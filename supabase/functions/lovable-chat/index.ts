@@ -142,6 +142,7 @@ async function executeToolCall(supabase: any, toolCall: any, SUPABASE_URL: strin
         const discussionResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'create_discussion',
+            executive: parsedArgs.executive || 'eliza', // Default to Eliza for chat-initiated discussions
             data: {
               repositoryId: 'R_kgDONfvCEw', // XMRT-Ecosystem repo ID
               title: parsedArgs.title,
@@ -167,6 +168,7 @@ async function executeToolCall(supabase: any, toolCall: any, SUPABASE_URL: strin
         const issueResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'create_issue',
+            executive: parsedArgs.executive || 'eliza', // Default to Eliza for chat-initiated issues
             data: {
               repo: parsedArgs.repo || 'XMRT-Ecosystem',
               title: parsedArgs.title,

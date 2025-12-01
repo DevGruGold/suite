@@ -92,6 +92,7 @@ Weekly retrospective for ${weekStart} to ${weekEnd}.
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
       body: {
         action: 'create_discussion',
+        executive: 'cso', // CSO handles strategic retrospectives
         data: {
           repositoryId: 'R_kgDONfvCEw',
           categoryId: 'DIC_kwDONfvCE84Cl9qy',

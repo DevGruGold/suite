@@ -105,6 +105,7 @@ Evening wrap-up for ${today}.
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
       body: {
         action: 'create_discussion',
+        executive: 'eliza', // Eliza handles daily summaries
         data: {
           repositoryId: 'R_kgDONfvCEw',
           categoryId: 'DIC_kwDONfvCE84Cl9qy',

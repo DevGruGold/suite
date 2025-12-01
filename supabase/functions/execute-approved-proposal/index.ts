@@ -132,6 +132,7 @@ ${proposal.implementation_code || 'No implementation outline provided. Please sc
       const { data: ghData, error: ghError } = await supabase.functions.invoke('github-integration', {
         body: {
           action: 'create_issue',
+          executive: 'council', // Council handles governance decisions
           repo: 'XMRT-Ecosystem',
           title: `[Governance Approved] Implement: ${proposal.function_name}`,
           body: `## Governance Proposal Approved

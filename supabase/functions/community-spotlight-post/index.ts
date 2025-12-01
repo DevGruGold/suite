@@ -94,6 +94,7 @@ Generated community spotlight for ${today}.
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
       body: {
         action: 'create_discussion',
+        executive: 'cso', // CSO handles community engagement
         data: {
           repositoryId: 'R_kgDONfvCEw',
           categoryId: 'DIC_kwDONfvCE84Cl9qy',
