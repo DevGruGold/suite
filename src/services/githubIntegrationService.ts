@@ -87,6 +87,7 @@ class GitHubIntegrationService {
    * @param repo - Repository name (optional, uses env default)
    * @param labels - Array of label names
    * @param assignees - Array of GitHub usernames to assign
+   * @param executive - Executive authoring this content (cso, cto, cio, cao, eliza, council)
    */
   async createIssue(
     title: string,
@@ -94,14 +95,16 @@ class GitHubIntegrationService {
     repo?: string,
     labels?: string[],
     assignees?: string[],
-    sessionCredentials?: any
+    sessionCredentials?: any,
+    executive?: string
   ): Promise<GitHubIssue> {
     return this.callGitHubFunction('create_issue', {
       repo,
       title,
       body,
       labels,
-      assignees
+      assignees,
+      executive: executive || 'eliza'
     }, sessionCredentials);
   }
 
@@ -110,12 +113,14 @@ class GitHubIntegrationService {
    * @param issueNumber - Issue number
    * @param comment - Comment text
    * @param repo - Repository name (optional)
+   * @param executive - Executive authoring this content (cso, cto, cio, cao, eliza, council)
    */
-  async commentOnIssue(issueNumber: number, comment: string, repo?: string, sessionCredentials?: any): Promise<any> {
+  async commentOnIssue(issueNumber: number, comment: string, repo?: string, sessionCredentials?: any, executive?: string): Promise<any> {
     return this.callGitHubFunction('comment_on_issue', {
       repo,
       issue_number: issueNumber,
-      body: comment
+      body: comment,
+      executive: executive || 'eliza'
     }, sessionCredentials);
   }
 
@@ -134,19 +139,22 @@ class GitHubIntegrationService {
    * @param categoryId - Discussion category ID
    * @param title - Discussion title
    * @param body - Discussion content
+   * @param executive - Executive authoring this content (cso, cto, cio, cao, eliza, council)
    */
   async createDiscussion(
     repositoryId: string,
     categoryId: string,
     title: string,
     body: string,
-    sessionCredentials?: any
+    sessionCredentials?: any,
+    executive?: string
   ): Promise<any> {
     return this.callGitHubFunction('create_discussion', {
       repositoryId,
       categoryId,
       title,
-      body
+      body,
+      executive: executive || 'eliza'
     }, sessionCredentials);
   }
 

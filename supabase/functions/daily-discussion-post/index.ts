@@ -111,6 +111,7 @@ Daily thoughts for ${reportDate}.
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
       body: {
         action: 'create_discussion',
+        executive: 'eliza', // Eliza handles daily thoughts
         data: {
           repositoryId: 'R_kgDONfvCEw', // XMRT-Ecosystem repo ID
           categoryId: 'DIC_kwDONfvCE84Cl9qy', // General category

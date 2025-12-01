@@ -249,7 +249,10 @@ class ExecutionInterceptorService {
     const operation = this.parseGitHubOperation(intent.description!);
 
     const { data, error } = await supabase.functions.invoke('github-integration', {
-      body: operation,
+      body: {
+        ...operation,
+        executive: 'eliza', // Default to Eliza for intercepted operations
+      },
     });
 
     if (error) {
