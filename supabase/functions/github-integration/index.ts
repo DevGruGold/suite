@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getGitHubCredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
+import { applyExecutiveAttribution, isValidExecutive } from "../_shared/executiveAttribution.ts";
 
 const GITHUB_CLIENT_ID = Deno.env.get('GITHUB_CLIENT_ID');
 const GITHUB_CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET');
@@ -188,10 +189,22 @@ serve(async (req) => {
         break;
 
       case 'create_issue':
-        // Add attribution footer if we have username
-        const issueBody = session_credentials?.github_username
-          ? `${data.body}\n\n---\n_Created via XMRT Assistant by @${session_credentials.github_username}_`
-          : data.body;
+        // Apply executive attribution if specified
+        let issueBody = data.body || '';
+        const issueExecutive = data.executive || 'eliza';
+        
+        if (isValidExecutive(issueExecutive)) {
+          issueBody = applyExecutiveAttribution(issueBody, issueExecutive, 'issue', {
+            includeHeader: true,
+            includeFooter: true,
+            includeTimestamp: true
+          });
+        }
+        
+        // Add user attribution if we have username (in addition to executive attribution)
+        if (session_credentials?.github_username) {
+          issueBody += `\n\n_User: @${session_credentials.github_username}_`;
+        }
           
         result = await fetch(
           `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues`,
@@ -209,12 +222,24 @@ serve(async (req) => {
         break;
 
       case 'comment_on_issue':
+        // Apply executive attribution if specified
+        let commentBody = data.comment || '';
+        const commentExecutive = data.executive || 'eliza';
+        
+        if (isValidExecutive(commentExecutive)) {
+          commentBody = applyExecutiveAttribution(commentBody, commentExecutive, 'comment', {
+            includeHeader: true,
+            includeFooter: true,
+            includeTimestamp: true
+          });
+        }
+        
         result = await fetch(
           `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}/comments`,
           {
             method: 'POST',
             headers,
-            body: JSON.stringify({ body: data.comment }),
+            body: JSON.stringify({ body: commentBody }),
           }
         );
         break;
@@ -362,13 +387,26 @@ serve(async (req) => {
         
         console.log(`📝 Creating discussion in category: ${matchedCategory.name} (${matchedCategory.id})`);
         
-        // Step 3: Create the discussion with escaped strings and attribution
+        // Step 3: Create the discussion with escaped strings and executive attribution
         const discussionTitle = (data.title || 'Untitled Discussion').replace(/"/g, '\\"');
-        const rawBody = data.body || 'No description provided.';
-        const attributedBody = session_credentials?.github_username
-          ? `${rawBody}\n\n---\n_Created via XMRT Assistant by @${session_credentials.github_username}_`
-          : rawBody;
-        const discussionBody = attributedBody.replace(/"/g, '\\"').replace(/\n/g, '\\n');
+        let rawBody = data.body || 'No description provided.';
+        const discussionExecutive = data.executive || 'eliza';
+        
+        // Apply executive attribution if specified
+        if (isValidExecutive(discussionExecutive)) {
+          rawBody = applyExecutiveAttribution(rawBody, discussionExecutive, 'discussion', {
+            includeHeader: true,
+            includeFooter: true,
+            includeTimestamp: true
+          });
+        }
+        
+        // Add user attribution if we have username
+        if (session_credentials?.github_username) {
+          rawBody += `\n\n_User: @${session_credentials.github_username}_`;
+        }
+        
+        const discussionBody = rawBody.replace(/"/g, '\\"').replace(/\n/g, '\\n');
         
         result = await fetch('https://api.github.com/graphql', {
           method: 'POST',

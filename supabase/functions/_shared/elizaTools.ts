@@ -636,7 +636,7 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'createGitHubDiscussion',
-      description: 'Create a GitHub discussion post in XMRT-Ecosystem repository. Returns discussion URL and ID. Use for announcements, updates, or community engagement.',
+      description: 'Create a GitHub discussion post in XMRT-Ecosystem repository with executive attribution. Returns discussion URL and ID. Use for announcements, updates, or community engagement.',
       parameters: {
         type: 'object',
         properties: {
@@ -646,6 +646,11 @@ export const ELIZA_TOOLS = [
             type: 'string', 
             description: 'Category ID (default: DIC_kwDOPHeChc4CkXxI for General)', 
             default: 'DIC_kwDOPHeChc4CkXxI' 
+          },
+          executive: {
+            type: 'string',
+            enum: ['cso', 'cto', 'cio', 'cao', 'eliza', 'council'],
+            description: 'Which executive is authoring this content. Adds rich header/footer attribution showing icon, title, specialty, and AI model.'
           }
         },
         required: ['title', 'body']
@@ -656,16 +661,42 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'createGitHubIssue',
-      description: 'Create a GitHub issue in any XMRT repository. Returns issue number and URL.',
+      description: 'Create a GitHub issue in any XMRT repository with executive attribution. Returns issue number and URL.',
       parameters: {
         type: 'object',
         properties: {
           repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)', default: 'XMRT-Ecosystem' },
           title: { type: 'string', description: 'Issue title' },
           body: { type: 'string', description: 'Issue description (supports Markdown)' },
-          labels: { type: 'array', items: { type: 'string' }, description: 'Optional labels (e.g., ["bug", "urgent"])' }
+          labels: { type: 'array', items: { type: 'string' }, description: 'Optional labels (e.g., ["bug", "urgent"])' },
+          executive: {
+            type: 'string',
+            enum: ['cso', 'cto', 'cio', 'cao', 'eliza', 'council'],
+            description: 'Which executive is authoring this content. Adds rich header/footer attribution showing icon, title, specialty, and AI model.'
+          }
         },
         required: ['title', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'commentOnGitHubIssue',
+      description: 'Add a comment to an existing GitHub issue with executive attribution.',
+      parameters: {
+        type: 'object',
+        properties: {
+          issue_number: { type: 'number', description: 'Issue number to comment on' },
+          comment: { type: 'string', description: 'Comment content (supports Markdown)' },
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)', default: 'XMRT-Ecosystem' },
+          executive: {
+            type: 'string',
+            enum: ['cso', 'cto', 'cio', 'cao', 'eliza', 'council'],
+            description: 'Which executive is authoring this comment. Adds rich header/footer attribution.'
+          }
+        },
+        required: ['issue_number', 'comment']
       }
     }
   },
