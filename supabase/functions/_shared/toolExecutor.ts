@@ -332,6 +332,13 @@ export async function executeToolCall(
       case 'createGitHubDiscussion':
         console.log(`📝 [${executiveName}] Create GitHub Discussion`);
         
+        // Derive executive from executiveName if not explicitly provided
+        const discussionExec = parsedArgs.executive || 
+          (executiveName?.toLowerCase()?.includes('strategy') ? 'cso' :
+           executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
+           executiveName?.toLowerCase()?.includes('information') ? 'cio' :
+           executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
+        
         const discussionResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'create_discussion',
@@ -339,7 +346,8 @@ export async function executeToolCall(
               repositoryId: 'R_kgDONfvCEw',
               title: parsedArgs.title,
               body: parsedArgs.body,
-              categoryId: parsedArgs.categoryId || 'DIC_kwDOPHeChc4CkXxI'
+              categoryId: parsedArgs.categoryId || 'DIC_kwDOPHeChc4CkXxI',
+              executive: discussionExec
             },
             session_credentials
           }
@@ -355,6 +363,13 @@ export async function executeToolCall(
       case 'createGitHubIssue':
         console.log(`🐛 [${executiveName}] Create GitHub Issue`);
         
+        // Derive executive from executiveName if not explicitly provided
+        const issueExec = parsedArgs.executive || 
+          (executiveName?.toLowerCase()?.includes('strategy') ? 'cso' :
+           executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
+           executiveName?.toLowerCase()?.includes('information') ? 'cio' :
+           executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
+        
         const issueResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'create_issue',
@@ -362,7 +377,8 @@ export async function executeToolCall(
               repo: parsedArgs.repo || 'XMRT-Ecosystem',
               title: parsedArgs.title,
               body: parsedArgs.body,
-              labels: parsedArgs.labels || []
+              labels: parsedArgs.labels || [],
+              executive: issueExec
             },
             session_credentials
           }
@@ -372,6 +388,36 @@ export async function executeToolCall(
           result = { success: false, error: issueResult.error.message };
         } else {
           result = { success: true, result: issueResult.data };
+        }
+        break;
+
+      case 'commentOnGitHubIssue':
+        console.log(`💬 [${executiveName}] Comment on GitHub Issue #${parsedArgs.issue_number}`);
+        
+        // Derive executive from executiveName if not explicitly provided
+        const commentExec = parsedArgs.executive || 
+          (executiveName?.toLowerCase()?.includes('strategy') ? 'cso' :
+           executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
+           executiveName?.toLowerCase()?.includes('information') ? 'cio' :
+           executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
+        
+        const commentResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'comment_on_issue',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              issue_number: parsedArgs.issue_number,
+              comment: parsedArgs.comment,
+              executive: commentExec
+            },
+            session_credentials
+          }
+        });
+        
+        if (commentResult.error) {
+          result = { success: false, error: commentResult.error.message };
+        } else {
+          result = { success: true, result: commentResult.data };
         }
         break;
 
