@@ -31,23 +31,54 @@ serve(async (req) => {
     // Validate required fields
     if (!function_name || !description || !proposed_by || !category || !rationale || !use_cases) {
       return new Response(
-        JSON.stringify({ error: 'Missing required fields' }),
+        JSON.stringify({ error: 'Missing required fields', suggestion: 'Provide function_name, description, proposed_by, category, rationale, and use_cases' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
 
-    // Check if function name already exists
+    // Status-aware duplicate check
     const { data: existing } = await supabase
       .from('edge_function_proposals')
-      .select('id')
+      .select('id, status, voting_phase')
       .eq('function_name', function_name)
       .single();
 
     if (existing) {
-      return new Response(
-        JSON.stringify({ error: 'Function name already proposed' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
-      );
+      // Block if actively voting
+      if (existing.status === 'voting') {
+        console.log(`⚠️ Function "${function_name}" is currently in voting phase: ${existing.voting_phase}`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Function is currently in active voting',
+            existing_status: existing.status,
+            existing_phase: existing.voting_phase,
+            proposal_id: existing.id,
+            suggestion: 'Wait for voting to complete or vote on the existing proposal using vote_on_function_proposal'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+        );
+      }
+      
+      // Block if already approved
+      if (existing.status === 'approved') {
+        console.log(`✅ Function "${function_name}" is already approved`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Function already approved and available',
+            existing_status: 'approved',
+            function_name,
+            suggestion: `This function exists! Use invoke_edge_function("${function_name}", {...}) to call it directly.`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 409 }
+        );
+      }
+      
+      // Allow re-proposal for rejected functions
+      if (existing.status === 'rejected') {
+        console.log(`📋 Re-proposing previously rejected function: ${function_name}`);
+        // Delete old rejected proposal to allow fresh start
+        await supabase.from('edge_function_proposals').delete().eq('id', existing.id);
+      }
     }
 
     // Create proposal

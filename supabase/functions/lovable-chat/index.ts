@@ -392,12 +392,32 @@ async function executeToolCall(supabase: any, toolCall: any, SUPABASE_URL: strin
           }
         });
         
+        // Extract detailed error from response body if available
         if (proposalResult.error) {
-          console.error(`❌ Proposal submission error:`, proposalResult.error);
-          await logToolExecution(supabase, name, parsedArgs, 'failed', null, proposalResult.error.message);
+          const errorDetail = proposalResult.data?.error || proposalResult.error.message || 'Proposal submission failed';
+          const suggestion = proposalResult.data?.suggestion;
+          const existingStatus = proposalResult.data?.existing_status;
+          
+          console.error(`❌ Proposal submission error:`, errorDetail, proposalResult.data);
+          
+          // Check if it's an "already approved" case - this is actually success!
+          if (existingStatus === 'approved') {
+            await logToolExecution(supabase, name, parsedArgs, 'completed', { already_exists: true }, null);
+            return { 
+              success: true,  // It's actually good news!
+              function_exists: true,
+              function_name: parsedArgs.function_name,
+              message: `Great news! "${parsedArgs.function_name}" is already approved and available. Use invoke_edge_function("${parsedArgs.function_name}", {...}) to call it directly.`,
+              suggestion
+            };
+          }
+          
+          await logToolExecution(supabase, name, parsedArgs, 'failed', null, errorDetail);
           return { 
             success: false, 
-            error: proposalResult.error.message || 'Proposal submission failed',
+            error: errorDetail,
+            suggestion,
+            existing_status: existingStatus,
             governance_action: 'propose_new_edge_function',
             status: 'failed'
           };
