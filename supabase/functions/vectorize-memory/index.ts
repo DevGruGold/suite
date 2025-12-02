@@ -16,7 +16,33 @@ serve(async (req) => {
   try {
     const { memory_id, content, context_type } = await req.json();
     
-    console.log(`🧠 Vectorizing memory ${memory_id}...`);
+    // Validate required fields - prevent null content crashes
+    if (!memory_id) {
+      console.warn('⚠️ Skipping vectorization - missing memory_id');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'memory_id is required',
+          skipped: true
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    if (!content || typeof content !== 'string' || content.trim().length === 0) {
+      console.warn(`⚠️ Skipping vectorization for ${memory_id} - null or empty content`);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'content is required and must be a non-empty string',
+          memory_id,
+          skipped: true
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
+    console.log(`🧠 Vectorizing memory ${memory_id} (${content.length} chars)...`);
 
     // Try to generate embedding with fallback support
     let embedding: number[];

@@ -2031,6 +2031,36 @@ export type Database = {
         }
         Relationships: []
       }
+      edge_function_usage: {
+        Row: {
+          created_at: string | null
+          error_message: string | null
+          execution_time_ms: number | null
+          executive_name: string | null
+          function_name: string
+          id: string
+          success: boolean | null
+        }
+        Insert: {
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          executive_name?: string | null
+          function_name: string
+          id?: string
+          success?: boolean | null
+        }
+        Update: {
+          created_at?: string | null
+          error_message?: string | null
+          execution_time_ms?: number | null
+          executive_name?: string | null
+          function_name?: string
+          id?: string
+          success?: boolean | null
+        }
+        Relationships: []
+      }
       eliza_activity_log: {
         Row: {
           activity_type: string
