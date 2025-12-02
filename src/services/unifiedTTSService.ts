@@ -215,14 +215,28 @@ export class UnifiedTTSService {
             onComplete?.();
             resolve(); // Not a real error - user stopped or new speech started
           } else if (event.error === 'synthesis-failed') {
-            // Retry once with default voice
-            console.warn('⚠️ Synthesis failed, retrying with default voice...');
+            // Chrome workaround: kick the engine out of stuck state
+            console.warn('⚠️ Synthesis failed, retrying with Chrome workaround...');
             setTimeout(() => {
               try {
+                // Chrome workaround: resume and refresh voices
+                window.speechSynthesis.resume();
+                window.speechSynthesis.getVoices();
+                
                 const retryUtterance = new SpeechSynthesisUtterance(sanitizedText);
                 retryUtterance.rate = options.speed || 1.0;
                 retryUtterance.pitch = 1.0;
                 retryUtterance.volume = 1.0;
+                
+                // Use first available voice as fallback with explicit selection
+                const fallbackVoices = window.speechSynthesis.getVoices();
+                if (fallbackVoices.length > 0) {
+                  const englishVoice = fallbackVoices.find(v => v.lang.startsWith('en')) || fallbackVoices[0];
+                  retryUtterance.voice = englishVoice;
+                  retryUtterance.lang = englishVoice.lang;
+                  console.log('🔄 Retrying with voice:', englishVoice.name);
+                }
+                
                 retryUtterance.onend = () => { 
                   onComplete?.(); 
                   resolve(); 
@@ -230,36 +244,44 @@ export class UnifiedTTSService {
                 retryUtterance.onerror = (e) => { 
                   console.error('Retry also failed:', e.error);
                   onComplete?.(); 
-                  resolve(); // Don't reject, just log and continue
+                  resolve();
                 };
+                
+                window.speechSynthesis.resume(); // One more kick right before speak
                 window.speechSynthesis.speak(retryUtterance);
               } catch (e) {
                 console.error('Retry exception:', e);
                 onComplete?.();
                 resolve();
               }
-            }, 300);
+            }, 500); // Increased delay for retry
           } else {
             onComplete?.();
-            // Don't reject on errors, just resolve to prevent queue blocking
             console.warn(`Speech synthesis error (non-blocking): ${event.error}`);
             resolve();
           }
         };
         
-        // Cancel any ongoing speech first
-        window.speechSynthesis.cancel();
+        // Chrome workaround: resume to kick the engine out of stuck state
+        if (window.speechSynthesis.paused) {
+          window.speechSynthesis.resume();
+        }
         
-        // Increased delay for better browser compatibility
+        // Refresh voices to ensure engine is ready
+        window.speechSynthesis.getVoices();
+        
+        // Small delay then speak
         setTimeout(() => {
           try {
+            // Resume again right before speak (Chrome bug fix)
+            window.speechSynthesis.resume();
             window.speechSynthesis.speak(utterance);
           } catch (speakError) {
             console.error('Error calling speak():', speakError);
             onComplete?.();
             resolve();
           }
-        }, 250); // Increased from 100ms to 250ms
+        }, 100);
         
       } catch (error) {
         console.error('Error in speakWithWebSpeech:', error);
@@ -346,6 +368,8 @@ export class UnifiedTTSService {
       window.speechSynthesis.cancel();
       this.currentUtterance = null;
     }
+    // Reset engine state for next speak (Chrome workaround)
+    window.speechSynthesis.resume();
   }
 
   isSpeaking(): boolean {
