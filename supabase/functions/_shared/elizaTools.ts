@@ -491,7 +491,7 @@ export const ELIZA_TOOLS = [
       type: 'function',
       function: {
         name: 'propose_new_edge_function',
-        description: 'Propose a new edge function to the Executive Council. Requires consensus (3/4 votes) for approval and automatic deployment. Use this when you identify a capability gap that would benefit the ecosystem.',
+        description: 'Propose a new edge function to the Executive Council. IMPORTANT: Before proposing, use list_function_proposals to check if the function already exists. If a function is already approved, use invoke_edge_function to call it directly instead of re-proposing. Requires 3/4 executive votes for approval. Previously rejected functions can be re-proposed with improvements.',
         parameters: {
           type: 'object',
           properties: {
