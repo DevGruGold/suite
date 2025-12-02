@@ -19,6 +19,8 @@ export class UnifiedTTSService {
   private audioContext: AudioContext | null = null;
   private isInitialized = false;
   private voicesLoaded = false;
+  private speechQueue: Array<{ text: string; options: UnifiedTTSOptions; onEnd?: () => void }> = [];
+  private isProcessingQueue = false;
 
   private sanitizeTextForSpeech(text: string): string {
     return text
@@ -50,8 +52,6 @@ export class UnifiedTTSService {
       .replace(/\s+/g, ' ')
       .trim();
   }
-  private speechQueue: Array<{ text: string; options: UnifiedTTSOptions; onEnd?: () => void }> = [];
-  private isProcessingQueue = false;
 
   async initialize(): Promise<void> {
     if (this.isInitialized) return;
@@ -143,6 +143,13 @@ export class UnifiedTTSService {
     const { text: modifiedText, rate: learnedRate } = speechLearningService.applyPreferences(options.text);
     const sanitizedText = this.sanitizeTextForSpeech(modifiedText);
 
+    // Check for empty text after sanitization
+    if (!sanitizedText || sanitizedText.trim().length === 0) {
+      console.warn('⚠️ Text empty after sanitization, skipping speech');
+      onComplete?.();
+      return Promise.resolve();
+    }
+
     return new Promise((resolve, reject) => {
       try {
         const utterance = new SpeechSynthesisUtterance(sanitizedText);
@@ -153,7 +160,7 @@ export class UnifiedTTSService {
         utterance.pitch = 1.0;
         utterance.volume = 1.0;
 
-        // Select best voice
+        // Select best voice with improved fallback
         const voices = window.speechSynthesis.getVoices();
         if (voices.length > 0) {
           const lang = options.language || 'en';
@@ -167,17 +174,27 @@ export class UnifiedTTSService {
             voicePreferences.some(pref => v.name.toLowerCase().includes(pref))
           );
           
+          // Fallback: any voice matching language prefix
           if (!preferredVoice) {
             preferredVoice = voices.find(v => v.lang.startsWith(langPrefix));
           }
           
+          // Fallback: any English voice
           if (!preferredVoice) {
-            preferredVoice = voices[0];
+            preferredVoice = voices.find(v => v.lang.includes('en'));
           }
           
-          utterance.voice = preferredVoice;
-          utterance.lang = preferredVoice.lang;
-          console.log(`🎤 Speaking with voice: ${preferredVoice.name} (${preferredVoice.lang})`);
+          // Final fallback: first available voice
+          if (!preferredVoice && voices.length > 0) {
+            preferredVoice = voices[0];
+            console.warn('⚠️ Using first available voice as fallback:', preferredVoice.name);
+          }
+          
+          if (preferredVoice) {
+            utterance.voice = preferredVoice;
+            utterance.lang = preferredVoice.lang;
+            console.log(`🎤 Speaking with voice: ${preferredVoice.name} (${preferredVoice.lang})`);
+          }
         } else {
           // No voices available - use default
           utterance.lang = options.language === 'es' ? 'es-ES' : 'en-US';
@@ -193,31 +210,61 @@ export class UnifiedTTSService {
         utterance.onerror = (event) => {
           console.error('Speech synthesis error:', event.error);
           this.currentUtterance = null;
-          onComplete?.();
           
           if (event.error === 'canceled' || event.error === 'interrupted') {
+            onComplete?.();
             resolve(); // Not a real error - user stopped or new speech started
+          } else if (event.error === 'synthesis-failed') {
+            // Retry once with default voice
+            console.warn('⚠️ Synthesis failed, retrying with default voice...');
+            setTimeout(() => {
+              try {
+                const retryUtterance = new SpeechSynthesisUtterance(sanitizedText);
+                retryUtterance.rate = options.speed || 1.0;
+                retryUtterance.pitch = 1.0;
+                retryUtterance.volume = 1.0;
+                retryUtterance.onend = () => { 
+                  onComplete?.(); 
+                  resolve(); 
+                };
+                retryUtterance.onerror = (e) => { 
+                  console.error('Retry also failed:', e.error);
+                  onComplete?.(); 
+                  resolve(); // Don't reject, just log and continue
+                };
+                window.speechSynthesis.speak(retryUtterance);
+              } catch (e) {
+                console.error('Retry exception:', e);
+                onComplete?.();
+                resolve();
+              }
+            }, 300);
           } else {
-            reject(new Error(`Speech synthesis error: ${event.error}`));
+            onComplete?.();
+            // Don't reject on errors, just resolve to prevent queue blocking
+            console.warn(`Speech synthesis error (non-blocking): ${event.error}`);
+            resolve();
           }
         };
         
         // Cancel any ongoing speech first
         window.speechSynthesis.cancel();
         
-        // Small delay for reliability across browsers
+        // Increased delay for better browser compatibility
         setTimeout(() => {
           try {
             window.speechSynthesis.speak(utterance);
           } catch (speakError) {
             console.error('Error calling speak():', speakError);
-            reject(speakError);
+            onComplete?.();
+            resolve();
           }
-        }, 100);
+        }, 250); // Increased from 100ms to 250ms
         
       } catch (error) {
         console.error('Error in speakWithWebSpeech:', error);
-        reject(error);
+        onComplete?.();
+        resolve();
       }
     });
   }

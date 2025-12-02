@@ -144,8 +144,69 @@ serve(async (req) => {
         result = { success: true, patterns };
         break;
 
+      // NEW: List all knowledge entities
+      case 'list_knowledge':
+        let listQuery = supabase
+          .from('knowledge_entities')
+          .select('*')
+          .order('updated_at', { ascending: false })
+          .limit(data?.limit || 50);
+
+        if (data?.entity_type) {
+          listQuery = listQuery.eq('entity_type', data.entity_type);
+        }
+
+        const { data: listEntities, error: listError } = await listQuery;
+        if (listError) throw listError;
+        result = { success: true, entities: listEntities, count: listEntities?.length || 0 };
+        break;
+
+      // NEW: Check knowledge system status
+      case 'check_status':
+        const { count: entityCount, error: countError1 } = await supabase
+          .from('knowledge_entities')
+          .select('*', { count: 'exact', head: true });
+
+        if (countError1) throw countError1;
+
+        const { count: relationCount, error: countError2 } = await supabase
+          .from('entity_relationships')
+          .select('*', { count: 'exact', head: true });
+
+        if (countError2) throw countError2;
+
+        const { count: patternCount, error: countError3 } = await supabase
+          .from('learning_patterns')
+          .select('*', { count: 'exact', head: true });
+
+        result = {
+          success: true,
+          status: 'healthy',
+          stats: {
+            total_entities: entityCount || 0,
+            total_relationships: relationCount || 0,
+            total_patterns: patternCount || 0
+          }
+        };
+        break;
+
+      // NEW: Delete knowledge entity
+      case 'delete_knowledge':
+        if (!data?.entity_id) {
+          throw new Error('entity_id is required for delete action');
+        }
+
+        const { error: deleteError } = await supabase
+          .from('knowledge_entities')
+          .delete()
+          .eq('id', data.entity_id);
+
+        if (deleteError) throw deleteError;
+        result = { success: true, deleted: data.entity_id };
+        break;
+
       default:
-        throw new Error(`Unknown action: ${action}`);
+        throw new Error(`Unknown action: ${action}. Available actions: store_knowledge, create_relationship, search_knowledge, get_related_entities, update_entity_confidence, store_learning_pattern, get_patterns, list_knowledge, check_status, delete_knowledge`);
     }
 
     return new Response(
