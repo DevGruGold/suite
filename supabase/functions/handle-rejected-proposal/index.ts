@@ -65,7 +65,7 @@ serve(async (req) => {
       reasoning: v.reasoning
     }));
 
-    // Generate improvement suggestions using AI
+    // Generate improvement suggestions using AI with correct message format
     let improvementSuggestions: string[] = [];
     try {
       const analysisPrompt = `
@@ -84,12 +84,24 @@ Generate improvement suggestions that address the concerns raised. Format as a J
 ["suggestion 1", "suggestion 2", ...]
 `;
 
-      const { data: aiResponse } = await supabase.functions.invoke('lovable-chat', {
+      // Use correct message format for lovable-chat
+      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('lovable-chat', {
         body: {
-          message: analysisPrompt,
-          mode: 'improvement_analysis'
+          messages: [
+            { role: 'user', content: analysisPrompt }
+          ],
+          userContext: {
+            mode: 'improvement_analysis',
+            governanceTask: 'rejection_feedback',
+            proposalId: proposal_id
+          }
         }
       });
+
+      if (aiError) {
+        console.error('⚠️ AI analysis error:', aiError);
+        throw aiError;
+      }
 
       // Parse suggestions from AI response
       const responseText = aiResponse?.response || aiResponse?.message || '';
@@ -108,14 +120,32 @@ Generate improvement suggestions that address the concerns raised. Format as a J
       ];
     }
 
-    // Update proposal with feedback
-    const feedback = {
+    // Build comprehensive final analysis
+    const finalAnalysis = {
+      decision: 'rejected',
+      decision_summary: `Rejected by ${rejectionVotes.length > 0 ? 'executive council' : 'community vote'}`,
+      vote_breakdown: {
+        executive: {
+          approvals: approvalVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
+          rejections: rejectionVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
+          details: votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).map(v => ({
+            executive: v.executive_name,
+            vote: v.vote,
+            reasoning: v.reasoning
+          })) || []
+        },
+        community: {
+          approvals: approvalVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
+          rejections: rejectionVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length
+        },
+        total_votes: votes?.length || 0
+      },
       rejection_reasons: rejectionReasons,
       improvement_suggestions: improvementSuggestions,
-      vote_summary: {
-        approvals: approvalVotes.length,
-        rejections: rejectionVotes.length,
-        total: votes?.length || 0
+      resubmission_guidance: {
+        can_resubmit: true,
+        recommended_changes: improvementSuggestions,
+        wait_period: 'None - can resubmit immediately after addressing feedback'
       },
       processed_at: new Date().toISOString()
     };
@@ -125,8 +155,7 @@ Generate improvement suggestions that address the concerns raised. Format as a J
       .update({ 
         status: 'rejected_with_feedback',
         updated_at: new Date().toISOString(),
-        // Store feedback in implementation_code field as JSON (repurposing)
-        implementation_code: JSON.stringify(feedback)
+        implementation_code: JSON.stringify(finalAnalysis)
       })
       .eq('id', proposal_id);
 
@@ -135,7 +164,7 @@ Generate improvement suggestions that address the concerns raised. Format as a J
       throw updateError;
     }
 
-    console.log('✅ Updated proposal with rejection feedback');
+    console.log('✅ Updated proposal with comprehensive rejection analysis');
 
     // Notify via activity feed
     await supabase
@@ -148,7 +177,8 @@ Generate improvement suggestions that address the concerns raised. Format as a J
           proposal_id,
           function_name: proposal.function_name,
           rejection_count: rejectionVotes.length,
-          suggestions_count: improvementSuggestions.length
+          suggestions_count: improvementSuggestions.length,
+          final_analysis: finalAnalysis
         }
       });
 
@@ -175,11 +205,7 @@ Generate improvement suggestions that address the concerns raised. Format as a J
         proposal_id,
         function_name: proposal.function_name,
         new_status: 'rejected_with_feedback',
-        feedback: {
-          rejection_reasons: rejectionReasons,
-          improvement_suggestions: improvementSuggestions,
-          vote_summary: feedback.vote_summary
-        },
+        final_analysis: finalAnalysis,
         message: 'Rejection feedback processed and suggestions generated'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
