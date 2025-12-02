@@ -442,6 +442,278 @@ export async function executeToolCall(
           result = { success: true, result: listResult.data };
         }
         break;
+
+      // ====================================================================
+      // GITHUB PULL REQUEST TOOLS
+      // ====================================================================
+      case 'createGitHubPullRequest':
+        console.log(`🔄 [${executiveName}] Create GitHub PR: ${parsedArgs.title}`);
+        const createPRResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'create_pull_request',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              title: parsedArgs.title,
+              body: parsedArgs.body,
+              head: parsedArgs.head,
+              base: parsedArgs.base || 'main',
+              draft: parsedArgs.draft || false
+            },
+            session_credentials
+          }
+        });
+        result = createPRResult.error
+          ? { success: false, error: createPRResult.error.message }
+          : { success: true, result: createPRResult.data };
+        break;
+
+      case 'listGitHubPullRequests':
+        console.log(`📋 [${executiveName}] List GitHub PRs`);
+        const listPRResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_pull_requests',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              state: parsedArgs.state || 'open'
+            },
+            session_credentials
+          }
+        });
+        result = listPRResult.error
+          ? { success: false, error: listPRResult.error.message }
+          : { success: true, result: listPRResult.data };
+        break;
+
+      case 'mergeGitHubPullRequest':
+        console.log(`✅ [${executiveName}] Merge GitHub PR #${parsedArgs.pull_number}`);
+        const mergePRResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'merge_pull_request',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              pull_number: parsedArgs.pull_number,
+              merge_method: parsedArgs.merge_method || 'squash',
+              commit_title: parsedArgs.commit_title,
+              commit_message: parsedArgs.commit_message
+            },
+            session_credentials
+          }
+        });
+        result = mergePRResult.error
+          ? { success: false, error: mergePRResult.error.message }
+          : { success: true, result: mergePRResult.data };
+        break;
+
+      case 'closeGitHubPullRequest':
+        console.log(`❌ [${executiveName}] Close GitHub PR #${parsedArgs.pull_number}`);
+        const closePRResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'close_pull_request',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              pull_number: parsedArgs.pull_number
+            },
+            session_credentials
+          }
+        });
+        result = closePRResult.error
+          ? { success: false, error: closePRResult.error.message }
+          : { success: true, result: closePRResult.data };
+        break;
+
+      // ====================================================================
+      // GITHUB BRANCH TOOLS
+      // ====================================================================
+      case 'createGitHubBranch':
+        console.log(`🌿 [${executiveName}] Create GitHub Branch: ${parsedArgs.branch_name}`);
+        const createBranchResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'create_branch',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              branch_name: parsedArgs.branch_name,
+              from_branch: parsedArgs.from_branch || 'main'
+            },
+            session_credentials
+          }
+        });
+        result = createBranchResult.error
+          ? { success: false, error: createBranchResult.error.message }
+          : { success: true, result: createBranchResult.data };
+        break;
+
+      case 'listGitHubBranches':
+        console.log(`📋 [${executiveName}] List GitHub Branches`);
+        const listBranchesResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_branches',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem'
+            },
+            session_credentials
+          }
+        });
+        result = listBranchesResult.error
+          ? { success: false, error: listBranchesResult.error.message }
+          : { success: true, result: listBranchesResult.data };
+        break;
+
+      case 'getGitHubBranchInfo':
+        console.log(`🔍 [${executiveName}] Get GitHub Branch Info: ${parsedArgs.branch}`);
+        const branchInfoResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'get_branch_info',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              branch: parsedArgs.branch
+            },
+            session_credentials
+          }
+        });
+        result = branchInfoResult.error
+          ? { success: false, error: branchInfoResult.error.message }
+          : { success: true, result: branchInfoResult.data };
+        break;
+
+      // ====================================================================
+      // GITHUB FILE & CODE TOOLS
+      // ====================================================================
+      case 'getGitHubFileContent':
+        console.log(`📄 [${executiveName}] Get GitHub File: ${parsedArgs.path}`);
+        const getFileResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'get_file_content',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              path: parsedArgs.path,
+              ref: parsedArgs.ref || 'main'
+            },
+            session_credentials
+          }
+        });
+        result = getFileResult.error
+          ? { success: false, error: getFileResult.error.message }
+          : { success: true, result: getFileResult.data };
+        break;
+
+      case 'commitGitHubFile':
+        console.log(`📝 [${executiveName}] Commit GitHub File: ${parsedArgs.path}`);
+        const commitFileResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'commit_file',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              path: parsedArgs.path,
+              content: parsedArgs.content,
+              message: parsedArgs.message,
+              branch: parsedArgs.branch || 'main',
+              sha: parsedArgs.sha
+            },
+            session_credentials
+          }
+        });
+        result = commitFileResult.error
+          ? { success: false, error: commitFileResult.error.message }
+          : { success: true, result: commitFileResult.data };
+        break;
+
+      case 'deleteGitHubFile':
+        console.log(`🗑️ [${executiveName}] Delete GitHub File: ${parsedArgs.path}`);
+        const deleteFileResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'delete_file',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              path: parsedArgs.path,
+              message: parsedArgs.message,
+              branch: parsedArgs.branch || 'main',
+              sha: parsedArgs.sha
+            },
+            session_credentials
+          }
+        });
+        result = deleteFileResult.error
+          ? { success: false, error: deleteFileResult.error.message }
+          : { success: true, result: deleteFileResult.data };
+        break;
+
+      case 'listGitHubFiles':
+        console.log(`📂 [${executiveName}] List GitHub Files: ${parsedArgs.path || '/'}`);
+        const listFilesResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_files',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              path: parsedArgs.path || '',
+              ref: parsedArgs.ref || 'main'
+            },
+            session_credentials
+          }
+        });
+        result = listFilesResult.error
+          ? { success: false, error: listFilesResult.error.message }
+          : { success: true, result: listFilesResult.data };
+        break;
+
+      case 'searchGitHubCode':
+        console.log(`🔍 [${executiveName}] Search GitHub Code: ${parsedArgs.query}`);
+        const searchCodeResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'search_code',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              query: parsedArgs.query
+            },
+            session_credentials
+          }
+        });
+        result = searchCodeResult.error
+          ? { success: false, error: searchCodeResult.error.message }
+          : { success: true, result: searchCodeResult.data };
+        break;
+
+      // ====================================================================
+      // GITHUB WORKFLOW TOOLS
+      // ====================================================================
+      case 'trigger_github_workflow':
+        console.log(`▶️ [${executiveName}] Trigger GitHub Workflow: ${parsedArgs.workflow_file}`);
+        const triggerWorkflowResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'trigger_workflow',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              workflow_file: parsedArgs.workflow_file,
+              ref: parsedArgs.ref || 'main',
+              inputs: parsedArgs.inputs || {}
+            },
+            session_credentials
+          }
+        });
+        result = triggerWorkflowResult.error
+          ? { success: false, error: triggerWorkflowResult.error.message }
+          : { success: true, result: triggerWorkflowResult.data };
+        break;
+
+      case 'createGitHubWorkflowFile':
+        console.log(`📋 [${executiveName}] Create GitHub Workflow: ${parsedArgs.workflow_name}`);
+        // Create workflow file in .github/workflows/ directory
+        const workflowPath = `.github/workflows/${parsedArgs.workflow_name}.yml`;
+        const createWorkflowResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'commit_file',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              path: workflowPath,
+              content: parsedArgs.yaml_content,
+              message: parsedArgs.commit_message || `Add workflow: ${parsedArgs.workflow_name}`,
+              branch: parsedArgs.branch || 'main'
+            },
+            session_credentials
+          }
+        });
+        result = createWorkflowResult.error
+          ? { success: false, error: createWorkflowResult.error.message }
+          : { success: true, result: { ...createWorkflowResult.data, workflow_path: workflowPath } };
         
       case 'list_available_functions':
         const functionsResult = await supabase.functions.invoke('list-available-functions', {

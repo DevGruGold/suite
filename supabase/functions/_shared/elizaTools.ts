@@ -715,6 +715,247 @@ export const ELIZA_TOOLS = [
       }
     }
   },
+  // ====================================================================
+  // 🔄 GITHUB PULL REQUEST TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'createGitHubPullRequest',
+      description: '🔄 Create a new pull request from one branch to another. Returns PR number and URL.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          title: { type: 'string', description: 'PR title' },
+          body: { type: 'string', description: 'PR description with details of changes' },
+          head: { type: 'string', description: 'Branch containing changes (source branch)' },
+          base: { type: 'string', description: 'Branch to merge into (default: main)', default: 'main' },
+          draft: { type: 'boolean', description: 'Create as draft PR', default: false }
+        },
+        required: ['title', 'body', 'head']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listGitHubPullRequests',
+      description: '📋 List pull requests from a repository with optional state filter.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          state: { type: 'string', enum: ['open', 'closed', 'all'], description: 'PR state filter', default: 'open' },
+          limit: { type: 'number', description: 'Number of PRs to return', default: 20 }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'mergeGitHubPullRequest',
+      description: '✅ Merge a pull request. Supports merge, squash, and rebase strategies.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          pull_number: { type: 'number', description: 'PR number to merge' },
+          merge_method: { type: 'string', enum: ['merge', 'squash', 'rebase'], description: 'Merge strategy', default: 'squash' },
+          commit_title: { type: 'string', description: 'Custom commit title for squash/merge' },
+          commit_message: { type: 'string', description: 'Custom commit message' }
+        },
+        required: ['pull_number']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'closeGitHubPullRequest',
+      description: '❌ Close a pull request without merging.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          pull_number: { type: 'number', description: 'PR number to close' }
+        },
+        required: ['pull_number']
+      }
+    }
+  },
+  // ====================================================================
+  // 🌿 GITHUB BRANCH TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'createGitHubBranch',
+      description: '🌿 Create a new branch from an existing branch or commit SHA.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          branch_name: { type: 'string', description: 'Name for the new branch' },
+          from_branch: { type: 'string', description: 'Source branch to create from (default: main)', default: 'main' }
+        },
+        required: ['branch_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listGitHubBranches',
+      description: '📋 List all branches in a repository.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getGitHubBranchInfo',
+      description: '🔍 Get detailed information about a specific branch including latest commit.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          branch: { type: 'string', description: 'Branch name to get info for' }
+        },
+        required: ['branch']
+      }
+    }
+  },
+  // ====================================================================
+  // 📁 GITHUB FILE & CODE TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'getGitHubFileContent',
+      description: '📄 Get the content of a file from a GitHub repository.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          path: { type: 'string', description: 'File path in repository (e.g., "src/App.tsx")' },
+          ref: { type: 'string', description: 'Branch or commit SHA (default: main)', default: 'main' }
+        },
+        required: ['path']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'commitGitHubFile',
+      description: '📝 Create or update a file in a GitHub repository. Use for editing codebase.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          path: { type: 'string', description: 'File path to create/update (e.g., "supabase/functions/new-func/index.ts")' },
+          content: { type: 'string', description: 'File content to write' },
+          message: { type: 'string', description: 'Commit message describing the change' },
+          branch: { type: 'string', description: 'Branch to commit to (default: main)', default: 'main' },
+          sha: { type: 'string', description: 'Current file SHA (required for updates, omit for new files)' }
+        },
+        required: ['path', 'content', 'message']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'deleteGitHubFile',
+      description: '🗑️ Delete a file from a GitHub repository.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          path: { type: 'string', description: 'File path to delete' },
+          message: { type: 'string', description: 'Commit message for deletion' },
+          branch: { type: 'string', description: 'Branch to delete from (default: main)', default: 'main' },
+          sha: { type: 'string', description: 'Current file SHA (required)' }
+        },
+        required: ['path', 'message', 'sha']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listGitHubFiles',
+      description: '📂 List files and directories in a repository path.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          path: { type: 'string', description: 'Directory path (default: root)', default: '' },
+          ref: { type: 'string', description: 'Branch or commit SHA (default: main)', default: 'main' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'searchGitHubCode',
+      description: '🔍 Search for code across the repository. Find functions, classes, or patterns.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          query: { type: 'string', description: 'Search query (e.g., "function executeToolCall" or "createClient")' }
+        },
+        required: ['query']
+      }
+    }
+  },
+  // ====================================================================
+  // ⚙️ GITHUB WORKFLOW TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'trigger_github_workflow',
+      description: '▶️ Trigger a GitHub Actions workflow dispatch event.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          workflow_file: { type: 'string', description: 'Workflow filename (e.g., "ci.yml")' },
+          ref: { type: 'string', description: 'Branch or tag to run workflow on (default: main)', default: 'main' },
+          inputs: { type: 'object', description: 'Workflow input parameters', additionalProperties: { type: 'string' } }
+        },
+        required: ['workflow_file']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'createGitHubWorkflowFile',
+      description: '📋 Create a new GitHub Actions workflow YAML file. Validates YAML and places in .github/workflows/.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          workflow_name: { type: 'string', description: 'Workflow filename without extension (e.g., "deploy-edge-functions")' },
+          yaml_content: { type: 'string', description: 'Complete YAML workflow content' },
+          commit_message: { type: 'string', description: 'Commit message for the workflow file' },
+          branch: { type: 'string', description: 'Branch to commit to (default: main)', default: 'main' }
+        },
+        required: ['workflow_name', 'yaml_content']
+      }
+    }
+  },
   {
     type: 'function',
     function: {
