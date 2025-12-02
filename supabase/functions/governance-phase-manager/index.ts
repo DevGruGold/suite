@@ -24,44 +24,69 @@ serve(async (req) => {
 
     const results: any = { action, timestamp: new Date().toISOString() };
 
-    // Action 1: Trigger executive votes for new proposals
+    // Action 1: Trigger executive votes for proposals without complete executive votes
     if (action === 'trigger_executive_votes' || action === 'check_all') {
-      const { data: pendingProposals, error: pendingError } = await supabase
+      // Get all proposals in executive phase that are still within deadline
+      const { data: execProposals, error: pendingError } = await supabase
         .from('edge_function_proposals')
         .select('id, function_name, voting_phase, executive_deadline, voting_started_at')
         .eq('status', 'voting')
         .eq('voting_phase', 'executive')
-        .is('voting_started_at', null);
+        .gt('executive_deadline', new Date().toISOString());
 
       if (pendingError) {
-        console.error('Error fetching pending proposals:', pendingError);
-      } else if (pendingProposals && pendingProposals.length > 0) {
-        console.log(`📊 Found ${pendingProposals.length} proposals needing executive votes`);
+        console.error('Error fetching executive proposals:', pendingError);
+      } else if (execProposals && execProposals.length > 0) {
+        console.log(`📊 Checking ${execProposals.length} proposals in executive phase`);
+        let triggered = 0;
         
-        for (const proposal of pendingProposals) {
-          // Set deadlines and trigger voting
-          await supabase
-            .from('edge_function_proposals')
-            .update({
-              voting_started_at: new Date().toISOString(),
-              executive_deadline: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
-              community_deadline: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString() // 25 hours
-            })
-            .eq('id', proposal.id);
+        for (const proposal of execProposals) {
+          // Check how many executives have voted
+          const { data: existingVotes } = await supabase
+            .from('executive_votes')
+            .select('executive_name')
+            .eq('proposal_id', proposal.id)
+            .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO']);
 
-          // Trigger executive voting
-          const { error: voteError } = await supabase.functions.invoke('request-executive-votes', {
-            body: { proposal_id: proposal.id }
-          });
+          const votedExecutives = existingVotes?.map(v => v.executive_name) || [];
+          const missingExecutives = ['CSO', 'CTO', 'CIO', 'CAO'].filter(e => !votedExecutives.includes(e));
 
-          if (voteError) {
-            console.error(`Failed to trigger votes for ${proposal.function_name}:`, voteError);
+          // If any executives haven't voted yet, trigger voting for them
+          if (missingExecutives.length > 0) {
+            console.log(`📋 ${proposal.function_name}: ${votedExecutives.length}/4 executives voted. Missing: ${missingExecutives.join(', ')}`);
+            
+            // Ensure deadlines are set if this is a new proposal
+            if (!proposal.voting_started_at) {
+              await supabase
+                .from('edge_function_proposals')
+                .update({
+                  voting_started_at: new Date().toISOString(),
+                  executive_deadline: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
+                  community_deadline: new Date(Date.now() + 25 * 60 * 60 * 1000).toISOString() // 25 hours
+                })
+                .eq('id', proposal.id);
+            }
+
+            // Trigger voting for missing executives
+            const { error: voteError } = await supabase.functions.invoke('request-executive-votes', {
+              body: { 
+                proposal_id: proposal.id,
+                target_executives: missingExecutives
+              }
+            });
+
+            if (voteError) {
+              console.error(`Failed to trigger votes for ${proposal.function_name}:`, voteError);
+            } else {
+              console.log(`✅ Triggered votes for ${missingExecutives.join(', ')} on: ${proposal.function_name}`);
+              triggered++;
+            }
           } else {
-            console.log(`✅ Triggered executive votes for: ${proposal.function_name}`);
+            console.log(`✅ ${proposal.function_name}: All 4 executives have voted`);
           }
         }
         
-        results.triggered_votes = pendingProposals.length;
+        results.triggered_votes = triggered;
       }
     }
 
