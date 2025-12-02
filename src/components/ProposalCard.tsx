@@ -13,14 +13,16 @@ import {
   Sparkles,
   Users,
   Loader2,
-  PlayCircle,
   AlertCircle,
   Lightbulb,
-  Rocket
+  Rocket,
+  MessageSquare
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
 import { VoteProgress } from './VoteProgress';
+import { VotingPhaseIndicator } from './VotingPhaseIndicator';
+import { ProposalComments } from './ProposalComments';
 
 interface Proposal {
   id: string;
@@ -34,6 +36,9 @@ interface Proposal {
   updated_at: string;
   implementation_code?: string | null;
   category?: string;
+  voting_phase?: string;
+  executive_deadline?: string | null;
+  community_deadline?: string | null;
 }
 
 interface ExecutiveVote {
@@ -86,24 +91,22 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
   onVoteSuccess 
 }) => {
   const [expanded, setExpanded] = useState(false);
+  const [showComments, setShowComments] = useState(false);
   const [voting, setVoting] = useState(false);
   const [userVote, setUserVote] = useState<string | null>(null);
-  const [triggeringVotes, setTriggeringVotes] = useState(false);
   const [feedback, setFeedback] = useState<any>(null);
 
-  // Parse feedback from implementation_code if status is rejected_with_feedback
   useEffect(() => {
     if (proposal.status === 'rejected_with_feedback' && proposal.implementation_code) {
       try {
         const parsedFeedback = JSON.parse(proposal.implementation_code as string);
         setFeedback(parsedFeedback);
       } catch (e) {
-        // Not JSON feedback, ignore
+        // Not JSON feedback
       }
     }
   }, [proposal]);
 
-  // Get session key for identifying user's vote
   const getSessionKey = () => {
     let sessionKey = localStorage.getItem('governance_session_key');
     if (!sessionKey) {
@@ -113,7 +116,6 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
     return sessionKey;
   };
 
-  // Check if user already voted on this proposal
   useEffect(() => {
     const sessionKey = getSessionKey();
     const existingVote = votes.find(
@@ -124,7 +126,6 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
     }
   }, [votes]);
 
-  // Separate executive and community votes
   const executiveVotes = votes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name));
   const communityVotes = votes.filter(v => v.executive_name === 'COMMUNITY');
   
@@ -151,10 +152,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       });
 
       if (error) throw error;
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+      if (data?.error) throw new Error(data.error);
 
       setUserVote(vote);
       toast({
@@ -193,30 +191,47 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
     });
   };
 
+  const canVote = proposal.status === 'voting' && 
+    (proposal.voting_phase === 'community' || !proposal.voting_phase);
+
   return (
     <Card className="border border-border hover:border-primary/30 transition-colors">
-      <CardHeader className="pb-3">
-        <div className="flex items-start justify-between gap-4">
+      <CardHeader className="p-4 sm:pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Sparkles className="h-4 w-4 text-primary shrink-0" />
-              <CardTitle className="text-lg truncate">{proposal.function_name}</CardTitle>
-              <Badge variant="outline" className={statusColors[proposal.status] || statusColors.pending}>
+              <CardTitle className="text-base sm:text-lg break-words">{proposal.function_name}</CardTitle>
+              <Badge variant="outline" className={`${statusColors[proposal.status] || statusColors.pending} shrink-0`}>
                 {statusLabels[proposal.status] || proposal.status.toUpperCase()}
               </Badge>
             </div>
-            <p className="text-sm text-muted-foreground mt-1 flex items-center gap-2">
-              <User className="h-3 w-3" />
-              Proposed by {proposal.proposed_by}
-              <span className="text-border">•</span>
-              <Clock className="h-3 w-3" />
-              {formatDate(proposal.created_at)}
+            <p className="text-xs sm:text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
+              <span className="flex items-center gap-1">
+                <User className="h-3 w-3" />
+                {proposal.proposed_by}
+              </span>
+              <span className="text-border hidden sm:inline">•</span>
+              <span className="flex items-center gap-1">
+                <Clock className="h-3 w-3" />
+                {formatDate(proposal.created_at)}
+              </span>
             </p>
           </div>
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-4">
+      <CardContent className="p-4 pt-0 space-y-4">
+        {/* Voting Phase Indicator with Countdown */}
+        {proposal.status === 'voting' && (
+          <VotingPhaseIndicator 
+            phase={proposal.voting_phase || 'executive'}
+            executiveDeadline={proposal.executive_deadline}
+            communityDeadline={proposal.community_deadline}
+            status={proposal.status}
+          />
+        )}
+
         {/* Description */}
         <p className="text-sm">{proposal.description}</p>
 
@@ -233,22 +248,21 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
         {/* Community Vote Stats */}
         {communityVotes.length > 0 && (
-          <div className="flex items-center gap-4 text-sm">
+          <div className="flex items-center gap-3 sm:gap-4 text-sm flex-wrap">
             <div className="flex items-center gap-1">
               <Users className="h-4 w-4 text-pink-500" />
-              <span className="text-muted-foreground">Community:</span>
+              <span className="text-muted-foreground text-xs sm:text-sm">Community:</span>
             </div>
-            <span className="text-green-600">✓ {communityApprovals}</span>
-            <span className="text-red-600">✗ {communityRejections}</span>
-            <span className="text-muted-foreground">({communityVotes.length} total)</span>
+            <span className="text-green-600 text-xs sm:text-sm">✓ {communityApprovals}</span>
+            <span className="text-red-600 text-xs sm:text-sm">✗ {communityRejections}</span>
+            <span className="text-muted-foreground text-xs">({communityVotes.length} total)</span>
           </div>
         )}
 
-        {/* Voting Buttons (only if voting is open) */}
-        {proposal.status === 'voting' && (
+        {/* Voting Buttons - Stack on mobile */}
+        {canVote && (
           <div className="space-y-2">
-            {/* Executive deliberation indicator */}
-            {executiveVotes.length < 4 && executiveVotes.length > 0 && (
+            {executiveVotes.length < 4 && executiveVotes.length > 0 && proposal.voting_phase === 'executive' && (
               <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-500/10 p-2 rounded-md">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 <span>Executives deliberating... ({executiveVotes.length}/4 have voted)</span>
@@ -265,36 +279,37 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
                 <span className="ml-1">(click to change)</span>
               </p>
             )}
-            <div className="flex flex-wrap gap-2">
+            
+            <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
               <Button
                 size="sm"
                 variant={userVote === 'approve' ? 'default' : 'outline'}
-                className={userVote === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-green-500/10 hover:text-green-600 hover:border-green-500/30'}
+                className={`${userVote === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-green-500/10 hover:text-green-600 hover:border-green-500/30'} text-xs sm:text-sm`}
                 onClick={() => handleVote('approve')}
                 disabled={voting}
               >
-                {voting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1" />}
-                Approve
+                {voting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 sm:mr-1" />}
+                <span className="hidden sm:inline">Approve</span>
               </Button>
               <Button
                 size="sm"
                 variant={userVote === 'reject' ? 'default' : 'outline'}
-                className={userVote === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30'}
+                className={`${userVote === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30'} text-xs sm:text-sm`}
                 onClick={() => handleVote('reject')}
                 disabled={voting}
               >
-                {voting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <XCircle className="h-4 w-4 mr-1" />}
-                Reject
+                {voting ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4 sm:mr-1" />}
+                <span className="hidden sm:inline">Reject</span>
               </Button>
               <Button
                 size="sm"
                 variant={userVote === 'abstain' ? 'default' : 'outline'}
-                className={userVote === 'abstain' ? 'bg-muted' : ''}
+                className={`${userVote === 'abstain' ? 'bg-muted' : ''} text-xs sm:text-sm`}
                 onClick={() => handleVote('abstain')}
                 disabled={voting}
               >
-                {voting ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <MinusCircle className="h-4 w-4 mr-1" />}
-                Abstain
+                {voting ? <Loader2 className="h-4 w-4 animate-spin" /> : <MinusCircle className="h-4 w-4 sm:mr-1" />}
+                <span className="hidden sm:inline">Abstain</span>
               </Button>
             </div>
           </div>
@@ -303,8 +318,8 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
         {/* Queued for Deployment Status */}
         {proposal.status === 'queued_for_deployment' && (
           <div className="flex items-center gap-2 text-sm text-purple-600 bg-purple-500/10 p-3 rounded-md">
-            <Rocket className="h-4 w-4" />
-            <span>Approved and queued for implementation. A task has been created for the development team.</span>
+            <Rocket className="h-4 w-4 shrink-0" />
+            <span className="text-xs sm:text-sm">Approved and queued for implementation.</span>
           </div>
         )}
 
@@ -318,7 +333,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
             {feedback.improvement_suggestions && (
               <ul className="space-y-1">
                 {feedback.improvement_suggestions.map((suggestion: string, idx: number) => (
-                  <li key={idx} className="text-sm text-muted-foreground flex items-start gap-2">
+                  <li key={idx} className="text-xs sm:text-sm text-muted-foreground flex items-start gap-2">
                     <Lightbulb className="h-3 w-3 mt-1 text-amber-500 shrink-0" />
                     {suggestion}
                   </li>
@@ -328,40 +343,60 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           </div>
         )}
 
-        {/* Expand/Collapse Button */}
-        <Button
-          variant="ghost"
-          size="sm"
-          className="w-full"
-          onClick={() => setExpanded(!expanded)}
-        >
-          {expanded ? (
-            <>
-              <ChevronUp className="h-4 w-4 mr-1" />
-              Hide Details
-            </>
-          ) : (
-            <>
-              <ChevronDown className="h-4 w-4 mr-1" />
-              View Details & Executive Reasoning
-            </>
-          )}
-        </Button>
+        {/* Action Buttons - Stack on mobile */}
+        <div className="flex flex-col sm:flex-row gap-2">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full sm:flex-1"
+            onClick={() => setExpanded(!expanded)}
+          >
+            {expanded ? (
+              <>
+                <ChevronUp className="h-4 w-4 mr-1" />
+                <span className="text-xs sm:text-sm">Hide Details</span>
+              </>
+            ) : (
+              <>
+                <ChevronDown className="h-4 w-4 mr-1" />
+                <span className="text-xs sm:text-sm">View Details</span>
+              </>
+            )}
+          </Button>
+          
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full sm:flex-1"
+            onClick={() => setShowComments(!showComments)}
+          >
+            <MessageSquare className="h-4 w-4 mr-1" />
+            <span className="text-xs sm:text-sm">{showComments ? 'Hide' : 'Show'} Discussion</span>
+          </Button>
+        </div>
+
+        {/* Comments Section */}
+        {showComments && (
+          <div className="pt-4 border-t border-border">
+            <ProposalComments 
+              proposalId={proposal.id} 
+              phase={proposal.voting_phase || 'executive'}
+            />
+          </div>
+        )}
 
         {/* Expanded Details */}
         {expanded && (
           <div className="space-y-4 pt-4 border-t border-border">
-            {/* Rationale */}
             <div>
               <h4 className="text-sm font-semibold mb-2">Rationale</h4>
-              <p className="text-sm text-muted-foreground">{proposal.rationale}</p>
+              <p className="text-xs sm:text-sm text-muted-foreground">{proposal.rationale}</p>
             </div>
 
-            {/* Use Cases */}
             {proposal.use_cases && proposal.use_cases.length > 0 && (
               <div>
                 <h4 className="text-sm font-semibold mb-2">Use Cases</h4>
-                <ul className="list-disc list-inside text-sm text-muted-foreground space-y-1">
+                <ul className="list-disc list-inside text-xs sm:text-sm text-muted-foreground space-y-1">
                   {proposal.use_cases.map((useCase: string, idx: number) => (
                     <li key={idx}>{useCase}</li>
                   ))}
@@ -369,7 +404,6 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
               </div>
             )}
 
-            {/* Executive Votes */}
             {executiveVotes.length > 0 && (
               <div>
                 <h4 className="text-sm font-semibold mb-2">Executive Reasoning</h4>
@@ -379,8 +413,8 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
                       key={vote.id} 
                       className="p-3 rounded-lg bg-muted/50 border border-border"
                     >
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className={`font-medium ${executiveColors[vote.executive_name] || 'text-foreground'}`}>
+                      <div className="flex items-center gap-2 mb-1 flex-wrap">
+                        <span className={`font-medium text-sm ${executiveColors[vote.executive_name] || 'text-foreground'}`}>
                           {vote.executive_name}
                         </span>
                         <Badge 
@@ -396,7 +430,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
                           {vote.vote.toUpperCase()}
                         </Badge>
                       </div>
-                      <p className="text-sm text-muted-foreground">{vote.reasoning}</p>
+                      <p className="text-xs sm:text-sm text-muted-foreground">{vote.reasoning}</p>
                     </div>
                   ))}
                 </div>

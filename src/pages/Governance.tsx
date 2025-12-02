@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Vote, Filter, Plus, Loader2 } from 'lucide-react';
+import { ArrowLeft, Vote, Filter, Plus, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProposalCard } from '@/components/ProposalCard';
@@ -24,6 +24,9 @@ interface Proposal {
   updated_at: string;
   implementation_code?: string | null;
   category?: string;
+  voting_phase?: string;
+  executive_deadline?: string | null;
+  community_deadline?: string | null;
 }
 
 interface ExecutiveVote {
@@ -43,8 +46,8 @@ export default function Governance() {
   const [activeTab, setActiveTab] = useState('all');
   const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
   
-  // New proposal form state
   const [newProposal, setNewProposal] = useState({
     function_name: '',
     description: '',
@@ -61,17 +64,14 @@ export default function Governance() {
         .order('created_at', { ascending: false });
 
       if (proposalsError) throw proposalsError;
-
       setProposals(proposalsData || []);
 
-      // Fetch all votes including session_key
       const { data: votesData, error: votesError } = await supabase
         .from('executive_votes')
         .select('*');
 
       if (votesError) throw votesError;
 
-      // Group votes by proposal_id
       const votesMap: Record<string, ExecutiveVote[]> = {};
       votesData?.forEach(vote => {
         if (!votesMap[vote.proposal_id]) {
@@ -87,10 +87,27 @@ export default function Governance() {
     }
   };
 
+  const triggerPhaseCheck = async () => {
+    setRefreshing(true);
+    try {
+      await supabase.functions.invoke('governance-phase-manager', {
+        body: { action: 'check_all' }
+      });
+      await fetchProposals();
+      toast({
+        title: 'Refreshed',
+        description: 'Governance phases checked and updated.'
+      });
+    } catch (error) {
+      console.error('Phase check failed:', error);
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
   useEffect(() => {
     fetchProposals();
 
-    // Subscribe to real-time changes
     const proposalsChannel = supabase
       .channel('governance-proposals')
       .on('postgres_changes', 
@@ -144,7 +161,6 @@ export default function Governance() {
 
     setSubmitting(true);
     try {
-      // Parse use cases (split by newlines)
       const useCases = newProposal.use_cases
         .split('\n')
         .map(s => s.trim())
@@ -162,17 +178,13 @@ export default function Governance() {
       });
 
       if (error) throw error;
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
+      if (data?.error) throw new Error(data.error);
 
       toast({
         title: '✅ Proposal Submitted',
-        description: 'Your proposal has been submitted for executive council review.'
+        description: 'Your proposal has been submitted. Executive voting will begin shortly.'
       });
 
-      // Reset form and close dialog
       setNewProposal({
         function_name: '',
         description: '',
@@ -198,169 +210,183 @@ export default function Governance() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
+      {/* Header - Mobile optimized */}
       <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-4 py-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
+        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2 sm:gap-4">
               <Link to="/">
-                <Button variant="ghost" size="sm" className="gap-2">
+                <Button variant="ghost" size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3">
                   <ArrowLeft className="h-4 w-4" />
-                  Back
+                  <span className="hidden sm:inline">Back</span>
                 </Button>
               </Link>
               <div className="flex items-center gap-2">
-                <Vote className="h-6 w-6 text-amber-500" />
-                <h1 className="text-xl font-bold">Governance Portal</h1>
+                <Vote className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
+                <h1 className="text-lg sm:text-xl font-bold">Governance</h1>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="outline" className="text-amber-600 border-amber-500/30 bg-amber-500/10">
+            
+            <div className="flex items-center gap-2 justify-between sm:justify-end">
+              <Badge variant="outline" className="text-amber-600 border-amber-500/30 bg-amber-500/10 text-xs sm:text-sm">
                 {counts.voting} awaiting votes
               </Badge>
               
-              {/* New Proposal Button */}
-              <Dialog open={proposalDialogOpen} onOpenChange={setProposalDialogOpen}>
-                <DialogTrigger asChild>
-                  <Button size="sm" className="gap-2">
-                    <Plus className="h-4 w-4" />
-                    New Proposal
-                  </Button>
-                </DialogTrigger>
-                <DialogContent className="sm:max-w-[500px]">
-                  <DialogHeader>
-                    <DialogTitle>Propose New Edge Function</DialogTitle>
-                    <DialogDescription>
-                      Submit a proposal for a new edge function. The executive council will review and vote on it.
-                    </DialogDescription>
-                  </DialogHeader>
-                  <form onSubmit={handleSubmitProposal} className="space-y-4 mt-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="function_name">Function Name *</Label>
-                      <Input
-                        id="function_name"
-                        placeholder="e.g., my-awesome-function"
-                        value={newProposal.function_name}
-                        onChange={e => setNewProposal(prev => ({ ...prev, function_name: e.target.value }))}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="proposed_by">Your Name / Handle *</Label>
-                      <Input
-                        id="proposed_by"
-                        placeholder="e.g., CommunityMember123"
-                        value={newProposal.proposed_by}
-                        onChange={e => setNewProposal(prev => ({ ...prev, proposed_by: e.target.value }))}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="description">Description *</Label>
-                      <Textarea
-                        id="description"
-                        placeholder="What does this function do?"
-                        value={newProposal.description}
-                        onChange={e => setNewProposal(prev => ({ ...prev, description: e.target.value }))}
-                        rows={3}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="rationale">Rationale *</Label>
-                      <Textarea
-                        id="rationale"
-                        placeholder="Why is this function needed? What problem does it solve?"
-                        value={newProposal.rationale}
-                        onChange={e => setNewProposal(prev => ({ ...prev, rationale: e.target.value }))}
-                        rows={3}
-                      />
-                    </div>
-                    
-                    <div className="space-y-2">
-                      <Label htmlFor="use_cases">Use Cases (one per line)</Label>
-                      <Textarea
-                        id="use_cases"
-                        placeholder="Automated monitoring&#10;User notifications&#10;Data processing"
-                        value={newProposal.use_cases}
-                        onChange={e => setNewProposal(prev => ({ ...prev, use_cases: e.target.value }))}
-                        rows={3}
-                      />
-                    </div>
-                    
-                    <Button type="submit" className="w-full" disabled={submitting}>
-                      {submitting ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Submitting...
-                        </>
-                      ) : (
-                        'Submit Proposal'
-                      )}
+              <div className="flex gap-2">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={triggerPhaseCheck}
+                  disabled={refreshing}
+                  className="px-2 sm:px-3"
+                >
+                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+                </Button>
+                
+                <Dialog open={proposalDialogOpen} onOpenChange={setProposalDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3">
+                      <Plus className="h-4 w-4" />
+                      <span className="hidden sm:inline">New Proposal</span>
                     </Button>
-                  </form>
-                </DialogContent>
-              </Dialog>
+                  </DialogTrigger>
+                  <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto mx-4">
+                    <DialogHeader>
+                      <DialogTitle>Propose New Edge Function</DialogTitle>
+                      <DialogDescription>
+                        Submit a proposal for review. Executives vote within 1 hour, then community votes for 24 hours.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <form onSubmit={handleSubmitProposal} className="space-y-4 mt-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="function_name">Function Name *</Label>
+                        <Input
+                          id="function_name"
+                          placeholder="e.g., my-awesome-function"
+                          value={newProposal.function_name}
+                          onChange={e => setNewProposal(prev => ({ ...prev, function_name: e.target.value }))}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="proposed_by">Your Name / Handle *</Label>
+                        <Input
+                          id="proposed_by"
+                          placeholder="e.g., CommunityMember123"
+                          value={newProposal.proposed_by}
+                          onChange={e => setNewProposal(prev => ({ ...prev, proposed_by: e.target.value }))}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="description">Description *</Label>
+                        <Textarea
+                          id="description"
+                          placeholder="What does this function do?"
+                          value={newProposal.description}
+                          onChange={e => setNewProposal(prev => ({ ...prev, description: e.target.value }))}
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="rationale">Rationale *</Label>
+                        <Textarea
+                          id="rationale"
+                          placeholder="Why is this function needed?"
+                          value={newProposal.rationale}
+                          onChange={e => setNewProposal(prev => ({ ...prev, rationale: e.target.value }))}
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label htmlFor="use_cases">Use Cases (one per line)</Label>
+                        <Textarea
+                          id="use_cases"
+                          placeholder="Automated monitoring&#10;User notifications"
+                          value={newProposal.use_cases}
+                          onChange={e => setNewProposal(prev => ({ ...prev, use_cases: e.target.value }))}
+                          rows={3}
+                        />
+                      </div>
+                      
+                      <Button type="submit" className="w-full" disabled={submitting}>
+                        {submitting ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Submitting...
+                          </>
+                        ) : (
+                          'Submit Proposal'
+                        )}
+                      </Button>
+                    </form>
+                  </DialogContent>
+                </Dialog>
+              </div>
             </div>
           </div>
         </div>
       </header>
 
       {/* Main Content */}
-      <main className="container mx-auto px-4 py-8">
+      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Info Banner */}
-        <div className="mb-8 p-4 rounded-lg bg-muted/50 border border-border">
-          <p className="text-sm text-muted-foreground">
-            <strong className="text-foreground">Democratic Voting:</strong> Cast your vote alongside AI executives on edge function proposals. 
-            Proposals need 3/4 executive approvals to pass. Community votes show support but don't count toward consensus.
+        <div className="mb-4 sm:mb-8 p-3 sm:p-4 rounded-lg bg-muted/50 border border-border">
+          <p className="text-xs sm:text-sm text-muted-foreground">
+            <strong className="text-foreground">Timed Voting:</strong> Executives have 1 hour to vote, then community has 24 hours. 
+            3/4 executive approvals needed to pass.
           </p>
         </div>
 
-        {/* Tabs */}
+        {/* Tabs - Horizontally scrollable on mobile */}
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="mb-6 flex flex-wrap gap-2 h-auto bg-transparent p-0">
-            <TabsTrigger 
-              value="all" 
-              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground"
-            >
-              All ({counts.all})
-            </TabsTrigger>
-            <TabsTrigger 
-              value="voting"
-              className="data-[state=active]:bg-amber-500 data-[state=active]:text-white"
-            >
-              <Vote className="h-3 w-3 mr-1" />
-              Voting ({counts.voting})
-            </TabsTrigger>
-            <TabsTrigger 
-              value="approved"
-              className="data-[state=active]:bg-green-500 data-[state=active]:text-white"
-            >
-              Approved ({counts.approved})
-            </TabsTrigger>
-            <TabsTrigger 
-              value="rejected"
-              className="data-[state=active]:bg-red-500 data-[state=active]:text-white"
-            >
-              Rejected ({counts.rejected})
-            </TabsTrigger>
-            {counts.deployed > 0 && (
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+            <TabsList className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 h-auto bg-transparent p-0 min-w-max">
               <TabsTrigger 
-                value="deployed"
-                className="data-[state=active]:bg-blue-500 data-[state=active]:text-white"
+                value="all" 
+                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm px-2 sm:px-3"
               >
-                Deployed ({counts.deployed})
+                All ({counts.all})
               </TabsTrigger>
-            )}
-          </TabsList>
+              <TabsTrigger 
+                value="voting"
+                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+              >
+                <Vote className="h-3 w-3 mr-1" />
+                Voting ({counts.voting})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="approved"
+                className="data-[state=active]:bg-green-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+              >
+                Approved ({counts.approved})
+              </TabsTrigger>
+              <TabsTrigger 
+                value="rejected"
+                className="data-[state=active]:bg-red-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+              >
+                Rejected ({counts.rejected})
+              </TabsTrigger>
+              {counts.deployed > 0 && (
+                <TabsTrigger 
+                  value="deployed"
+                  className="data-[state=active]:bg-blue-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+                >
+                  Deployed ({counts.deployed})
+                </TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
           {loading ? (
             <div className="flex items-center justify-center py-12">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : (
             <>
-              <TabsContent value="all" className="space-y-4 mt-0">
+              <TabsContent value="all" className="space-y-3 sm:space-y-4 mt-0">
                 {filterProposals('all').length === 0 ? (
                   <EmptyState message="No proposals yet. Be the first to submit one!" />
                 ) : (
@@ -375,7 +401,7 @@ export default function Governance() {
                 )}
               </TabsContent>
 
-              <TabsContent value="voting" className="space-y-4 mt-0">
+              <TabsContent value="voting" className="space-y-3 sm:space-y-4 mt-0">
                 {filterProposals('voting').length === 0 ? (
                   <EmptyState message="No proposals currently in voting" />
                 ) : (
@@ -390,7 +416,7 @@ export default function Governance() {
                 )}
               </TabsContent>
 
-              <TabsContent value="approved" className="space-y-4 mt-0">
+              <TabsContent value="approved" className="space-y-3 sm:space-y-4 mt-0">
                 {filterProposals('approved').length === 0 ? (
                   <EmptyState message="No approved proposals" />
                 ) : (
@@ -405,7 +431,7 @@ export default function Governance() {
                 )}
               </TabsContent>
 
-              <TabsContent value="rejected" className="space-y-4 mt-0">
+              <TabsContent value="rejected" className="space-y-3 sm:space-y-4 mt-0">
                 {filterProposals('rejected').length === 0 ? (
                   <EmptyState message="No rejected proposals" />
                 ) : (
@@ -420,7 +446,7 @@ export default function Governance() {
                 )}
               </TabsContent>
 
-              <TabsContent value="deployed" className="space-y-4 mt-0">
+              <TabsContent value="deployed" className="space-y-3 sm:space-y-4 mt-0">
                 {filterProposals('deployed').length === 0 ? (
                   <EmptyState message="No deployed functions" />
                 ) : (
@@ -444,9 +470,9 @@ export default function Governance() {
 
 function EmptyState({ message }: { message: string }) {
   return (
-    <div className="text-center py-12 text-muted-foreground">
-      <Filter className="h-12 w-12 mx-auto mb-4 opacity-50" />
-      <p>{message}</p>
+    <div className="text-center py-8 sm:py-12 text-muted-foreground">
+      <Filter className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 opacity-50" />
+      <p className="text-sm sm:text-base">{message}</p>
     </div>
   );
 }

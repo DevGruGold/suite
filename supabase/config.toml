@@ -536,10 +536,34 @@ verify_jwt = false
 [functions.handle-rejected-proposal]
 verify_jwt = false
 
+[functions.governance-phase-manager]
+verify_jwt = false
+
 # ====================================================================
 # TOOL USAGE ANALYTICS
 # ====================================================================
 
 [functions.tool-usage-analytics]
 verify_jwt = false
+
+# ====================================================================
+# GOVERNANCE CRON JOBS
+# ====================================================================
+# Trigger executive votes for new proposals - every 5 minutes
+[[edge_runtime.scheduled_functions]]
+function_name = "governance-phase-manager"
+schedule = "*/5 * * * *"
+body = '{"action":"trigger_executive_votes"}'
+
+# Check phase transitions - every 10 minutes
+[[edge_runtime.scheduled_functions]]
+function_name = "governance-phase-manager"
+schedule = "2,12,22,32,42,52 * * * *"
+body = '{"action":"check_phase_transitions"}'
+
+# Finalize voting - every 15 minutes
+[[edge_runtime.scheduled_functions]]
+function_name = "governance-phase-manager"
+schedule = "5,20,35,50 * * * *"
+body = '{"action":"finalize_voting"}'
 
