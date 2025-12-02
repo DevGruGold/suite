@@ -4,6 +4,7 @@ import { generateElizaSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
 import { callLovableAIGateway } from '../_shared/aiGatewayFallback.ts';
+import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -759,7 +760,59 @@ serve(async (req) => {
     // Default to direct chat if no special task detected
     console.log('💬 Direct Chat - No special task detected');
 
-    let systemPrompt = generateElizaSystemPrompt(userContext, miningStats, systemVersion, aiExecutive, aiExecutiveTitle);
+    // Create Supabase client for tool execution (moved up for memory retrieval)
+    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // ========== PHASE: MEMORY RETRIEVAL ==========
+    // Server-side memory retrieval fallback if frontend didn't send memoryContexts
+    let enrichedConversationHistory = conversationHistory || {};
+    let memoryContexts = conversationHistory?.memoryContexts || [];
+
+    if (memoryContexts.length === 0 && userContext?.sessionKey) {
+      console.log('📚 No memory contexts from frontend - fetching server-side...');
+      try {
+        const { data: serverMemories } = await supabase
+          .from('memory_contexts')
+          .select('context_type, content, importance_score')
+          .or(`user_id.eq.${userContext.sessionKey},session_id.eq.${userContext.sessionKey}`)
+          .order('importance_score', { ascending: false })
+          .order('created_at', { ascending: false })
+          .limit(30);
+        
+        if (serverMemories && serverMemories.length > 0) {
+          memoryContexts = serverMemories.map(m => ({
+            contextType: m.context_type,
+            content: m.content,
+            importanceScore: m.importance_score
+          }));
+          enrichedConversationHistory = {
+            ...conversationHistory,
+            memoryContexts
+          };
+          console.log(`✅ Retrieved ${memoryContexts.length} memories server-side`);
+        }
+      } catch (memError) {
+        console.warn('⚠️ Server-side memory retrieval failed:', memError);
+      }
+    } else if (memoryContexts.length > 0) {
+      console.log(`📚 Using ${memoryContexts.length} memories from frontend`);
+    }
+
+    // ========== BUILD CONTEXTUAL SYSTEM PROMPT ==========
+    const basePrompt = generateElizaSystemPrompt(userContext, miningStats, systemVersion, aiExecutive, aiExecutiveTitle);
+    
+    // Inject memories, conversation history, and context into the system prompt
+    let systemPrompt = await buildContextualPrompt(basePrompt, {
+      conversationHistory: enrichedConversationHistory,
+      userContext,
+      miningStats,
+      systemVersion,
+      executiveName: aiExecutive || 'Eliza',
+      memoryContexts
+    }, supabase);
+    
+    console.log(`📝 System prompt enhanced with context builder (${systemPrompt.length} chars)`);
     
     // 📹 Add live camera feed context dynamically if user is in multimodal mode
     if (images && images.length > 0 && isLiveCameraFeed) {
@@ -790,10 +843,6 @@ You are looking at the user RIGHT NOW through their webcam. This means:
       systemPrompt += liveFeedContext;
       console.log('📹 Added LIVE CAMERA FEED context to system prompt');
     }
-    
-    // Create Supabase client for tool execution
-    const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     
     let currentMessages = [ { role: 'system', content: systemPrompt }, ...messages ];
     let toolIterations = 0;
