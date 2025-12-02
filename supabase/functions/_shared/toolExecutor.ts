@@ -791,12 +791,75 @@ export async function executeToolCall(
         });
         result = { success: true, result: agentResult.data };
         break;
+
+      // ====================================================================
+      // KNOWLEDGE MANAGEMENT TOOLS
+      // ====================================================================
+      case 'store_knowledge':
+        console.log(`🧠 [${executiveName}] Store Knowledge: ${parsedArgs.name}`);
+        const storeKnowledgeResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'store_knowledge', data: parsedArgs }
+        });
+        result = storeKnowledgeResult.error
+          ? { success: false, error: storeKnowledgeResult.error.message }
+          : { success: true, result: storeKnowledgeResult.data };
+        break;
+
+      case 'search_knowledge':
+        console.log(`🔍 [${executiveName}] Search Knowledge: ${parsedArgs.search_term || parsedArgs.entity_type || 'all'}`);
+        const searchKnowledgeResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'search_knowledge', data: parsedArgs }
+        });
+        result = searchKnowledgeResult.error
+          ? { success: false, error: searchKnowledgeResult.error.message }
+          : { success: true, result: searchKnowledgeResult.data };
+        break;
+
+      case 'create_knowledge_relationship':
+        console.log(`🔗 [${executiveName}] Create Knowledge Relationship`);
+        const createRelResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'create_relationship', data: parsedArgs }
+        });
+        result = createRelResult.error
+          ? { success: false, error: createRelResult.error.message }
+          : { success: true, result: createRelResult.data };
+        break;
+
+      case 'get_related_knowledge':
+        console.log(`🕸️ [${executiveName}] Get Related Knowledge: ${parsedArgs.entity_id}`);
+        const relatedResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'get_related_entities', data: parsedArgs }
+        });
+        result = relatedResult.error
+          ? { success: false, error: relatedResult.error.message }
+          : { success: true, result: relatedResult.data };
+        break;
+
+      case 'get_knowledge_status':
+        console.log(`📊 [${executiveName}] Get Knowledge Status`);
+        const statusResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'check_status', data: {} }
+        });
+        result = statusResult.error
+          ? { success: false, error: statusResult.error.message }
+          : { success: true, result: statusResult.data };
+        break;
+
+      case 'delete_knowledge':
+        console.log(`🗑️ [${executiveName}] Delete Knowledge: ${parsedArgs.entity_id}`);
+        const deleteKnowledgeResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'delete_knowledge', data: parsedArgs }
+        });
+        result = deleteKnowledgeResult.error
+          ? { success: false, error: deleteKnowledgeResult.error.message }
+          : { success: true, result: deleteKnowledgeResult.data };
+        break;
         
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, and more.`
         };
     }
     

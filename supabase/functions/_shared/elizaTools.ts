@@ -1596,5 +1596,106 @@ export const ELIZA_TOOLS = [
         }
       }
     }
+  },
+
+  // ====================================================================
+  // 🧠 KNOWLEDGE MANAGEMENT TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'store_knowledge',
+      description: '🧠 Store a new knowledge entity (concept, tool, skill, person, project) in the knowledge base for long-term memory.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name of the knowledge entity' },
+          type: { 
+            type: 'string', 
+            description: 'Type of entity (e.g., concept, tool, skill, person, project, feature, fact)',
+            enum: ['concept', 'tool', 'skill', 'person', 'project', 'feature', 'fact', 'general']
+          },
+          description: { type: 'string', description: 'Detailed description of the entity' },
+          metadata: { type: 'object', description: 'Optional additional metadata' },
+          confidence: { type: 'number', description: 'Confidence score 0-1 (default 0.5)' }
+        },
+        required: ['name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge',
+      description: '🔍 Search the knowledge base by type, search term, or confidence score. Find stored knowledge entities.',
+      parameters: {
+        type: 'object',
+        properties: {
+          search_term: { type: 'string', description: 'Text to search for in entity names and descriptions' },
+          entity_type: { type: 'string', description: 'Filter by entity type (concept, tool, skill, person, etc.)' },
+          min_confidence: { type: 'number', description: 'Minimum confidence score (0-1)' },
+          limit: { type: 'number', description: 'Maximum results to return (default 20)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_knowledge_relationship',
+      description: '🔗 Create a relationship between two knowledge entities to build a knowledge graph.',
+      parameters: {
+        type: 'object',
+        properties: {
+          source_id: { type: 'string', description: 'UUID of the source entity' },
+          target_id: { type: 'string', description: 'UUID of the target entity' },
+          relationship_type: { 
+            type: 'string', 
+            description: 'Type of relationship (e.g., related_to, part_of, depends_on, created_by, uses)'
+          },
+          strength: { type: 'number', description: 'Relationship strength 0-1 (default 0.5)' }
+        },
+        required: ['source_id', 'target_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_related_knowledge',
+      description: '🕸️ Get all entities related to a specific knowledge entity.',
+      parameters: {
+        type: 'object',
+        properties: {
+          entity_id: { type: 'string', description: 'UUID of the entity to find relationships for' }
+        },
+        required: ['entity_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_knowledge_status',
+      description: '📊 Check knowledge base health and get statistics (entity count, relationship count, pattern count).',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'delete_knowledge',
+      description: '🗑️ Delete a knowledge entity and its relationships by ID.',
+      parameters: {
+        type: 'object',
+        properties: {
+          entity_id: { type: 'string', description: 'UUID of the entity to delete' }
+        },
+        required: ['entity_id']
+      }
+    }
   }
 ];
