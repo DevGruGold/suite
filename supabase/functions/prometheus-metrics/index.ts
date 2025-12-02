@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics } from '../_shared/healthScoring.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -159,17 +160,33 @@ serve(async (req) => {
       metrics += formatPrometheusMetric('xmrt_commands_by_status', count, { status, period: 'last_hour' }, 'Commands by status');
     });
 
-    // Health score metric (including XMRTCharger)
-    let healthScore = 100;
-    if (tasksByStatus['BLOCKED']) healthScore -= tasksByStatus['BLOCKED'] * 5;
-    if (agentsByStatus['ERROR']) healthScore -= agentsByStatus['ERROR'] * 10;
-    if (successRate < 70) healthScore -= (70 - successRate);
-    if (activeDeviceCount === 0 && (devices?.length || 0) > 5) healthScore -= 5;
-    if (avgEfficiency < 70 && (chargingSessions?.length || 0) > 10) healthScore -= 5;
-    if (validatedEvents < (popEvents?.length || 0) * 0.8) healthScore -= 5;
-    healthScore = Math.max(0, Math.min(100, healthScore));
+    // Fetch cron job health for unified scoring
+    let cronStats = { failing: 0, stalled: 0 };
+    try {
+      const { data: cronJobs } = await supabase.rpc('get_cron_jobs_status');
+      cronStats = extractCronMetrics(cronJobs || []);
+    } catch (cronErr) {
+      console.warn('⚠️ Could not fetch cron job status:', cronErr);
+    }
 
-    metrics += formatPrometheusMetric('eliza_health_score', healthScore, {}, 'Overall system health score (0-100)');
+    // Health score metric - UNIFIED SCORING SYSTEM
+    const healthMetrics = buildHealthMetrics({
+      apiKeyHealth: { unhealthy: 0 }, // Would need separate query
+      pythonExecStats: { failed: failedExecs },
+      taskStats: { BLOCKED: tasksByStatus['BLOCKED'] || 0 },
+      cronStats,
+      agentStats: { ERROR: agentsByStatus['ERROR'] || 0 },
+      edgeFunctionStats: { overall_error_rate: 0 },
+      deviceStats: { total: devices?.length || 0, active: activeDeviceCount },
+      chargingStats: { avg_efficiency: avgEfficiency, total: chargingSessions?.length || 0 },
+      commandStats: { failed: commandsByStatus['failed'] || 0 }
+    });
+
+    const healthResult = calculateUnifiedHealthScore(healthMetrics);
+
+    metrics += formatPrometheusMetric('eliza_health_score', healthResult.score, {}, 'Overall system health score (0-100)');
+    metrics += formatPrometheusMetric('eliza_health_status', healthResult.status === 'healthy' ? 1 : healthResult.status === 'warning' ? 2 : healthResult.status === 'degraded' ? 3 : 4, {}, 'Health status (1=healthy, 2=warning, 3=degraded, 4=critical)');
+    metrics += formatPrometheusMetric('eliza_health_issues_count', healthResult.issues.length, {}, 'Number of health issues detected');
 
     // System uptime (use agent count as a proxy for system being operational)
     metrics += formatPrometheusMetric('eliza_system_operational', agents && agents.length > 0 ? 1 : 0, {}, 'System operational status (1=up, 0=down)');

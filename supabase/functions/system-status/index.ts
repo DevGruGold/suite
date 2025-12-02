@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
 import { EDGE_FUNCTIONS_REGISTRY } from '../_shared/edgeFunctionRegistry.ts';
+import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics } from '../_shared/healthScoring.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -484,21 +485,32 @@ serve(async (req) => {
       };
     }
     
-    // 9. Generate Health Summary
-    const healthyComponents = Object.values(statusReport.components).filter(
-      (c: any) => c.status === 'healthy'
-    ).length;
-    const totalComponents = Object.keys(statusReport.components).length;
+    // 9. Generate Health Summary - UNIFIED SCORING SYSTEM
+    const cronMetrics = extractCronMetrics(statusReport.components.cron_jobs?.all_jobs || []);
     
-    statusReport.health_score = Math.round((healthyComponents / totalComponents) * 100);
+    const healthMetrics = buildHealthMetrics({
+      apiKeyHealth: { unhealthy: 0 }, // API key health checked separately
+      pythonExecStats: { failed: 0 }, // Would need separate query
+      taskStats: { blocked: statusReport.components.tasks?.stats?.blocked || 0 },
+      cronStats: { 
+        failing: statusReport.components.cron_jobs?.failing_jobs || cronMetrics.failing,
+        stalled: statusReport.components.cron_jobs?.stalled_jobs || cronMetrics.stalled
+      },
+      agentStats: { error: statusReport.components.agents?.stats?.error || 0 },
+      edgeFunctionStats: { overall_error_rate: statusReport.components.edge_functions?.overall_error_rate || 0 },
+      deviceStats: { total: 0, active: 0 },
+      chargingStats: { avg_efficiency: 100, total: 0 },
+      commandStats: { failed: 0 }
+    });
     
-    if (statusReport.health_score < 50) {
-      statusReport.overall_status = 'unhealthy';
-    } else if (statusReport.health_score < 80) {
-      statusReport.overall_status = 'degraded';
-    }
+    const healthResult = calculateUnifiedHealthScore(healthMetrics);
     
-    console.log(`✅ System Status Check Complete - Overall: ${statusReport.overall_status} (${statusReport.health_score}% healthy)`);
+    statusReport.health_score = healthResult.score;
+    statusReport.overall_status = healthResult.status;
+    statusReport.health_issues = healthResult.issues;
+    statusReport.scoring_method = 'unified_v1';
+    
+    console.log(`✅ System Status Check Complete - Overall: ${statusReport.overall_status} (${statusReport.health_score}/100)`);
     
     return new Response(
       JSON.stringify({
