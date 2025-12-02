@@ -2112,6 +2112,59 @@ export type Database = {
         }
         Relationships: []
       }
+      eliza_decision_reports: {
+        Row: {
+          community_votes: Json | null
+          created_at: string | null
+          decision: string
+          decision_method: string
+          executive_votes: Json | null
+          id: string
+          proposal_id: string | null
+          reasoning: string
+          total_community_votes: number | null
+          total_executive_votes: number | null
+          weighted_score_approve: number | null
+          weighted_score_reject: number | null
+        }
+        Insert: {
+          community_votes?: Json | null
+          created_at?: string | null
+          decision: string
+          decision_method: string
+          executive_votes?: Json | null
+          id?: string
+          proposal_id?: string | null
+          reasoning: string
+          total_community_votes?: number | null
+          total_executive_votes?: number | null
+          weighted_score_approve?: number | null
+          weighted_score_reject?: number | null
+        }
+        Update: {
+          community_votes?: Json | null
+          created_at?: string | null
+          decision?: string
+          decision_method?: string
+          executive_votes?: Json | null
+          id?: string
+          proposal_id?: string | null
+          reasoning?: string
+          total_community_votes?: number | null
+          total_executive_votes?: number | null
+          weighted_score_approve?: number | null
+          weighted_score_reject?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "eliza_decision_reports_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "edge_function_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       eliza_function_usage: {
         Row: {
           context: string | null

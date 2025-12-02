@@ -145,19 +145,35 @@ serve(async (req) => {
 
     // Action 3: Finalize voting when community phase ends
     if (action === 'finalize_voting' || action === 'check_all') {
-      const { data: expiredCommunity, error: commError } = await supabase
+      // Check both community phase with expired deadline AND executive phase with expired deadline
+      const { data: expiredProposals, error: commError } = await supabase
         .from('edge_function_proposals')
-        .select('id, function_name, community_deadline')
+        .select('id, function_name, community_deadline, executive_deadline, voting_phase')
         .eq('status', 'voting')
-        .eq('voting_phase', 'community')
-        .lt('community_deadline', new Date().toISOString());
+        .in('voting_phase', ['community', 'executive']);
 
       if (commError) {
-        console.error('Error checking community deadlines:', commError);
-      } else if (expiredCommunity && expiredCommunity.length > 0) {
-        console.log(`🗳️ ${expiredCommunity.length} proposals ready for final count`);
+        console.error('Error checking deadlines:', commError);
+      } else if (expiredProposals && expiredProposals.length > 0) {
+        const now = new Date();
         
-        for (const proposal of expiredCommunity) {
+        // Filter proposals ready for finalization
+        const readyToFinalize = expiredProposals.filter(p => {
+          if (p.voting_phase === 'community' && p.community_deadline) {
+            return new Date(p.community_deadline) < now;
+          }
+          // Also finalize executive phase if deadline passed (Eliza decides with available votes)
+          if (p.voting_phase === 'executive' && p.executive_deadline) {
+            return new Date(p.executive_deadline) < now;
+          }
+          return false;
+        });
+
+        if (readyToFinalize.length > 0) {
+          console.log(`🗳️ ${readyToFinalize.length} proposals ready for Eliza's weighted determination`);
+        }
+        
+        for (const proposal of readyToFinalize) {
           // Mark as final count phase
           await supabase
             .from('edge_function_proposals')
@@ -167,13 +183,14 @@ serve(async (req) => {
             })
             .eq('id', proposal.id);
 
-          // Count votes
+          // Get ALL votes (executive + community)
           const { data: votes } = await supabase
             .from('executive_votes')
-            .select('executive_name, vote')
+            .select('executive_name, vote, reasoning')
             .eq('proposal_id', proposal.id);
 
-          const executiveVotes = votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)) || [];
+          const executiveNames = ['CSO', 'CTO', 'CIO', 'CAO'];
+          const executiveVotes = votes?.filter(v => executiveNames.includes(v.executive_name)) || [];
           const communityVotes = votes?.filter(v => v.executive_name === 'COMMUNITY') || [];
 
           const execApprovals = executiveVotes.filter(v => v.vote === 'approve').length;
@@ -181,9 +198,77 @@ serve(async (req) => {
           const communityApprovals = communityVotes.filter(v => v.vote === 'approve').length;
           const communityRejections = communityVotes.filter(v => v.vote === 'reject').length;
 
-          // Determine outcome: 3/4 executive approvals needed
-          const approved = execApprovals >= 3;
+          // WEIGHTED VOTING ALGORITHM
+          // Executive vote = 10 points, Community vote = 1 point
+          const EXEC_WEIGHT = 10;
+          const COMMUNITY_WEIGHT = 1;
+          
+          const weightedApprove = (execApprovals * EXEC_WEIGHT) + (communityApprovals * COMMUNITY_WEIGHT);
+          const weightedReject = (execRejections * EXEC_WEIGHT) + (communityRejections * COMMUNITY_WEIGHT);
+          
+          let approved = false;
+          let decisionMethod = '';
+          let reasoning = '';
+
+          // Decision Tree:
+          if (execApprovals >= 3) {
+            // Clear executive consensus (3+ approvals)
+            approved = true;
+            decisionMethod = 'executive_consensus';
+            reasoning = `Clear executive consensus with ${execApprovals}/4 executives approving. Community supported with ${communityApprovals} additional approvals.`;
+          } else if (execRejections >= 3) {
+            // Clear executive rejection
+            approved = false;
+            decisionMethod = 'executive_rejection';
+            reasoning = `Executive council rejected with ${execRejections}/4 votes against. Community had ${communityRejections} rejections.`;
+          } else if (executiveVotes.length === 0) {
+            // No executives voted - community supermajority decides
+            const totalCommunity = communityApprovals + communityRejections;
+            if (totalCommunity > 0) {
+              const approvalRate = communityApprovals / totalCommunity;
+              approved = approvalRate >= 0.6; // 60% supermajority
+              decisionMethod = 'community_supermajority';
+              reasoning = `No executives voted within the deadline. Community decided with ${(approvalRate * 100).toFixed(0)}% approval rate (${communityApprovals}/${totalCommunity} votes). ${approved ? 'Met' : 'Did not meet'} 60% supermajority threshold.`;
+            } else {
+              // No votes at all - reject by default
+              approved = false;
+              decisionMethod = 'community_supermajority';
+              reasoning = 'No votes were cast by executives or community. Proposal rejected due to lack of participation.';
+            }
+          } else {
+            // Incomplete/split executive votes - use weighted scoring
+            if (weightedApprove > weightedReject) {
+              approved = true;
+              decisionMethod = 'weighted_score';
+              reasoning = `Weighted voting determined approval. Score: ${weightedApprove} approve vs ${weightedReject} reject. (${execApprovals} executives + ${communityApprovals} community approved, ${execRejections} executives + ${communityRejections} community rejected)`;
+            } else if (weightedReject > weightedApprove) {
+              approved = false;
+              decisionMethod = 'weighted_score';
+              reasoning = `Weighted voting determined rejection. Score: ${weightedReject} reject vs ${weightedApprove} approve. (${execRejections} executives + ${communityRejections} community rejected, ${execApprovals} executives + ${communityApprovals} community approved)`;
+            } else {
+              // Tie - Eliza breaks the tie based on community sentiment
+              const communityLeans = communityApprovals > communityRejections;
+              approved = communityLeans;
+              decisionMethod = 'tie_breaker';
+              reasoning = `Weighted scores tied at ${weightedApprove}. Eliza breaks tie based on community sentiment: ${communityApprovals} approvals vs ${communityRejections} rejections. Decision: ${approved ? 'APPROVED' : 'REJECTED'}.`;
+            }
+          }
+
           const newStatus = approved ? 'approved' : 'rejected';
+
+          // Store detailed decision report
+          await supabase.from('eliza_decision_reports').insert({
+            proposal_id: proposal.id,
+            decision: newStatus,
+            decision_method: decisionMethod,
+            reasoning: reasoning,
+            executive_votes: executiveVotes.reduce((acc, v) => ({ ...acc, [v.executive_name]: { vote: v.vote, reasoning: v.reasoning } }), {}),
+            community_votes: { approvals: communityApprovals, rejections: communityRejections },
+            weighted_score_approve: weightedApprove,
+            weighted_score_reject: weightedReject,
+            total_executive_votes: executiveVotes.length,
+            total_community_votes: communityVotes.length
+          });
 
           await supabase
             .from('edge_function_proposals')
@@ -194,22 +279,25 @@ serve(async (req) => {
             })
             .eq('id', proposal.id);
 
-          // Log final result
+          // Log final result with Eliza's reasoning
           await supabase.from('activity_feed').insert({
             type: approved ? 'proposal_approved' : 'proposal_rejected',
             title: `${approved ? '✅ Approved' : '❌ Rejected'}: ${proposal.function_name}`,
-            description: `Final tally: ${execApprovals}/4 executive approvals, ${communityApprovals} community approvals, ${communityRejections} community rejections.`,
+            description: reasoning,
             data: { 
               proposal_id: proposal.id, 
+              decision_method: decisionMethod,
               executive_approvals: execApprovals,
               executive_rejections: execRejections,
               community_approvals: communityApprovals,
               community_rejections: communityRejections,
+              weighted_approve: weightedApprove,
+              weighted_reject: weightedReject,
               outcome: newStatus
             }
           });
 
-          // If approved, trigger implementation workflow
+          // Trigger appropriate workflow
           if (approved) {
             await supabase.functions.invoke('execute-approved-proposal', {
               body: { proposal_id: proposal.id }
@@ -220,10 +308,10 @@ serve(async (req) => {
             }).catch(e => console.error('Failed to handle rejection:', e));
           }
 
-          console.log(`✅ ${proposal.function_name} → ${newStatus.toUpperCase()}`);
+          console.log(`✅ ${proposal.function_name} → ${newStatus.toUpperCase()} (${decisionMethod})`);
         }
         
-        results.finalized = expiredCommunity.length;
+        results.finalized = readyToFinalize.length;
       }
     }
 
