@@ -123,18 +123,33 @@ Respond in JSON format:
 {"vote": "approve|reject|abstain", "reasoning": "Your detailed reasoning here"}
 `;
 
-        // Call lovable-chat to get executive's analysis
+        // Call lovable-chat to get executive's analysis using correct message format
         const { data: aiResponse, error: aiError } = await supabase.functions.invoke('lovable-chat', {
           body: {
-            message: analysisPrompt,
-            executive: exec,
-            mode: 'governance_analysis'
+            messages: [
+              { role: 'user', content: analysisPrompt }
+            ],
+            userContext: {
+              executiveRole: exec,
+              mode: 'governance_analysis',
+              governanceTask: 'proposal_analysis',
+              proposalId: proposal_id
+            }
           }
         });
 
         if (aiError) {
-          console.error(`❌ ${exec} analysis failed:`, aiError);
-          errors.push({ executive: exec, error: aiError.message });
+          // Extract detailed error from response if available
+          const errorDetail = aiResponse?.error || aiError.message;
+          console.error(`❌ ${exec} analysis failed:`, errorDetail);
+          errors.push({ executive: exec, error: errorDetail });
+          continue;
+        }
+
+        // Validate response exists
+        if (!aiResponse?.response && !aiResponse?.message) {
+          console.error(`❌ ${exec} returned empty response`);
+          errors.push({ executive: exec, error: 'Empty response from AI' });
           continue;
         }
 
