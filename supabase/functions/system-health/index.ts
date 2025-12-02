@@ -3,6 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { formatSystemReport, SystemReport } from "../_shared/reportFormatter.ts";
+import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics } from '../_shared/healthScoring.ts';
 
 const logger = EdgeFunctionLogger('system-health');
 
@@ -235,59 +236,36 @@ serve(async (req) => {
         })
     ]);
 
-    // Calculate overall health score (0-100) - Optimized for 100/100
-    let healthScore = 100;
-    const issues = [];
-
-    // Check for critical issues (only critical failures reduce score)
-    if (apiKeyHealth.unhealthy > 0) {
-      healthScore -= apiKeyHealth.unhealthy * 15;
-      issues.push({ severity: 'critical', message: `${apiKeyHealth.unhealthy} API key(s) unhealthy`, details: apiKeyHealth.critical_issues });
+    // Fetch cron job health for unified scoring
+    let cronStats = { failing: 0, stalled: 0 };
+    try {
+      const { data: cronJobs } = await supabase.rpc('get_cron_jobs_status');
+      cronStats = extractCronMetrics(cronJobs || []);
+    } catch (cronErr) {
+      console.warn('⚠️ Could not fetch cron job status:', cronErr);
     }
 
-    // Only penalize for significant Python failures (>10 failures is concerning)
-    if (pythonExecStats.failed > 10) {
-      healthScore -= 10;
-      issues.push({ severity: 'warning', message: `${pythonExecStats.failed} failed Python executions in last 24h` });
-    }
+    // Calculate overall health score using UNIFIED SCORING SYSTEM
+    const healthMetrics = buildHealthMetrics({
+      apiKeyHealth: { unhealthy: apiKeyHealth.unhealthy },
+      pythonExecStats: { failed: pythonExecStats.failed },
+      taskStats: { BLOCKED: taskStats.BLOCKED },
+      cronStats,
+      agentStats: { ERROR: 0 }, // Agents don't track ERROR status here
+      edgeFunctionStats: { overall_error_rate: 0 },
+      deviceStats: { total: deviceStats.total, active: deviceStats.active },
+      chargingStats: { avg_efficiency: chargingStats.avg_efficiency, total: chargingStats.total },
+      commandStats: { failed: commandStats.failed }
+    });
 
-    // Note: Idle agents with no tasks is NORMAL operation, not an issue
-    // Note: Some blocked tasks are part of normal development flow, only warn if excessive
-    if (taskStats.BLOCKED > 3) {
-      healthScore -= (taskStats.BLOCKED - 3) * 3; // Only penalize after 3 blocked
-      issues.push({ severity: 'warning', message: `${taskStats.BLOCKED} blocked task(s) need attention` });
-    }
-
-    // XMRTCharger health checks
-    if (deviceStats.active === 0 && deviceStats.total > 5) {
-      healthScore -= 5;
-      issues.push({ 
-        severity: 'warning', 
-        message: 'No active XMRTCharger devices connected' 
-      });
-    }
-
-    if (chargingStats.avg_efficiency < 70 && chargingStats.total > 10) {
-      healthScore -= 5;
-      issues.push({ 
-        severity: 'warning', 
-        message: `Low charging efficiency: ${chargingStats.avg_efficiency}%` 
-      });
-    }
-
-    if (commandStats.failed > 5) {
-      healthScore -= 10;
-      issues.push({ 
-        severity: 'high', 
-        message: `${commandStats.failed} engagement commands failed` 
-      });
-    }
-
-    // Determine health status
-    let status = 'healthy';
-    if (healthScore < 50) status = 'critical';
-    else if (healthScore < 70) status = 'degraded';
-    else if (healthScore < 90) status = 'warning';
+    const healthResult = calculateUnifiedHealthScore(healthMetrics);
+    const healthScore = healthResult.score;
+    const status = healthResult.status;
+    const issues = healthResult.issues.map(i => ({
+      severity: i.severity,
+      message: i.message,
+      details: i.severity === 'critical' && apiKeyHealth.critical_issues ? apiKeyHealth.critical_issues : undefined
+    }));
 
     const healthReport: SystemReport = {
       timestamp: new Date().toISOString(),
