@@ -1992,8 +1992,10 @@ export type Database = {
       edge_function_proposals: {
         Row: {
           category: string
+          community_deadline: string | null
           created_at: string | null
           description: string
+          executive_deadline: string | null
           function_name: string
           id: string
           implementation_code: string | null
@@ -2002,11 +2004,15 @@ export type Database = {
           status: string | null
           updated_at: string | null
           use_cases: Json
+          voting_phase: string | null
+          voting_started_at: string | null
         }
         Insert: {
           category: string
+          community_deadline?: string | null
           created_at?: string | null
           description: string
+          executive_deadline?: string | null
           function_name: string
           id?: string
           implementation_code?: string | null
@@ -2015,11 +2021,15 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           use_cases?: Json
+          voting_phase?: string | null
+          voting_started_at?: string | null
         }
         Update: {
           category?: string
+          community_deadline?: string | null
           created_at?: string | null
           description?: string
+          executive_deadline?: string | null
           function_name?: string
           id?: string
           implementation_code?: string | null
@@ -2028,6 +2038,8 @@ export type Database = {
           status?: string | null
           updated_at?: string | null
           use_cases?: Json
+          voting_phase?: string | null
+          voting_started_at?: string | null
         }
         Relationships: []
       }
@@ -3942,6 +3954,60 @@ export type Database = {
           status?: string | null
         }
         Relationships: []
+      }
+      proposal_comments: {
+        Row: {
+          author_name: string
+          author_session_key: string | null
+          comment: string
+          comment_type: string | null
+          created_at: string | null
+          downvotes: number | null
+          id: string
+          parent_comment_id: string | null
+          proposal_id: string | null
+          upvotes: number | null
+        }
+        Insert: {
+          author_name: string
+          author_session_key?: string | null
+          comment: string
+          comment_type?: string | null
+          created_at?: string | null
+          downvotes?: number | null
+          id?: string
+          parent_comment_id?: string | null
+          proposal_id?: string | null
+          upvotes?: number | null
+        }
+        Update: {
+          author_name?: string
+          author_session_key?: string | null
+          comment?: string
+          comment_type?: string | null
+          created_at?: string | null
+          downvotes?: number | null
+          id?: string
+          parent_comment_id?: string | null
+          proposal_id?: string | null
+          upvotes?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "proposal_comments_parent_comment_id_fkey"
+            columns: ["parent_comment_id"]
+            isOneToOne: false
+            referencedRelation: "proposal_comments"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "proposal_comments_proposal_id_fkey"
+            columns: ["proposal_id"]
+            isOneToOne: false
+            referencedRelation: "edge_function_proposals"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rate_limits: {
         Row: {
