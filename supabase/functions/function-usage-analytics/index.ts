@@ -28,6 +28,9 @@ serve(async (req) => {
     const timeThreshold = new Date();
     timeThreshold.setHours(timeThreshold.getHours() - time_period_hours);
 
+    // Python function name aliases - all these refer to Python code execution
+    const pythonAliases = ['python-executor', 'eliza-python-runtime', 'execute_python'];
+    
     // Base query
     let query = supabase
       .from('eliza_function_usage')
@@ -35,9 +38,15 @@ serve(async (req) => {
       .gte('invoked_at', timeThreshold.toISOString())
       .order('invoked_at', { ascending: false });
 
-    // Apply filters
+    // Apply filters with Python alias grouping
     if (function_name) {
-      query = query.eq('function_name', function_name);
+      // If querying for any Python executor variant, include all aliases
+      if (pythonAliases.includes(function_name)) {
+        console.log(`🐍 Python alias detected: ${function_name} - querying all Python variants: ${pythonAliases.join(', ')}`);
+        query = query.in('function_name', pythonAliases);
+      } else {
+        query = query.eq('function_name', function_name);
+      }
     }
     if (executive_name) {
       query = query.eq('executive_name', executive_name);
