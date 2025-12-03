@@ -78,21 +78,40 @@ ${code}
       const output = new TextDecoder().decode(stdout);
       const error = new TextDecoder().decode(stderr);
 
-      // Log execution
+      // Log execution to eliza_python_executions
       await supabase.from('eliza_python_executions').insert({
         code,
         output: output || null,
-        error: error || null,
+        error_message: error || null,  // FIXED: use error_message not error
         exit_code: exitCode,
         execution_time_ms: executionTime,
         source: source,
         purpose: purpose || null,
+        status: exitCode === 0 ? 'completed' : 'error',  // Add explicit status
         metadata: {
           agent_id,
           task_id,
           runtime: 'eliza-python-runtime',
           network_enabled: true
         }
+      });
+
+      // ALSO log to eliza_function_usage for analytics visibility
+      await supabase.from('eliza_function_usage').insert({
+        function_name: 'execute_python',
+        success: exitCode === 0,
+        execution_time_ms: executionTime,
+        error_message: exitCode !== 0 ? (error || 'Execution failed') : null,
+        tool_category: 'python',
+        context: JSON.stringify({
+          source: 'eliza-python-runtime-direct',
+          purpose: purpose,
+          code_length: code?.length || 0,
+          agent_id,
+          task_id
+        }),
+        invoked_at: new Date().toISOString(),
+        deployment_version: 'eliza-python-runtime-v2'
       });
 
       // Log to activity

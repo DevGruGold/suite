@@ -140,6 +140,7 @@ serve(async (req) => {
     }
 
     // STRATEGY 3: Query eliza_python_executions for Python-specific logs
+    // FIXED: Schema uses status='completed' (not 'success') and error_message (not 'error')
     console.log('📝 Querying eliza_python_executions...');
     const { data: pythonLogs, error: pythonLogsError } = await supabase
       .from('eliza_python_executions')
@@ -151,17 +152,20 @@ serve(async (req) => {
     if (!pythonLogsError && pythonLogs && pythonLogs.length > 0) {
       console.log(`✅ Found ${pythonLogs.length} eliza_python_executions entries`);
       
+      // FIXED: Use correct schema - status='completed' and error_message field
       const pythonLogRecords = pythonLogs.map(log => ({
-        function_name: 'python-executor',
-        success: log.status === 'success',
+        function_name: 'execute_python',  // Changed to match tool name
+        success: log.status === 'completed',  // FIXED: was 'success'
         execution_time_ms: log.execution_time_ms || null,
-        error_message: log.status === 'error' ? log.error : null,
+        error_message: (log.status === 'error' || log.status === 'failed') ? log.error_message : null,  // FIXED: was 'error'
         context: JSON.stringify({
           source: 'python_executions_sync',
-          description: log.description,
+          purpose: log.purpose,
+          original_source: log.source,
           agent_id: log.agent_id,
           task_id: log.task_id,
-          original_id: log.id
+          original_id: log.id,
+          original_status: log.status
         }),
         invoked_at: log.created_at,
         deployment_version: 'python_execution_sync',
