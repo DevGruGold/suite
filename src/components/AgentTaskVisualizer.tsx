@@ -22,6 +22,8 @@ import {
   ArrowRight,
   GripVertical
 } from 'lucide-react';
+import { TaskProgressRing, TaskProgressBar } from './TaskProgressRing';
+import { AgentTaskSummary } from './AgentTaskSummary';
 
 interface Task {
   id: string;
@@ -33,6 +35,9 @@ interface Task {
   assignee_agent_id: string | null;
   blocking_reason: string | null;
   updated_at: string;
+  stage_started_at: string | null;
+  auto_advance_threshold_hours: number | null;
+  progress_percentage: number | null;
 }
 
 interface Agent {
@@ -87,29 +92,52 @@ function getStageIndex(stage: string): number {
   return STAGES.findIndex(s => s.key === stage);
 }
 
-function AgentCard({ agent, taskCount }: { agent: Agent; taskCount: number }) {
+interface AgentCardProps {
+  agent: Agent;
+  taskCount: number;
+  assignedTasks: Task[];
+}
+
+function AgentCard({ agent, taskCount, assignedTasks }: AgentCardProps) {
   const isActive = agent.status === 'BUSY';
   const shortName = agent.name.split(' - ')[0].split(' ')[0];
+  
+  // Find most urgent task
+  const urgentTask = assignedTasks.reduce<Task | null>((urgent, task) => {
+    if (!urgent) return task;
+    return (task.progress_percentage || 0) > (urgent.progress_percentage || 0) ? task : urgent;
+  }, null);
+  const hasUrgent = urgentTask && (urgentTask.progress_percentage || 0) >= 75;
   
   return (
     <div 
       className={`p-2.5 rounded-lg border transition-all hover:scale-[1.02] ${
-        isActive 
-          ? 'border-green-500/50 bg-green-500/10' 
-          : 'border-blue-500/30 bg-blue-500/5'
+        hasUrgent
+          ? 'border-red-500/50 bg-red-500/10 animate-pulse'
+          : isActive 
+            ? 'border-green-500/50 bg-green-500/10' 
+            : 'border-blue-500/30 bg-blue-500/5'
       }`}
     >
       <div className="flex items-center gap-2">
         <div 
           className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
+            hasUrgent ? 'bg-red-500 animate-pulse' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
           }`} 
         />
         <span className="text-xs font-medium truncate text-foreground">{shortName}</span>
       </div>
+      
+      {/* Pipeline position summary */}
+      {assignedTasks.length > 0 && (
+        <div className="mt-1.5">
+          <AgentTaskSummary tasks={assignedTasks} compact />
+        </div>
+      )}
+      
       <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
-        <span className={isActive ? 'text-green-400' : 'text-blue-400'}>
-          {agent.status}
+        <span className={hasUrgent ? 'text-red-400' : isActive ? 'text-green-400' : 'text-blue-400'}>
+          {hasUrgent ? 'URGENT' : agent.status}
         </span>
         <span>•</span>
         <span>{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
@@ -129,6 +157,8 @@ interface TaskCardProps {
 function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
   const statusStyle = STATUS_STYLES[task.status] || STATUS_STYLES.PENDING;
   const categoryColor = task.category ? CATEGORY_COLORS[task.category.toLowerCase()] || 'bg-muted' : 'bg-muted';
+  const progressPercentage = task.progress_percentage || 0;
+  const isUrgent = progressPercentage >= 75;
   
   return (
     <div 
@@ -137,8 +167,11 @@ function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging }: TaskC
       onDragEnd={onDragEnd}
       className={`p-3 rounded-lg border ${statusStyle.border} ${statusStyle.bg} backdrop-blur-sm transition-all cursor-grab active:cursor-grabbing group ${
         isDragging ? 'opacity-50 scale-95' : 'hover:scale-[1.02] hover:shadow-lg'
-      }`}
+      } ${isUrgent ? 'ring-1 ring-red-500/50' : ''}`}
     >
+      {/* Progress bar at top */}
+      <TaskProgressBar percentage={progressPercentage} className="mb-2" />
+      
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-1">
           <GripVertical className="w-3 h-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
@@ -175,9 +208,18 @@ function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging }: TaskC
         </div>
       )}
       
-      <div className="mt-2 flex items-center gap-1 text-[10px] text-muted-foreground">
-        <Clock className="w-3 h-3" />
-        {getRelativeTime(task.updated_at)}
+      {/* Auto-advance countdown */}
+      <div className="mt-2 flex items-center justify-between">
+        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+          <Clock className="w-3 h-3" />
+          {getRelativeTime(task.updated_at)}
+        </div>
+        <TaskProgressRing 
+          percentage={progressPercentage}
+          stageStartedAt={task.stage_started_at}
+          thresholdHours={task.auto_advance_threshold_hours || 4}
+          size="sm"
+        />
       </div>
     </div>
   );
@@ -417,7 +459,7 @@ export function AgentTaskVisualizer() {
       const [tasksRes, agentsRes] = await Promise.all([
         supabase
           .from('tasks')
-          .select('id, title, stage, status, priority, category, assignee_agent_id, blocking_reason, updated_at')
+          .select('id, title, stage, status, priority, category, assignee_agent_id, blocking_reason, updated_at, stage_started_at, auto_advance_threshold_hours, progress_percentage')
           .in('status', ['PENDING', 'IN_PROGRESS'])
           .order('priority', { ascending: false })
           .limit(50),
@@ -516,6 +558,11 @@ export function AgentTaskVisualizer() {
   const getAgentTaskCount = (agentId: string) => {
     return tasks.filter(t => t.assignee_agent_id === agentId).length;
   };
+  
+  // Get assigned tasks for an agent
+  const getAgentTasks = (agentId: string): Task[] => {
+    return tasks.filter(t => t.assignee_agent_id === agentId);
+  };
 
   if (isLoading) {
     return (
@@ -602,7 +649,8 @@ export function AgentTaskVisualizer() {
             <AgentCard 
               key={agent.id} 
               agent={agent} 
-              taskCount={getAgentTaskCount(agent.id)} 
+              taskCount={getAgentTaskCount(agent.id)}
+              assignedTasks={getAgentTasks(agent.id)}
             />
           ))}
           {agents.length === 0 && (
