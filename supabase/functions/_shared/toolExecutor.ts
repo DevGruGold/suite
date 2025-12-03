@@ -1126,12 +1126,71 @@ export async function executeToolCall(
           ? { success: false, error: deleteKnowledgeResult.error.message }
           : { success: true, result: deleteKnowledgeResult.data };
         break;
+
+      // ====================================================================
+      // DEPLOYMENT AUTOMATION TOOLS
+      // ====================================================================
+      case 'deploy_approved_function':
+        console.log(`🚀 [${executiveName}] Deploy Approved Function: ${parsedArgs.proposal_id}`);
+        const deployResult = await supabase.functions.invoke('deploy-approved-edge-function', {
+          body: { 
+            action: 'deploy_single',
+            proposal_id: parsedArgs.proposal_id,
+            auto_deploy: parsedArgs.auto_deploy ?? true,
+            run_health_check: parsedArgs.run_health_check ?? true,
+            version_tag: parsedArgs.version_tag
+          }
+        });
+        result = deployResult.error
+          ? { success: false, error: deployResult.error.message }
+          : { success: true, result: deployResult.data };
+        break;
+
+      case 'get_deployment_status':
+        console.log(`📊 [${executiveName}] Get Deployment Status`);
+        const statusDeployResult = await supabase.functions.invoke('deploy-approved-edge-function', {
+          body: { 
+            action: 'get_deployment_status',
+            proposal_id: parsedArgs.proposal_id
+          }
+        });
+        result = statusDeployResult.error
+          ? { success: false, error: statusDeployResult.error.message }
+          : { success: true, result: statusDeployResult.data };
+        break;
+
+      case 'rollback_deployment':
+        console.log(`⏮️ [${executiveName}] Rollback Deployment: ${parsedArgs.proposal_id}`);
+        const rollbackResult = await supabase.functions.invoke('deploy-approved-edge-function', {
+          body: { 
+            action: 'rollback',
+            proposal_id: parsedArgs.proposal_id
+          }
+        });
+        result = rollbackResult.error
+          ? { success: false, error: rollbackResult.error.message }
+          : { success: true, result: rollbackResult.data };
+        break;
+
+      case 'process_deployment_queue':
+        console.log(`📋 [${executiveName}] Process Deployment Queue`);
+        const queueResult = await supabase.functions.invoke('deploy-approved-edge-function', {
+          body: { 
+            action: 'process_queue',
+            auto_deploy: parsedArgs.auto_deploy ?? true,
+            run_health_check: parsedArgs.run_health_check ?? true
+          }
+        });
+        result = queueResult.error
+          ? { success: false, error: queueResult.error.message }
+          : { success: true, result: queueResult.data };
+        break;
         
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, and more.`
         };
     }
     

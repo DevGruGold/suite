@@ -1938,5 +1938,68 @@ export const ELIZA_TOOLS = [
         required: ['entity_id']
       }
     }
+  },
+
+  // ====================================================================
+  // 🚀 DEPLOYMENT AUTOMATION TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'deploy_approved_function',
+      description: '🚀 Deploy an approved edge function proposal to production. Commits code to GitHub, updates config.toml, and triggers Lovable auto-deployment.',
+      parameters: {
+        type: 'object',
+        properties: {
+          proposal_id: { type: 'string', description: 'UUID of the approved proposal to deploy' },
+          auto_deploy: { type: 'boolean', description: 'If true, commit directly to main (triggers auto-deploy). If false, create PR for review. Default: true' },
+          run_health_check: { type: 'boolean', description: 'Whether to run post-deployment health checks. Default: true' },
+          version_tag: { type: 'string', description: 'Optional version tag for tracking (e.g., "v1.0.0")' }
+        },
+        required: ['proposal_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_deployment_status',
+      description: '📊 Get deployment status for proposals. Shows deploying, deployed, and failed deployments.',
+      parameters: {
+        type: 'object',
+        properties: {
+          proposal_id: { type: 'string', description: 'Optional: specific proposal ID. If omitted, returns all recent deployments.' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'rollback_deployment',
+      description: '⏮️ Rollback a deployed function to its previous version or remove it entirely.',
+      parameters: {
+        type: 'object',
+        properties: {
+          proposal_id: { type: 'string', description: 'UUID of the deployed proposal to rollback' },
+          reason: { type: 'string', description: 'Reason for rollback' }
+        },
+        required: ['proposal_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'process_deployment_queue',
+      description: '📋 Process all proposals queued for deployment. Deploys all approved functions waiting in the queue.',
+      parameters: {
+        type: 'object',
+        properties: {
+          auto_deploy: { type: 'boolean', description: 'Commit directly to main (default: true)' },
+          run_health_check: { type: 'boolean', description: 'Run health checks after deployment (default: true)' }
+        }
+      }
+    }
   }
 ];

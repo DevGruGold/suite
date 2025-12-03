@@ -567,3 +567,15 @@ function_name = "governance-phase-manager"
 schedule = "5,20,35,50 * * * *"
 body = '{"action":"finalize_voting"}'
 
+# Deploy approved functions - every 10 minutes
+[[edge_runtime.scheduled_functions]]
+function_name = "deploy-approved-edge-function"
+schedule = "3,13,23,33,43,53 * * * *"
+body = '{"action":"process_queue"}'
+
+# ====================================================================
+# DEPLOYMENT AUTOMATION
+# ====================================================================
+
+[functions.deploy-approved-edge-function]
+verify_jwt = false
