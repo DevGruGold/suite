@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { 
@@ -12,7 +13,10 @@ import {
   User,
   AlertTriangle,
   Clock,
-  ChevronRight
+  ChevronRight,
+  RefreshCw,
+  Bot,
+  Cpu
 } from 'lucide-react';
 
 interface Task {
@@ -31,6 +35,8 @@ interface Agent {
   id: string;
   name: string;
   status: string;
+  role: string;
+  current_workload: number | null;
 }
 
 const STAGES = [
@@ -73,6 +79,37 @@ function getRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
+function AgentCard({ agent, taskCount }: { agent: Agent; taskCount: number }) {
+  const isActive = agent.status === 'BUSY';
+  const shortName = agent.name.split(' - ')[0].split(' ')[0];
+  
+  return (
+    <div 
+      className={`p-2.5 rounded-lg border transition-all hover:scale-[1.02] ${
+        isActive 
+          ? 'border-green-500/50 bg-green-500/10' 
+          : 'border-blue-500/30 bg-blue-500/5'
+      }`}
+    >
+      <div className="flex items-center gap-2">
+        <div 
+          className={`w-2 h-2 rounded-full flex-shrink-0 ${
+            isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
+          }`} 
+        />
+        <span className="text-xs font-medium truncate text-foreground">{shortName}</span>
+      </div>
+      <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
+        <span className={isActive ? 'text-green-400' : 'text-blue-400'}>
+          {agent.status}
+        </span>
+        <span>•</span>
+        <span>{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
+      </div>
+    </div>
+  );
+}
+
 function TaskCard({ task, agentName }: { task: Task; agentName: string | null }) {
   const statusStyle = STATUS_STYLES[task.status] || STATUS_STYLES.PENDING;
   const categoryColor = task.category ? CATEGORY_COLORS[task.category.toLowerCase()] || 'bg-muted' : 'bg-muted';
@@ -92,7 +129,7 @@ function TaskCard({ task, agentName }: { task: Task; agentName: string | null })
         {agentName && (
           <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-5 gap-1">
             <User className="w-2.5 h-2.5" />
-            {agentName}
+            {agentName.split(' - ')[0].split(' ')[0]}
           </Badge>
         )}
         
@@ -180,36 +217,63 @@ function StageColumn({
   );
 }
 
-export function TaskPipeline() {
+export function AgentTaskVisualizer() {
   const [tasks, setTasks] = useState<Task[]>([]);
-  const [agents, setAgents] = useState<Map<string, Agent>>(new Map());
+  const [agents, setAgents] = useState<Agent[]>([]);
+  const [agentMap, setAgentMap] = useState<Map<string, Agent>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [isLive, setIsLive] = useState(true);
 
   useEffect(() => {
     async function fetchData() {
       setIsLoading(true);
+      setError(null);
       
+      console.log('[AgentTaskVisualizer] Fetching data...');
+      
+      // Use same query filters as HeroSection for consistency
       const [tasksRes, agentsRes] = await Promise.all([
         supabase
           .from('tasks')
           .select('id, title, stage, status, priority, category, assignee_agent_id, blocking_reason, updated_at')
-          .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED'])
+          .in('status', ['PENDING', 'IN_PROGRESS'])
           .order('priority', { ascending: false })
           .limit(50),
         supabase
           .from('agents')
-          .select('id, name, status')
+          .select('id, name, status, role, current_workload')
           .in('status', ['IDLE', 'BUSY'])
       ]);
+      
+      console.log('[AgentTaskVisualizer] Results:', {
+        tasks: tasksRes.data?.length,
+        tasksError: tasksRes.error?.message,
+        agents: agentsRes.data?.length,
+        agentsError: agentsRes.error?.message
+      });
+      
+      if (tasksRes.error) {
+        console.error('[AgentTaskVisualizer] Tasks error:', tasksRes.error);
+        setError(`Tasks: ${tasksRes.error.message}`);
+      }
+      
+      if (agentsRes.error) {
+        console.error('[AgentTaskVisualizer] Agents error:', agentsRes.error);
+        setError(prev => prev ? `${prev}; Agents: ${agentsRes.error.message}` : `Agents: ${agentsRes.error.message}`);
+      }
       
       if (tasksRes.data) {
         setTasks(tasksRes.data as Task[]);
       }
       
       if (agentsRes.data) {
-        const agentMap = new Map<string, Agent>();
-        agentsRes.data.forEach((a: Agent) => agentMap.set(a.id, a));
-        setAgents(agentMap);
+        const agentsList = agentsRes.data as Agent[];
+        setAgents(agentsList);
+        const map = new Map<string, Agent>();
+        agentsList.forEach(a => map.set(a.id, a));
+        setAgentMap(map);
       }
       
       setIsLoading(false);
@@ -219,17 +283,18 @@ export function TaskPipeline() {
     
     // Real-time subscriptions
     const tasksChannel = supabase
-      .channel('pipeline-tasks')
+      .channel('visualizer-tasks')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'tasks'
       }, (payload) => {
+        setIsLive(true);
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const newTask = payload.new as Task;
           setTasks(prev => {
             const filtered = prev.filter(t => t.id !== newTask.id);
-            if (['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED'].includes(newTask.status)) {
+            if (['PENDING', 'IN_PROGRESS'].includes(newTask.status)) {
               return [...filtered, newTask].sort((a, b) => b.priority - a.priority).slice(0, 50);
             }
             return filtered;
@@ -241,15 +306,22 @@ export function TaskPipeline() {
       .subscribe();
     
     const agentsChannel = supabase
-      .channel('pipeline-agents')
+      .channel('visualizer-agents')
       .on('postgres_changes', {
         event: '*',
         schema: 'public',
         table: 'agents'
       }, (payload) => {
+        setIsLive(true);
         if (payload.eventType === 'INSERT' || payload.eventType === 'UPDATE') {
           const agent = payload.new as Agent;
-          setAgents(prev => new Map(prev).set(agent.id, agent));
+          if (['IDLE', 'BUSY'].includes(agent.status)) {
+            setAgents(prev => {
+              const filtered = prev.filter(a => a.id !== agent.id);
+              return [...filtered, agent];
+            });
+            setAgentMap(prev => new Map(prev).set(agent.id, agent));
+          }
         }
       })
       .subscribe();
@@ -258,39 +330,132 @@ export function TaskPipeline() {
       supabase.removeChannel(tasksChannel);
       supabase.removeChannel(agentsChannel);
     };
-  }, []);
+  }, [refreshKey]);
+
+  // Calculate task count per agent
+  const getAgentTaskCount = (agentId: string) => {
+    return tasks.filter(t => t.assignee_agent_id === agentId).length;
+  };
 
   if (isLoading) {
     return (
-      <div className="p-4">
-        <div className="flex gap-4">
-          {STAGES.map((stage) => (
-            <div key={stage.key} className="min-w-[180px]">
-              <Skeleton className="h-6 w-24 mb-3" />
-              <Skeleton className="h-24 w-full" />
-            </div>
-          ))}
+      <div className="p-4 space-y-6">
+        {/* Agent Grid Skeleton */}
+        <div>
+          <Skeleton className="h-5 w-32 mb-3" />
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {Array.from({ length: 12 }).map((_, i) => (
+              <Skeleton key={i} className="h-16 w-full" />
+            ))}
+          </div>
+        </div>
+        {/* Task Pipeline Skeleton */}
+        <div>
+          <Skeleton className="h-5 w-32 mb-3" />
+          <div className="flex gap-4">
+            {STAGES.map((stage) => (
+              <div key={stage.key} className="min-w-[180px]">
+                <Skeleton className="h-6 w-24 mb-3" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
   }
 
-  return (
-    <ScrollArea className="w-full">
-      <div className="p-4 flex gap-1">
-        {STAGES.map((stage, idx) => (
-          <StageColumn 
-            key={stage.key}
-            stage={stage}
-            tasks={tasks}
-            agents={agents}
-            isLast={idx === STAGES.length - 1}
-          />
-        ))}
+  if (error) {
+    return (
+      <div className="p-4 flex items-center gap-3 text-amber-400 text-sm">
+        <AlertTriangle className="w-4 h-4 flex-shrink-0" />
+        <span className="flex-1">{error}</span>
+        <Button 
+          size="sm" 
+          variant="ghost" 
+          onClick={() => setRefreshKey(k => k + 1)}
+          className="h-7 px-2"
+        >
+          <RefreshCw className="w-3 h-3 mr-1" /> 
+          Retry
+        </Button>
       </div>
-      <ScrollBar orientation="horizontal" />
-    </ScrollArea>
+    );
+  }
+
+  return (
+    <div className="p-4 space-y-6">
+      {/* Header with controls */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          {isLive && (
+            <Badge variant="outline" className="text-[10px] px-2 py-0.5 text-green-400 border-green-500/30">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse mr-1.5" />
+              Live
+            </Badge>
+          )}
+        </div>
+        <Button 
+          variant="ghost" 
+          size="sm" 
+          className="h-7 w-7 p-0" 
+          onClick={() => setRefreshKey(k => k + 1)}
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+        </Button>
+      </div>
+
+      {/* Agent Grid Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Bot className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">Active Agents</span>
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+            {agents.length}
+          </Badge>
+        </div>
+        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+          {agents.map(agent => (
+            <AgentCard 
+              key={agent.id} 
+              agent={agent} 
+              taskCount={getAgentTaskCount(agent.id)} 
+            />
+          ))}
+          {agents.length === 0 && (
+            <div className="col-span-full text-center py-4 text-xs text-muted-foreground">
+              No active agents
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Task Pipeline Section */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Cpu className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">Task Pipeline</span>
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+            {tasks.length}
+          </Badge>
+        </div>
+        <ScrollArea className="w-full">
+          <div className="flex gap-1 pb-2">
+            {STAGES.map((stage, idx) => (
+              <StageColumn 
+                key={stage.key}
+                stage={stage}
+                tasks={tasks}
+                agents={agentMap}
+                isLast={idx === STAGES.length - 1}
+              />
+            ))}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+      </div>
+    </div>
   );
 }
 
-export default TaskPipeline;
+export default AgentTaskVisualizer;

@@ -1,9 +1,9 @@
 import UnifiedChat from "@/components/UnifiedChat";
 import PythonShell from "@/components/PythonShell";
-import TaskPipeline from "@/components/TaskPipeline";
+import AgentTaskVisualizer from "@/components/AgentTaskVisualizer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Activity, Workflow } from "lucide-react";
+import { Activity, Bot } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
 import { HeroSection } from "@/components/HeroSection";
 
@@ -73,21 +73,18 @@ const Index = () => {
             </CardContent>
           </Card>
 
-          {/* Task Pipeline */}
+          {/* Agent & Task Visualizer */}
           <Card className="glass-card overflow-hidden">
             <CardHeader className="border-b border-border/60 py-4 px-5">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-medium flex items-center gap-2">
-                  <Workflow className="w-4 h-4 text-primary" />
-                  Task Pipeline
+                  <Bot className="w-4 h-4 text-primary" />
+                  Agent & Task Visualizer
                 </CardTitle>
-                <Badge variant="outline" className="text-xs font-normal">
-                  Live
-                </Badge>
               </div>
             </CardHeader>
             <CardContent className="p-0">
-              <TaskPipeline />
+              <AgentTaskVisualizer />
             </CardContent>
           </Card>
         </div>
