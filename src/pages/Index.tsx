@@ -1,173 +1,97 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import UnifiedChat from "@/components/UnifiedChat";
 import PythonShell from "@/components/PythonShell";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Info, Activity, Brain, Zap, Eye, Code, Users } from "lucide-react";
+import { Info, Activity, Zap, Eye, Code, ChevronDown } from "lucide-react";
 import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { Button } from "@/components/ui/button";
+import { MobileNav } from "@/components/MobileNav";
 
 const Index = () => {
   const [showInfo, setShowInfo] = useState(false);
 
   return (
-    <div className="min-h-screen bg-background p-4 md:p-8">
-      <div className="max-w-7xl mx-auto space-y-6">
-        {/* Header Section */}
-        <div className="text-center space-y-4">
-          <div className="flex items-center justify-center gap-3">
-            <Users className="w-12 h-12 text-primary" />
-            <h1 className="text-4xl md:text-5xl font-bold text-foreground">
-              XMRT Council
-            </h1>
-            <Brain className="w-12 h-12 text-primary" />
+    <div className="min-h-screen bg-background">
+      <MobileNav />
+      
+      {/* Header */}
+      <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">
+                Suite
+              </h1>
+              <Badge variant="secondary" className="text-xs font-medium">
+                Enterprise
+              </Badge>
+            </div>
+            
+            {/* Status Indicators */}
+            <div className="hidden md:flex items-center gap-2">
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <div className="w-1.5 h-1.5 rounded-full bg-suite-success animate-pulse-subtle" />
+                <span>System Active</span>
+              </div>
+              <div className="w-px h-4 bg-border" />
+              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                <Activity className="w-3 h-3" />
+                <span>120+ Functions</span>
+              </div>
+            </div>
           </div>
-          <p className="text-lg text-muted-foreground max-w-2xl mx-auto">
-            Autonomous AI Executive Board with 120+ Edge Functions | Individual & Group Deliberations
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+        {/* Hero Section */}
+        <div className="text-center space-y-3 py-4">
+          <p className="text-muted-foreground text-sm max-w-xl mx-auto">
+            Enterprise AI automation with intelligent assistants and real-time monitoring
           </p>
           
-          {/* Status Badges */}
-          <div className="flex flex-wrap items-center justify-center gap-2">
-            <Badge variant="outline" className="border-primary/20">
-              <Activity className="w-3 h-3 mr-1" />
-              Circular Learning Active
-            </Badge>
-            <Badge variant="outline" className="border-primary/20">
-              <Code className="w-3 h-3 mr-1" />
-              Auto-Fixer Running
-            </Badge>
-            <Badge variant="outline" className="border-primary/20">
-              <Eye className="w-3 h-3 mr-1" />
-              Full Visibility
-            </Badge>
-          </div>
-
-          {/* Info Section */}
+          {/* System Info Collapsible */}
           <Collapsible open={showInfo} onOpenChange={setShowInfo}>
             <CollapsibleTrigger asChild>
-              <Button variant="ghost" size="sm" className="gap-2">
+              <Button variant="ghost" size="sm" className="gap-2 text-muted-foreground hover:text-foreground">
                 <Info className="w-4 h-4" />
-                {showInfo ? "Hide" : "Show"} System Information
+                <span className="text-xs">{showInfo ? "Hide" : "System"} Details</span>
+                <ChevronDown className={`w-3 h-3 transition-transform ${showInfo ? 'rotate-180' : ''}`} />
               </Button>
             </CollapsibleTrigger>
             <CollapsibleContent>
-              <Card className="mt-4 border-border bg-card/80 backdrop-blur">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-lg">
-                    <Brain className="w-5 h-5 text-primary" />
-                    Circular Learning System
+              <Card className="mt-4 border-border bg-card text-left max-w-3xl mx-auto">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base font-medium flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-primary" />
+                    Autonomous Learning System
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-4 text-sm text-left">
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-primary flex items-center gap-2">
-                      <Zap className="w-4 h-4" />
-                      How It Works
-                    </h4>
-                    <ol className="list-decimal list-inside space-y-1 text-muted-foreground pl-2">
-                      <li>You interact with Eliza through natural language</li>
-                      <li>Eliza executes code in <strong>background only</strong> (never shown in chat)</li>
-                      <li>Code appears in the <strong>Background Work</strong> window below</li>
-                      <li>Every minute, daemon scans for failed executions</li>
-                      <li>Auto-fixer analyzes errors and generates corrected code</li>
-                      <li>Fixed code is re-executed automatically</li>
-                      <li>Learning metadata is extracted from each fix</li>
-                      <li>Eliza continuously improves from experience</li>
-                    </ol>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-primary flex items-center gap-2">
-                      <Eye className="w-4 h-4" />
-                      Real-Time Activity Monitoring
-                    </h4>
-                    <p className="text-muted-foreground">
-                      The <strong>Background Work</strong> window shows ALL system activity in real-time:
-                    </p>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-xs">
-                      <div className="bg-muted/50 p-2 rounded">
-                        <strong>💬 Chat Activity</strong>
-                        <ul className="list-disc list-inside pl-2 mt-1">
-                          <li>User messages</li>
-                          <li>Eliza responses</li>
-                        </ul>
-                      </div>
-                      <div className="bg-muted/50 p-2 rounded">
-                        <strong>🔧 Tool Executions</strong>
-                        <ul className="list-disc list-inside pl-2 mt-1">
-                          <li>Start and end logging</li>
-                          <li>All tool types tracked</li>
-                        </ul>
-                      </div>
-                      <div className="bg-muted/50 p-2 rounded">
-                        <strong>🔍 Daemon Scans</strong>
-                        <ul className="list-disc list-inside pl-2 mt-1">
-                          <li>Every 60 seconds</li>
-                          <li>Failure detection</li>
-                        </ul>
-                      </div>
-                      <div className="bg-muted/50 p-2 rounded">
-                        <strong>🤖 Auto-Fixing</strong>
-                        <ul className="list-disc list-inside pl-2 mt-1">
-                          <li>Error analysis</li>
-                          <li>Code generation</li>
-                          <li>Re-execution</li>
-                          <li>Learning extraction</li>
-                        </ul>
-                      </div>
-                      <div className="bg-muted/50 p-2 rounded">
-                        <strong>🐍 Code Execution</strong>
-                        <ul className="list-disc list-inside pl-2 mt-1">
-                          <li>Background only</li>
-                          <li>Full output captured</li>
-                        </ul>
-                      </div>
-                      <div className="bg-muted/50 p-2 rounded">
-                        <strong>📡 MCP Integration</strong>
-                        <ul className="list-disc list-inside pl-2 mt-1">
-                          <li>80+ edge functions</li>
-                          <li>Dynamic invocation</li>
-                        </ul>
-                      </div>
+                <CardContent className="space-y-4 text-sm">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2 p-3 rounded-lg bg-muted/50">
+                      <h4 className="font-medium text-foreground flex items-center gap-2">
+                        <Eye className="w-3.5 h-3.5 text-primary" />
+                        Real-Time Monitoring
+                      </h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Watch all system activity including executions, scans, auto-fixes, and learning events in real-time.
+                      </p>
                     </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <h4 className="font-semibold text-primary flex items-center gap-2">
-                      <Code className="w-4 h-4" />
-                      Key Features
-                    </h4>
-                    <ul className="list-disc list-inside space-y-1 text-muted-foreground pl-2">
-                      <li><strong>Background Execution:</strong> Code runs silently, results appear in work window</li>
-                      <li><strong>Autonomous Fixing:</strong> AI automatically corrects errors without user intervention</li>
-                      <li><strong>Continuous Learning:</strong> Each fix generates insights for future improvements</li>
-                      <li><strong>Complete Visibility:</strong> See every tool call, scan, fix, and learning event</li>
-                      <li><strong>MCP Integration:</strong> Access to 80+ Supabase edge functions dynamically</li>
-                      <li><strong>Real-Time Updates:</strong> Activity stream updates live via Supabase Realtime</li>
-                    </ul>
-                  </div>
-
-                  <div className="bg-muted/30 p-3 rounded-lg border border-border">
-                    <p className="text-xs text-muted-foreground">
-                      <strong>Activity Types Visible:</strong> chat_message, chat_response, tool_execution, 
-                      python_execution, daemon_scan, auto_fix_triggered, auto_fix_analysis, auto_fix_execution, 
-                      learning_analysis, auto_fix_complete, mcp_invocation, error
-                    </p>
-                  </div>
-
-                  <div className="text-center pt-2">
-                    <a 
-                      href="https://github.com/DevGruGold/xmrtassistant" 
-                      target="_blank" 
-                      rel="noopener noreferrer"
-                      className="text-sm text-primary hover:text-primary/80 underline"
-                    >
-                      View Documentation on GitHub →
-                    </a>
+                    <div className="space-y-2 p-3 rounded-lg bg-muted/50">
+                      <h4 className="font-medium text-foreground flex items-center gap-2">
+                        <Code className="w-3.5 h-3.5 text-primary" />
+                        Self-Healing Code
+                      </h4>
+                      <p className="text-xs text-muted-foreground leading-relaxed">
+                        Autonomous error detection and correction with continuous improvement from each fix.
+                      </p>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
@@ -175,34 +99,27 @@ const Index = () => {
           </Collapsible>
         </div>
 
-        {/* Main Content */}
+        {/* Main Content Grid */}
         <div className="grid grid-cols-1 gap-6">
           {/* Chat Interface */}
-          <Card className="border-border shadow-xl bg-card/90 backdrop-blur">
-            <CardHeader className="border-b border-border bg-muted/30">
-              <CardTitle className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-primary" />
-                XMRT Council
-              </CardTitle>
-            </CardHeader>
+          <Card className="glass-card overflow-hidden">
             <CardContent className="p-0">
               <UnifiedChat />
             </CardContent>
           </Card>
 
-          {/* Background Work Window */}
-          <Card className="border-border shadow-xl bg-card/90 backdrop-blur">
-            <CardHeader className="border-b border-border bg-muted/30">
-              <CardTitle className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-primary" />
-                Background Work
-                <Badge variant="secondary" className="ml-auto">
-                  Real-Time Activity
+          {/* System Activity */}
+          <Card className="glass-card overflow-hidden">
+            <CardHeader className="border-b border-border/60 py-4 px-5">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  System Activity
+                </CardTitle>
+                <Badge variant="outline" className="text-xs font-normal">
+                  Live
                 </Badge>
-              </CardTitle>
-              <p className="text-sm text-muted-foreground mt-1">
-                Live view of code execution, daemon scans, auto-fixes, and all system activity
-              </p>
+              </div>
             </CardHeader>
             <CardContent className="p-0">
               <PythonShell />
@@ -211,15 +128,12 @@ const Index = () => {
         </div>
 
         {/* Footer */}
-        <div className="text-center text-sm text-muted-foreground pb-4">
-          <p>
-            Powered by Circular Learning • Autonomous Code Fixing • Real-Time Monitoring
+        <footer className="text-center py-6 border-t border-border/60">
+          <p className="text-xs text-muted-foreground">
+            Powered by autonomous learning • Real-time monitoring • Enterprise AI
           </p>
-          <p className="text-xs mt-1">
-            All activity visible • Code executes in background only • Learning never stops
-          </p>
-        </div>
-      </div>
+        </footer>
+      </main>
     </div>
   );
 };

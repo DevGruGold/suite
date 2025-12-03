@@ -1461,15 +1461,15 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   };
 
   return (
-    <Card className={`bg-card/50 backdrop-blur-sm border border-border/50 flex flex-col h-[500px] sm:h-[600px] ${className}`}>
-      {/* Make Me Human Toggle */}
+    <Card className={`bg-card border-border/60 flex flex-col h-[500px] sm:h-[600px] ${className}`}>
+      {/* Voice Intelligence Toggle */}
       <MakeMeHumanToggle 
         onModeChange={(mode, enabled) => setIsHumanizedMode(enabled)}
         onStateChange={(state) => setHumeState(state)}
       />
       
-      {/* Simplified Header */}
-      <div className="p-4 border-b border-border/50">
+      {/* Clean Header */}
+      <div className="px-4 py-3 border-b border-border/60">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
             <AdaptiveAvatar
@@ -1479,8 +1479,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               enableVoice={voiceEnabled}
             />
             <div className="min-w-0">
-              <h3 className="font-semibold text-foreground text-sm sm:text-base truncate">Eliza AI</h3>
-              <p className="text-xs text-muted-foreground truncate">Your XMRT Assistant</p>
+              <h3 className="font-medium text-foreground text-sm sm:text-base truncate">Suite Assistant</h3>
+              <p className="text-[11px] text-muted-foreground truncate">Enterprise AI</p>
             </div>
           </div>
 
@@ -1517,7 +1517,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             
             {/* Realtime Connection Indicator */}
             {realtimeConnected && (
-              <Badge variant="outline" className="text-xs hidden sm:flex items-center gap-1 bg-green-500/10 text-green-600 border-green-500/30">
+              <Badge variant="outline" className="text-[10px] hidden sm:flex items-center gap-1 bg-suite-success/10 text-suite-success border-suite-success/30">
                 <Wifi className="h-3 w-3" />
                 <span>Live</span>
               </Badge>
@@ -1656,11 +1656,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                 {/* Standard message bubble (skip if council deliberation) */}
                 {!(message.isCouncilDeliberation) && (
                   <div className="max-w-[80%] sm:max-w-[75%]">
-                    <div
-                      className={`p-3 rounded-2xl ${
+                  <div
+                      className={`p-3 rounded-xl ${
                         message.sender === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-md'
-                        : 'bg-muted/50 text-foreground rounded-bl-md'
+                        ? 'bg-primary text-primary-foreground rounded-br-sm'
+                        : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
                     }`}
                     >
                       {/* Show attached images */}
@@ -1707,14 +1707,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
             {isProcessing && (
               <div className="flex justify-start animate-fade-in">
-                <div className="bg-muted/50 text-foreground p-3 rounded-2xl rounded-bl-md">
+                <div className="bg-muted/50 text-foreground p-3 rounded-xl rounded-bl-sm border border-border/40">
                   <div className="flex items-center gap-2">
                     <div className="flex space-x-1">
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce"></div>
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
-                      <div className="w-2 h-2 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
+                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce"></div>
+                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.1s' }}></div>
+                      <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: '0.2s' }}></div>
                     </div>
-                    <span className="text-sm text-muted-foreground">Thinking...</span>
+                    <span className="text-xs text-muted-foreground">Processing...</span>
                   </div>
                 </div>
               </div>
@@ -1737,7 +1737,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       </div>
 
       {/* Text Input Area */}
-      <div className="border-t border-border/50 bg-background/50">
+      <div className="border-t border-border/60 bg-card/50">
         <div className="p-4">
           {/* Attachment Preview */}
           <AttachmentPreview
@@ -1757,14 +1757,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               onEmotionUpdate={handleEmotionUpdate}
             />
             
-            {/* Camera Active Indicator - Shows Eliza can see you */}
+            {/* Camera Active Indicator */}
             {humeState?.mode === 'multimodal' && humeState?.videoStream && (
               <Badge 
                 variant="outline" 
-                className={`text-xs flex items-center gap-1 ${videoReady ? 'bg-green-500/20 text-green-400 border-green-500/30' : 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30 animate-pulse'}`}
+                className={`text-[10px] flex items-center gap-1 ${videoReady ? 'bg-suite-success/10 text-suite-success border-suite-success/30' : 'bg-suite-warning/10 text-suite-warning border-suite-warning/30 animate-pulse-subtle'}`}
               >
-                <span className={`w-2 h-2 rounded-full ${videoReady ? 'bg-green-500 animate-pulse' : 'bg-yellow-500'}`}></span>
-                {videoReady ? 'Eliza can see you' : 'Camera initializing...'}
+                <span className={`w-1.5 h-1.5 rounded-full ${videoReady ? 'bg-suite-success animate-pulse-subtle' : 'bg-suite-warning'}`}></span>
+                {videoReady ? 'Camera active' : 'Initializing...'}
               </Badge>
             )}
             
@@ -1792,7 +1792,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               value={textInput}
               onChange={(e) => {
                 setTextInput(e.target.value);
-                // If user starts typing while Eliza is speaking, interrupt her
+                // If user starts typing while assistant is speaking, interrupt
                 if (isSpeaking && e.target.value.length > 0) {
                   enhancedTTS.stop();
                   setIsSpeaking(false);
@@ -1801,23 +1801,23 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               onKeyPress={handleKeyPress}
               placeholder={
                 needsAPIKey 
-                  ? "Provide your GitHub PAT using the 🔑 button to post discussions..." 
+                  ? "Configure API key to continue..." 
                   : attachments.length > 0
-                    ? `${attachments.length} file${attachments.length > 1 ? 's' : ''} attached - add a message...`
+                    ? `${attachments.length} file${attachments.length > 1 ? 's' : ''} attached`
                     : humeState.mode === 'voice' && humeState.isEnabled
                       ? "Speak or type..."
                       : isSpeaking 
-                        ? "Start typing to interrupt..." 
-                        : "Ask Eliza anything..."
+                        ? "Type to interrupt..." 
+                        : "Ask anything..."
               }
-              className="flex-1 rounded-full border-border/50 bg-background/50 min-h-[48px] text-sm px-4"
+              className="flex-1 rounded-lg border-border/60 bg-background min-h-[44px] text-sm px-4"
               disabled={isProcessing}
             />
             <Button
               onClick={handleSendMessage}
               disabled={(!textInput.trim() && attachments.length === 0) || isProcessing}
               size="sm"
-              className="rounded-full min-h-[48px] min-w-[48px] hover-scale"
+              className="rounded-lg min-h-[44px] min-w-[44px]"
             >
               <Send className="h-4 w-4" />
             </Button>

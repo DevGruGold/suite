@@ -3,8 +3,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Sparkles, Brain, Mic, Volume2, Camera, Layers, 
-  Phone, Settings, Loader2, CheckCircle2, XCircle 
+  Mic, Volume2, Camera, 
+  Settings, Loader2, CheckCircle2 
 } from 'lucide-react';
 import { humanizedTTS } from '@/services/humanizedTTSService';
 import { useToast } from '@/hooks/use-toast';
@@ -74,7 +74,6 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
     releaseStreams
   } = useHumePermissions();
 
-  // Restore mode from localStorage
   useEffect(() => {
     const savedMode = localStorage.getItem('humeMode') as HumeMode | null;
     const savedEnabled = localStorage.getItem('humeEnabled') === 'true';
@@ -89,17 +88,15 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
       try {
         setSettings(JSON.parse(savedSettings));
       } catch (e) {
-        console.error('Failed to parse Hume settings:', e);
+        console.error('Failed to parse settings:', e);
       }
     }
   }, []);
 
-  // Save settings when they change
   useEffect(() => {
     localStorage.setItem('humeSettings', JSON.stringify(settings));
   }, [settings]);
 
-  // Sync stream changes to parent - this ensures streams are passed after permissions are granted
   useEffect(() => {
     onStateChange?.({
       mode,
@@ -110,7 +107,6 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
   }, [audioStream, videoStream, mode, isEnabled, onStateChange]);
 
   const handleModeChange = async (newMode: HumeMode) => {
-    // If switching to a mode that needs permissions, check and request streams
     if (newMode === 'voice' || newMode === 'multimodal') {
       const needsMic = newMode === 'voice' || newMode === 'multimodal';
       const needsCamera = newMode === 'multimodal';
@@ -118,24 +114,20 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
       const hasMic = micPermission === 'granted';
       const hasCamera = cameraPermission === 'granted';
       
-      // If we don't have permissions yet, show dialog
       if ((needsMic && !hasMic) || (needsCamera && !hasCamera)) {
         setPendingMode(newMode);
         setShowPermissionDialog(true);
         return;
       }
       
-      // Permissions granted but we may not have streams yet - request them
       const hasAudioStream = !!audioStream;
       const hasVideoStream = !!videoStream;
       
       if ((needsMic && !hasAudioStream) || (needsCamera && !hasVideoStream)) {
-        // Request streams (permissions already granted, so this should succeed)
         await requestPermissionsForMode(newMode);
       }
     }
     
-    // Proceed with mode switch
     completeModeSw(newMode);
   };
 
@@ -149,7 +141,6 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
       onModeChange?.(newMode, true, streams);
     }
     
-    // Always notify state change
     onStateChange?.({
       mode: newMode,
       isEnabled,
@@ -179,7 +170,6 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
 
   const handleToggleEnabled = async () => {
     if (isEnabled) {
-      // Disable
       setIsEnabled(false);
       localStorage.setItem('humeEnabled', 'false');
       humanizedTTS.disableHumanizedMode();
@@ -191,11 +181,10 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
         videoStream: videoStream || undefined
       });
       toast({
-        title: "Hume AI Disabled",
-        description: "Reverted to browser-based features"
+        title: "Voice Intelligence Disabled",
+        description: "Reverted to standard mode"
       });
     } else {
-      // Enable
       setIsLoading(true);
       
       try {
@@ -218,7 +207,7 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
         } else {
           toast({
             title: "Connection Failed",
-            description: "Could not connect to Hume AI. Check server configuration.",
+            description: "Could not connect. Check configuration.",
             variant: "destructive"
           });
         }
@@ -226,7 +215,7 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
         console.error('Enable error:', error);
         toast({
           title: "Error",
-          description: "Failed to activate Hume AI",
+          description: "Failed to activate voice intelligence",
           variant: "destructive"
         });
       } finally {
@@ -237,25 +226,17 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
 
   const getModeTitle = (m: HumeMode): string => {
     switch (m) {
-      case 'tts': return '🎭 Hume TTS Active';
-      case 'voice': return '🎤 Voice Chat Active';
-      case 'multimodal': return '🎬 Full Multimodal Active';
+      case 'tts': return 'Voice Active';
+      case 'voice': return 'Voice Chat Active';
+      case 'multimodal': return 'Full Mode Active';
     }
   };
 
   const getModeDescription = (m: HumeMode): string => {
     switch (m) {
       case 'tts': return 'Empathic voice synthesis enabled';
-      case 'voice': return 'Real-time voice conversation with emotion analysis';
-      case 'multimodal': return 'Voice + video with full emotion tracking';
-    }
-  };
-
-  const getModeIcon = (m: HumeMode) => {
-    switch (m) {
-      case 'tts': return <Volume2 className="h-4 w-4" />;
-      case 'voice': return <Phone className="h-4 w-4" />;
-      case 'multimodal': return <Layers className="h-4 w-4" />;
+      case 'voice': return 'Real-time voice conversation';
+      case 'multimodal': return 'Voice + video with emotion tracking';
     }
   };
 
@@ -263,13 +244,13 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
     setIsTesting(true);
     try {
       const testMessage = isEnabled 
-        ? "Hello! Hume AI is active. I can understand and respond with empathy."
-        : "Browser voice mode active. Enable Hume for empathic voice.";
+        ? "Voice intelligence is active. I can understand and respond with empathy."
+        : "Standard voice mode active. Enable for enhanced voice.";
       
       await humanizedTTS.speak({ text: testMessage });
       toast({
         title: "Voice Test Complete",
-        description: isEnabled ? "Hume AI voice working!" : "Browser voice working!"
+        description: isEnabled ? "Enhanced voice working" : "Standard voice working"
       });
     } catch (error) {
       console.error('Voice test failed:', error);
@@ -299,153 +280,146 @@ export const MakeMeHumanToggle: React.FC<MakeMeHumanToggleProps> = ({
         error={permissionError}
       />
       
-      <div className={`flex flex-col gap-2 px-4 py-3 bg-gradient-to-r from-purple-500/10 to-pink-500/10 border-b border-purple-500/20 ${className}`}>
+      <div className={`flex flex-col gap-2 px-4 py-3 bg-muted/30 border-b border-border/60 ${className}`}>
         {/* Header row */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <Sparkles className={`h-4 w-4 ${isEnabled ? 'text-purple-500' : 'text-muted-foreground'}`} />
-          <span className="text-sm font-medium">Make Me Hume-an</span>
-          {isEnabled && (
-            <Badge variant="secondary" className="text-xs bg-purple-500/20 text-purple-400 border-purple-500/30">
-              {mode === 'multimodal' ? 'Full' : mode === 'voice' ? 'Voice' : 'TTS'}
-            </Badge>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2">
-          {/* Test button */}
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={handleTestVoice}
-            disabled={isTesting || isLoading}
-            className="h-7 px-2 text-xs"
-          >
-            {isTesting ? (
-              <Loader2 className="h-3 w-3 animate-spin" />
-            ) : (
-              <Volume2 className="h-3 w-3" />
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <div className={`w-2 h-2 rounded-full ${isEnabled ? 'bg-primary animate-pulse-subtle' : 'bg-muted-foreground/30'}`} />
+            <span className="text-sm font-medium text-foreground">Voice Intelligence</span>
+            {isEnabled && (
+              <Badge variant="secondary" className="text-[10px]">
+                {mode === 'multimodal' ? 'Full' : mode === 'voice' ? 'Voice' : 'TTS'}
+              </Badge>
             )}
-          </Button>
+          </div>
 
-          {/* Settings popover */}
-          <Popover>
-            <PopoverTrigger asChild>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
-                <Settings className="h-3 w-3" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-72" align="end">
-              <div className="space-y-4">
-                <h4 className="font-medium text-sm">Hume AI Settings</h4>
-                
-                <div className="space-y-3">
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="auto-connect" className="text-xs">Auto-connect</Label>
-                    <Switch
-                      id="auto-connect"
-                      checked={settings.autoConnect}
-                      onCheckedChange={(v) => setSettings(s => ({ ...s, autoConnect: v }))}
-                    />
-                  </div>
+          <div className="flex items-center gap-1.5">
+            {/* Test button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleTestVoice}
+              disabled={isTesting || isLoading}
+              className="h-7 w-7 p-0"
+            >
+              {isTesting ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Volume2 className="h-3.5 w-3.5" />
+              )}
+            </Button>
 
-                  <div className="flex items-center justify-between">
-                    <Label htmlFor="show-emotions" className="text-xs">Show emotions</Label>
-                    <Switch
-                      id="show-emotions"
-                      checked={settings.showEmotions}
-                      onCheckedChange={(v) => setSettings(s => ({ ...s, showEmotions: v }))}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label className="text-xs">Emotion sensitivity</Label>
-                    <Slider
-                      value={[settings.emotionSensitivity * 100]}
-                      onValueChange={([v]) => setSettings(s => ({ ...s, emotionSensitivity: v / 100 }))}
-                      max={100}
-                      step={10}
-                    />
-                  </div>
-
-                  {mode === 'multimodal' && (
-                    <div className="space-y-2">
-                      <Label className="text-xs">Video capture interval (ms)</Label>
-                      <Slider
-                        value={[settings.captureInterval]}
-                        onValueChange={([v]) => setSettings(s => ({ ...s, captureInterval: v }))}
-                        min={500}
-                        max={3000}
-                        step={250}
+            {/* Settings popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 w-7 p-0">
+                  <Settings className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-64" align="end">
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm">Voice Settings</h4>
+                  
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="auto-connect" className="text-xs">Auto-connect</Label>
+                      <Switch
+                        id="auto-connect"
+                        checked={settings.autoConnect}
+                        onCheckedChange={(v) => setSettings(s => ({ ...s, autoConnect: v }))}
                       />
-                      <span className="text-xs text-muted-foreground">{settings.captureInterval}ms</span>
                     </div>
-                  )}
-                </div>
-              </div>
-            </PopoverContent>
-          </Popover>
 
-          {/* Enable/Disable button */}
-          <Button
-            variant={isEnabled ? 'default' : 'outline'}
-            size="sm"
-            onClick={handleToggleEnabled}
-            disabled={isLoading}
-            className={`h-7 px-3 text-xs ${isEnabled ? 'bg-purple-600 hover:bg-purple-700' : ''}`}
-          >
-            {isLoading ? (
-              <Loader2 className="h-3 w-3 animate-spin mr-1" />
-            ) : isEnabled ? (
-              <Brain className="h-3 w-3 mr-1" />
-            ) : (
-              <Sparkles className="h-3 w-3 mr-1" />
-            )}
-            {isLoading ? 'Connecting...' : isEnabled ? 'Active' : 'Enable'}
-          </Button>
+                    <div className="flex items-center justify-between">
+                      <Label htmlFor="show-emotions" className="text-xs">Show emotions</Label>
+                      <Switch
+                        id="show-emotions"
+                        checked={settings.showEmotions}
+                        onCheckedChange={(v) => setSettings(s => ({ ...s, showEmotions: v }))}
+                      />
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label className="text-xs">Emotion sensitivity</Label>
+                      <Slider
+                        value={[settings.emotionSensitivity * 100]}
+                        onValueChange={([v]) => setSettings(s => ({ ...s, emotionSensitivity: v / 100 }))}
+                        max={100}
+                        step={10}
+                      />
+                    </div>
+
+                    {mode === 'multimodal' && (
+                      <div className="space-y-2">
+                        <Label className="text-xs">Capture interval</Label>
+                        <Slider
+                          value={[settings.captureInterval]}
+                          onValueChange={([v]) => setSettings(s => ({ ...s, captureInterval: v }))}
+                          min={500}
+                          max={3000}
+                          step={250}
+                        />
+                        <span className="text-[10px] text-muted-foreground">{settings.captureInterval}ms</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </PopoverContent>
+            </Popover>
+
+            {/* Enable/Disable button */}
+            <Button
+              variant={isEnabled ? 'default' : 'outline'}
+              size="sm"
+              onClick={handleToggleEnabled}
+              disabled={isLoading}
+              className="h-7 px-3 text-xs"
+            >
+              {isLoading ? (
+                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+              ) : null}
+              {isLoading ? 'Connecting...' : isEnabled ? 'Active' : 'Enable'}
+            </Button>
+          </div>
         </div>
-      </div>
 
         {/* Mode selector tabs */}
         <Tabs value={mode} onValueChange={(v) => handleModeChange(v as HumeMode)} className="w-full">
-          <TabsList className="w-full h-8 bg-muted/50">
+          <TabsList className="w-full h-8 bg-background/50">
             <TabsTrigger 
               value="tts" 
-              className="flex-1 h-7 text-xs data-[state=active]:bg-purple-500/20"
+              className="flex-1 h-7 text-xs data-[state=active]:bg-primary/10"
             >
               <Volume2 className="h-3 w-3 mr-1" />
-              TTS Only
+              TTS
             </TabsTrigger>
             <TabsTrigger 
               value="voice" 
-              className="flex-1 h-7 text-xs data-[state=active]:bg-purple-500/20"
+              className="flex-1 h-7 text-xs data-[state=active]:bg-primary/10"
             >
               <Mic className="h-3 w-3 mr-1" />
-              Voice Chat
-              {micPermission === 'granted' && <CheckCircle2 className="h-2.5 w-2.5 ml-1 text-green-500" />}
+              Voice
+              {micPermission === 'granted' && <CheckCircle2 className="h-2.5 w-2.5 ml-1 text-suite-success" />}
             </TabsTrigger>
             <TabsTrigger 
               value="multimodal" 
-              className="flex-1 h-7 text-xs data-[state=active]:bg-purple-500/20"
+              className="flex-1 h-7 text-xs data-[state=active]:bg-primary/10"
             >
               <Camera className="h-3 w-3 mr-1" />
-              Multimodal
+              Full
               {micPermission === 'granted' && cameraPermission === 'granted' && (
-                <CheckCircle2 className="h-2.5 w-2.5 ml-1 text-green-500" />
+                <CheckCircle2 className="h-2.5 w-2.5 ml-1 text-suite-success" />
               )}
             </TabsTrigger>
           </TabsList>
         </Tabs>
 
         {/* Mode description */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {getModeIcon(mode)}
-          <span>
-            {mode === 'tts' && 'Empathic voice synthesis for Eliza responses'}
-            {mode === 'voice' && 'Real-time voice conversation with emotion tracking'}
-            {mode === 'multimodal' && 'Voice + camera with full emotional intelligence'}
-          </span>
-        </div>
+        <p className="text-[11px] text-muted-foreground">
+          {mode === 'tts' && 'Empathic voice synthesis for responses'}
+          {mode === 'voice' && 'Real-time voice conversation'}
+          {mode === 'multimodal' && 'Voice + camera with emotion tracking'}
+        </p>
       </div>
     </>
   );
