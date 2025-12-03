@@ -24,17 +24,17 @@ export class QuickGreetingService {
     returnUser: [
       "Welcome back! I remember we discussed {summary}. How can I help you continue our conversation or explore something new?",
       "Good to see you again! Last time we talked about {summary}. What would you like to work on today?",
-      "Hello again! I recall our conversation about {summary}. How can I assist you further with XMRT-DAO?",
+      "Hello again! I recall our conversation about {summary}. How can I assist you further?",
     ],
     newFounder: [
-      "Welcome back, founder! How can I assist with XMRT-DAO today?",
-      "Hello, founder! Ready to continue building the future of decentralized mining?",
-      "Welcome! What aspects of XMRT-DAO shall we work on today?",
+      "Welcome back, founder! How can I assist with Suite today?",
+      "Hello, founder! Ready to continue building the future of enterprise AI?",
+      "Welcome! What aspects of Suite shall we work on today?",
     ],
     newUser: [
-      "Hello! I'm Eliza, your XMRT-DAO AI assistant. How can I help you get started?",
-      "Welcome to XMRT-DAO! I'm here to help you understand our decentralized mining ecosystem.",
-      "Hi there! I'm Eliza, ready to assist you with XMRT-DAO. What would you like to know?",
+      "Hello! I'm your Suite AI assistant. How can I help you get started?",
+      "Welcome to Suite! I'm here to help you with intelligent automation and AI-powered workflows.",
+      "Hi there! I'm Suite AI, ready to assist you. What would you like to accomplish?",
     ]
   };
 
@@ -71,6 +71,7 @@ export class QuickGreetingService {
         timestamp: Date.now(),
         sessionId
       };
+      // Keep existing localStorage key for backwards compatibility
       localStorage.setItem('xmrt-last-conversation', JSON.stringify(cache));
     } catch (error) {
       console.warn('Failed to cache conversation summary:', error);
