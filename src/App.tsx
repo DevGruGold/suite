@@ -17,6 +17,15 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
       <TooltipProvider>
+        {/* Skip Navigation Link for Accessibility */}
+        <a 
+          href="#main-content" 
+          className="skip-link"
+          aria-label="Skip to main content"
+        >
+          Skip to main content
+        </a>
+        
         <BrowserRouter>
           <Routes>
             <Route path="/" element={<Index />} />
@@ -27,6 +36,9 @@ const App = () => (
             <Route path="/governance" element={<Governance />} />
           </Routes>
         </BrowserRouter>
+        
+        <Toaster />
+        <Sonner />
       </TooltipProvider>
     </LanguageProvider>
   </QueryClientProvider>

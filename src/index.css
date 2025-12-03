@@ -103,9 +103,20 @@
   body {
     @apply bg-background text-foreground font-sans antialiased;
   }
+
+  /* Focus visible styles for accessibility */
+  :focus-visible {
+    @apply outline-none ring-2 ring-ring ring-offset-2 ring-offset-background;
+  }
+
+  /* Skip link styles */
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-[9999] focus:bg-primary focus:text-primary-foreground focus:px-4 focus:py-2 focus:rounded-md focus:shadow-lg;
+  }
 }
 
 @layer utilities {
+  /* Glass morphism effects */
   .glass {
     @apply bg-background/80 backdrop-blur-xl border border-border/50;
   }
@@ -114,11 +125,93 @@
     @apply bg-card/90 backdrop-blur-sm border border-border/60 shadow-lg;
   }
   
+  /* Interactive hover effects */
   .hover-lift {
     @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-lg;
   }
+
+  .hover-scale {
+    @apply transition-transform duration-200 hover:scale-[1.02] active:scale-[0.98];
+  }
+
+  .hover-glow {
+    @apply transition-shadow duration-300 hover:shadow-[0_0_20px_hsl(217_91%_60%_/_0.2)];
+  }
   
+  /* Text gradient */
   .text-gradient {
     @apply bg-gradient-to-r from-primary to-accent bg-clip-text text-transparent;
+  }
+
+  /* Shimmer loading effect */
+  .shimmer {
+    @apply relative overflow-hidden;
+    background: linear-gradient(
+      90deg,
+      hsl(var(--muted)) 0%,
+      hsl(var(--muted-foreground) / 0.1) 50%,
+      hsl(var(--muted)) 100%
+    );
+    background-size: 200% 100%;
+    animation: shimmer 1.5s ease-in-out infinite;
+  }
+
+  /* Status indicators */
+  .status-dot {
+    @apply w-2 h-2 rounded-full;
+  }
+
+  .status-dot-success {
+    @apply status-dot bg-suite-success;
+  }
+
+  .status-dot-warning {
+    @apply status-dot bg-suite-warning;
+  }
+
+  .status-dot-danger {
+    @apply status-dot bg-suite-danger;
+  }
+
+  .status-dot-info {
+    @apply status-dot bg-suite-info;
+  }
+
+  /* Card variants */
+  .card-interactive {
+    @apply transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md cursor-pointer;
+  }
+
+  .card-elevated {
+    @apply shadow-md hover:shadow-lg transition-shadow duration-300;
+  }
+
+  /* Button enhancements */
+  .btn-press {
+    @apply active:scale-[0.98] transition-transform duration-150;
+  }
+
+  /* Focus ring utilities */
+  .focus-ring {
+    @apply focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background focus-visible:outline-none;
+  }
+}
+
+/* Reduced motion preferences */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* Print styles */
+@media print {
+  .no-print {
+    display: none !important;
   }
 }
