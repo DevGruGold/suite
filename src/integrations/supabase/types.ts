@@ -145,6 +145,33 @@ export type Database = {
           },
         ]
       }
+      agent_performance_reviews: {
+        Row: {
+          created_at: string | null
+          fleet_health_score: number | null
+          id: string
+          recommendations: Json | null
+          review_period_end: string | null
+          review_period_start: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          fleet_health_score?: number | null
+          id?: string
+          recommendations?: Json | null
+          review_period_end?: string | null
+          review_period_start?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          fleet_health_score?: number | null
+          id?: string
+          recommendations?: Json | null
+          review_period_end?: string | null
+          review_period_start?: string | null
+        }
+        Relationships: []
+      }
       agent_specializations: {
         Row: {
           agent_id: string
@@ -249,6 +276,36 @@ export type Database = {
           status?: Database["public"]["Enums"]["agent_status"]
           updated_at?: string
           version?: string | null
+        }
+        Relationships: []
+      }
+      anomaly_resolutions: {
+        Row: {
+          anomaly_type: string
+          auto_resolved: boolean | null
+          created_at: string | null
+          id: string
+          resolution_status: string | null
+          root_cause_analysis: string | null
+          severity: string | null
+        }
+        Insert: {
+          anomaly_type: string
+          auto_resolved?: boolean | null
+          created_at?: string | null
+          id?: string
+          resolution_status?: string | null
+          root_cause_analysis?: string | null
+          severity?: string | null
+        }
+        Update: {
+          anomaly_type?: string
+          auto_resolved?: boolean | null
+          created_at?: string | null
+          id?: string
+          resolution_status?: string | null
+          root_cause_analysis?: string | null
+          severity?: string | null
         }
         Relationships: []
       }
@@ -1162,6 +1219,69 @@ export type Database = {
           },
         ]
       }
+      community_sentiment_reports: {
+        Row: {
+          created_at: string | null
+          id: string
+          overall_sentiment_score: number | null
+          report_date: string | null
+          sentiment_breakdown: Json | null
+          top_topics: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          overall_sentiment_score?: number | null
+          report_date?: string | null
+          sentiment_breakdown?: Json | null
+          top_topics?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          overall_sentiment_score?: number | null
+          report_date?: string | null
+          sentiment_breakdown?: Json | null
+          top_topics?: Json | null
+        }
+        Relationships: []
+      }
+      competitor_profiles: {
+        Row: {
+          category: string | null
+          created_at: string | null
+          description: string | null
+          github_org: string | null
+          id: string
+          is_active: boolean | null
+          key_features: Json | null
+          name: string
+          website_url: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          github_org?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_features?: Json | null
+          name: string
+          website_url?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string | null
+          description?: string | null
+          github_org?: string | null
+          id?: string
+          is_active?: boolean | null
+          key_features?: Json | null
+          name?: string
+          website_url?: string | null
+        }
+        Relationships: []
+      }
       conversation_history: {
         Row: {
           conversation_title: string | null
@@ -1522,6 +1642,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      developer_onboarding: {
+        Row: {
+          created_at: string | null
+          experience_level: string | null
+          github_username: string
+          id: string
+          onboarding_status: string | null
+          skills_detected: Json | null
+        }
+        Insert: {
+          created_at?: string | null
+          experience_level?: string | null
+          github_username: string
+          id?: string
+          onboarding_status?: string | null
+          skills_detected?: Json | null
+        }
+        Update: {
+          created_at?: string | null
+          experience_level?: string | null
+          github_username?: string
+          id?: string
+          onboarding_status?: string | null
+          skills_detected?: Json | null
+        }
+        Relationships: []
       }
       device_activity_log: {
         Row: {
