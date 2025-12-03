@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X } from "lucide-react";
+import { Menu, X, Home, Users, DollarSign, Award, Scale } from "lucide-react";
 import { Button } from "./ui/button";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -10,57 +10,41 @@ export function MobileNav() {
 
   const toggleMenu = () => setIsOpen(!isOpen);
 
+  const navItems = [
+    { to: "/", label: t('nav.home'), icon: Home },
+    { to: "/council", label: "Board", icon: Users },
+    { to: "/treasury", label: "Finance", icon: DollarSign },
+    { to: "/contributors", label: "Team", icon: Award },
+    { to: "/governance", label: "Governance", icon: Scale },
+  ];
+
   return (
     <div className="relative">
-      <div className="fixed top-4 right-4 z-50">
+      <div className="fixed top-4 right-4 z-50 md:hidden">
         <Button
-          variant="ghost"
+          variant="outline"
           size="icon"
           onClick={toggleMenu}
-          className="md:hidden text-white hover:bg-gray-700"
+          className="bg-card/90 backdrop-blur-sm border-border/60 shadow-md"
         >
-          {isOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
         </Button>
       </div>
 
       {isOpen && (
-        <div className="fixed inset-0 z-40 bg-gray-900/95 backdrop-blur-sm md:hidden">
-          <nav className="flex flex-col items-center justify-center h-full space-y-8">
-            <Link
-              to="/"
-              className="text-2xl font-bold text-white hover:text-purple-400 transition-colors"
-              onClick={toggleMenu}
-            >
-              {t('nav.home')}
-            </Link>
-            <Link
-              to="/treasury"
-              className="text-2xl font-bold text-white hover:text-purple-400 transition-colors"
-              onClick={toggleMenu}
-            >
-              {t('nav.treasury')}
-            </Link>
-            <Link
-              to="/council"
-              className="text-2xl font-bold text-white hover:text-purple-400 transition-colors"
-              onClick={toggleMenu}
-            >
-              🏛️ Council
-            </Link>
-            <Link
-              to="/contributors"
-              className="text-2xl font-bold text-white hover:text-purple-400 transition-colors"
-              onClick={toggleMenu}
-            >
-              🏆 Contributors
-            </Link>
-            <Link
-              to="/governance"
-              className="text-2xl font-bold text-white hover:text-amber-400 transition-colors"
-              onClick={toggleMenu}
-            >
-              ⚖️ Governance
-            </Link>
+        <div className="fixed inset-0 z-40 bg-background/98 backdrop-blur-md md:hidden animate-fade-in">
+          <nav className="flex flex-col items-center justify-center h-full space-y-6">
+            {navItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="flex items-center gap-3 text-lg font-medium text-foreground hover:text-primary transition-colors"
+                onClick={toggleMenu}
+              >
+                <item.icon className="h-5 w-5" />
+                {item.label}
+              </Link>
+            ))}
           </nav>
         </div>
       )}

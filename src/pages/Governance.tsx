@@ -210,25 +210,25 @@ export default function Governance() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header - Mobile optimized */}
-      <header className="border-b border-border bg-card/50 backdrop-blur-sm sticky top-0 z-10">
+      {/* Header */}
+      <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
         <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <div className="flex items-center gap-2 sm:gap-4">
               <Link to="/">
-                <Button variant="ghost" size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3">
+                <Button variant="ghost" size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3 text-muted-foreground hover:text-foreground">
                   <ArrowLeft className="h-4 w-4" />
                   <span className="hidden sm:inline">Back</span>
                 </Button>
               </Link>
               <div className="flex items-center gap-2">
-                <Vote className="h-5 w-5 sm:h-6 sm:w-6 text-amber-500" />
-                <h1 className="text-lg sm:text-xl font-bold">Governance</h1>
+                <Vote className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+                <h1 className="text-lg sm:text-xl font-semibold">Governance</h1>
               </div>
             </div>
             
             <div className="flex items-center gap-2 justify-between sm:justify-end">
-              <Badge variant="outline" className="text-amber-600 border-amber-500/30 bg-amber-500/10 text-xs sm:text-sm">
+              <Badge variant="outline" className="text-suite-warning border-suite-warning/30 bg-suite-warning/10 text-xs sm:text-sm">
                 {counts.voting} awaiting votes
               </Badge>
               
@@ -333,7 +333,7 @@ export default function Governance() {
       {/* Main Content */}
       <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
         {/* Info Banner */}
-        <div className="mb-4 sm:mb-8 p-3 sm:p-4 rounded-lg bg-muted/50 border border-border">
+        <div className="mb-4 sm:mb-8 p-3 sm:p-4 rounded-lg bg-muted/30 border border-border/60">
           <p className="text-xs sm:text-sm text-muted-foreground">
             <strong className="text-foreground">Timed Voting:</strong> Executives have 1 hour to vote, then community has 24 hours. 
             3/4 executive approvals needed to pass.
@@ -352,27 +352,27 @@ export default function Governance() {
               </TabsTrigger>
               <TabsTrigger 
                 value="voting"
-                className="data-[state=active]:bg-amber-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+                className="data-[state=active]:bg-suite-warning data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
               >
                 <Vote className="h-3 w-3 mr-1" />
                 Voting ({counts.voting})
               </TabsTrigger>
               <TabsTrigger 
                 value="approved"
-                className="data-[state=active]:bg-green-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+                className="data-[state=active]:bg-suite-success data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
               >
                 Approved ({counts.approved})
               </TabsTrigger>
               <TabsTrigger 
                 value="rejected"
-                className="data-[state=active]:bg-red-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+                className="data-[state=active]:bg-destructive data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
               >
                 Rejected ({counts.rejected})
               </TabsTrigger>
               {counts.deployed > 0 && (
                 <TabsTrigger 
                   value="deployed"
-                  className="data-[state=active]:bg-blue-500 data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+                  className="data-[state=active]:bg-primary data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
                 >
                   Deployed ({counts.deployed})
                 </TabsTrigger>

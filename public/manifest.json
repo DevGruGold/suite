@@ -1,11 +1,11 @@
 {
-  "name": "XMRT Economy",
-  "short_name": "XMRT",
-  "description": "Mobile Mining Democracy & AI-Powered DAO Governance Platform",
+  "name": "Suite",
+  "short_name": "Suite",
+  "description": "Enterprise AI Automation Platform",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0f0f23",
-  "theme_color": "#7c3aed",
+  "background_color": "#ffffff",
+  "theme_color": "#0f172a",
   "icons": [
     {
       "src": "/favicon.png",
