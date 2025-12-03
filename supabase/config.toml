@@ -1,5 +1,8 @@
 project_id = "vawouugtzwmejxqkeqqj"
 
+[functions.task-auto-advance]
+verify_jwt = false
+
 [functions.hume-tts]
 verify_jwt = false
 

@@ -5219,6 +5219,7 @@ export type Database = {
         Row: {
           actual_duration_hours: number | null
           assignee_agent_id: string | null
+          auto_advance_threshold_hours: number | null
           blocked_reason: string | null
           blocking_reason: string | null
           category: Database["public"]["Enums"]["task_category"]
@@ -5228,13 +5229,16 @@ export type Database = {
           description: string
           estimated_duration_hours: number | null
           id: string
+          last_agent_notified_at: string | null
           max_retries: number | null
           metadata: Json
           priority: number
+          progress_percentage: number | null
           repo: string
           required_skills: Json | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
+          stage_started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -5242,6 +5246,7 @@ export type Database = {
         Insert: {
           actual_duration_hours?: number | null
           assignee_agent_id?: string | null
+          auto_advance_threshold_hours?: number | null
           blocked_reason?: string | null
           blocking_reason?: string | null
           category: Database["public"]["Enums"]["task_category"]
@@ -5251,13 +5256,16 @@ export type Database = {
           description: string
           estimated_duration_hours?: number | null
           id: string
+          last_agent_notified_at?: string | null
           max_retries?: number | null
           metadata?: Json
           priority?: number
+          progress_percentage?: number | null
           repo: string
           required_skills?: Json | null
           retry_count?: number | null
           stage: Database["public"]["Enums"]["task_stage"]
+          stage_started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at?: string
@@ -5265,6 +5273,7 @@ export type Database = {
         Update: {
           actual_duration_hours?: number | null
           assignee_agent_id?: string | null
+          auto_advance_threshold_hours?: number | null
           blocked_reason?: string | null
           blocking_reason?: string | null
           category?: Database["public"]["Enums"]["task_category"]
@@ -5274,13 +5283,16 @@ export type Database = {
           description?: string
           estimated_duration_hours?: number | null
           id?: string
+          last_agent_notified_at?: string | null
           max_retries?: number | null
           metadata?: Json
           priority?: number
+          progress_percentage?: number | null
           repo?: string
           required_skills?: Json | null
           retry_count?: number | null
           stage?: Database["public"]["Enums"]["task_stage"]
+          stage_started_at?: string | null
           status?: Database["public"]["Enums"]["task_status"]
           title?: string
           updated_at?: string
@@ -6869,6 +6881,7 @@ export type Database = {
         Returns: {
           actual_duration_hours: number | null
           assignee_agent_id: string | null
+          auto_advance_threshold_hours: number | null
           blocked_reason: string | null
           blocking_reason: string | null
           category: Database["public"]["Enums"]["task_category"]
@@ -6878,13 +6891,16 @@ export type Database = {
           description: string
           estimated_duration_hours: number | null
           id: string
+          last_agent_notified_at: string | null
           max_retries: number | null
           metadata: Json
           priority: number
+          progress_percentage: number | null
           repo: string
           required_skills: Json | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
+          stage_started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -7324,6 +7340,7 @@ export type Database = {
         Returns: {
           actual_duration_hours: number | null
           assignee_agent_id: string | null
+          auto_advance_threshold_hours: number | null
           blocked_reason: string | null
           blocking_reason: string | null
           category: Database["public"]["Enums"]["task_category"]
@@ -7333,13 +7350,16 @@ export type Database = {
           description: string
           estimated_duration_hours: number | null
           id: string
+          last_agent_notified_at: string | null
           max_retries: number | null
           metadata: Json
           priority: number
+          progress_percentage: number | null
           repo: string
           required_skills: Json | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
+          stage_started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
@@ -7406,6 +7426,7 @@ export type Database = {
         Returns: {
           actual_duration_hours: number | null
           assignee_agent_id: string | null
+          auto_advance_threshold_hours: number | null
           blocked_reason: string | null
           blocking_reason: string | null
           category: Database["public"]["Enums"]["task_category"]
@@ -7415,13 +7436,16 @@ export type Database = {
           description: string
           estimated_duration_hours: number | null
           id: string
+          last_agent_notified_at: string | null
           max_retries: number | null
           metadata: Json
           priority: number
+          progress_percentage: number | null
           repo: string
           required_skills: Json | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
+          stage_started_at: string | null
           status: Database["public"]["Enums"]["task_status"]
           title: string
           updated_at: string
