@@ -640,11 +640,11 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'execute_python',
-      description: 'BACKGROUND EXECUTION: Write and execute Python code in background sandbox ONLY. Code NEVER appears in chat. You write code → background system executes it → auto-fixer corrects errors → results feed back to you. Communicate ONLY outcomes and insights to user, NEVER show raw code. CRITICAL: The "requests" module is NOT available. For HTTP calls, use urllib.request from the standard library instead. Example: import urllib.request; urllib.request.urlopen(url). Or better yet, use the call_edge_function tool directly.',
+      description: '⚠️ PURE COMPUTATION ONLY - NO NETWORK ACCESS! Execute Python code for calculations, data processing, JSON manipulation, string operations, and math ONLY. The sandbox has NO internet connectivity - urllib, requests, socket ALL FAIL with DNS errors. For ANY HTTP/API calls, use invoke_edge_function or call_edge_function instead. Valid uses: calculate hashes, parse JSON, format dates, process arrays, mathematical calculations. INVALID uses: fetch URLs, call APIs, download data - these WILL FAIL.',
       parameters: {
         type: 'object',
         properties: {
-          code: { type: 'string', description: 'The Python code to execute. DO NOT import requests - use urllib.request instead or use call_edge_function tool' },
+          code: { type: 'string', description: 'Python code for PURE COMPUTATION ONLY. DO NOT attempt any network/HTTP calls - they will fail. Use for: math, json, datetime, string manipulation, data processing.' },
           purpose: { type: 'string', description: 'Brief description of what this code does' }
         },
         required: ['code', 'purpose']
