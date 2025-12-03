@@ -689,6 +689,211 @@ Ensure the output is well-structured, professional, and actionable.
       return aggregated;
     }
 
+    // ========== LOG RETRIEVAL (for diagnostics) ==========
+    case 'log_retrieval': {
+      const failingFunctions = context.failing_functions || context.extract_failing_functions_result?.failing_functions || [];
+      const allLogs: any[] = [];
+      
+      for (const funcName of failingFunctions.slice(0, 5)) { // Limit to 5 functions
+        try {
+          const { data, error } = await supabase.functions.invoke('get-edge-function-logs', {
+            body: {
+              function_name: funcName,
+              time_window_hours: step.time_window_hours || 168,
+              status_filter: step.status_filter || 'error',
+              include_stack_traces: step.include_stack_traces ?? true,
+              limit: step.limit || 50,
+            }
+          });
+          
+          if (!error && data) {
+            allLogs.push({ function: funcName, logs: data, success: true });
+          } else {
+            allLogs.push({ function: funcName, error: error?.message, success: false });
+          }
+        } catch (e) {
+          console.error(`[Log Retrieval] Error fetching logs for ${funcName}:`, e);
+          allLogs.push({ function: funcName, error: e.message, success: false });
+        }
+      }
+      
+      return {
+        logs: allLogs,
+        functions_analyzed: allLogs.length,
+        successful_retrievals: allLogs.filter(l => l.success).length,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // ========== FAILURE CALCULATION (for diagnostics) ==========
+    case 'failure_calculation': {
+      const executions = context.fetch_execution_history_result?.data || [];
+      const failures = executions.filter((e: any) => !e.success);
+      const failureRate = executions.length > 0 ? (failures.length / executions.length) * 100 : 0;
+      
+      // Extract error patterns
+      const errorPatterns: Record<string, number> = {};
+      failures.forEach((f: any) => {
+        const msg = f.error_message || 'Unknown error';
+        errorPatterns[msg] = (errorPatterns[msg] || 0) + 1;
+      });
+      
+      // Find most common failing functions from error messages
+      const functionPattern = /Function (\S+) failed|invoke\(['"]([^'"]+)['"]\)|(\w+-\w+(?:-\w+)*) (error|failed)/gi;
+      const failingFunctionsSet = new Set<string>();
+      
+      failures.forEach((f: any) => {
+        const errorMsg = f.error_message || '';
+        const results = f.execution_results;
+        
+        // Extract from error message
+        let match;
+        while ((match = functionPattern.exec(errorMsg)) !== null) {
+          const funcName = match[1] || match[2] || match[3];
+          if (funcName) failingFunctionsSet.add(funcName);
+        }
+        
+        // Extract from execution results
+        if (results?.steps) {
+          results.steps.forEach((s: any) => {
+            if (s.status === 'failed' || s.result?.error) {
+              if (s.result?.function) failingFunctionsSet.add(s.result.function);
+            }
+          });
+        }
+      });
+      
+      const failingFunctions = Array.from(failingFunctionsSet);
+      const mostCommonError = Object.entries(errorPatterns).sort((a, b) => b[1] - a[1])[0];
+      
+      // Store in context for subsequent steps
+      context.failing_functions = failingFunctions;
+      context.failure_rate = failureRate;
+      context.high_severity = failureRate > 50;
+      context.auto_fixable = failingFunctions.length === 1 && failureRate < 80;
+      context.requires_modification = failingFunctions.length > 0;
+      context.is_revenue_workflow = context.template_name?.includes('customer') || 
+                                     context.template_name?.includes('billing') ||
+                                     context.template_name?.includes('revenue');
+      
+      return {
+        failure_rate: failureRate.toFixed(2),
+        total_executions: executions.length,
+        total_failures: failures.length,
+        error_patterns: errorPatterns,
+        failing_functions: failingFunctions,
+        most_common_error: mostCommonError ? { message: mostCommonError[0], count: mostCommonError[1] } : null,
+        timestamp: new Date().toISOString(),
+      };
+    }
+
+    // ========== SEVERITY SCORING (for diagnostics) ==========
+    case 'severity_scoring': {
+      const failureRate = context.failure_rate || context.calculate_failure_metrics_result?.failure_rate || 0;
+      const executionsAffected = context.total_failures || context.calculate_failure_metrics_result?.total_failures || 0;
+      const isRevenueWorkflow = context.is_revenue_workflow || false;
+      
+      // Calculate severity score (0-100)
+      let severityScore = 0;
+      severityScore += Math.min(failureRate * 0.6, 60); // Up to 60 points for failure rate
+      severityScore += Math.min(executionsAffected * 2, 20); // Up to 20 points for volume
+      if (isRevenueWorkflow) severityScore += 20; // 20 point boost for revenue workflows
+      
+      // Determine severity level
+      let severity: string;
+      if (severityScore >= 80 || failureRate >= 90) severity = 'critical';
+      else if (severityScore >= 60 || failureRate >= 70) severity = 'high';
+      else if (severityScore >= 40 || failureRate >= 50) severity = 'medium';
+      else severity = 'low';
+      
+      // Update context flags
+      context.severity = severity;
+      context.severity_score = severityScore;
+      context.high_severity = severity === 'critical' || severity === 'high';
+      context.manual_intervention_needed = severity === 'critical';
+      context.learning_opportunity = context.total_failures >= 5;
+      
+      return {
+        severity,
+        severity_score: severityScore.toFixed(1),
+        factors: {
+          failure_rate: failureRate,
+          executions_affected: executionsAffected,
+          is_revenue_workflow: isRevenueWorkflow,
+        },
+        recommendations: {
+          urgent: severity === 'critical',
+          auto_fix_eligible: context.auto_fixable,
+          requires_manual_review: context.manual_intervention_needed,
+        },
+      };
+    }
+
+    // ========== DIAGNOSTIC REPORTING ==========
+    case 'diagnostic_reporting': {
+      const diagnosisId = `diag_${Date.now()}_${crypto.randomUUID().substring(0, 8)}`;
+      const templateName = context.template_name;
+      
+      // Gather all diagnostic data
+      const failureMetrics = context.calculate_failure_metrics_result || {};
+      const rootCause = context.ai_root_cause_analysis_result || {};
+      const recommendations = context.generate_remediation_recommendations_result || {};
+      const severityData = context.assess_severity_result || {};
+      
+      // Build report sections
+      const sections: { heading: string; content: any }[] = [
+        { heading: 'Executive Summary', content: `Workflow "${templateName}" diagnosed with ${severityData.severity || 'unknown'} severity. Failure rate: ${failureMetrics.failure_rate || 0}%` },
+        { heading: 'Failure Metrics', content: failureMetrics },
+        { heading: 'Root Cause Analysis', content: rootCause.analysis || 'No root cause identified' },
+        { heading: 'Affected Functions', content: context.failing_functions || [] },
+        { heading: 'Recommendations', content: recommendations.generated_content || 'No recommendations generated' },
+        { heading: 'Severity Assessment', content: severityData },
+      ];
+      
+      const report = generateReport(
+        `Workflow Diagnostic Report: ${templateName}`,
+        sections,
+        { 
+          diagnosis_id: diagnosisId,
+          template_name: templateName,
+          severity: severityData.severity,
+          generated_at: new Date().toISOString(),
+        }
+      );
+      
+      // Store to diagnostic reports table
+      if (step.output_table) {
+        try {
+          await supabase.from(step.output_table).insert({
+            template_name: templateName,
+            diagnosis_id: diagnosisId,
+            executions_analyzed: failureMetrics.total_executions || 0,
+            failure_rate: parseFloat(failureMetrics.failure_rate) || 0,
+            primary_failure_point: failureMetrics.most_common_error?.message || null,
+            root_cause_analysis: rootCause,
+            recommended_actions: recommendations,
+            affected_functions: context.failing_functions || [],
+            full_report: report.full_report,
+            severity: severityData.severity || 'medium',
+          });
+          console.log(`[Diagnostic Report] Stored to ${step.output_table} with ID: ${diagnosisId}`);
+        } catch (e) {
+          console.warn(`[Diagnostic Report] Could not store to ${step.output_table}:`, e.message);
+        }
+      }
+      
+      return {
+        diagnosis_id: diagnosisId,
+        template_analyzed: templateName,
+        severity: severityData.severity,
+        failure_rate: failureMetrics.failure_rate,
+        primary_failure_point: failureMetrics.most_common_error?.message,
+        affected_functions: context.failing_functions,
+        report_summary: report.summary,
+        full_report: report.full_report,
+      };
+    }
+
     // ========== VALIDATION ==========
     case 'validation':
       return { validated: true, message: 'Validation passed' };

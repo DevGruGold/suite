@@ -365,7 +365,7 @@ export const ELIZA_TOOLS = [
       type: 'function',
       function: {
         name: 'execute_workflow_template',
-        description: '🔄 Execute a pre-built workflow template by name with custom parameters. Available templates: acquire_new_customer, upsell_existing_customer, monthly_billing_cycle, churn_prevention, content_campaign, influencer_outreach, treasury_health_check, execute_buyback, learn_from_failures.',
+        description: '🔄 Execute a pre-built workflow template by name with custom parameters. Available templates: acquire_new_customer, upsell_existing_customer, monthly_billing_cycle, churn_prevention, content_campaign, influencer_outreach, treasury_health_check, execute_buyback, learn_from_failures, diagnose_workflow_failure.',
         parameters: {
           type: 'object',
           properties: {
@@ -380,13 +380,48 @@ export const ELIZA_TOOLS = [
                 'influencer_outreach', 
                 'treasury_health_check', 
                 'execute_buyback', 
-                'learn_from_failures'
+                'learn_from_failures',
+                'diagnose_workflow_failure',
+                'autonomous_governance_proposal_evaluation',
+                'proactive_system_anomaly_detection_and_resolution',
+                'community_engagement_sentiment_analysis_and_response',
+                'developer_onboarding_and_contribution_guidance',
+                'competitive_landscape_analysis_and_reporting',
+                'documentation_generation_and_maintenance',
+                'agent_performance_review_and_optimization'
               ],
               description: 'Name of the workflow template to execute'
             },
             params: { 
               type: 'object',
               description: 'Template-specific parameters (e.g., {"email":"customer@example.com","tier":"pro","service_name":"uspto-patent-mcp"})'
+            }
+          },
+          required: ['template_name']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'diagnose_workflow_failure',
+        description: '🔍 Diagnose why a workflow is failing by analyzing execution history, error patterns, and edge function logs. Returns root cause analysis, affected functions, severity assessment, and actionable remediation recommendations.',
+        parameters: {
+          type: 'object',
+          properties: {
+            template_name: { 
+              type: 'string', 
+              description: 'Name of the failing workflow template to diagnose (e.g., "acquire_new_customer")'
+            },
+            time_window_days: {
+              type: 'number',
+              description: 'Number of days of execution history to analyze. Default: 7',
+              default: 7
+            },
+            include_logs: {
+              type: 'boolean',
+              description: 'Whether to fetch detailed edge function logs for affected functions. Default: true',
+              default: true
             }
           },
           required: ['template_name']
