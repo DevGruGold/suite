@@ -87,6 +87,9 @@ interface LogQueryParams {
   limit?: number;
   include_stack_traces?: boolean;
   compare_with?: string[];
+  include_analytics?: boolean;
+  include_boot_events?: boolean;
+  include_system_logs?: boolean;
 }
 
 serve(async (req) => {
@@ -121,7 +124,10 @@ serve(async (req) => {
       status_filter = 'all',
       limit = 100,
       include_stack_traces = true,
-      compare_with = []
+      compare_with = [],
+      include_analytics = true,
+      include_boot_events = true,
+      include_system_logs = true
     } = params;
 
     if (!function_name) {
@@ -166,10 +172,11 @@ serve(async (req) => {
     const timeThreshold = new Date();
     timeThreshold.setHours(timeThreshold.getHours() - time_window_hours);
 
-    // Query logs for all target functions
+    // Query logs for all target functions from MULTIPLE SOURCES
     const functionResults: Record<string, any> = {};
     
     for (const funcName of targetFunctions) {
+      // SOURCE 1: eliza_function_usage (primary)
       let usageQuery = supabase
         .from('eliza_function_usage')
         .select('*')
@@ -186,13 +193,84 @@ serve(async (req) => {
 
       const { data: usageLogs, error: usageError } = await usageQuery;
 
+      // SOURCE 2: system_logs for early-stage errors (if enabled)
+      let systemLogs: any[] = [];
+      if (include_system_logs) {
+        const { data: sysLogs, error: sysError } = await supabase
+          .from('system_logs')
+          .select('*')
+          .ilike('function_name', `%${funcName}%`)
+          .gte('created_at', timeThreshold.toISOString())
+          .order('created_at', { ascending: false })
+          .limit(50);
+
+        if (!sysError && sysLogs) {
+          systemLogs = sysLogs.map(log => ({
+            id: log.id,
+            function_name: log.function_name || funcName,
+            success: log.log_level !== 'error',
+            execution_time_ms: log.metadata?.execution_time_ms || null,
+            error_message: log.log_level === 'error' ? log.message : null,
+            invoked_at: log.created_at,
+            source: 'system_logs',
+            log_level: log.log_level,
+            log_category: log.log_category,
+            metadata: log.metadata
+          }));
+          console.log(`📋 Found ${systemLogs.length} system_logs entries for ${funcName}`);
+        }
+      }
+
+      // SOURCE 3: api_call_logs for function invocations
+      let apiCallLogs: any[] = [];
+      const { data: apiLogs, error: apiError } = await supabase
+        .from('api_call_logs')
+        .select('*')
+        .eq('function_name', funcName)
+        .gte('called_at', timeThreshold.toISOString())
+        .order('called_at', { ascending: false })
+        .limit(50);
+
+      if (!apiError && apiLogs) {
+        apiCallLogs = apiLogs.map(log => ({
+          id: log.id,
+          function_name: log.function_name,
+          success: log.status === 'success',
+          execution_time_ms: log.execution_time_ms,
+          error_message: log.error_message,
+          invoked_at: log.called_at,
+          source: 'api_call_logs',
+          metadata: log.caller_context
+        }));
+        console.log(`📋 Found ${apiCallLogs.length} api_call_logs entries for ${funcName}`);
+      }
+
       if (usageError) {
         console.error(`❌ Error fetching logs for ${funcName}:`, usageError);
-        functionResults[funcName] = { error: usageError.message };
+        functionResults[funcName] = { 
+          error: usageError.message,
+          system_logs: systemLogs,
+          api_call_logs: apiCallLogs
+        };
         continue;
       }
 
-      functionResults[funcName] = analyzeLogData(funcName, usageLogs || [], include_stack_traces);
+      // Merge all logs and analyze
+      const allLogs = [
+        ...(usageLogs || []).map(l => ({ ...l, source: 'eliza_function_usage' })),
+        ...systemLogs,
+        ...apiCallLogs
+      ].sort((a, b) => new Date(b.invoked_at).getTime() - new Date(a.invoked_at).getTime());
+
+      functionResults[funcName] = {
+        ...analyzeLogData(funcName, allLogs, include_stack_traces),
+        data_sources: {
+          eliza_function_usage: usageLogs?.length || 0,
+          system_logs: systemLogs.length,
+          api_call_logs: apiCallLogs.length,
+          total_merged: allLogs.length
+        }
+      };
     }
 
     // If single function, return flat structure for backward compatibility

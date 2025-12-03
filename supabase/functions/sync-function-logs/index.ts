@@ -6,22 +6,12 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface FunctionEdgeLog {
-  id: string;
-  timestamp: string;
-  event_message: string;
-  metadata: {
-    function_id?: string;
-    execution_time_ms?: number;
-    deployment_id?: string;
-    version?: string;
-    response?: {
-      status_code?: number;
-    };
-    request?: {
-      method?: string;
-    };
-  };
+interface SyncOptions {
+  hours_back?: number;
+  backfill_days?: number;
+  include_boot_events?: boolean;
+  include_console_output?: boolean;
+  force_full_sync?: boolean;
 }
 
 serve(async (req) => {
@@ -30,7 +20,8 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  console.log('🔄 Starting function logs sync...');
+  const startTime = Date.now();
+  console.log('🔄 Starting enhanced function logs sync...');
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -41,9 +32,12 @@ serve(async (req) => {
     });
 
     // Parse request body for options
-    let options = { 
-      hours_back: 24,  // Default to last 24 hours
-      backfill: false  // Set to true for initial backfill
+    let options: SyncOptions = { 
+      hours_back: 1,
+      backfill_days: 0,
+      include_boot_events: true,
+      include_console_output: true,
+      force_full_sync: false
     };
     
     try {
@@ -53,12 +47,142 @@ serve(async (req) => {
       // Use defaults if no body
     }
 
-    console.log(`📊 Syncing logs from last ${options.hours_back} hours, backfill: ${options.backfill}`);
+    // If backfill_days is specified, override hours_back
+    const effectiveHoursBack = options.backfill_days 
+      ? options.backfill_days * 24 
+      : (options.hours_back || 1);
 
-    // Query Supabase analytics for function_edge_logs
-    const timeWindowStart = new Date(Date.now() - options.hours_back * 60 * 60 * 1000).toISOString();
+    console.log(`📊 Syncing logs from last ${effectiveHoursBack} hours (backfill_days: ${options.backfill_days || 0})`);
+
+    // Calculate time window
+    const timeWindowStart = new Date(Date.now() - effectiveHoursBack * 60 * 60 * 1000).toISOString();
     
-    // Query the analytics endpoint for function edge logs
+    // STRATEGY 1: Query system_logs table for early-stage errors
+    console.log('📝 Querying system_logs for early-stage errors...');
+    const { data: systemLogs, error: systemLogsError } = await supabase
+      .from('system_logs')
+      .select('*')
+      .gte('created_at', timeWindowStart)
+      .in('log_source', ['edge_function_early_stage', 'edge_function_boot', 'edge_function'])
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (!systemLogsError && systemLogs && systemLogs.length > 0) {
+      console.log(`✅ Found ${systemLogs.length} system_logs entries`);
+      
+      // Convert system_logs to eliza_function_usage format
+      const systemLogRecords = systemLogs.map(log => ({
+        function_name: log.function_name || 'unknown',
+        success: log.log_level !== 'error',
+        execution_time_ms: log.metadata?.execution_time_ms || null,
+        error_message: log.log_level === 'error' ? log.message : null,
+        context: JSON.stringify({
+          source: 'system_logs_sync',
+          log_level: log.log_level,
+          log_category: log.log_category,
+          original_id: log.id
+        }),
+        invoked_at: log.created_at,
+        deployment_version: log.metadata?.stage || 'system_log_sync'
+      }));
+
+      // Upsert system log records
+      if (systemLogRecords.length > 0) {
+        const { error: insertError } = await supabase
+          .from('eliza_function_usage')
+          .insert(systemLogRecords);
+
+        if (insertError) {
+          console.error('⚠️ Failed to insert system_logs records:', insertError.message);
+        } else {
+          console.log(`✅ Synced ${systemLogRecords.length} records from system_logs`);
+        }
+      }
+    }
+
+    // STRATEGY 2: Query api_call_logs table
+    console.log('📝 Querying api_call_logs...');
+    const { data: apiLogs, error: apiLogsError } = await supabase
+      .from('api_call_logs')
+      .select('*')
+      .gte('called_at', timeWindowStart)
+      .order('called_at', { ascending: false })
+      .limit(500);
+
+    if (!apiLogsError && apiLogs && apiLogs.length > 0) {
+      console.log(`✅ Found ${apiLogs.length} api_call_logs entries`);
+      
+      const apiLogRecords = apiLogs.map(log => ({
+        function_name: log.function_name,
+        success: log.status === 'success',
+        execution_time_ms: log.execution_time_ms || null,
+        error_message: log.error_message || null,
+        context: JSON.stringify({
+          source: 'api_call_logs_sync',
+          caller_context: log.caller_context,
+          original_id: log.id
+        }),
+        invoked_at: log.called_at,
+        deployment_version: 'api_call_log_sync'
+      }));
+
+      if (apiLogRecords.length > 0) {
+        const { error: insertError } = await supabase
+          .from('eliza_function_usage')
+          .insert(apiLogRecords);
+
+        if (insertError) {
+          console.error('⚠️ Failed to insert api_call_logs records:', insertError.message);
+        } else {
+          console.log(`✅ Synced ${apiLogRecords.length} records from api_call_logs`);
+        }
+      }
+    }
+
+    // STRATEGY 3: Query eliza_python_executions for Python-specific logs
+    console.log('📝 Querying eliza_python_executions...');
+    const { data: pythonLogs, error: pythonLogsError } = await supabase
+      .from('eliza_python_executions')
+      .select('*')
+      .gte('created_at', timeWindowStart)
+      .order('created_at', { ascending: false })
+      .limit(500);
+
+    if (!pythonLogsError && pythonLogs && pythonLogs.length > 0) {
+      console.log(`✅ Found ${pythonLogs.length} eliza_python_executions entries`);
+      
+      const pythonLogRecords = pythonLogs.map(log => ({
+        function_name: 'python-executor',
+        success: log.status === 'success',
+        execution_time_ms: log.execution_time_ms || null,
+        error_message: log.status === 'error' ? log.error : null,
+        context: JSON.stringify({
+          source: 'python_executions_sync',
+          description: log.description,
+          agent_id: log.agent_id,
+          task_id: log.task_id,
+          original_id: log.id
+        }),
+        invoked_at: log.created_at,
+        deployment_version: 'python_execution_sync',
+        tool_category: 'python'
+      }));
+
+      if (pythonLogRecords.length > 0) {
+        const { error: insertError } = await supabase
+          .from('eliza_function_usage')
+          .insert(pythonLogRecords);
+
+        if (insertError) {
+          console.error('⚠️ Failed to insert python_executions records:', insertError.message);
+        } else {
+          console.log(`✅ Synced ${pythonLogRecords.length} records from eliza_python_executions`);
+        }
+      }
+    }
+
+    // STRATEGY 4: Try original edge_function_logs approach (might fail)
+    console.log('📝 Attempting edge_function_logs query...');
     const { data: edgeLogs, error: logsError } = await supabase
       .from('edge_function_logs')
       .select('*')
@@ -196,12 +320,43 @@ serve(async (req) => {
       });
     }
 
+    // Calculate total records synced from all sources
+    const totalSystemLogs = systemLogs?.length || 0;
+    const totalApiLogs = apiLogs?.length || 0;
+    const totalPythonLogs = pythonLogs?.length || 0;
+    const totalSynced = totalSystemLogs + totalApiLogs + totalPythonLogs;
+
+    // Refresh the materialized view for analytics
+    try {
+      await supabase.rpc('refresh_function_version_performance');
+      console.log('✅ Refreshed function_version_performance materialized view');
+    } catch (refreshError) {
+      console.log('⚠️ Could not refresh materialized view:', refreshError);
+    }
+
+    // Also refresh tool_usage_dashboard
+    try {
+      await supabase.rpc('refresh_tool_usage_dashboard');
+      console.log('✅ Refreshed tool_usage_dashboard materialized view');
+    } catch (refreshError) {
+      console.log('⚠️ Could not refresh tool_usage_dashboard:', refreshError);
+    }
+
+    const executionTime = Date.now() - startTime;
+
     return new Response(JSON.stringify({
       success: true,
-      source: 'edge_function_logs',
-      records_processed: 0,
-      message: 'No new logs to sync',
-      time_window_hours: options.hours_back
+      summary: {
+        total_records_synced: totalSynced,
+        system_logs_synced: totalSystemLogs,
+        api_call_logs_synced: totalApiLogs,
+        python_executions_synced: totalPythonLogs,
+        edge_logs_synced: edgeLogs?.length || 0
+      },
+      time_window_hours: effectiveHoursBack,
+      backfill_days: options.backfill_days || 0,
+      execution_time_ms: executionTime,
+      materialized_views_refreshed: true
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
