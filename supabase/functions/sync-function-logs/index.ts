@@ -140,7 +140,7 @@ serve(async (req) => {
     }
 
     // STRATEGY 3: Query eliza_python_executions for Python-specific logs
-    // FIXED: Schema uses status='completed' (not 'success') and error_message (not 'error')
+    // Sync BOTH as 'python-executor' (edge function) and 'execute_python' (tool) for complete analytics coverage
     console.log('📝 Querying eliza_python_executions...');
     const { data: pythonLogs, error: pythonLogsError } = await supabase
       .from('eliza_python_executions')
@@ -152,25 +152,61 @@ serve(async (req) => {
     if (!pythonLogsError && pythonLogs && pythonLogs.length > 0) {
       console.log(`✅ Found ${pythonLogs.length} eliza_python_executions entries`);
       
-      // FIXED: Use correct schema - status='completed' and error_message field
-      const pythonLogRecords = pythonLogs.map(log => ({
-        function_name: 'execute_python',  // Changed to match tool name
-        success: log.status === 'completed',  // FIXED: was 'success'
-        execution_time_ms: log.execution_time_ms || null,
-        error_message: (log.status === 'error' || log.status === 'failed') ? log.error_message : null,  // FIXED: was 'error'
-        context: JSON.stringify({
-          source: 'python_executions_sync',
-          purpose: log.purpose,
-          original_source: log.source,
-          agent_id: log.agent_id,
-          task_id: log.task_id,
-          original_id: log.id,
-          original_status: log.status
-        }),
-        invoked_at: log.created_at,
-        deployment_version: 'python_execution_sync',
-        tool_category: 'python'
-      }));
+      // Create records for BOTH function names to ensure complete analytics coverage
+      const pythonLogRecords: Array<{
+        function_name: string;
+        success: boolean;
+        execution_time_ms: number | null;
+        error_message: string | null;
+        context: string;
+        invoked_at: string;
+        deployment_version: string;
+        tool_category: string;
+      }> = [];
+      
+      pythonLogs.forEach(log => {
+        const baseRecord = {
+          success: log.status === 'completed',
+          execution_time_ms: log.execution_time_ms || null,
+          error_message: (log.status === 'error' || log.status === 'failed') ? log.error_message : null,
+          invoked_at: log.created_at,
+          tool_category: 'python'
+        };
+        
+        // Record as 'python-executor' (edge function name)
+        pythonLogRecords.push({
+          ...baseRecord,
+          function_name: 'python-executor',
+          context: JSON.stringify({
+            source: 'python_executions_sync',
+            sync_type: 'edge_function',
+            purpose: log.purpose,
+            original_source: log.source,
+            agent_id: log.agent_id,
+            task_id: log.task_id,
+            original_id: log.id,
+            original_status: log.status
+          }),
+          deployment_version: 'python_execution_sync_v2'
+        });
+        
+        // Also record as 'execute_python' (tool name) for tool analytics
+        pythonLogRecords.push({
+          ...baseRecord,
+          function_name: 'execute_python',
+          context: JSON.stringify({
+            source: 'python_executions_sync',
+            sync_type: 'tool_call',
+            purpose: log.purpose,
+            original_source: log.source,
+            agent_id: log.agent_id,
+            task_id: log.task_id,
+            original_id: log.id,
+            original_status: log.status
+          }),
+          deployment_version: 'python_execution_sync_v2'
+        });
+      });
 
       if (pythonLogRecords.length > 0) {
         const { error: insertError } = await supabase
@@ -180,7 +216,7 @@ serve(async (req) => {
         if (insertError) {
           console.error('⚠️ Failed to insert python_executions records:', insertError.message);
         } else {
-          console.log(`✅ Synced ${pythonLogRecords.length} records from eliza_python_executions`);
+          console.log(`✅ Synced ${pythonLogRecords.length} records from eliza_python_executions (${pythonLogs.length} executions × 2 names)`);
         }
       }
     }

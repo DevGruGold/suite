@@ -182,6 +182,34 @@ Deno.serve(async (req) => {
       console.log(`✅ [DATABASE] Successfully logged execution`);
     }
 
+    // 📊 DIRECT ANALYTICS LOGGING - Log to eliza_function_usage for analytics visibility
+    console.log(`📊 [ANALYTICS] Logging to eliza_function_usage as 'python-executor'...`);
+    const analyticsResult = await supabase.from('eliza_function_usage').insert({
+      function_name: 'python-executor',  // Use edge function name for analytics
+      success: exitCode === 0,
+      execution_time_ms: executionTime,
+      error_message: exitCode !== 0 ? (result.run?.stderr || 'Execution failed') : null,
+      tool_category: 'python',
+      context: JSON.stringify({
+        source: 'python-executor-direct',
+        purpose: purpose || null,
+        code_length: code?.length || 0,
+        agent_id,
+        task_id,
+        language,
+        version,
+        was_auto_fixed: wasAutoFixed
+      }),
+      invoked_at: new Date().toISOString(),
+      deployment_version: 'python-executor-v2'
+    });
+
+    if (analyticsResult.error) {
+      console.error('⚠️ [ANALYTICS] Failed to log to eliza_function_usage:', analyticsResult.error.message);
+    } else {
+      console.log(`✅ [ANALYTICS] Successfully logged to eliza_function_usage`);
+    }
+
     // Also log to activity log with clear source attribution
     const activityTitle = wasAutoFixed && exitCode === 0
       ? '🔧 Code Auto-Fixed and Executed Successfully'
