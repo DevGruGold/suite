@@ -90,9 +90,10 @@ Deno.serve(async (req) => {
     }
 
     // Calculate statistics from Python executions
+    // Schema: eliza_python_executions uses status='completed'|'error'|'pending'|'running', error_message field
     const total = allExecutions.length;
-    const successful = allExecutions.filter(e => e.status === "success").length;
-    const failed = allExecutions.filter(e => e.status === "error").length;
+    const successful = allExecutions.filter(e => e.status === "completed").length;
+    const failed = allExecutions.filter(e => e.status === "error" || e.status === "failed").length;
     const success_rate = total > 0 ? (successful / total) * 100 : 0;
 
     // Identify common patterns from ALL sources
@@ -102,11 +103,12 @@ Deno.serve(async (req) => {
     const function_error_patterns: Record<string, number> = {};
 
     // Process Python execution patterns
+    // Schema: error field is 'error_message', success status is 'completed'
     allExecutions.forEach(exec => {
-      if (exec.status === "error" && exec.error) {
-        const error_type = exec.error.split(":")[0].trim();
+      if ((exec.status === "error" || exec.status === "failed") && exec.error_message) {
+        const error_type = exec.error_message.split(":")[0].trim();
         error_patterns[error_type] = (error_patterns[error_type] || 0) + 1;
-      } else if (exec.status === "success" && exec.metadata?.learning_metadata) {
+      } else if (exec.status === "completed" && exec.metadata?.learning_metadata) {
         const lesson = exec.metadata.learning_metadata.lesson;
         if (lesson) {
           successful_patterns[lesson] = (successful_patterns[lesson] || 0) + 1;
@@ -115,8 +117,9 @@ Deno.serve(async (req) => {
     });
 
     // Process system log early-stage errors
+    // Schema: system_logs uses 'log_source' not 'function_name'
     allSystemErrors.forEach(log => {
-      const funcName = log.function_name || 'unknown';
+      const funcName = log.log_source || (log.message?.match(/\[([^\]]+)\]/)?.[1]) || 'unknown';
       const errorType = log.log_category || 'early_stage_error';
       const key = `${funcName}:${errorType}`;
       early_stage_errors[key] = (early_stage_errors[key] || 0) + 1;
@@ -210,7 +213,7 @@ Be specific, practical, and prioritize by impact.`;
         })),
         recent_system_errors: allSystemErrors.slice(0, 5).map(e => ({
           id: e.id,
-          function_name: e.function_name,
+          log_source: e.log_source,
           message: e.message,
           log_category: e.log_category,
           created_at: e.created_at
