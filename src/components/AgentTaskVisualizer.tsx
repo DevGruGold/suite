@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, DragEvent } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { toast } from '@/hooks/use-toast';
 import { 
   MessageSquare, 
   FileText, 
@@ -16,7 +17,10 @@ import {
   ChevronRight,
   RefreshCw,
   Bot,
-  Cpu
+  Cpu,
+  ArrowLeft,
+  ArrowRight,
+  GripVertical
 } from 'lucide-react';
 
 interface Task {
@@ -79,6 +83,10 @@ function getRelativeTime(dateString: string): string {
   return `${diffDays}d ago`;
 }
 
+function getStageIndex(stage: string): number {
+  return STAGES.findIndex(s => s.key === stage);
+}
+
 function AgentCard({ agent, taskCount }: { agent: Agent; taskCount: number }) {
   const isActive = agent.status === 'BUSY';
   const shortName = agent.name.split(' - ')[0].split(' ')[0];
@@ -110,18 +118,34 @@ function AgentCard({ agent, taskCount }: { agent: Agent; taskCount: number }) {
   );
 }
 
-function TaskCard({ task, agentName }: { task: Task; agentName: string | null }) {
+interface TaskCardProps {
+  task: Task;
+  agentName: string | null;
+  onDragStart: (e: DragEvent<HTMLDivElement>, task: Task) => void;
+  onDragEnd: () => void;
+  isDragging: boolean;
+}
+
+function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
   const statusStyle = STATUS_STYLES[task.status] || STATUS_STYLES.PENDING;
   const categoryColor = task.category ? CATEGORY_COLORS[task.category.toLowerCase()] || 'bg-muted' : 'bg-muted';
   
   return (
     <div 
-      className={`p-3 rounded-lg border ${statusStyle.border} ${statusStyle.bg} backdrop-blur-sm transition-all hover:scale-[1.02] hover:shadow-lg`}
+      draggable
+      onDragStart={(e) => onDragStart(e, task)}
+      onDragEnd={onDragEnd}
+      className={`p-3 rounded-lg border ${statusStyle.border} ${statusStyle.bg} backdrop-blur-sm transition-all cursor-grab active:cursor-grabbing group ${
+        isDragging ? 'opacity-50 scale-95' : 'hover:scale-[1.02] hover:shadow-lg'
+      }`}
     >
       <div className="flex items-start justify-between gap-2 mb-2">
-        <h4 className="text-xs font-medium text-foreground line-clamp-2 flex-1">
-          {task.title}
-        </h4>
+        <div className="flex items-center gap-1.5 flex-1">
+          <GripVertical className="w-3 h-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+          <h4 className="text-xs font-medium text-foreground line-clamp-2">
+            {task.title}
+          </h4>
+        </div>
         <div className={`w-2 h-2 rounded-full ${categoryColor} flex-shrink-0 mt-1`} />
       </div>
       
@@ -159,23 +183,59 @@ function TaskCard({ task, agentName }: { task: Task; agentName: string | null })
   );
 }
 
-function StageColumn({ 
-  stage, 
-  tasks, 
-  agents,
-  isLast 
-}: { 
+type StageKey = typeof STAGES[number]['key'];
+
+interface StageColumnProps {
   stage: typeof STAGES[number];
   tasks: Task[];
   agents: Map<string, Agent>;
   isLast: boolean;
-}) {
+  dragOverStage: string | null;
+  onDragOver: (e: DragEvent<HTMLDivElement>, stageKey: StageKey) => void;
+  onDragLeave: () => void;
+  onDrop: (e: DragEvent<HTMLDivElement>, stageKey: StageKey) => void;
+  onDragStart: (e: DragEvent<HTMLDivElement>, task: Task) => void;
+  onDragEnd: () => void;
+  draggedTask: Task | null;
+  isUpdating: boolean;
+}
+
+function StageColumn({ 
+  stage, 
+  tasks, 
+  agents,
+  isLast,
+  dragOverStage,
+  onDragOver,
+  onDragLeave,
+  onDrop,
+  onDragStart,
+  onDragEnd,
+  draggedTask,
+  isUpdating
+}: StageColumnProps) {
   const Icon = stage.icon;
   const stageTasks = tasks.filter(t => t.stage === stage.key);
+  const isDragOver = dragOverStage === stage.key;
+  
+  // Determine direction indicator
+  const showDirection = isDragOver && draggedTask && draggedTask.stage !== stage.key;
+  const currentIdx = draggedTask ? getStageIndex(draggedTask.stage) : -1;
+  const targetIdx = getStageIndex(stage.key);
+  const isMovingForward = currentIdx < targetIdx;
   
   return (
     <div className="flex items-stretch gap-2">
-      <div className="flex flex-col min-w-[180px] max-w-[200px]">
+      <div 
+        className={`flex flex-col min-w-[180px] max-w-[200px] rounded-lg transition-all duration-200 ${
+          isDragOver 
+            ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5' 
+            : ''
+        } ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
+        onDragOver={(e) => onDragOver(e, stage.key)}
+        onDragLeave={onDragLeave}
+        onDrop={(e) => onDrop(e, stage.key)}
+      >
         <div className="flex items-center gap-2 mb-3 pb-2 border-b border-border/40">
           <div className="p-1.5 rounded-md bg-primary/10">
             <Icon className="w-3.5 h-3.5 text-primary" />
@@ -186,10 +246,35 @@ function StageColumn({
           </Badge>
         </div>
         
-        <div className="flex flex-col gap-2 flex-1 min-h-[100px]">
+        {/* Direction indicator */}
+        {showDirection && (
+          <div className={`flex items-center justify-center gap-1.5 py-2 mb-2 rounded-md text-[10px] font-medium ${
+            isMovingForward 
+              ? 'bg-green-500/20 text-green-400 border border-green-500/30' 
+              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+          }`}>
+            {isMovingForward ? (
+              <>
+                <ArrowRight className="w-3 h-3" />
+                <span>Execute</span>
+              </>
+            ) : (
+              <>
+                <ArrowLeft className="w-3 h-3" />
+                <span>Discuss</span>
+              </>
+            )}
+          </div>
+        )}
+        
+        <div className={`flex flex-col gap-2 flex-1 min-h-[100px] rounded-lg transition-colors ${
+          isDragOver ? 'bg-primary/5' : ''
+        }`}>
           {stageTasks.length === 0 ? (
-            <div className="flex-1 flex items-center justify-center text-[10px] text-muted-foreground/50 border border-dashed border-border/30 rounded-lg">
-              No tasks
+            <div className={`flex-1 flex items-center justify-center text-[10px] text-muted-foreground/50 border border-dashed rounded-lg transition-colors ${
+              isDragOver ? 'border-primary/50 bg-primary/5' : 'border-border/30'
+            }`}>
+              {isDragOver ? 'Drop here' : 'No tasks'}
             </div>
           ) : (
             stageTasks.slice(0, 5).map(task => (
@@ -197,6 +282,9 @@ function StageColumn({
                 key={task.id} 
                 task={task} 
                 agentName={task.assignee_agent_id ? agents.get(task.assignee_agent_id)?.name || null : null}
+                onDragStart={onDragStart}
+                onDragEnd={onDragEnd}
+                isDragging={draggedTask?.id === task.id}
               />
             ))
           )}
@@ -225,6 +313,99 @@ export function AgentTaskVisualizer() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isLive, setIsLive] = useState(true);
+  
+  // Drag and drop state
+  const [draggedTask, setDraggedTask] = useState<Task | null>(null);
+  const [dragOverStage, setDragOverStage] = useState<string | null>(null);
+  const [isUpdating, setIsUpdating] = useState(false);
+
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, task: Task) => {
+    setDraggedTask(task);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', task.id);
+  };
+
+  const handleDragEnd = () => {
+    setDraggedTask(null);
+    setDragOverStage(null);
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, stageKey: string) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverStage(stageKey);
+  };
+
+  const handleDragLeave = () => {
+    setDragOverStage(null);
+  };
+
+  const handleDrop = async (e: DragEvent<HTMLDivElement>, targetStage: string) => {
+    e.preventDefault();
+    setDragOverStage(null);
+    
+    if (!draggedTask || draggedTask.stage === targetStage) {
+      setDraggedTask(null);
+      return;
+    }
+    
+    const fromIdx = getStageIndex(draggedTask.stage);
+    const toIdx = getStageIndex(targetStage);
+    const isForward = toIdx > fromIdx;
+    const fromLabel = STAGES[fromIdx]?.label || draggedTask.stage;
+    const toLabel = STAGES[toIdx]?.label || targetStage;
+    
+    setIsUpdating(true);
+    
+    try {
+      // Update the task stage in database
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ 
+          stage: targetStage as 'DISCUSS' | 'PLAN' | 'EXECUTE' | 'VERIFY' | 'INTEGRATE',
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', draggedTask.id);
+      
+      if (updateError) throw updateError;
+      
+      // Log activity for agent notification
+      const activityTitle = isForward 
+        ? `Task queued for execution: ${draggedTask.title}`
+        : `Task sent back for discussion: ${draggedTask.title}`;
+      
+      await supabase.from('agent_activities').insert({
+        agent_id: draggedTask.assignee_agent_id || 'system',
+        activity: activityTitle,
+        level: isForward ? 'info' : 'warning'
+      });
+      
+      // Show toast notification
+      toast({
+        title: isForward ? 'Task moved forward' : 'Task moved back',
+        description: `"${draggedTask.title.slice(0, 40)}${draggedTask.title.length > 40 ? '...' : ''}" moved from ${fromLabel} to ${toLabel}`,
+        variant: isForward ? 'default' : 'default',
+      });
+      
+      // Optimistically update UI
+      setTasks(prev => prev.map(t => 
+        t.id === draggedTask.id 
+          ? { ...t, stage: targetStage, updated_at: new Date().toISOString() }
+          : t
+      ));
+      
+    } catch (err) {
+      console.error('[AgentTaskVisualizer] Failed to update task:', err);
+      toast({
+        title: 'Failed to move task',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsUpdating(false);
+      setDraggedTask(null);
+    }
+  };
 
   useEffect(() => {
     async function fetchData() {
@@ -233,7 +414,6 @@ export function AgentTaskVisualizer() {
       
       console.log('[AgentTaskVisualizer] Fetching data...');
       
-      // Use same query filters as HeroSection for consistency
       const [tasksRes, agentsRes] = await Promise.all([
         supabase
           .from('tasks')
@@ -394,6 +574,9 @@ export function AgentTaskVisualizer() {
               Live
             </Badge>
           )}
+          <span className="text-[10px] text-muted-foreground">
+            Drag tasks between stages to reassign
+          </span>
         </div>
         <Button 
           variant="ghost" 
@@ -448,6 +631,14 @@ export function AgentTaskVisualizer() {
                 tasks={tasks}
                 agents={agentMap}
                 isLast={idx === STAGES.length - 1}
+                dragOverStage={dragOverStage}
+                onDragOver={(e, stageKey) => handleDragOver(e, stageKey)}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                draggedTask={draggedTask}
+                isUpdating={isUpdating}
               />
             ))}
           </div>
