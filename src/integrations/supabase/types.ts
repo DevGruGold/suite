@@ -5835,6 +5835,54 @@ export type Database = {
           },
         ]
       }
+      workflow_diagnostic_reports: {
+        Row: {
+          affected_functions: string[] | null
+          created_at: string | null
+          diagnosis_id: string
+          executions_analyzed: number | null
+          failure_rate: number | null
+          full_report: string | null
+          id: string
+          primary_failure_point: string | null
+          recommended_actions: Json | null
+          resolved_at: string | null
+          root_cause_analysis: Json | null
+          severity: string | null
+          template_name: string
+        }
+        Insert: {
+          affected_functions?: string[] | null
+          created_at?: string | null
+          diagnosis_id: string
+          executions_analyzed?: number | null
+          failure_rate?: number | null
+          full_report?: string | null
+          id?: string
+          primary_failure_point?: string | null
+          recommended_actions?: Json | null
+          resolved_at?: string | null
+          root_cause_analysis?: Json | null
+          severity?: string | null
+          template_name: string
+        }
+        Update: {
+          affected_functions?: string[] | null
+          created_at?: string | null
+          diagnosis_id?: string
+          executions_analyzed?: number | null
+          failure_rate?: number | null
+          full_report?: string | null
+          id?: string
+          primary_failure_point?: string | null
+          recommended_actions?: Json | null
+          resolved_at?: string | null
+          root_cause_analysis?: Json | null
+          severity?: string | null
+          template_name?: string
+        }
+        Relationships: []
+      }
       workflow_executions: {
         Row: {
           created_at: string
