@@ -7020,7 +7020,9 @@ export type Database = {
         Args: never
         Returns: {
           active: boolean
+          expected_frequency_hours: number
           failed_runs_24h: number
+          is_overdue: boolean
           jobid: number
           jobname: string
           last_run_duration: unknown

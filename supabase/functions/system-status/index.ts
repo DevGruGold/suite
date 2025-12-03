@@ -386,10 +386,9 @@ serve(async (req) => {
         j.success_rate !== null && j.success_rate < 50
       ).length || 0;
       
-      // Jobs that should have run but didn't (active but no runs in 24h)
-      const stalledJobs = cronJobs?.filter((j: any) => 
-        j.active && (!j.total_runs_24h || j.total_runs_24h === 0)
-      ).length || 0;
+      // Use schedule-aware stalled detection from shared module
+      const cronMetrics = extractCronMetrics(cronJobs || []);
+      const stalledJobs = cronMetrics.stalled;
       
       // Determine overall cron health status
       let cronStatus = 'healthy';
