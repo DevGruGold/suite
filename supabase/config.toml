@@ -419,6 +419,9 @@ verify_jwt = false
 [functions.get-edge-function-logs]
 verify_jwt = false
 
+[functions.debug-analytics-data-flow]
+verify_jwt = false
+
 [functions.list-available-functions]
 verify_jwt = false
 
@@ -530,6 +533,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.get-edge-function-logs]
+verify_jwt = false
+
+[functions.debug-analytics-data-flow]
 verify_jwt = false
 
 # ====================================================================
