@@ -49,10 +49,10 @@ export const ExecutiveDirectory: React.FC<ExecutiveDirectoryProps> = ({
       <div className="text-center space-y-2">
         <div className="flex items-center justify-center gap-2">
           <Users className="w-8 h-8 text-primary" />
-          <h2 className="text-3xl font-bold text-foreground">XMRT Council Executive Board</h2>
+          <h2 className="text-3xl font-bold text-foreground">Suite Executive Board</h2>
         </div>
         <p className="text-muted-foreground">
-          Engage with AI Executives individually or convene the full council for group deliberation
+          Engage with AI Executives individually or convene the full board for group deliberation
         </p>
       </div>
 
