@@ -410,6 +410,15 @@ verify_jwt = false
 [functions.get-code-execution-lessons]
 verify_jwt = false
 
+[functions.query-edge-analytics]
+verify_jwt = false
+
+[functions.sync-function-logs]
+verify_jwt = false
+
+[functions.get-edge-function-logs]
+verify_jwt = false
+
 [functions.list-available-functions]
 verify_jwt = false
 
