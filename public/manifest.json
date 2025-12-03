@@ -1,12 +1,17 @@
 {
   "name": "Suite",
   "short_name": "Suite",
-  "description": "Enterprise AI Automation Platform",
+  "description": "Enterprise AI Automation Platform - Intelligent assistants, autonomous operations, and real-time monitoring",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#ffffff",
-  "theme_color": "#0f172a",
+  "background_color": "#0f172a",
+  "theme_color": "#1d2939",
   "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    },
     {
       "src": "/favicon.png",
       "sizes": "512x512",
