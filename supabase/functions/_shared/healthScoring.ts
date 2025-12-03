@@ -170,20 +170,117 @@ export function calculateUnifiedHealthScore(metrics: HealthMetrics): HealthResul
 }
 
 /**
- * Helper to extract cron job metrics from pg_cron data
+ * Parse cron schedule to determine expected frequency in hours.
+ * Handles standard cron expressions and returns expected run frequency.
+ */
+export function parseScheduleFrequency(schedule: string): number {
+  if (!schedule) return 24;
+  
+  const parts = schedule.trim().split(/\s+/);
+  if (parts.length < 5) return 24;
+  
+  const [minute, hour, dayOfMonth, month, dayOfWeek] = parts;
+  
+  // Monthly (specific day of month like "1" or "15", not "*" or "*/N")
+  if (dayOfMonth !== '*' && !dayOfMonth.includes('/') && !dayOfMonth.includes(',') && !dayOfMonth.includes('-')) {
+    return 744; // ~31 days in hours
+  }
+  
+  // Weekly (specific day of week like "0" for Sunday, "3" for Wednesday)
+  if (dayOfWeek !== '*' && !dayOfWeek.includes('/') && !dayOfWeek.includes(',') && !dayOfWeek.includes('-')) {
+    return 168; // 7 days in hours
+  }
+  
+  // Every N days (e.g., "*/3" in day of month field)
+  if (dayOfMonth.includes('/')) {
+    const interval = parseInt(dayOfMonth.split('/')[1]) || 1;
+    return interval * 24;
+  }
+  
+  // Every N hours (e.g., "*/6" in hour field)
+  if (hour.includes('/')) {
+    const interval = parseInt(hour.split('/')[1]) || 1;
+    return interval;
+  }
+  
+  // Specific hour(s) each day = daily (e.g., "0 14 * * *" runs at 2pm daily)
+  if (hour !== '*' && !hour.includes('/')) {
+    return 24;
+  }
+  
+  // Every N minutes (runs very frequently)
+  if (minute.includes('/')) {
+    const interval = parseInt(minute.split('/')[1]) || 1;
+    return Math.max(1, interval / 60); // At least 1 hour buffer
+  }
+  
+  // Default to daily for unrecognized patterns
+  return 24;
+}
+
+/**
+ * Detect one-time schedules (specific date and month).
+ * These should be excluded from stalled detection.
+ */
+export function isOneTimeSchedule(schedule: string): boolean {
+  if (!schedule) return false;
+  const parts = schedule.trim().split(/\s+/);
+  if (parts.length < 5) return false;
+  
+  const [, , dayOfMonth, month] = parts;
+  
+  // If both month and day are specific numbers (not * or ranges), it's one-time
+  const isSpecificMonth = month !== '*' && !month.includes('/') && !month.includes('-') && !month.includes(',');
+  const isSpecificDay = dayOfMonth !== '*' && !dayOfMonth.includes('/') && !dayOfMonth.includes('-') && !dayOfMonth.includes(',');
+  
+  return isSpecificMonth && isSpecificDay;
+}
+
+/**
+ * Helper to extract cron job metrics from pg_cron data.
+ * Uses schedule-aware logic to detect stalled jobs correctly for weekly/monthly schedules.
  */
 export function extractCronMetrics(cronJobs: any[]): { failing: number; stalled: number } {
   if (!cronJobs || !Array.isArray(cronJobs)) {
     return { failing: 0, stalled: 0 };
   }
   
+  // Jobs with poor success rate (<50%)
   const failing = cronJobs.filter(j => 
     j.success_rate !== null && j.success_rate < 50
   ).length;
   
-  const stalled = cronJobs.filter(j => 
-    j.active && (!j.total_runs_24h || j.total_runs_24h === 0)
-  ).length;
+  // Schedule-aware stalled detection
+  const stalled = cronJobs.filter(j => {
+    // Skip inactive jobs
+    if (!j.active) return false;
+    
+    // Skip one-time jobs
+    if (isOneTimeSchedule(j.schedule)) return false;
+    
+    // Use pre-calculated is_overdue if available from DB function
+    if (j.is_overdue !== undefined && j.is_overdue !== null) {
+      return j.is_overdue;
+    }
+    
+    // Parse schedule to determine expected frequency
+    const expectedFrequencyHours = parseScheduleFrequency(j.schedule);
+    
+    // Add 50% buffer to expected frequency for grace period
+    const windowHours = expectedFrequencyHours * 1.5;
+    
+    // If no last_run_time, check if job should have run by now
+    if (!j.last_run_time) {
+      // Active jobs that have never run are stalled (unless they're new)
+      return true;
+    }
+    
+    const lastRun = new Date(j.last_run_time);
+    const hoursSinceLastRun = (Date.now() - lastRun.getTime()) / (1000 * 60 * 60);
+    
+    // Job is stalled if it hasn't run within its expected window + buffer
+    return hoursSinceLastRun > windowHours;
+  }).length;
   
   return { failing, stalled };
 }
