@@ -67,23 +67,36 @@ export async function executeToolCall(
     };
   }
   
-  // Parse arguments with detailed error feedback
+  // Parse arguments with detailed error feedback including expected schema
   let parsedArgs;
   try {
     parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
   } catch (parseError) {
+    // Provide tool-specific expected schema in error messages
+    const expectedSchemas: Record<string, string> = {
+      'execute_python': '{ "code": "python_code_string", "purpose": "description_of_what_code_does" }',
+      'assign_task': '{ "title": "string", "description": "string", "category": "code|infra|research|governance|mining|device|ops|other", "assignee_agent_id": "agent-xxx", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE" }',
+      'update_task_status': '{ "task_id": "uuid", "status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE" }',
+      'update_agent_status': '{ "agent_id": "agent-xxx", "status": "IDLE|BUSY|ARCHIVED|ERROR|OFFLINE" }',
+      'createGitHubIssue': '{ "title": "string", "body": "string", "repo": "XMRT-Ecosystem", "labels": ["bug"] }',
+      'invoke_edge_function': '{ "function_name": "string", "payload": {} }',
+      'bulk_update_task_status': '{ "task_ids": ["uuid1", "uuid2"], "new_status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED" }'
+    };
+    
+    const expectedSchema = expectedSchemas[name] || 'Check tool definition for required parameters';
+    
     await logFunctionUsage(supabase, {
       function_name: name,
       executive_name: executiveName,
       success: false,
       execution_time_ms: Date.now() - startTime,
-      error_message: 'Failed to parse tool arguments',
-      parameters: { raw_args: args, parse_error: parseError.message }
+      error_message: `Failed to parse tool arguments for ${name}`,
+      parameters: { raw_args: args, parse_error: parseError.message, expected_schema: expectedSchema }
     });
     return { 
       success: false, 
-      error: 'Invalid tool arguments: JSON parse failed',
-      learning_point: 'Tool arguments must be valid JSON. Check syntax, ensure quotes are properly escaped, and validate JSON structure.'
+      error: `Invalid tool arguments for ${name}: JSON parse failed. Expected format: ${expectedSchema}`,
+      learning_point: `Tool ${name} requires valid JSON. Expected schema: ${expectedSchema}. Ensure quotes are escaped and JSON is valid.`
     };
   }
   
