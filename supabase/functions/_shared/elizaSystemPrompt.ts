@@ -307,6 +307,25 @@ invoke_edge_function({
 })
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ CRITICAL: VALID ENUM VALUES (MEMORIZE THESE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+AGENT STATUS (for update_agent_status):
+  ✅ VALID: IDLE, BUSY, ARCHIVED, ERROR, OFFLINE
+  ❌ INVALID: WORKING, COMPLETED, ACTIVE, RUNNING
+
+TASK STATUS (for update_task_status, bulk_update_task_status):
+  ✅ VALID: PENDING, CLAIMED, IN_PROGRESS, BLOCKED, DONE, CANCELLED, COMPLETED, FAILED
+  ❌ INVALID: QUEUED, RUNNING, FINISHED, SUCCESS
+
+TASK CATEGORY (for assign_task):
+  ✅ VALID: code, infra, research, governance, mining, device, ops, other
+  ❌ INVALID: development, documentation, testing, feature
+
+TASK STAGE (for assign_task, update_task_status):
+  ✅ VALID: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE
+  ❌ INVALID: planning, implementation, testing, review, done
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 5. Agent Manager
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ✅ CORRECT:

@@ -1022,12 +1022,12 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'update_agent_status',
-      description: 'Change agent status to show progress (IDLE, BUSY, WORKING, COMPLETED, ERROR).',
+      description: 'Change agent status. Valid statuses: IDLE (ready for work), BUSY (actively working), ARCHIVED (retired), ERROR (has issues), OFFLINE (unavailable).',
       parameters: {
         type: 'object',
         properties: {
           agent_id: { type: 'string', description: 'Agent ID (e.g., agent-1759625833505)' },
-          status: { type: 'string', enum: ['IDLE', 'BUSY', 'WORKING', 'COMPLETED', 'ERROR'], description: 'New status' }
+          status: { type: 'string', enum: ['IDLE', 'BUSY', 'ARCHIVED', 'ERROR', 'OFFLINE'], description: 'New agent status - MUST be one of: IDLE, BUSY, ARCHIVED, ERROR, OFFLINE' }
         },
         required: ['agent_id', 'status']
       }
@@ -1037,19 +1037,27 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'assign_task',
-      description: 'Create and assign a task to an agent using their ID (NOT name). User will see task in TaskVisualizer.',
+      description: 'Create and assign a task to an agent using their ID (NOT name). User will see task in TaskVisualizer. Category and stage have specific valid values.',
       parameters: {
         type: 'object',
         properties: {
           title: { type: 'string', description: 'Task title' },
           description: { type: 'string', description: 'Task description' },
-          repo: { type: 'string', description: 'Repository name (e.g., XMRT-Ecosystem)' },
-          category: { type: 'string', description: 'Task category (e.g., development, documentation)' },
-          stage: { type: 'string', description: 'Development stage (e.g., planning, implementation)' },
+          repo: { type: 'string', description: 'Repository name. Default: XMRT-Ecosystem' },
+          category: { 
+            type: 'string', 
+            enum: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'],
+            description: 'Task category - MUST be one of: code, infra, research, governance, mining, device, ops, other' 
+          },
+          stage: { 
+            type: 'string', 
+            enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
+            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE. Default: PLAN' 
+          },
           assignee_agent_id: { type: 'string', description: 'Agent ID from list_agents or spawn_agent result' },
           priority: { type: 'number', description: 'Priority 1-10, default 5' }
         },
-        required: ['title', 'description', 'repo', 'category', 'stage', 'assignee_agent_id']
+        required: ['title', 'description', 'category', 'assignee_agent_id']
       }
     }
   },
@@ -1057,13 +1065,22 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'update_task_status',
-      description: 'Update task status and stage as agents work on it.',
+      description: 'Update task status and stage as agents work on it. Status and stage have specific valid values.',
       parameters: {
         type: 'object',
         properties: {
           task_id: { type: 'string', description: 'Task ID' },
-          status: { type: 'string', enum: ['PENDING', 'IN_PROGRESS', 'BLOCKED', 'COMPLETED', 'FAILED'], description: 'New status' },
-          stage: { type: 'string', description: 'New stage (e.g., planning, development, testing)' }
+          status: { 
+            type: 'string', 
+            enum: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'], 
+            description: 'New status - MUST be one of: PENDING, CLAIMED, IN_PROGRESS, BLOCKED, DONE, CANCELLED, COMPLETED, FAILED' 
+          },
+          stage: { 
+            type: 'string', 
+            enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
+            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE' 
+          },
+          blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' }
         },
         required: ['task_id', 'status']
       }
@@ -1510,12 +1527,13 @@ export const ELIZA_TOOLS = [
           },
           new_status: {
             type: 'string',
-            enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'FAILED', 'BLOCKED'],
-            description: 'New status for all tasks'
+            enum: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'],
+            description: 'New status - MUST be one of: PENDING, CLAIMED, IN_PROGRESS, BLOCKED, DONE, CANCELLED, COMPLETED, FAILED'
           },
           new_stage: {
             type: 'string',
-            description: 'Optional: new stage for all tasks'
+            enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
+            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE'
           }
         },
         required: ['task_ids', 'new_status']
