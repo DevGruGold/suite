@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
 import { AlertCircle, CheckCircle2, Zap, Brain, Wrench, Activity, Clock, ExternalLink, User, ListTodo } from 'lucide-react';
@@ -30,6 +30,12 @@ export const ActivityPulse = ({
   const [activities, setActivities] = useState<ActivityItem[]>([]);
   const [isLive, setIsLive] = useState(true);
   const containerRef = useRef<HTMLDivElement>(null);
+
+  // Calculate linked activities count once for performance
+  const linkedActivitiesCount = useMemo(() => 
+    activities.filter(a => a.task_id || a.agent_id).length,
+    [activities]
+  );
 
   useEffect(() => {
     // Fetch recent activities - REAL DATA ONLY with task_id and agent_id
@@ -330,15 +336,17 @@ export const ActivityPulse = ({
         <div className="absolute inset-y-0 right-0 w-16 bg-gradient-to-l from-background to-transparent z-10 pointer-events-none" />
       </div>
 
-      {/* Linked items indicator */}
-      <div className="flex justify-between items-center mt-2 px-1">
-        <span className="text-[10px] text-muted-foreground">
-          Click linked items to navigate
-        </span>
-        <span className="text-[10px] text-muted-foreground">
-          {activities.filter(a => a.task_id || a.agent_id).length} linked activities
-        </span>
-      </div>
+      {/* Linked items indicator - only show if there are linked items */}
+      {linkedActivitiesCount > 0 && (
+        <div className="flex justify-between items-center mt-2 px-1">
+          <span className="text-[10px] text-muted-foreground">
+            Click linked items to navigate
+          </span>
+          <span className="text-[10px] text-muted-foreground">
+            {linkedActivitiesCount} linked {linkedActivitiesCount === 1 ? 'activity' : 'activities'}
+          </span>
+        </div>
+      )}
     </div>
   );
 };
