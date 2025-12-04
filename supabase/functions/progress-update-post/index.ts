@@ -36,31 +36,67 @@ serve(async (req) => {
       throw new Error('GITHUB_TOKEN not configured');
     }
 
-    // Get recent completions (last hour)
+    // ============= RICH DYNAMIC DATA FETCHING =============
+
+    // Get recent completions (last hour) with details
     const { data: recentCompletions } = await supabase
       .from('eliza_activity_log')
-      .select('*')
+      .select('title, activity_type, description, status, metadata, created_at')
       .eq('status', 'completed')
       .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString())
-      .order('created_at', { ascending: false});
+      .order('created_at', { ascending: false });
 
-    // Get active agents
+    // Get recent failures
+    const { data: recentFailures } = await supabase
+      .from('eliza_activity_log')
+      .select('title, activity_type, description')
+      .eq('status', 'failed')
+      .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
+
+    // Get active agents with current tasks
     const { data: activeAgents } = await supabase
       .from('agents')
-      .select('*')
+      .select('name, status, current_workload')
       .eq('status', 'BUSY');
 
-    // Get blocked tasks
+    // Get idle agents
+    const { data: idleAgents } = await supabase
+      .from('agents')
+      .select('name')
+      .eq('status', 'IDLE');
+
+    // Get blocked tasks with reasons
     const { data: blockedTasks } = await supabase
       .from('tasks')
-      .select('*')
+      .select('title, blocking_reason, category, stage')
       .eq('status', 'BLOCKED');
 
     // Get current workflow executions
     const { data: runningWorkflows } = await supabase
       .from('workflow_executions')
-      .select('*')
+      .select('workflow_template_id, status, started_at')
       .eq('status', 'running');
+
+    // Get Python executions in last hour
+    const { data: pythonRecent } = await supabase
+      .from('eliza_python_executions')
+      .select('status')
+      .gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
+
+    // Get function calls in last hour
+    const { data: functionRecent } = await supabase
+      .from('eliza_function_usage')
+      .select('function_name, success')
+      .gte('invoked_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
+
+    // Get in-progress tasks
+    const { data: inProgressTasks } = await supabase
+      .from('tasks')
+      .select('title, stage, assignee_agent_id')
+      .eq('status', 'IN_PROGRESS')
+      .limit(5);
+
+    // ============= CALCULATE REAL METRICS =============
 
     const time = new Date().toLocaleTimeString('en-US', { 
       hour: 'numeric',
@@ -68,25 +104,110 @@ serve(async (req) => {
       hour12: true
     });
 
-    // Generate progress update with Gemini
-    const prompt = `Generate a concise hourly progress update for the XMRT DAO ecosystem.
+    // Python stats
+    const pythonTotal = pythonRecent?.length || 0;
+    const pythonSuccess = pythonRecent?.filter(p => p.status === 'completed').length || 0;
+    const pythonRate = pythonTotal > 0 ? ((pythonSuccess / pythonTotal) * 100).toFixed(0) : 'N/A';
 
-Context:
-- Time: ${time} UTC
-- Recent completions (last hour): ${recentCompletions?.length || 0}
-- Active agents: ${activeAgents?.length || 0}
-- Blocked tasks: ${blockedTasks?.length || 0}
-- Running workflows: ${runningWorkflows?.length || 0}
-- Recent items: ${recentCompletions?.slice(0, 3).map(c => c.title).join(', ') || 'None'}
+    // Function stats
+    const functionTotal = functionRecent?.length || 0;
+    const functionSuccess = functionRecent?.filter(f => f.success).length || 0;
+    const functionRate = functionTotal > 0 ? ((functionSuccess / functionTotal) * 100).toFixed(0) : 'N/A';
 
-Create a brief status update that:
-1. Lists what just completed
-2. Shows what's currently active
-3. Flags any blockers
-4. Provides overall status assessment
-5. Keeps it factual and concise
+    // Determine overall status
+    const blockedCount = blockedTasks?.length || 0;
+    const activeCount = activeAgents?.length || 0;
+    const completedCount = recentCompletions?.length || 0;
+    const failedCount = recentFailures?.length || 0;
 
-This is a quick pulse check, not a deep dive. Format as GitHub markdown.`;
+    let statusEmoji = '🟢';
+    let statusText = 'All systems nominal';
+    if (blockedCount > 3 || failedCount > 2) {
+      statusEmoji = '🟡';
+      statusText = 'Moderate issues - attention needed';
+    }
+    if (blockedCount > 5 || failedCount > 5) {
+      statusEmoji = '🔴';
+      statusText = 'Critical issues detected';
+    }
+    if (activeCount === 0 && completedCount === 0) {
+      statusEmoji = '🔵';
+      statusText = 'Quiet period - ready for new work';
+    }
+
+    // ============= BUILD DETAILED CONTEXT =============
+
+    const completionsText = recentCompletions && recentCompletions.length > 0
+      ? recentCompletions.slice(0, 5).map(c => `  - ✅ ${c.title || c.activity_type}`).join('\n')
+      : '  No completions in the last hour';
+
+    const failuresText = recentFailures && recentFailures.length > 0
+      ? recentFailures.slice(0, 3).map(f => `  - ❌ ${f.title || f.activity_type}`).join('\n')
+      : '  ✅ No failures';
+
+    const activeAgentsText = activeAgents && activeAgents.length > 0
+      ? activeAgents.map(a => `  - 🤖 ${a.name.split(' - ')[0]} (${a.current_workload} tasks)`).join('\n')
+      : '  No agents currently busy';
+
+    const blockedText = blockedTasks && blockedTasks.length > 0
+      ? blockedTasks.slice(0, 3).map(t => `  - 🚫 "${t.title}": ${t.blocking_reason || 'Unknown'}`).join('\n')
+      : '  ✅ No blockers';
+
+    const inProgressText = inProgressTasks && inProgressTasks.length > 0
+      ? inProgressTasks.map(t => `  - 🔄 "${t.title}" [${t.stage}]`).join('\n')
+      : '  No tasks in progress';
+
+    const workflowsText = runningWorkflows && runningWorkflows.length > 0
+      ? runningWorkflows.map(w => `  - ⚙️ ${w.workflow_template_id}`).join('\n')
+      : '  No workflows running';
+
+    // ============= GENERATE DYNAMIC PROMPT =============
+
+    const prompt = `Generate a concise hourly progress update for the XMRT DAO ecosystem based on ACTUAL CURRENT STATE.
+
+## REAL-TIME STATUS (${time} UTC)
+
+### ${statusEmoji} Overall Status: ${statusText}
+
+### 📊 Last Hour Metrics
+- **Completions:** ${completedCount}
+- **Failures:** ${failedCount}
+- **Python Executions:** ${pythonTotal} (${pythonRate}% success)
+- **Function Calls:** ${functionTotal} (${functionRate}% success)
+
+### ✅ Recently Completed
+${completionsText}
+
+### ❌ Recent Failures
+${failuresText}
+
+### 🤖 Active Agents (${activeCount})
+${activeAgentsText}
+
+**Idle Agents:** ${idleAgents?.length || 0}
+
+### 🔄 Tasks In Progress
+${inProgressText}
+
+### 🚫 Blockers (${blockedCount})
+${blockedText}
+
+### ⚙️ Running Workflows (${runningWorkflows?.length || 0})
+${workflowsText}
+
+---
+
+## INSTRUCTIONS:
+1. Create a BRIEF status update (this is a pulse check, not a deep dive)
+2. Reference the ACTUAL numbers and specific items above
+3. If there are completions, highlight 1-2 notable ones
+4. If there are blockers, flag them as priorities
+5. If there are failures, acknowledge them briefly
+6. Mention active agents by name
+7. Keep it factual and concise - 150-250 words max
+8. Include the status emoji and assessment
+
+Format as GitHub markdown. Sign off as Eliza with the CAO (analytics) attribution.`;
 
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
@@ -98,9 +219,11 @@ This is a quick pulse check, not a deep dive. Format as GitHub markdown.`;
     });
 
     const geminiData = await geminiResponse.json();
-    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `## 📊 Quick Status Update (${time} UTC)
+    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `## ${statusEmoji} Quick Status Update (${time} UTC)
 
-Status update for ${time} UTC.
+**Status:** ${statusText}
+**Completions:** ${completedCount} | **Failures:** ${failedCount}
+**Active Agents:** ${activeCount} | **Blockers:** ${blockedCount}
 
 — Eliza 📊`;
 
@@ -108,7 +231,7 @@ Status update for ${time} UTC.
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
       body: {
         action: 'create_discussion',
-        executive: 'cao', // CAO handles analytics and metrics
+        executive: 'cao',
         data: {
           repositoryId: 'R_kgDONfvCEw',
           categoryId: 'DIC_kwDONfvCE84Cl9qy',
@@ -123,10 +246,9 @@ Status update for ${time} UTC.
       throw discussionError;
     }
 
-    // ✅ Extract discussion data from corrected response structure
     const discussion = discussionData?.data;
 
-    // Log the discussion creation
+    // Log with rich metadata
     await supabase.from('eliza_activity_log').insert({
       activity_type: 'progress_update_posted',
       title: '📊 Progress Update Posted',
@@ -135,9 +257,16 @@ Status update for ${time} UTC.
         discussion_url: discussion?.url,
         discussion_id: discussion?.id,
         discussion_title: discussion?.title,
-        completions_count: recentCompletions?.length || 0,
-        active_agents_count: activeAgents?.length || 0,
-        blocked_tasks_count: blockedTasks?.length || 0
+        status_emoji: statusEmoji,
+        status_text: statusText,
+        completions_count: completedCount,
+        failures_count: failedCount,
+        active_agents_count: activeCount,
+        active_agents: activeAgents?.map(a => a.name),
+        blocked_tasks_count: blockedCount,
+        blocked_tasks: blockedTasks?.map(t => t.title),
+        python_success_rate: pythonRate,
+        function_success_rate: functionRate
       },
       status: 'completed'
     });
@@ -162,16 +291,3 @@ Status update for ${time} UTC.
     );
   }
 });
-
-function getOverallStatus(activeAgents: any[], blockedTasks: any[], recentCompletions: any[]): string {
-  if (blockedTasks && blockedTasks.length > 3) {
-    return '🟡 Moderate blockers - need attention';
-  }
-  if (activeAgents && activeAgents.length > 2) {
-    return '🟢 High activity - things are moving!';
-  }
-  if (recentCompletions && recentCompletions.length > 0) {
-    return '🟢 Steady progress';
-  }
-  return '🔵 Quiet period - ready for new work';
-}

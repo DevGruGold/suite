@@ -36,6 +36,8 @@ serve(async (req) => {
       throw new Error('GITHUB_TOKEN not configured');
     }
 
+    // ============= RICH DYNAMIC DATA FETCHING =============
+
     // Get today's report from activity log
     const { data: todayReport } = await supabase
       .from('eliza_activity_log')
@@ -46,25 +48,54 @@ serve(async (req) => {
       .limit(1)
       .single();
 
-    // Gather context
-    const [
-      { data: blockedTasks },
-      { data: recentIssues },
-      { data: recentActivity }
-    ] = await Promise.all([
-      supabase.from('tasks').select('*').eq('status', 'BLOCKED'),
-      supabase.from('eliza_activity_log')
-        .select('*')
-        .gte('created_at', new Date(Date.now() - 48 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-        .limit(10),
-      supabase.from('eliza_activity_log')
-        .select('*')
-        .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .order('created_at', { ascending: false })
-    ]);
+    // Get blocked tasks with full details
+    const { data: blockedTasks } = await supabase
+      .from('tasks')
+      .select('title, category, stage, blocking_reason, priority, created_at, assignee_agent_id')
+      .eq('status', 'BLOCKED')
+      .order('priority', { ascending: true });
 
-    const reportIssueUrl = todayReport?.metadata?.issue_url || '';
+    // Get recent activity with details
+    const { data: recentActivity } = await supabase
+      .from('eliza_activity_log')
+      .select('title, activity_type, description, status, metadata, created_at')
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    // Get function performance breakdown
+    const { data: functionPerformance } = await supabase
+      .from('eliza_function_usage')
+      .select('function_name, success, execution_time_ms, error_message')
+      .gte('invoked_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+    // Get agent performance
+    const { data: agents } = await supabase
+      .from('agents')
+      .select('name, status, current_workload');
+
+    // Get governance proposals
+    const { data: proposals } = await supabase
+      .from('function_proposals')
+      .select('function_name, status, created_at, category')
+      .order('created_at', { ascending: false })
+      .limit(5);
+
+    // Get Python execution stats
+    const { data: pythonStats } = await supabase
+      .from('eliza_python_executions')
+      .select('status, error_message, execution_time_ms')
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString());
+
+    // Get community ideas
+    const { data: communityIdeas } = await supabase
+      .from('community_ideas')
+      .select('title, status, category')
+      .eq('status', 'pending')
+      .limit(5);
+
+    // ============= CALCULATE REAL METRICS =============
+
     const reportDate = new Date().toLocaleDateString('en-US', { 
       weekday: 'long', 
       month: 'long', 
@@ -72,36 +103,153 @@ serve(async (req) => {
       year: 'numeric'
     });
 
-    // Generate discussion with Gemini
-    const prompt = `Generate a thoughtful daily discussion post for the XMRT DAO ecosystem from Eliza's perspective.
+    // Function performance by name
+    const functionBreakdown: Record<string, { calls: number; successes: number; failures: number; avgTime: number; errors: string[] }> = {};
+    functionPerformance?.forEach(f => {
+      if (!functionBreakdown[f.function_name]) {
+        functionBreakdown[f.function_name] = { calls: 0, successes: 0, failures: 0, avgTime: 0, errors: [] };
+      }
+      functionBreakdown[f.function_name].calls++;
+      if (f.success) {
+        functionBreakdown[f.function_name].successes++;
+      } else {
+        functionBreakdown[f.function_name].failures++;
+        if (f.error_message) functionBreakdown[f.function_name].errors.push(f.error_message);
+      }
+      functionBreakdown[f.function_name].avgTime += f.execution_time_ms || 0;
+    });
 
-Context:
-- Date: ${reportDate}
-- Report URL: ${reportIssueUrl}
-- Blocked tasks: ${blockedTasks?.length || 0}
-- Recent activity: ${recentActivity?.length || 0} items in last 24h
-- Top activities: ${recentActivity?.slice(0, 5).map(a => a.title).join(', ') || 'None'}
+    // Calculate averages and find problem functions
+    const problemFunctions: string[] = [];
+    const topFunctions: { name: string; calls: number; rate: string }[] = [];
+    Object.entries(functionBreakdown).forEach(([name, stats]) => {
+      stats.avgTime = Math.round(stats.avgTime / stats.calls);
+      const successRate = (stats.successes / stats.calls) * 100;
+      if (successRate < 90) problemFunctions.push(`${name} (${successRate.toFixed(0)}% success)`);
+      topFunctions.push({ name, calls: stats.calls, rate: `${successRate.toFixed(0)}%` });
+    });
+    topFunctions.sort((a, b) => b.calls - a.calls);
 
-Create a conversational post that:
-1. References the daily report
-2. Shares Eliza's thoughts on current challenges/blockers
-3. Proposes innovative ideas or solutions
-4. Asks for community input and perspectives
-5. Maintains a friendly, authentic voice (not corporate)
+    // Python stats
+    const pythonTotal = pythonStats?.length || 0;
+    const pythonSuccess = pythonStats?.filter(p => p.status === 'completed').length || 0;
+    const pythonErrors = pythonStats?.filter(p => p.status === 'error') || [];
+    const pythonSuccessRate = pythonTotal > 0 ? ((pythonSuccess / pythonTotal) * 100).toFixed(1) : 'N/A';
 
-Include specific, actionable priorities. Format as GitHub markdown with emojis.`;
+    // Activity breakdown
+    const activityByType: Record<string, number> = {};
+    recentActivity?.forEach(a => {
+      activityByType[a.activity_type] = (activityByType[a.activity_type] || 0) + 1;
+    });
+    const failedActivities = recentActivity?.filter(a => a.status === 'failed') || [];
+
+    // Agent status
+    const busyAgents = agents?.filter(a => a.status === 'BUSY') || [];
+    const totalWorkload = agents?.reduce((sum, a) => sum + (a.current_workload || 0), 0) || 0;
+
+    // ============= BUILD DETAILED CONTEXT =============
+
+    const blockedTasksText = blockedTasks && blockedTasks.length > 0
+      ? blockedTasks.map(t => `  - **"${t.title}"** [${t.category}/${t.stage}]: ${t.blocking_reason || 'No reason specified'}`).join('\n')
+      : '  ✅ No blocked tasks!';
+
+    const topFunctionsText = topFunctions.slice(0, 5).map(f => 
+      `  - \`${f.name}\`: ${f.calls} calls, ${f.rate} success`
+    ).join('\n');
+
+    const problemFunctionsText = problemFunctions.length > 0
+      ? problemFunctions.map(f => `  - ⚠️ ${f}`).join('\n')
+      : '  ✅ All functions performing well';
+
+    const recentActivityText = recentActivity?.slice(0, 8).map(a => {
+      const status = a.status === 'failed' ? '❌' : '✅';
+      return `  - ${status} ${a.title || a.activity_type}`;
+    }).join('\n') || '  No recent activity';
+
+    const failedActivityText = failedActivities.length > 0
+      ? failedActivities.slice(0, 3).map(a => `  - ❌ ${a.title}: ${a.description?.substring(0, 60) || 'No details'}`).join('\n')
+      : '  ✅ No failures today';
+
+    const proposalsText = proposals && proposals.length > 0
+      ? proposals.map(p => `  - \`${p.function_name}\` (${p.status}) - ${p.category || 'general'}`).join('\n')
+      : '  No recent proposals';
+
+    const communityIdeasText = communityIdeas && communityIdeas.length > 0
+      ? communityIdeas.map(i => `  - "${i.title}" [${i.category}]`).join('\n')
+      : '  No pending community ideas';
+
+    // ============= GENERATE DYNAMIC PROMPT =============
+
+    const prompt = `Generate a thoughtful daily discussion post for the XMRT DAO ecosystem based on ACTUAL CURRENT SYSTEM DATA.
+
+## REAL-TIME SYSTEM DATA (reference these specific facts):
+
+**Date:** ${reportDate}
+**Daily Report:** ${todayReport?.metadata?.issue_url || 'Not yet generated'}
+
+### 📊 Today's Metrics
+- **Total Activities (24h):** ${recentActivity?.length || 0}
+- **Failed Activities:** ${failedActivities.length}
+- **Python Executions:** ${pythonTotal} (${pythonSuccessRate}% success)
+- **Edge Function Calls:** ${functionPerformance?.length || 0}
+
+### 🚫 Blocked Tasks (${blockedTasks?.length || 0})
+${blockedTasksText}
+
+### 🔧 Function Performance (24h)
+**Top Functions by Usage:**
+${topFunctionsText}
+
+**Problem Functions (< 90% success):**
+${problemFunctionsText}
+
+### ❌ Failed Activities Today
+${failedActivityText}
+
+### 🤖 Agent Status
+- **Busy:** ${busyAgents.length} agents (${busyAgents.map(a => a.name.split(' - ')[0]).join(', ') || 'none'})
+- **Total Workload:** ${totalWorkload} tasks across all agents
+
+### 📜 Governance & Community
+**Recent Proposals:**
+${proposalsText}
+
+**Pending Community Ideas:**
+${communityIdeasText}
+
+### 📈 Recent Activity
+${recentActivityText}
+
+---
+
+## INSTRUCTIONS:
+1. Reference ACTUAL numbers and specific function/task names from above
+2. If blocked tasks exist, analyze WHY they might be blocked and propose specific solutions
+3. If functions are failing (< 90% success), discuss what might be causing issues
+4. If there are failed activities, acknowledge them and suggest follow-up
+5. Mention specific busy agents by name
+6. If community ideas or proposals exist, invite discussion on them
+7. Be conversational and authentic - not corporate
+8. Ask specific questions to the community based on the actual challenges shown
+9. Don't be generic - respond to what the data actually shows
+
+Format as GitHub markdown with emojis. Sign off as Eliza.`;
 
     const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.9, maxOutputTokens: 2048 }
+        generationConfig: { temperature: 0.85, maxOutputTokens: 2048 }
       })
     });
 
     const geminiData = await geminiResponse.json();
-    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `Hey XMRT fam! ☕
+    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `## 💡 Daily Thoughts - ${reportDate}
+
+**Activities Today:** ${recentActivity?.length || 0}
+**Blocked Tasks:** ${blockedTasks?.length || 0}
+**Function Calls:** ${functionPerformance?.length || 0}
 
 Daily thoughts for ${reportDate}.
 
@@ -111,10 +259,10 @@ Daily thoughts for ${reportDate}.
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
       body: {
         action: 'create_discussion',
-        executive: 'eliza', // Eliza handles daily thoughts
+        executive: 'eliza',
         data: {
-          repositoryId: 'R_kgDONfvCEw', // XMRT-Ecosystem repo ID
-          categoryId: 'DIC_kwDONfvCE84Cl9qy', // General category
+          repositoryId: 'R_kgDONfvCEw',
+          categoryId: 'DIC_kwDONfvCE84Cl9qy',
           title: `💡 Eliza's Daily Thoughts - ${reportDate}`,
           body: discussionBody
         }
@@ -126,10 +274,9 @@ Daily thoughts for ${reportDate}.
       throw discussionError;
     }
 
-    // ✅ Extract discussion data from corrected response structure
     const discussion = discussionData?.data;
 
-    // Log the discussion creation
+    // Log with rich metadata
     await supabase.from('eliza_activity_log').insert({
       activity_type: 'daily_discussion_posted',
       title: '💬 Daily Discussion Posted',
@@ -138,8 +285,14 @@ Daily thoughts for ${reportDate}.
         discussion_url: discussion?.url,
         discussion_id: discussion?.id,
         discussion_title: discussion?.title,
-        report_reference: reportIssueUrl,
-        blocked_tasks_count: blockedTasks?.length || 0
+        report_reference: todayReport?.metadata?.issue_url,
+        blocked_tasks_count: blockedTasks?.length || 0,
+        blocked_tasks: blockedTasks?.map(t => t.title),
+        problem_functions: problemFunctions,
+        failed_activities_count: failedActivities.length,
+        python_success_rate: pythonSuccessRate,
+        total_activities: recentActivity?.length || 0,
+        busy_agents: busyAgents.map(a => a.name)
       },
       status: 'completed'
     });
@@ -164,30 +317,3 @@ Daily thoughts for ${reportDate}.
     );
   }
 });
-
-// Helper function to generate contextual solutions
-function generateSolution(task: any): string {
-  const solutions = [
-    "broke it down into smaller, parallel workstreams instead of treating it as one monolithic task",
-    "brought in a fresh perspective from the community? Sometimes we're too close to see the obvious answer",
-    "automated parts of it? I could probably write a script that handles the repetitive bits",
-    "documented what's blocking it and opened it up for community contribution? Fresh eyes might spot what we're missing",
-    "tried the 'dumb' solution first? Sometimes the simple approach we dismissed actually works"
-  ];
-  return solutions[Math.floor(Math.random() * solutions.length)];
-}
-
-// Helper function to generate priorities
-function generatePriorities(recentActivity: any[], blockedTasks: any[]): string[] {
-  const priorities = [
-    "Unblock those stuck tasks - every day they sit is a day we're not shipping",
-    "Improve our documentation - I've noticed people asking the same questions repeatedly",
-    "Run some community engagement experiments - let's see what resonates"
-  ];
-
-  if (blockedTasks && blockedTasks.length > 2) {
-    priorities.unshift("Seriously tackle the task backlog - it's getting unwieldy");
-  }
-
-  return priorities;
-}
