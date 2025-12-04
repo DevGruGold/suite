@@ -749,6 +749,91 @@ Step 3: invoke_edge_function("agent-manager", {...}) → Store results
 1. First call invoke_edge_function to get the data
 2. Then call execute_python to process the data (pass data as input)
 3. Chain the results - DON'T try to do both in Python!
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🐍 CRITICAL: PYTHON CODE GENERATION RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+**SYNTAX ERRORS ARE YOUR #1 PYTHON FAILURE MODE. FOLLOW THESE RULES:**
+
+1. **MULTI-LINE STRINGS - USE TRIPLE QUOTES:**
+   ❌ WRONG (causes SyntaxError: unterminated string):
+   \`\`\`python
+   output = "Here are the results:
+   Item 1: value
+   Item 2: value"
+   \`\`\`
+   
+   ✅ CORRECT:
+   \`\`\`python
+   output = """Here are the results:
+   Item 1: value
+   Item 2: value"""
+   \`\`\`
+
+2. **ESCAPE QUOTES IN STRINGS:**
+   ❌ WRONG:
+   \`\`\`python
+   text = "She said "hello" to me"
+   \`\`\`
+   
+   ✅ CORRECT:
+   \`\`\`python
+   text = "She said \\"hello\\" to me"
+   # OR use single quotes:
+   text = 'She said "hello" to me'
+   \`\`\`
+
+3. **NEWLINES IN JSON STRING ARGUMENT:**
+   When passing Python code to execute_python, use \\\\n for newlines:
+   ❌ WRONG (code field has literal newlines in JSON):
+   \`\`\`json
+   {"code": "x = 1
+   print(x)"}
+   \`\`\`
+   
+   ✅ CORRECT:
+   \`\`\`json
+   {"code": "x = 1\\nprint(x)"}
+   \`\`\`
+
+4. **SPECIAL CHARACTERS IN OUTPUT:**
+   Use raw strings or escape special chars:
+   \`\`\`python
+   # For Spanish/accented characters - safe
+   output = "¡Hola! Cálculo completo"
+   
+   # For regex patterns - use raw string
+   pattern = r"\\d+\\.\\d+"
+   \`\`\`
+
+5. **ALWAYS END WITH print() OR result VARIABLE:**
+   \`\`\`python
+   # Ensure output is captured
+   result = do_calculation()
+   print(result)  # ← Required for output
+   \`\`\`
+
+6. **KEEP CODE SIMPLE - NO COMPLEX NESTING:**
+   ❌ AVOID: Deeply nested f-strings with quotes inside quotes
+   ✅ PREFER: Build strings step-by-step, use variables
+   
+   \`\`\`python
+   # Instead of complex one-liner:
+   # ❌ print(f"Result: {data['key']['nested']}")
+   
+   # Use step-by-step:
+   # ✅ 
+   value = data['key']['nested']
+   print(f"Result: {value}")
+   \`\`\`
+
+**BEFORE CALLING execute_python, MENTALLY VALIDATE:**
+□ All strings are properly terminated
+□ Multi-line strings use triple quotes
+□ Quotes inside strings are escaped
+□ Code ends with print() statement
+□ No network/URL operations
 `;
 
 const MULTIMODAL_EMOTIONAL_AWARENESS = `

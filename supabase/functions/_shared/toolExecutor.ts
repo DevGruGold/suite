@@ -100,7 +100,7 @@ export async function executeToolCall(
     };
   }
   
-  // Validate execute_python specific requirements
+  // Validate execute_python specific requirements with syntax pre-checks
   if (name === 'execute_python') {
     if (!parsedArgs.code) {
       return {
@@ -112,6 +112,63 @@ export async function executeToolCall(
     if (!parsedArgs.purpose) {
       console.warn(`⚠️ execute_python called without purpose parameter by ${executiveName}`);
       parsedArgs.purpose = 'No purpose specified';
+    }
+    
+    // Pre-execution Python syntax validation to catch common issues
+    const code = parsedArgs.code;
+    const syntaxIssues: string[] = [];
+    
+    // Check for unterminated strings (common failure mode)
+    const singleQuoteCount = (code.match(/(?<!\\)'/g) || []).length;
+    const doubleQuoteCount = (code.match(/(?<!\\)"/g) || []).length;
+    const tripleDoubleCount = (code.match(/"""/g) || []).length;
+    const tripleSingleCount = (code.match(/'''/g) || []).length;
+    
+    // After removing triple quotes, check if remaining quotes are balanced
+    const adjustedSingle = singleQuoteCount - (tripleSingleCount * 3);
+    const adjustedDouble = doubleQuoteCount - (tripleDoubleCount * 3);
+    
+    if (adjustedSingle % 2 !== 0) {
+      syntaxIssues.push("Unbalanced single quotes (') - possible unterminated string");
+    }
+    if (adjustedDouble % 2 !== 0) {
+      syntaxIssues.push('Unbalanced double quotes (") - possible unterminated string');
+    }
+    
+    // Check for network operations that will fail
+    const networkPatterns = [
+      { pattern: /urllib\.request/i, msg: "urllib.request detected - WILL FAIL (no network access)" },
+      { pattern: /requests\.(get|post|put|delete)/i, msg: "requests module detected - WILL FAIL (no network access)" },
+      { pattern: /socket\./i, msg: "socket module detected - WILL FAIL (no network access)" },
+      { pattern: /urlopen\(/i, msg: "urlopen() detected - WILL FAIL (no network access)" },
+      { pattern: /http\.client/i, msg: "http.client detected - WILL FAIL (no network access)" },
+    ];
+    
+    for (const { pattern, msg } of networkPatterns) {
+      if (pattern.test(code)) {
+        syntaxIssues.push(msg);
+      }
+    }
+    
+    // Check for missing print statement (common issue - no output)
+    if (!code.includes('print(') && !code.includes('print (')) {
+      syntaxIssues.push("No print() statement - output may not be captured. Add print(result) at the end.");
+    }
+    
+    // If critical issues found, return early with helpful guidance
+    if (syntaxIssues.some(issue => issue.includes('WILL FAIL'))) {
+      console.error(`🚫 [${executiveName}] Python pre-validation BLOCKED execution:`, syntaxIssues);
+      return {
+        success: false,
+        error: `Python code blocked before execution due to: ${syntaxIssues.join('; ')}`,
+        learning_point: `Python sandbox has NO network access. For HTTP/API calls, use invoke_edge_function instead. For computation only, remove network code and use pure Python.`,
+        detected_issues: syntaxIssues
+      };
+    }
+    
+    // Log warnings but allow execution
+    if (syntaxIssues.length > 0) {
+      console.warn(`⚠️ [${executiveName}] Python pre-validation warnings:`, syntaxIssues);
     }
   }
   
