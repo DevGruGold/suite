@@ -47,10 +47,8 @@ serve(async (req) => {
     healthResults.push(deepseekHealth);
     await supabase.from('api_key_health').upsert(deepseekHealth, { onConflict: 'service_name' });
 
-    // Check xAI (Lead AI)
-    const xaiHealth = await checkXAIHealth();
-    healthResults.push(xaiHealth);
-    await supabase.from('api_key_health').upsert(xaiHealth, { onConflict: 'service_name' });
+    // xAI check removed - not actively used, was causing health deductions
+    // If needed in future, re-enable with proper API credentials
 
     // Check Vercel AI
     const vercelHealth = await checkVercelAIHealth();
@@ -385,59 +383,7 @@ async function checkElevenLabsHealth() {
   }
 }
 
-async function checkXAIHealth() {
-  const apiKey = Deno.env.get('AI_GATEWAY_API_KEY');
-  if (!apiKey) {
-    return {
-      service_name: 'xai',
-      key_type: 'api_key',
-      is_healthy: false,
-      error_message: 'API key not configured',
-      expiry_warning: false,
-      days_until_expiry: null,
-      metadata: {}
-    };
-  }
-
-  try {
-    // Test via Cloudflare AI Gateway since AI_GATEWAY_API_KEY is for gateway, not direct xAI
-    const response = await fetch('https://gateway.ai.cloudflare.com/v1/2ab66a3e3b0f6c8d1f849bf835e90d7b/xmrt-dao/openai/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'xai/grok-beta',
-        messages: [{ role: 'user', content: 'test' }],
-        max_tokens: 5
-      })
-    });
-
-    return {
-      service_name: 'xai',
-      key_type: 'api_key',
-      is_healthy: response.ok || response.status === 402,
-      error_message: response.ok ? null : `HTTP ${response.status}`,
-      expiry_warning: response.status === 402,
-      days_until_expiry: null,
-      metadata: { 
-        note: response.status === 402 ? 'Credits depleted' : '',
-        gateway: 'cloudflare_ai_gateway'
-      }
-    };
-  } catch (error) {
-    return {
-      service_name: 'xai',
-      key_type: 'api_key',
-      is_healthy: false,
-      error_message: error.message,
-      expiry_warning: false,
-      days_until_expiry: null,
-      metadata: {}
-    };
-  }
-}
+// checkXAIHealth removed - not actively used
 
 async function checkVercelAIHealth() {
   // Note: We're actually using AI_GATEWAY_API_KEY for Cloudflare AI Gateway, not Vercel

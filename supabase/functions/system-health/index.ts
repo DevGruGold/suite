@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { formatSystemReport, SystemReport } from "../_shared/reportFormatter.ts";
-import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics } from '../_shared/healthScoring.ts';
+import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics, ESSENTIAL_API_SERVICES } from '../_shared/healthScoring.ts';
 
 const logger = EdgeFunctionLogger('system-health');
 
@@ -98,17 +98,25 @@ serve(async (req) => {
           return stats;
         }),
 
-      // API key health
+      // API key health - only count ESSENTIAL services as unhealthy for health scoring
       supabase.from('api_key_health')
         .select('service_name, is_healthy, error_message')
         .order('last_checked', { ascending: false })
         .then(({ data }) => {
-          const unhealthy = data?.filter(k => !k.is_healthy) || [];
+          // Only essential services count toward health deduction
+          const essentialUnhealthy = data?.filter(k => 
+            !k.is_healthy && ESSENTIAL_API_SERVICES.includes(k.service_name)
+          ) || [];
+          const allUnhealthy = data?.filter(k => !k.is_healthy) || [];
           return {
             total: data?.length || 0,
             healthy: data?.filter(k => k.is_healthy).length || 0,
-            unhealthy: unhealthy.length,
-            critical_issues: unhealthy.map(k => `${k.service_name}: ${k.error_message}`)
+            unhealthy: essentialUnhealthy.length, // Only essential services for health score
+            all_unhealthy: allUnhealthy.length,   // For reporting purposes
+            critical_issues: essentialUnhealthy.map(k => `${k.service_name}: ${k.error_message}`),
+            non_essential_issues: allUnhealthy
+              .filter(k => !ESSENTIAL_API_SERVICES.includes(k.service_name))
+              .map(k => `${k.service_name}: ${k.error_message}`)
           };
         }),
 
