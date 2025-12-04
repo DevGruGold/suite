@@ -427,10 +427,12 @@ serve(async (req) => {
           name: j.jobname,
           schedule: j.schedule,
           active: j.active,
-          last_run: j.last_run_time,
+          last_run_time: j.last_run_time,  // Keep original name for healthScoring.ts
+          last_run: j.last_run_time,       // Alias for UI compatibility
           last_status: j.last_run_status,
           success_rate: j.success_rate,
-          runs_24h: j.total_runs_24h
+          runs_24h: j.total_runs_24h,
+          is_overdue: j.is_overdue         // Pass through DB-calculated value
         })) || []
       };
       
