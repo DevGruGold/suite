@@ -1,6 +1,19 @@
 // Unified Health Scoring System
 // Standardized across system-status, system-health, and prometheus-metrics
 
+/**
+ * Essential API services that impact core operations.
+ * Only unhealthy keys from this list will cause health deductions.
+ * Non-essential services (xai, vercel_ai, elevenlabs, etc.) are informational only.
+ */
+export const ESSENTIAL_API_SERVICES = [
+  'github',       // Core for code operations
+  'deepseek',     // Primary AI provider
+  'gemini',       // Vision fallback
+  'lovable_ai',   // Primary chat
+  'openai'        // Fallback AI
+];
+
 export interface HealthMetrics {
   apiKeysUnhealthy: number;
   pythonFailures24h: number;
