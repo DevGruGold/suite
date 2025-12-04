@@ -380,6 +380,96 @@ serve(async (req) => {
       metadata: { health_score: healthScore, status, issues_count: issues.length }
     });
 
+    // AUTO-CREATE TASK when health drops below threshold
+    if (healthScore < 90 && issues.length > 0) {
+      // Check if a health investigation task already exists
+      const { data: existingTask } = await supabase
+        .from('tasks')
+        .select('id')
+        .eq('category', 'ops')
+        .ilike('title', '%Health Investigation%')
+        .in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED'])
+        .limit(1)
+        .single();
+
+      if (!existingTask) {
+        // Create a new task for health investigation
+        const issueDescriptions = issues.map(i => `[${i.severity}] ${i.message}`).join('; ');
+        
+        const { data: newTask, error: taskError } = await supabase
+          .from('tasks')
+          .insert({
+            title: `🔴 Health Investigation: Score ${healthScore}/100`,
+            description: `Auto-generated task. Health score dropped to ${healthScore}. Issues: ${issueDescriptions}. Recommendations: ${healthReport.recommendations.slice(0, 3).map(r => r.action).join(', ')}`,
+            category: 'ops',
+            stage: 'DISCUSS',
+            status: 'PENDING',
+            priority: healthScore < 80 ? 9 : 7,
+            metadata: {
+              auto_generated: true,
+              health_score: healthScore,
+              issues: issues,
+              recommendations: healthReport.recommendations
+            }
+          })
+          .select()
+          .single();
+
+        if (newTask && !taskError) {
+          // Find an agent with infra skills or lowest workload
+          const { data: agents } = await supabase
+            .from('agents')
+            .select('id, name, status, current_workload')
+            .eq('status', 'IDLE')
+            .order('current_workload', { ascending: true })
+            .limit(1);
+
+          if (agents && agents.length > 0) {
+            const agent = agents[0];
+            await supabase
+              .from('tasks')
+              .update({ 
+                assignee_agent_id: agent.id,
+                status: 'CLAIMED'
+              })
+              .eq('id', newTask.id);
+
+            await supabase
+              .from('agents')
+              .update({ 
+                status: 'BUSY',
+                current_workload: (agent.current_workload || 0) + 1
+              })
+              .eq('id', agent.id);
+
+            // Log the auto-assignment
+            await supabase.from('eliza_activity_log').insert({
+              activity_type: 'auto_task_assignment',
+              title: 'Health Task Auto-Created',
+              description: `Created health investigation task and assigned to ${agent.name}`,
+              status: 'completed',
+              metadata: { task_id: newTask.id, agent_id: agent.id, health_score: healthScore }
+            });
+
+            console.log(`✅ Auto-created health task and assigned to ${agent.name}`);
+          } else {
+            // Log unassigned task
+            await supabase.from('eliza_activity_log').insert({
+              activity_type: 'auto_task_creation',
+              title: 'Health Task Auto-Created (Unassigned)',
+              description: `Created health investigation task - no idle agents available`,
+              status: 'completed',
+              metadata: { task_id: newTask.id, health_score: healthScore }
+            });
+
+            console.log(`✅ Auto-created health task (no idle agents to assign)`);
+          }
+        }
+      } else {
+        console.log(`ℹ️ Health investigation task already exists, skipping creation`);
+      }
+    }
+
     console.log(formattedReport);
 
     await logger.info(`Health check complete - ${status} (${healthScore}/100)`, 'system_health', {

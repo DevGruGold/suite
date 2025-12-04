@@ -3,7 +3,8 @@ import { AnimatedCounter } from './AnimatedCounter';
 import { ActivityPulse } from './ActivityPulse';
 import { AgentStatusGrid } from './AgentStatusGrid';
 import { supabase } from '@/integrations/supabase/client';
-import { Zap, Bot, Activity, CheckCircle2, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Zap, Bot, Activity, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 const marketingBanners = [
   {
@@ -33,6 +34,8 @@ interface Stats {
   activeAgents: number;
   activeTasks: number;
   healthScore: number;
+  healthStatus: 'healthy' | 'degraded' | 'critical';
+  healthIssues: string[];
 }
 
 export const HeroSection = () => {
@@ -42,7 +45,9 @@ export const HeroSection = () => {
     totalExecutions: 0,
     activeAgents: 0,
     activeTasks: 0,
-    healthScore: 95
+    healthScore: 100,
+    healthStatus: 'healthy',
+    healthIssues: []
   });
 
   // Auto-rotate banners
@@ -56,30 +61,69 @@ export const HeroSection = () => {
     return () => clearInterval(interval);
   }, [isPaused]);
 
-  // Fetch stats
+  // Fetch stats including REAL health score
   useEffect(() => {
     const fetchStats = async () => {
-      const [executions, agents, tasks] = await Promise.all([
+      // Fetch basic counts and health from activity log
+      const [executions, agents, tasks, healthLog] = await Promise.all([
         supabase.from('eliza_activity_log').select('id', { count: 'exact', head: true }),
         supabase.from('agents').select('id', { count: 'exact', head: true }).eq('status', 'IDLE').or('status.eq.BUSY'),
-        supabase.from('tasks').select('id', { count: 'exact', head: true }).in('status', ['PENDING', 'IN_PROGRESS'])
+        supabase.from('tasks').select('id', { count: 'exact', head: true }).in('status', ['PENDING', 'IN_PROGRESS']),
+        // Get most recent health check from activity log
+        supabase.from('eliza_activity_log')
+          .select('metadata, description')
+          .eq('activity_type', 'system_health_check')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .single()
       ]);
+
+      // Extract health score from latest health check
+      let healthScore = 100;
+      let healthStatus: 'healthy' | 'degraded' | 'critical' = 'healthy';
+      let healthIssues: string[] = [];
+      
+      if (healthLog.data?.metadata) {
+        const metadata = healthLog.data.metadata as { health_score?: number; status?: string; issues_count?: number };
+        healthScore = metadata.health_score ?? 100;
+        healthStatus = metadata.status === 'critical' ? 'critical' : 
+                       metadata.status === 'degraded' ? 'degraded' : 'healthy';
+        if (metadata.issues_count && metadata.issues_count > 0) {
+          healthIssues = [`${metadata.issues_count} issue(s) detected`];
+        }
+      }
 
       setStats({
         totalExecutions: executions.count || 1000000,
         activeAgents: agents.count || 12,
         activeTasks: tasks.count || 6,
-        healthScore: 95
+        healthScore,
+        healthStatus,
+        healthIssues
       });
     };
 
     fetchStats();
 
-    // Subscribe to updates
+    // Subscribe to updates for real-time health changes
     const channel = supabase
       .channel('hero-stats')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'eliza_activity_log' }, () => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'eliza_activity_log' }, (payload) => {
         setStats(prev => ({ ...prev, totalExecutions: prev.totalExecutions + 1 }));
+        
+        // Update health score if this is a health check
+        if (payload.new.activity_type === 'system_health_check' && payload.new.metadata) {
+          const metadata = payload.new.metadata as { health_score?: number; status?: string; issues_count?: number };
+          setStats(prev => ({
+            ...prev,
+            healthScore: metadata.health_score ?? prev.healthScore,
+            healthStatus: metadata.status === 'critical' ? 'critical' : 
+                          metadata.status === 'degraded' ? 'degraded' : 'healthy',
+            healthIssues: metadata.issues_count && metadata.issues_count > 0 
+              ? [`${metadata.issues_count} issue(s) detected`] 
+              : []
+          }));
+        }
       })
       .subscribe();
 
@@ -89,6 +133,19 @@ export const HeroSection = () => {
   }, []);
 
   const banner = marketingBanners[currentBanner];
+
+  // Health score color coding
+  const getHealthColor = () => {
+    if (stats.healthScore >= 95) return 'text-emerald-500';
+    if (stats.healthScore >= 80) return 'text-amber-500';
+    return 'text-destructive';
+  };
+
+  const getHealthBgColor = () => {
+    if (stats.healthScore >= 95) return 'from-emerald-500/20 to-emerald-500/5';
+    if (stats.healthScore >= 80) return 'from-amber-500/20 to-amber-500/5';
+    return 'from-destructive/20 to-destructive/5';
+  };
 
   return (
     <section className="relative w-full py-6 px-4 overflow-hidden">
@@ -159,11 +216,10 @@ export const HeroSection = () => {
             label="Active Agents"
             value={stats.activeAgents}
           />
-          <StatCard 
-            icon={<CheckCircle2 className="w-5 h-5 text-violet-500" />}
-            label="System Health"
-            value={stats.healthScore}
-            suffix="%"
+          <HealthStatCard 
+            healthScore={stats.healthScore}
+            healthStatus={stats.healthStatus}
+            healthIssues={stats.healthIssues}
           />
           <StatCard 
             icon={<Activity className="w-5 h-5 text-amber-500" />}
@@ -172,13 +228,19 @@ export const HeroSection = () => {
           />
         </div>
 
-        {/* Activity Visualization */}
-        <div className="glass-card rounded-xl p-4 space-y-3">
+        {/* Activity Visualization - HIGHLIGHTED */}
+        <div className="glass-card rounded-xl p-4 space-y-3 ring-1 ring-primary/20">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-medium text-muted-foreground">Live Activity</h3>
+            <div className="flex items-center gap-2">
+              <span className="relative flex h-2 w-2">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-primary"></span>
+              </span>
+              <h3 className="text-sm font-medium text-foreground">Live Activity Feed</h3>
+            </div>
             <AgentStatusGrid />
           </div>
-          <ActivityPulse />
+          <ActivityPulse healthScore={stats.healthScore} />
         </div>
       </div>
     </section>
@@ -201,3 +263,45 @@ const StatCard = ({ icon, label, value, suffix = '' }: StatCardProps) => (
     <p className="text-xs text-muted-foreground mt-1">{label}</p>
   </div>
 );
+
+interface HealthStatCardProps {
+  healthScore: number;
+  healthStatus: 'healthy' | 'degraded' | 'critical';
+  healthIssues: string[];
+}
+
+const HealthStatCard = ({ healthScore, healthStatus, healthIssues }: HealthStatCardProps) => {
+  const getHealthColor = () => {
+    if (healthScore >= 95) return 'text-emerald-500';
+    if (healthScore >= 80) return 'text-amber-500';
+    return 'text-destructive';
+  };
+
+  const getHealthIcon = () => {
+    if (healthScore >= 95) return <CheckCircle2 className="w-5 h-5 text-emerald-500" />;
+    if (healthScore >= 80) return <AlertTriangle className="w-5 h-5 text-amber-500" />;
+    return <AlertTriangle className="w-5 h-5 text-destructive" />;
+  };
+
+  const getBorderClass = () => {
+    if (healthScore >= 95) return '';
+    if (healthScore >= 80) return 'ring-2 ring-amber-500/50 animate-pulse-subtle';
+    return 'ring-2 ring-destructive/50 animate-pulse';
+  };
+
+  return (
+    <div className={cn(
+      "glass-card rounded-lg p-4 text-center hover-lift transition-all",
+      getBorderClass()
+    )}>
+      <div className="flex justify-center mb-2">{getHealthIcon()}</div>
+      <div className={cn("text-2xl md:text-3xl font-bold", getHealthColor())}>
+        <AnimatedCounter end={healthScore} suffix="%" />
+      </div>
+      <p className="text-xs text-muted-foreground mt-1">System Health</p>
+      {healthIssues.length > 0 && (
+        <p className="text-[10px] text-amber-500 mt-1 truncate">{healthIssues[0]}</p>
+      )}
+    </div>
+  );
+};
