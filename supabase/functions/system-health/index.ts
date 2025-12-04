@@ -442,24 +442,27 @@ serve(async (req) => {
               })
               .eq('id', agent.id);
 
-            // Log the auto-assignment
+            // Log the auto-assignment with direct task_id and agent_id columns
             await supabase.from('eliza_activity_log').insert({
               activity_type: 'auto_task_assignment',
-              title: 'Health Task Auto-Created',
-              description: `Created health investigation task and assigned to ${agent.name}`,
+              title: `🔴 Health Task Created & Assigned to ${agent.name}`,
+              description: `Health score ${healthScore}/100 - ${issues.length} issue(s). Assigned to ${agent.name}`,
               status: 'completed',
-              metadata: { task_id: newTask.id, agent_id: agent.id, health_score: healthScore }
+              task_id: newTask.id,
+              agent_id: agent.id,
+              metadata: { health_score: healthScore, issues: issues.map(i => i.message) }
             });
 
             console.log(`✅ Auto-created health task and assigned to ${agent.name}`);
           } else {
-            // Log unassigned task
+            // Log unassigned task with direct task_id column
             await supabase.from('eliza_activity_log').insert({
               activity_type: 'auto_task_creation',
-              title: 'Health Task Auto-Created (Unassigned)',
-              description: `Created health investigation task - no idle agents available`,
-              status: 'completed',
-              metadata: { task_id: newTask.id, health_score: healthScore }
+              title: `🔴 Health Task Created (Unassigned)`,
+              description: `Health score ${healthScore}/100 - ${issues.length} issue(s). No idle agents available.`,
+              status: 'pending',
+              task_id: newTask.id,
+              metadata: { health_score: healthScore, issues: issues.map(i => i.message) }
             });
 
             console.log(`✅ Auto-created health task (no idle agents to assign)`);
