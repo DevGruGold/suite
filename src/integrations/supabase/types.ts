@@ -2223,6 +2223,7 @@ export type Database = {
       eliza_activity_log: {
         Row: {
           activity_type: string
+          agent_id: string | null
           created_at: string | null
           description: string | null
           function_name: string | null
@@ -2230,11 +2231,13 @@ export type Database = {
           mentioned_to_user: boolean | null
           metadata: Json | null
           status: string
+          task_id: string | null
           title: string | null
           updated_at: string | null
         }
         Insert: {
           activity_type: string
+          agent_id?: string | null
           created_at?: string | null
           description?: string | null
           function_name?: string | null
@@ -2242,11 +2245,13 @@ export type Database = {
           mentioned_to_user?: boolean | null
           metadata?: Json | null
           status?: string
+          task_id?: string | null
           title?: string | null
           updated_at?: string | null
         }
         Update: {
           activity_type?: string
+          agent_id?: string | null
           created_at?: string | null
           description?: string | null
           function_name?: string | null
@@ -2254,6 +2259,7 @@ export type Database = {
           mentioned_to_user?: boolean | null
           metadata?: Json | null
           status?: string
+          task_id?: string | null
           title?: string | null
           updated_at?: string | null
         }
@@ -6423,6 +6429,27 @@ export type Database = {
           session_id: string | null
           wallet_address: string | null
           worker_id: string | null
+        }
+        Relationships: []
+      }
+      activity_with_context: {
+        Row: {
+          activity_type: string | null
+          agent_id: string | null
+          agent_name: string | null
+          agent_status: Database["public"]["Enums"]["agent_status"] | null
+          agent_workload: number | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          metadata: Json | null
+          status: string | null
+          task_category: Database["public"]["Enums"]["task_category"] | null
+          task_id: string | null
+          task_stage: Database["public"]["Enums"]["task_stage"] | null
+          task_status: Database["public"]["Enums"]["task_status"] | null
+          task_title: string | null
+          title: string | null
         }
         Relationships: []
       }
