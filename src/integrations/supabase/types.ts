@@ -2705,6 +2705,7 @@ export type Database = {
           actions: Json
           conditions: Json | null
           created_at: string | null
+          description: string | null
           event_pattern: string
           id: string
           is_active: boolean | null
@@ -2715,6 +2716,7 @@ export type Database = {
           actions: Json
           conditions?: Json | null
           created_at?: string | null
+          description?: string | null
           event_pattern: string
           id?: string
           is_active?: boolean | null
@@ -2725,6 +2727,7 @@ export type Database = {
           actions?: Json
           conditions?: Json | null
           created_at?: string | null
+          description?: string | null
           event_pattern?: string
           id?: string
           is_active?: boolean | null
