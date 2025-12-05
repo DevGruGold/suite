@@ -180,6 +180,47 @@ schedule = "0 16 * * 5"
 function_name = "community-spotlight-post"
 schedule = "0 14 * * 3"
 
+# ====================================================================
+# WORKFLOW TEMPLATE AUTOMATION CRON JOBS
+# ====================================================================
+# These cron jobs automatically execute workflow templates on schedule
+# Minute offsets chosen to avoid collision with existing jobs
+
+# Performance Optimization Cycle - Every 6 hours at :30
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "30 */6 * * *"
+body = '{"action":"execute_template","data":{"template_name":"performance_optimization_cycle"}}'
+
+# Code Quality Audit - Daily at 03:00 UTC
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "0 3 * * *"
+body = '{"action":"execute_template","data":{"template_name":"code_quality_audit"}}'
+
+# Database Optimization - Weekly Sunday at 02:00 UTC
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "0 2 * * 0"
+body = '{"action":"execute_template","data":{"template_name":"database_optimization_workflow"}}'
+
+# Documentation Generation - Weekly Friday at 17:00 UTC
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "0 17 * * 5"
+body = '{"action":"execute_template","data":{"template_name":"documentation_generation_workflow"}}'
+
+# Knowledge Graph Expansion - Every 12 hours at :45
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "45 */12 * * *"
+body = '{"action":"execute_template","data":{"template_name":"knowledge_graph_expansion"}}'
+
+# DAO Governance Cycle - Every 30 minutes at :05 and :35
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "5,35 * * * *"
+body = '{"action":"execute_template","data":{"template_name":"dao_governance_cycle"}}'
 
 # ====================================================================
 # EDGE FUNCTIONS AUTHENTICATION CONFIGURATION
