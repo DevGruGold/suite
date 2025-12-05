@@ -365,23 +365,45 @@ export const ELIZA_TOOLS = [
       type: 'function',
       function: {
         name: 'execute_workflow_template',
-        description: '🔄 Execute a pre-built workflow template by name with custom parameters. Available templates: acquire_new_customer, upsell_existing_customer, monthly_billing_cycle, churn_prevention, content_campaign, influencer_outreach, treasury_health_check, execute_buyback, learn_from_failures, diagnose_workflow_failure.',
+        description: '🔄 Execute a pre-built workflow template by name with custom parameters. Categories: Revenue (acquire_new_customer, upsell_existing_customer, monthly_billing_cycle, churn_prevention), Marketing (content_campaign, influencer_outreach), Financial (treasury_health_check, execute_buyback), Technical Excellence (auto_fix_codebase, code_quality_audit, automated_testing_pipeline), Optimization (modify_edge_function, performance_optimization_cycle, database_optimization_workflow), Knowledge Management (documentation_generation_workflow, knowledge_graph_expansion), Community Growth (dao_governance_cycle, contributor_onboarding_workflow), Ecosystem Evolution (create_new_microservice, feature_development_pipeline), Meta (learn_from_failures, diagnose_workflow_failure).',
         parameters: {
           type: 'object',
           properties: {
             template_name: { 
               type: 'string', 
               enum: [
+                // Revenue workflows
                 'acquire_new_customer', 
                 'upsell_existing_customer', 
                 'monthly_billing_cycle', 
-                'churn_prevention', 
+                'churn_prevention',
+                // Marketing workflows
                 'content_campaign', 
-                'influencer_outreach', 
+                'influencer_outreach',
+                // Financial workflows
                 'treasury_health_check', 
-                'execute_buyback', 
+                'execute_buyback',
+                // Technical excellence workflows
+                'auto_fix_codebase',
+                'code_quality_audit',
+                'automated_testing_pipeline',
+                // Optimization workflows
+                'modify_edge_function',
+                'performance_optimization_cycle',
+                'database_optimization_workflow',
+                // Knowledge management workflows
+                'documentation_generation_workflow',
+                'knowledge_graph_expansion',
+                // Community growth workflows
+                'dao_governance_cycle',
+                'contributor_onboarding_workflow',
+                // Ecosystem evolution workflows
+                'create_new_microservice',
+                'feature_development_pipeline',
+                // Meta workflows
                 'learn_from_failures',
                 'diagnose_workflow_failure',
+                // Legacy/governance workflows
                 'autonomous_governance_proposal_evaluation',
                 'proactive_system_anomaly_detection_and_resolution',
                 'community_engagement_sentiment_analysis_and_response',
