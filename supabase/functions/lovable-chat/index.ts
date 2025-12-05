@@ -1001,6 +1001,19 @@ You are looking at the user RIGHT NOW through their webcam. This means:
           }
           
           // ✅ CRITICAL FIX: Pass tools to enable REAL execution
+          // Log context size for monitoring
+          const requestBodyEstimate = JSON.stringify({
+            messages: messagesForGateway,
+            systemPrompt,
+            tools: ELIZA_TOOLS
+          }).length;
+          const estimatedTokens = Math.round(requestBodyEstimate / 4);
+          console.log(`📏 Request body size: ${requestBodyEstimate.toLocaleString()} characters (~${estimatedTokens.toLocaleString()} tokens)`);
+          
+          if (requestBodyEstimate > 400000) {
+            console.warn('⚠️ Request body very large (>400K chars) - may cause context overflow');
+          }
+          
           message = await callLovableAIGateway(messagesForGateway, {
             model: 'google/gemini-2.5-flash',
             systemPrompt,
