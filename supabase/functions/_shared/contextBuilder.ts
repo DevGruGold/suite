@@ -59,19 +59,23 @@ export async function buildContextualPrompt(
 ): Promise<string> {
   let prompt = basePrompt;
   
-  // Add conversation history summaries
+  // Add conversation history summaries (limit to last 5)
   if (options.conversationHistory?.summaries?.length) {
+    const recentSummaries = options.conversationHistory.summaries.slice(-5);
     prompt += `\n\n📜 PREVIOUS CONVERSATION SUMMARIES:\n`;
-    options.conversationHistory.summaries.forEach((summary) => {
+    recentSummaries.forEach((summary) => {
       prompt += `• ${summary.summaryText} (${summary.messageCount} messages)\n`;
     });
   }
   
-  // Add recent messages
+  // Add recent messages (truncate long individual messages)
   if (options.conversationHistory?.recentMessages?.length) {
     prompt += `\n\n💬 RECENT MESSAGES:\n`;
     options.conversationHistory.recentMessages.forEach((msg) => {
-      prompt += `${msg.sender}: ${msg.content}\n`;
+      const content = msg.content.length > 1000 
+        ? msg.content.substring(0, 1000) + '...' 
+        : msg.content;
+      prompt += `${msg.sender}: ${content}\n`;
     });
   }
   
@@ -89,12 +93,12 @@ export async function buildContextualPrompt(
     });
   }
   
-  // Add memory contexts (prioritize the high-importance ones)
+  // Add memory contexts (prioritize the high-importance ones, limit to 15)
   const memoryContexts = options.memoryContexts || options.conversationHistory?.memoryContexts;
   if (memoryContexts?.length) {
     const sortedMemories = [...memoryContexts]
       .sort((a, b) => b.importanceScore - a.importanceScore)
-      .slice(0, 50); // Limit to top 50 memories
+      .slice(0, 15); // Limit to top 15 memories (reduced from 50)
     
     prompt += `\n\n📚 MEMORY BANK (Perfect Recall):\n`;
     sortedMemories.forEach((memory) => {
