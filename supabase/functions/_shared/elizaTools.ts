@@ -13,6 +13,63 @@
 
 export const ELIZA_TOOLS = [
     // ====================================================================
+    // 🚀 STAE - SUITE TASK AUTOMATION ENGINE TOOLS
+    // ====================================================================
+    {
+      type: 'function',
+      function: {
+        name: 'create_task_from_template',
+        description: '📋 STAE: Create a new task using a predefined template. Automatically fills in checklist, required skills, priority, and stage based on template category. Use this for consistent, standardized task creation.',
+        parameters: {
+          type: 'object',
+          properties: {
+            template_name: { 
+              type: 'string', 
+              description: 'Template name: code_review, bug_fix, feature_implementation, infrastructure_check, deployment_pipeline, research_analysis, proposal_evaluation, operations_task, system_health_investigation, mining_optimization, device_integration',
+              enum: ['code_review', 'bug_fix', 'feature_implementation', 'infrastructure_check', 'deployment_pipeline', 'research_analysis', 'proposal_evaluation', 'operations_task', 'system_health_investigation', 'mining_optimization', 'device_integration']
+            },
+            title: { type: 'string', description: 'Task title - will be substituted into template description' },
+            description: { type: 'string', description: 'Optional: Override template description with custom text' },
+            priority: { type: 'number', description: 'Optional: Override default priority (1-10, higher = more urgent)' },
+            auto_assign: { type: 'boolean', description: 'Optional: Automatically assign to best-matching agent (default: true)' }
+          },
+          required: ['template_name', 'title']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'smart_assign_task',
+        description: '🤖 STAE: Intelligently assign a task to the best-matching agent using weighted scoring: skills (40%), workload (30%), success rate (20%), activity (10%). Use this for optimal agent-task matching.',
+        parameters: {
+          type: 'object',
+          properties: {
+            task_id: { type: 'string', description: 'UUID of the task to assign' },
+            prefer_agent_id: { type: 'string', description: 'Optional: Prefer this agent if they meet minimum skill criteria' },
+            min_skill_match: { type: 'number', description: 'Optional: Minimum skill overlap required (0-1, default: 0.3 = 30%)' }
+          },
+          required: ['task_id']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_automation_metrics',
+        description: '📊 STAE: Get comprehensive automation coverage metrics including template usage rate, auto-assignment rate, knowledge extraction rate, agent utilization, and average completion time.',
+        parameters: {
+          type: 'object',
+          properties: {
+            time_window_hours: { type: 'number', description: 'Optional: Time window for metrics (default: 24 hours)' },
+            breakdown_by: { type: 'string', enum: ['category', 'agent', 'template'], description: 'Optional: Group metrics by category, agent, or template' }
+          },
+          required: []
+        }
+      }
+    },
+
+    // ====================================================================
     // 🎯 CONVERSATIONAL USER ACQUISITION TOOLS
     // ====================================================================
     {

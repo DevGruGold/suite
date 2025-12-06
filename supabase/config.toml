@@ -638,3 +638,28 @@ body = '{"action":"process_queue"}'
 
 [functions.deploy-approved-edge-function]
 verify_jwt = false
+
+# ====================================================================
+# STAE - SUITE TASK AUTOMATION ENGINE
+# ====================================================================
+
+[functions.suite-task-automation-engine]
+verify_jwt = false
+
+# STAE Smart Assignment Check - Every 10 minutes at :07
+[[edge_runtime.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "7,17,27,37,47,57 * * * *"
+body = '{"action":"smart_assign","data":{"auto_batch":true}}'
+
+# STAE Automation Metrics Collection - Every hour at :22
+[[edge_runtime.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "22 * * * *"
+body = '{"action":"get_metrics","data":{"time_window_hours":24,"store_metrics":true}}'
+
+# STAE Knowledge Extraction - Every 2 hours at :42
+[[edge_runtime.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "42 */2 * * *"
+body = '{"action":"extract_knowledge","data":{"completed_since_hours":2}}'
