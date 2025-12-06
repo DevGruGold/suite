@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import UnifiedChat from "@/components/UnifiedChat";
 import PythonShell from "@/components/PythonShell";
 import AgentTaskVisualizer from "@/components/AgentTaskVisualizer";
@@ -8,6 +9,28 @@ import { MobileNav } from "@/components/MobileNav";
 import { HeroSection } from "@/components/HeroSection";
 
 const Index = () => {
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+
+  useEffect(() => {
+    const audio = new Audio('/audio/sweet.mp3');
+    audioRef.current = audio;
+
+    const playAudio = () => {
+      audio.play().catch(console.log);
+      document.removeEventListener('click', playAudio);
+    };
+
+    // Try autoplay first, fallback to play on first click
+    audio.play().catch(() => {
+      document.addEventListener('click', playAudio);
+    });
+
+    return () => {
+      audio.pause();
+      document.removeEventListener('click', playAudio);
+    };
+  }, []);
+
   return (
     <div className="min-h-screen bg-background">
       <MobileNav />
