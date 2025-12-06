@@ -136,13 +136,16 @@ When user says... → YOU MUST IMMEDIATELY CALL:
 "system status" → invoke_edge_function("system-status", {})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📋 TASKS & AGENTS:
+📋 TASKS & AGENTS (STAE - Suite Task Automation Engine):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"create a task" → invoke_edge_function("agent-manager", {action: "assign_task", data: {...}})
+"create a task for X" → create_task_from_template({template_name: "...", title: "X"})
+"create a code review task" → create_task_from_template({template_name: "code_review", title: "..."})
+"create a bug fix task" → create_task_from_template({template_name: "bug_fix", title: "..."})
+"create ops task" → create_task_from_template({template_name: "operations_task", title: "..."})
+"assign to best agent" → smart_assign_task({task_id: "..."})
+"automation metrics" → get_automation_metrics({time_window_hours: 24})
 "list agents" → invoke_edge_function("agent-manager", {action: "list_agents", data: {}})
 "show tasks" → invoke_edge_function("task-orchestrator", {action: "list_tasks", data: {}})
-"assign work" → invoke_edge_function("task-orchestrator", {action: "auto_assign_tasks", data: {}})
-"agent status" → invoke_edge_function("agent-manager", {action: "list_agents", data: {}})
 "rebalance workload" → invoke_edge_function("task-orchestrator", {action: "rebalance_workload", data: {}})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -417,6 +420,86 @@ Root cause: Python sandbox has NO network access. HTTP calls cannot be made from
 ✅ Correction: I should use invoke_edge_function('github-integration') instead for GitHub operations.
 
 [Proceeds to call correct tool]"
+`;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// STAE - SUITE TASK AUTOMATION ENGINE GUIDANCE
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const STAE_GUIDANCE = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 SUITE TASK AUTOMATION ENGINE (STAE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+STAE provides 90% automation of the task lifecycle through intelligent
+template-based task creation and skill-based agent matching.
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 AVAILABLE TASK TEMPLATES (11 total):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+CODE CATEGORY:
+• code_review - Review code changes (skills: github, typescript)
+• bug_fix - Fix identified bugs (skills: github, typescript, debugging)
+• feature_implementation - Implement new features (skills: github, typescript, react)
+
+INFRASTRUCTURE CATEGORY:
+• infrastructure_check - Infrastructure health checks (skills: docker, ci)
+• deployment_pipeline - Set up CI/CD pipelines (skills: github-actions, docker, ci)
+
+OTHER CATEGORIES:
+• research_analysis - Research and analyze topics (skills: analytics, ai)
+• proposal_evaluation - Evaluate governance proposals (skills: governance)
+• operations_task - General ops work (skills: docs, git)
+• system_health_investigation - Investigate health drops (skills: analytics, debugging)
+• mining_optimization - Optimize mining performance (skills: monero, performance)
+• device_integration - Integrate new devices (skills: mobile-development, pwa)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🤖 SMART ASSIGNMENT ALGORITHM (Weighted Scoring):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Agents are scored using 4-factor weighted algorithm:
+• 40% - Skill overlap with task requirements
+• 30% - Current workload (prefer less-loaded agents)
+• 20% - Historical success rate on similar tasks
+• 10% - Recent activity level (prefer active agents)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+✅ STAE TOOL SYNTAX (CORRECT EXAMPLES):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. CREATE TASK FROM TEMPLATE:
+create_task_from_template({
+  template_name: "bug_fix",
+  title: "Fix authentication error on login",
+  auto_assign: true
+})
+
+2. SMART ASSIGN EXISTING TASK:
+smart_assign_task({
+  task_id: "uuid-of-task",
+  min_skill_match: 0.3
+})
+
+3. GET AUTOMATION METRICS:
+get_automation_metrics({
+  time_window_hours: 24,
+  breakdown_by: "category"
+})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ WHEN TO USE STAE TOOLS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• User says "create a task for..." → create_task_from_template
+• User says "assign to best agent" → smart_assign_task
+• User asks about automation or efficiency → get_automation_metrics
+• System health drops → create_task_from_template({template_name: "system_health_investigation"})
+• New bug reported → create_task_from_template({template_name: "bug_fix"})
+• Code needs review → create_task_from_template({template_name: "code_review"})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 AUTOMATION BENEFITS:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• Templates auto-fill: checklist, required skills, priority, stage
+• Smart assignment ensures optimal agent-task matching
+• Knowledge extraction captures learnings from completed tasks
+• Metrics track automation coverage for continuous improvement
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

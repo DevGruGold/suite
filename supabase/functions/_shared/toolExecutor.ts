@@ -1256,11 +1256,44 @@ export async function executeToolCall(
           : { success: true, result: queueResult.data };
         break;
         
+      // ====================================================================
+      // STAE - SUITE TASK AUTOMATION ENGINE TOOLS
+      // ====================================================================
+      case 'create_task_from_template':
+        console.log(`📋 [${executiveName}] STAE: Create Task from Template`);
+        const createTemplateResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'create_from_template', data: parsedArgs }
+        });
+        result = createTemplateResult.error
+          ? { success: false, error: createTemplateResult.error.message }
+          : { success: true, result: createTemplateResult.data };
+        break;
+
+      case 'smart_assign_task':
+        console.log(`🤖 [${executiveName}] STAE: Smart Assign Task`);
+        const smartAssignResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'smart_assign', data: parsedArgs }
+        });
+        result = smartAssignResult.error
+          ? { success: false, error: smartAssignResult.error.message }
+          : { success: true, result: smartAssignResult.data };
+        break;
+
+      case 'get_automation_metrics':
+        console.log(`📊 [${executiveName}] STAE: Get Automation Metrics`);
+        const metricsResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'get_metrics', data: parsedArgs }
+        });
+        result = metricsResult.error
+          ? { success: false, error: metricsResult.error.message }
+          : { success: true, result: metricsResult.data };
+        break;
+
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, and more.`
         };
     }
     

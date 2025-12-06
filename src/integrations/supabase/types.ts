@@ -5224,6 +5224,60 @@ export type Database = {
         }
         Relationships: []
       }
+      task_templates: {
+        Row: {
+          auto_advance_threshold_hours: number | null
+          category: string
+          checklist: Json | null
+          created_at: string | null
+          default_priority: number | null
+          default_stage: string | null
+          description_template: string
+          estimated_duration_hours: number | null
+          id: string
+          is_active: boolean | null
+          required_skills: Json | null
+          success_rate: number | null
+          template_name: string
+          times_used: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          auto_advance_threshold_hours?: number | null
+          category: string
+          checklist?: Json | null
+          created_at?: string | null
+          default_priority?: number | null
+          default_stage?: string | null
+          description_template: string
+          estimated_duration_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          required_skills?: Json | null
+          success_rate?: number | null
+          template_name: string
+          times_used?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          auto_advance_threshold_hours?: number | null
+          category?: string
+          checklist?: Json | null
+          created_at?: string | null
+          default_priority?: number | null
+          default_stage?: string | null
+          description_template?: string
+          estimated_duration_hours?: number | null
+          id?: string
+          is_active?: boolean | null
+          required_skills?: Json | null
+          success_rate?: number | null
+          template_name?: string
+          times_used?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       tasks: {
         Row: {
           actual_duration_hours: number | null
