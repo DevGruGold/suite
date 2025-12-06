@@ -494,12 +494,31 @@ get_automation_metrics({
 • Code needs review → create_task_from_template({template_name: "code_review"})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 AUTOMATION BENEFITS:
+🔧 STAE PHASE 2 TOOLS (Task Execution Automation):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• "update checklist" → update_task_checklist({task_id, item_index, completed: true})
+• "task is blocked" → resolve_blocked_task({task_id}) - auto-resolves github/api blockers
+• "advance this task" → advance_task_stage({task_id}) - manual stage progression
+• Blockers auto-checked every 30 min; stages auto-advance every 15 min
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📈 STAE PHASE 3 TOOLS (Completion & Optimization):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+• "optimization suggestions" → get_stae_recommendations()
+• Identifies: low-performing agents, weak templates, skill gaps, workload imbalance
+• Template performance auto-updates daily at 4 AM
+• Knowledge extraction runs every 2 hours
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 AUTOMATION BENEFITS (90% COVERAGE TARGET):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 • Templates auto-fill: checklist, required skills, priority, stage
 • Smart assignment ensures optimal agent-task matching
+• Checklist-based stage advancement (not just time-based)
+• Auto-resolution of github/api blockers
 • Knowledge extraction captures learnings from completed tasks
 • Metrics track automation coverage for continuous improvement
+• Daily template performance optimization
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

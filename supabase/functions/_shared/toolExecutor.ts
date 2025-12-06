@@ -1289,11 +1289,51 @@ export async function executeToolCall(
           : { success: true, result: metricsResult.data };
         break;
 
+      case 'update_task_checklist':
+        console.log(`✅ [${executiveName}] STAE Phase 2: Update Checklist`);
+        const checklistResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'update_checklist_item', data: parsedArgs }
+        });
+        result = checklistResult.error
+          ? { success: false, error: checklistResult.error.message }
+          : { success: true, result: checklistResult.data };
+        break;
+
+      case 'resolve_blocked_task':
+        console.log(`🔓 [${executiveName}] STAE Phase 2: Resolve Blocked Task`);
+        const resolveResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'auto_resolve_blockers', data: { task_id: parsedArgs.task_id } }
+        });
+        result = resolveResult.error
+          ? { success: false, error: resolveResult.error.message }
+          : { success: true, result: resolveResult.data };
+        break;
+
+      case 'get_stae_recommendations':
+        console.log(`💡 [${executiveName}] STAE Phase 3: Get Recommendations`);
+        const recsResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'get_optimization_recommendations', data: {} }
+        });
+        result = recsResult.error
+          ? { success: false, error: recsResult.error.message }
+          : { success: true, result: recsResult.data };
+        break;
+
+      case 'advance_task_stage':
+        console.log(`⏩ [${executiveName}] STAE Phase 2: Advance Task Stage`);
+        const advanceResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'advance_task_stage', data: parsedArgs }
+        });
+        result = advanceResult.error
+          ? { success: false, error: advanceResult.error.message }
+          : { success: true, result: advanceResult.data };
+        break;
+
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, and more.`
         };
     }
     
