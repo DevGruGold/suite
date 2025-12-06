@@ -663,3 +663,21 @@ body = '{"action":"get_metrics","data":{"time_window_hours":24,"store_metrics":t
 function_name = "suite-task-automation-engine"
 schedule = "42 */2 * * *"
 body = '{"action":"extract_knowledge","data":{"completed_since_hours":2}}'
+
+# STAE Phase 2: Checklist-based stage advancement - Every 15 minutes at :12
+[[edge_runtime.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "12,27,42,57 * * * *"
+body = '{"action":"checklist_based_advance","data":{}}'
+
+# STAE Phase 2: Auto-resolve blockers - Every 30 minutes at :18
+[[edge_runtime.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "18,48 * * * *"
+body = '{"action":"auto_resolve_blockers","data":{}}'
+
+# STAE Phase 3: Template performance update - Daily at 4 AM
+[[edge_runtime.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "0 4 * * *"
+body = '{"action":"update_template_performance","data":{"time_window_hours":168}}'

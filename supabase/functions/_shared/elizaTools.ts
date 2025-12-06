@@ -68,6 +68,64 @@ export const ELIZA_TOOLS = [
         }
       }
     },
+    {
+      type: 'function',
+      function: {
+        name: 'update_task_checklist',
+        description: '✅ STAE Phase 2: Update a task checklist item status. Mark items as completed or uncompleted to track progress.',
+        parameters: {
+          type: 'object',
+          properties: {
+            task_id: { type: 'string', description: 'UUID of the task' },
+            item_index: { type: 'number', description: 'Index of checklist item (0-based)' },
+            item_text: { type: 'string', description: 'Alternative: exact text of checklist item' },
+            completed: { type: 'boolean', description: 'Whether item is completed (true) or not (false)' }
+          },
+          required: ['task_id', 'completed']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'resolve_blocked_task',
+        description: '🔓 STAE Phase 2: Attempt to auto-resolve a blocked task. Analyzes blocker reason and applies resolution rules for github, api, dependency issues.',
+        parameters: {
+          type: 'object',
+          properties: {
+            task_id: { type: 'string', description: 'UUID of the blocked task to resolve' }
+          },
+          required: ['task_id']
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'get_stae_recommendations',
+        description: '💡 STAE Phase 3: Get optimization recommendations for agents, templates, and workload. Identifies low performers, skill gaps, and imbalances.',
+        parameters: {
+          type: 'object',
+          properties: {},
+          required: []
+        }
+      }
+    },
+    {
+      type: 'function',
+      function: {
+        name: 'advance_task_stage',
+        description: '⏩ STAE Phase 2: Manually advance a task to the next pipeline stage (DISCUSS→PLAN→EXECUTE→VERIFY→INTEGRATE).',
+        parameters: {
+          type: 'object',
+          properties: {
+            task_id: { type: 'string', description: 'UUID of the task to advance' },
+            target_stage: { type: 'string', enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'], description: 'Optional: specific stage to advance to' }
+          },
+          required: ['task_id']
+        }
+      }
+    },
 
     // ====================================================================
     // 🎯 CONVERSATIONAL USER ACQUISITION TOOLS

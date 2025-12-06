@@ -5191,6 +5191,45 @@ export type Database = {
         }
         Relationships: []
       }
+      task_blocker_resolutions: {
+        Row: {
+          blocker_type: string
+          created_at: string | null
+          id: string
+          original_reason: string | null
+          resolution_action: string | null
+          resolution_notes: string | null
+          resolved_at: string | null
+          resolved_automatically: boolean | null
+          resolver_agent_id: string | null
+          task_id: string
+        }
+        Insert: {
+          blocker_type: string
+          created_at?: string | null
+          id?: string
+          original_reason?: string | null
+          resolution_action?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_automatically?: boolean | null
+          resolver_agent_id?: string | null
+          task_id: string
+        }
+        Update: {
+          blocker_type?: string
+          created_at?: string | null
+          id?: string
+          original_reason?: string | null
+          resolution_action?: string | null
+          resolution_notes?: string | null
+          resolved_at?: string | null
+          resolved_automatically?: boolean | null
+          resolver_agent_id?: string | null
+          task_id?: string
+        }
+        Relationships: []
+      }
       task_executions: {
         Row: {
           error_message: string | null
@@ -5288,6 +5327,7 @@ export type Database = {
           category: Database["public"]["Enums"]["task_category"]
           claimed_at: string | null
           claimed_by: string | null
+          completed_checklist_items: Json | null
           created_at: string
           description: string
           estimated_duration_hours: number | null
@@ -5297,8 +5337,10 @@ export type Database = {
           metadata: Json
           priority: number
           progress_percentage: number | null
+          quality_score: number | null
           repo: string
           required_skills: Json | null
+          resolution_notes: string | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
           stage_started_at: string | null
@@ -5315,6 +5357,7 @@ export type Database = {
           category: Database["public"]["Enums"]["task_category"]
           claimed_at?: string | null
           claimed_by?: string | null
+          completed_checklist_items?: Json | null
           created_at?: string
           description: string
           estimated_duration_hours?: number | null
@@ -5324,8 +5367,10 @@ export type Database = {
           metadata?: Json
           priority?: number
           progress_percentage?: number | null
+          quality_score?: number | null
           repo: string
           required_skills?: Json | null
+          resolution_notes?: string | null
           retry_count?: number | null
           stage: Database["public"]["Enums"]["task_stage"]
           stage_started_at?: string | null
@@ -5342,6 +5387,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["task_category"]
           claimed_at?: string | null
           claimed_by?: string | null
+          completed_checklist_items?: Json | null
           created_at?: string
           description?: string
           estimated_duration_hours?: number | null
@@ -5351,8 +5397,10 @@ export type Database = {
           metadata?: Json
           priority?: number
           progress_percentage?: number | null
+          quality_score?: number | null
           repo?: string
           required_skills?: Json | null
+          resolution_notes?: string | null
           retry_count?: number | null
           stage?: Database["public"]["Enums"]["task_stage"]
           stage_started_at?: string | null
@@ -6971,6 +7019,7 @@ export type Database = {
           category: Database["public"]["Enums"]["task_category"]
           claimed_at: string | null
           claimed_by: string | null
+          completed_checklist_items: Json | null
           created_at: string
           description: string
           estimated_duration_hours: number | null
@@ -6980,8 +7029,10 @@ export type Database = {
           metadata: Json
           priority: number
           progress_percentage: number | null
+          quality_score: number | null
           repo: string
           required_skills: Json | null
+          resolution_notes: string | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
           stage_started_at: string | null
@@ -7430,6 +7481,7 @@ export type Database = {
           category: Database["public"]["Enums"]["task_category"]
           claimed_at: string | null
           claimed_by: string | null
+          completed_checklist_items: Json | null
           created_at: string
           description: string
           estimated_duration_hours: number | null
@@ -7439,8 +7491,10 @@ export type Database = {
           metadata: Json
           priority: number
           progress_percentage: number | null
+          quality_score: number | null
           repo: string
           required_skills: Json | null
+          resolution_notes: string | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
           stage_started_at: string | null
@@ -7516,6 +7570,7 @@ export type Database = {
           category: Database["public"]["Enums"]["task_category"]
           claimed_at: string | null
           claimed_by: string | null
+          completed_checklist_items: Json | null
           created_at: string
           description: string
           estimated_duration_hours: number | null
@@ -7525,8 +7580,10 @@ export type Database = {
           metadata: Json
           priority: number
           progress_percentage: number | null
+          quality_score: number | null
           repo: string
           required_skills: Json | null
+          resolution_notes: string | null
           retry_count: number | null
           stage: Database["public"]["Enums"]["task_stage"]
           stage_started_at: string | null
