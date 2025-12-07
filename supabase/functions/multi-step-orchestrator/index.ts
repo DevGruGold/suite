@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { callAIWithFallback } from '../_shared/unifiedAIFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -359,38 +360,31 @@ serve(async (req) => {
 
 // Step execution functions
 async function executeAIAnalysis(step: any, apiKey: string, userInput: string, context: any) {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        {
-          role: 'system',
-          content: step.system_prompt || 'You are a helpful AI assistant analyzing data.'
-        },
-        {
-          role: 'user',
-          content: step.prompt || userInput
-        }
+  try {
+    const result = await callAIWithFallback(
+      [
+        { role: 'system', content: step.system_prompt || 'You are a helpful AI assistant analyzing data.' },
+        { role: 'user', content: step.prompt || userInput }
       ],
-      temperature: step.temperature || 0.7,
-      max_tokens: step.max_tokens || 1000
-    })
-  });
-  
-  if (!response.ok) {
-    throw new Error(`AI analysis failed: ${response.status}`);
+      {
+        temperature: step.temperature || 0.7,
+        maxTokens: step.max_tokens || 1000
+      }
+    );
+    
+    const content = typeof result === 'string' ? result : (result.content || result.message || JSON.stringify(result));
+    const provider = typeof result === 'object' && result.provider ? result.provider : 'unified_cascade';
+    
+    console.log(`✅ AI Analysis completed via: ${provider}`);
+    
+    return {
+      analysis: content,
+      model: provider
+    };
+  } catch (error) {
+    console.error('❌ AI analysis failed after all providers:', error);
+    throw new Error(`AI analysis failed after all providers: ${error.message}`);
   }
-  
-  const data = await response.json();
-  return {
-    analysis: data.choices[0].message.content,
-    model: 'gemini-2.5-flash'
-  };
 }
 
 async function executeDataFetch(step: any, supabase: any) {
@@ -474,30 +468,45 @@ async function executeAPICall(step: any, supabaseUrl: string, serviceKey: string
 }
 
 async function executeDecision(step: any, apiKey: string, context: any) {
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        {
-          role: 'system',
-          content: 'You are a decision engine. Analyze the context and make a strategic decision. Respond with JSON: {"decision": "...", "reasoning": "...", "confidence": 0-1}'
+  try {
+    const result = await callAIWithFallback(
+      [
+        { 
+          role: 'system', 
+          content: 'You are a decision engine. Analyze the context and make a strategic decision. Respond with JSON: {"decision": "...", "reasoning": "...", "confidence": 0-1}' 
         },
-        {
-          role: 'user',
-          content: `Context: ${JSON.stringify(context)}\n\nDecision needed: ${step.decision_prompt}`
+        { 
+          role: 'user', 
+          content: `Context: ${JSON.stringify(context)}\n\nDecision needed: ${step.decision_prompt}` 
         }
       ],
-      temperature: 0.3
-    })
-  });
-  
-  if (!response.ok) {
-    throw new Error(`Decision making failed: ${response.status}`);
+      { temperature: 0.3, maxTokens: 1000 }
+    );
+    
+    const content = typeof result === 'string' ? result : (result.content || result.message || '');
+    const provider = typeof result === 'object' && result.provider ? result.provider : 'unified_cascade';
+    
+    console.log(`✅ Decision completed via: ${provider}`);
+    
+    // Try to parse JSON from response
+    try {
+      const jsonMatch = content.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } catch (parseError) {
+      console.warn('Could not parse decision as JSON, returning raw');
+    }
+    
+    return {
+      decision: content,
+      reasoning: 'Raw AI response',
+      confidence: 0.7,
+      provider
+    };
+  } catch (error) {
+    console.error('❌ Decision making failed after all providers:', error);
+    throw new Error(`Decision making failed after all providers: ${error.message}`);
   }
   
   const data = await response.json();
