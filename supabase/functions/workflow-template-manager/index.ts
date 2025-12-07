@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { generateTextWithFallback } from '../_shared/unifiedAIFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,71 +10,6 @@ const corsHeaders = {
 interface ExecuteTemplateParams {
   template_name: string;
   params?: Record<string, any>;
-}
-
-// AI Provider Configuration
-const AI_MODELS = {
-  'deepseek-chat': {
-    url: 'https://api.deepseek.com/v1/chat/completions',
-    model: 'deepseek-chat',
-    keyEnv: 'DEEPSEEK_API_KEY',
-  },
-  'gemini': {
-    url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-    keyEnv: 'GEMINI_API_KEY',
-  },
-  'lovable': {
-    url: 'https://ai.gateway.lovable.dev/v1/chat/completions',
-    model: 'google/gemini-2.5-flash',
-    keyEnv: 'LOVABLE_API_KEY',
-  },
-};
-
-// Helper: Call AI for analysis or generation
-async function callAI(
-  prompt: string,
-  systemPrompt: string = 'You are an expert AI assistant helping with workflow automation.',
-  model: string = 'deepseek-chat'
-): Promise<string> {
-  const config = AI_MODELS[model] || AI_MODELS['deepseek-chat'];
-  const apiKey = Deno.env.get(config.keyEnv) || Deno.env.get('DEEPSEEK_API_KEY');
-
-  if (!apiKey) {
-    console.warn(`[AI] No API key found for ${model}, using fallback response`);
-    return `[AI Analysis Placeholder] Analysis would be performed here with prompt: ${prompt.substring(0, 100)}...`;
-  }
-
-  try {
-    // Use DeepSeek-style API (OpenAI compatible)
-    const response = await fetch(config.url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model: config.model || 'deepseek-chat',
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: prompt },
-        ],
-        temperature: 0.7,
-        max_tokens: 2000,
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[AI] API error: ${response.status} - ${errorText}`);
-      return `[AI Error] Failed to get response: ${response.status}`;
-    }
-
-    const data = await response.json();
-    return data.choices?.[0]?.message?.content || '[AI] No content in response';
-  } catch (error) {
-    console.error('[AI] Error calling AI:', error);
-    return `[AI Error] ${error.message}`;
-  }
 }
 
 // Helper: Generate structured report
@@ -526,7 +462,6 @@ async function executeStep(step: any, context: Record<string, any>, supabase: an
   switch (stepType) {
     // ========== AI ANALYSIS ==========
     case 'ai_analysis': {
-      const model = step.model || 'deepseek-chat';
       const prompt = `
 Task: ${step.name}
 Description: ${step.description}
@@ -539,17 +474,16 @@ Format your response as structured analysis with clear sections.
 `;
       const systemPrompt = `You are an expert analyst for the Suite AI Platform. Provide clear, actionable analysis based on the data provided. Be specific and data-driven in your assessments.`;
       
-      const analysis = await callAI(prompt, systemPrompt, model);
+      const analysis = await generateTextWithFallback(prompt, systemPrompt, { temperature: 0.7, max_tokens: 2000 });
       return { 
         analysis, 
-        model_used: model,
+        model_used: 'unified_cascade',
         analyzed_at: new Date().toISOString(),
       };
     }
 
     // ========== AI GENERATION ==========
     case 'ai_generation': {
-      const model = step.model || 'deepseek-chat';
       const prompt = `
 Task: ${step.name}
 Description: ${step.description}
@@ -562,10 +496,10 @@ Ensure the output is well-structured, professional, and actionable.
 `;
       const systemPrompt = `You are an expert content generator for the Suite AI Platform. Create high-quality, professional content that aligns with enterprise standards. Be thorough but concise.`;
       
-      const generated = await callAI(prompt, systemPrompt, model);
+      const generated = await generateTextWithFallback(prompt, systemPrompt, { temperature: 0.7, max_tokens: 2000 });
       return { 
         generated_content: generated,
-        model_used: model,
+        model_used: 'unified_cascade',
         generated_at: new Date().toISOString(),
       };
     }
