@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Bot } from "lucide-react";
 import { MobileNav } from "@/components/MobileNav";
+import { DesktopNav } from "@/components/DesktopNav";
 import { HeroSection } from "@/components/HeroSection";
 
 const Index = () => {
@@ -38,7 +39,7 @@ const Index = () => {
       {/* Header */}
       <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-semibold tracking-tight text-foreground">
                 Suite
@@ -48,16 +49,19 @@ const Index = () => {
               </Badge>
             </div>
             
+            {/* Desktop Navigation */}
+            <DesktopNav />
+            
             {/* Status Indicators */}
             <div className="hidden md:flex items-center gap-2">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <div className="w-1.5 h-1.5 rounded-full bg-suite-success animate-pulse" />
-                <span>System Active</span>
+                <span>Active</span>
               </div>
               <div className="w-px h-4 bg-border" />
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <Activity className="w-3 h-3" />
-                <span>120+ Functions</span>
+                <span>120+</span>
               </div>
             </div>
           </div>
