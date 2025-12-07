@@ -1,11 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 
+// Frontend Edge Function Registry - Synchronized with backend
+// Total: 115+ functions across 18 categories
+
 export interface EdgeFunctionCapability {
   name: string;
   url: string;
   description: string;
   capabilities: string[];
-  category: 'ai' | 'mining' | 'web' | 'speech' | 'faucet' | 'ecosystem' | 'deployment' | 'github' | 'autonomous' | 'knowledge' | 'task-management' | 'monitoring' | 'code-execution';
+  category: 'ai' | 'mining' | 'web' | 'speech' | 'faucet' | 'ecosystem' | 'deployment' | 'github' | 'autonomous' | 'knowledge' | 'task-management' | 'monitoring' | 'code-execution' | 'database' | 'network' | 'superduper' | 'daemon' | 'governance' | 'research' | 'revenue' | 'vsco' | 'hume' | 'acquisition' | 'payments' | 'automation';
   example_use: string;
 }
 
@@ -324,6 +327,347 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['mining', 'automation', 'mobile', 'setup'],
     category: 'mining',
     example_use: '{}'
+  },
+  // ============= VSCO WORKSPACE (CMS/Studio Management) =============
+  {
+    name: 'vsco-workspace',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vsco-workspace',
+    description: '📸 VSCO Workspace CMS - Full studio management: contacts, jobs, events, quotes, products, worksheets, notes, invoices, and calendar',
+    capabilities: ['Contact management', 'Job management', 'Event scheduling', 'Product pricing', 'Quote creation', 'Worksheets/templates', 'Notes', 'Invoice management', 'Calendar integration', 'Pipeline analytics'],
+    category: 'vsco',
+    example_use: '{"action":"create_contact","data":{"firstName":"John","lastName":"Doe","email":"john@example.com"}}'
+  },
+  // ============= HUME AI (Emotional Intelligence) =============
+  {
+    name: 'hume-access-token',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/hume-access-token',
+    description: '🎭 Hume EVI Access Token - Generate tokens for Hume Empathic Voice Interface',
+    capabilities: ['OAuth token generation', 'EVI voice access', 'Client authentication'],
+    category: 'hume',
+    example_use: 'Generate access token for Hume EVI voice chat'
+  },
+  {
+    name: 'hume-expression-measurement',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/hume-expression-measurement',
+    description: '🎭 Hume Expression Measurement - Analyze facial expressions and emotions',
+    capabilities: ['Facial expression analysis', 'Emotion detection', 'Confidence scoring'],
+    category: 'hume',
+    example_use: '{"image":"base64_encoded_image"}'
+  },
+  {
+    name: 'hume-tts',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/hume-tts',
+    description: '🎭 Hume TTS - Empathic text-to-speech with emotional expression',
+    capabilities: ['Emotional voice synthesis', 'Voice ID selection', 'Expressive audio'],
+    category: 'hume',
+    example_use: '{"text":"Hello","voiceId":"c7aa10be-..."}'
+  },
+  // ============= USER ACQUISITION =============
+  {
+    name: 'qualify-lead',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/qualify-lead',
+    description: '💰 Lead Qualification - Score leads based on conversation signals',
+    capabilities: ['Lead scoring', 'Signal processing', 'Budget detection', 'Urgency assessment'],
+    category: 'acquisition',
+    example_use: '{"session_key":"abc123","user_signals":{"mentioned_budget":true}}'
+  },
+  {
+    name: 'identify-service-interest',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/identify-service-interest',
+    description: '🎯 Service Interest Detection - Identify services a lead wants',
+    capabilities: ['Service detection', 'Interest scoring', 'Multi-service tracking'],
+    category: 'acquisition',
+    example_use: '{"user_message":"I need mining help","session_key":"abc123"}'
+  },
+  {
+    name: 'convert-session-to-user',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/convert-session-to-user',
+    description: '👤 Session Conversion - Convert anonymous sessions to users',
+    capabilities: ['User creation', 'Profile linking', 'Session migration'],
+    category: 'acquisition',
+    example_use: '{"session_key":"abc123","email":"user@example.com"}'
+  },
+  // ============= PAYMENTS =============
+  {
+    name: 'generate-stripe-link',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/generate-stripe-link',
+    description: '💳 Stripe Payment Links - Generate payment links for upgrades',
+    capabilities: ['Payment link generation', 'Checkout session', 'Tier pricing'],
+    category: 'payments',
+    example_use: '{"tier":"pro","email":"customer@example.com"}'
+  },
+  {
+    name: 'stripe-payment-webhook',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/stripe-payment-webhook',
+    description: '💳 Stripe Webhook - Process payments and auto-upgrade keys',
+    capabilities: ['Payment verification', 'Webhook validation', 'Auto upgrade'],
+    category: 'payments',
+    example_use: 'Webhook endpoint for Stripe events'
+  },
+  // ============= AUTOMATION =============
+  {
+    name: 'suite-task-automation-engine',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/suite-task-automation-engine',
+    description: '🤖 STAE - Task automation with templates and smart assignment',
+    capabilities: ['Template-based tasks', 'Smart agent matching', 'Checklist management', 'Stage advancement'],
+    category: 'automation',
+    example_use: '{"action":"create_task_from_template","data":{"template_name":"bug_fix"}}'
+  },
+  {
+    name: 'task-auto-advance',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/task-auto-advance',
+    description: '⏩ Task Auto-Advance - Auto-advance tasks through pipeline',
+    capabilities: ['Stage advancement', 'Threshold monitoring', 'Agent notification'],
+    category: 'automation',
+    example_use: 'Runs on cron to advance eligible tasks'
+  },
+  {
+    name: 'workflow-template-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/workflow-template-manager',
+    description: '🔄 Workflow Templates - Pre-built workflow templates for automation',
+    capabilities: ['Template library', 'Workflow execution', 'Performance tracking'],
+    category: 'automation',
+    example_use: '{"action":"execute_template","data":{"template_name":"acquire_new_customer"}}'
+  },
+  // ============= SUPERDUPER AGENTS =============
+  {
+    name: 'superduper-router',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-router',
+    description: '🚀 SuperDuper Router - Central router for specialist agents',
+    capabilities: ['Agent routing', 'Request orchestration', 'Load balancing'],
+    category: 'superduper',
+    example_use: 'Route to SuperDuper agents'
+  },
+  {
+    name: 'superduper-business-growth',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-business-growth',
+    description: 'SuperDuper Agent: Business growth strategy',
+    capabilities: ['Business strategy', 'Market analysis', 'Growth planning'],
+    category: 'superduper',
+    example_use: 'Analyze market opportunities'
+  },
+  {
+    name: 'superduper-code-architect',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-code-architect',
+    description: 'SuperDuper Agent: Software architecture',
+    capabilities: ['Architecture design', 'Code review', 'System optimization'],
+    category: 'superduper',
+    example_use: 'Design system architecture'
+  },
+  {
+    name: 'superduper-finance-investment',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-finance-investment',
+    description: 'SuperDuper Agent: Financial planning',
+    capabilities: ['Financial analysis', 'Investment strategy', 'Budget planning'],
+    category: 'superduper',
+    example_use: 'Analyze financial health'
+  },
+  {
+    name: 'superduper-research-intelligence',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-research-intelligence',
+    description: 'SuperDuper Agent: Research and intelligence',
+    capabilities: ['Market research', 'Competitive analysis', 'Trend monitoring'],
+    category: 'superduper',
+    example_use: 'Conduct market research'
+  },
+  // ============= GOVERNANCE =============
+  {
+    name: 'governance-phase-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/governance-phase-manager',
+    description: '⚖️ Governance Phase Manager - Timed voting phase transitions',
+    capabilities: ['Phase transitions', 'Executive deadlines', 'Community voting'],
+    category: 'governance',
+    example_use: 'Manage governance voting phases'
+  },
+  {
+    name: 'evaluate-community-idea',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/evaluate-community-idea',
+    description: 'Evaluate community ideas for feasibility',
+    capabilities: ['Idea evaluation', 'Feasibility analysis', 'Impact assessment'],
+    category: 'governance',
+    example_use: 'Evaluate community proposals'
+  },
+  {
+    name: 'execute-approved-proposal',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/execute-approved-proposal',
+    description: '✅ Execute Approved Proposals - Finalize with code generation',
+    capabilities: ['Code generation', 'Task creation', 'GitHub PR creation'],
+    category: 'governance',
+    example_use: '{"proposal_id":"uuid"}'
+  },
+  {
+    name: 'handle-rejected-proposal',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/handle-rejected-proposal',
+    description: '❌ Handle Rejected Proposals - Generate improvement suggestions',
+    capabilities: ['Rejection handling', 'Improvement suggestions', 'Feedback'],
+    category: 'governance',
+    example_use: '{"proposal_id":"uuid"}'
+  },
+  // ============= MONITORING =============
+  {
+    name: 'get-edge-function-logs',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-edge-function-logs',
+    description: '📊 Edge Function Logs - Retrieve detailed logs',
+    capabilities: ['Log retrieval', 'Error filtering', 'Time-based queries'],
+    category: 'monitoring',
+    example_use: '{"function_name":"github-integration","hours":24}'
+  },
+  {
+    name: 'get-function-version-analytics',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-function-version-analytics',
+    description: '📈 Function Version Analytics - Compare versions',
+    capabilities: ['Version comparison', 'Regression detection', 'Performance metrics'],
+    category: 'monitoring',
+    example_use: '{"function_name":"lovable-chat","compare_versions":true}'
+  },
+  {
+    name: 'sync-function-logs',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/sync-function-logs',
+    description: '🔄 Sync Function Logs - Synchronize logs from Analytics',
+    capabilities: ['Log synchronization', 'Backfill data', 'Version tracking'],
+    category: 'monitoring',
+    example_use: 'Runs on cron every 15 minutes'
+  },
+  {
+    name: 'tool-usage-analytics',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/tool-usage-analytics',
+    description: '📊 Tool Usage Analytics - Comprehensive tool analytics',
+    capabilities: ['Tool success rates', 'Executive breakdowns', 'Error patterns'],
+    category: 'monitoring',
+    example_use: '{"time_period_hours":168}'
+  },
+  // ============= REVENUE =============
+  {
+    name: 'service-monetization-engine',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/service-monetization-engine',
+    description: '💰 Service Monetization - API key generation and billing',
+    capabilities: ['API key management', 'Usage tracking', 'Tiered pricing', 'Revenue analytics'],
+    category: 'revenue',
+    example_use: '{"action":"generate_api_key","data":{"service_name":"uspto-patent-mcp","tier":"pro"}}'
+  },
+  // ============= RESEARCH =============
+  {
+    name: 'uspto-patent-mcp',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/uspto-patent-mcp',
+    description: 'USPTO Patent MCP - Search 11M+ patents, retrieve full text, download PDFs',
+    capabilities: ['Patent search', 'Full text retrieval', 'PDF downloads', 'Portfolio analysis'],
+    category: 'research',
+    example_use: '{"method":"tools/call","params":{"name":"search_patents","arguments":{"query":"TTL/artificial intelligence"}}}'
+  },
+  // ============= AUTONOMOUS =============
+  {
+    name: 'autonomous-code-fixer',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-code-fixer',
+    description: 'Self-healing code execution - auto-fixes failed Python',
+    capabilities: ['Auto-detect failures', 'Fix syntax errors', 'Re-execute code'],
+    category: 'autonomous',
+    example_use: 'Automatically fixes failed Python executions'
+  },
+  {
+    name: 'autonomous-decision-maker',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-decision-maker',
+    description: '🧠 Autonomous Decision Maker - AI-driven decisions',
+    capabilities: ['Decision analysis', 'Impact assessment', 'Recommendations'],
+    category: 'autonomous',
+    example_use: '{"decision_type":"task_assignment","context":{...}}'
+  },
+  {
+    name: 'eliza-intelligence-coordinator',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/eliza-intelligence-coordinator',
+    description: 'Coordinates intelligence across all agents',
+    capabilities: ['Intelligence coordination', 'Knowledge synthesis', 'Multi-agent orchestration'],
+    category: 'autonomous',
+    example_use: 'Coordinate intelligence across agents'
+  },
+  {
+    name: 'eliza-self-evaluation',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/eliza-self-evaluation',
+    description: 'Self-evaluation for continuous improvement',
+    capabilities: ['Performance analysis', 'Self-evaluation', 'Improvement recommendations'],
+    category: 'autonomous',
+    example_use: 'Analyze system performance'
+  },
+  {
+    name: 'morning-discussion-post',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/morning-discussion-post',
+    description: '🌅 Morning Discussion - Generate daily discussion topics',
+    capabilities: ['Automated posting', 'Content generation', 'Scheduling'],
+    category: 'autonomous',
+    example_use: 'Generate morning discussion on GitHub'
+  },
+  {
+    name: 'evening-summary-post',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/evening-summary-post',
+    description: '🌆 Evening Summary - Generate daily summary reports',
+    capabilities: ['Automated posting', 'Content generation', 'Summary'],
+    category: 'autonomous',
+    example_use: 'Generate evening summary on GitHub'
+  },
+  {
+    name: 'weekly-retrospective-post',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/weekly-retrospective-post',
+    description: '📅 Weekly Retrospective - Generate weekly retrospective',
+    capabilities: ['Automated posting', 'Content generation', 'Retrospective'],
+    category: 'autonomous',
+    example_use: 'Generate weekly retrospective on GitHub'
+  },
+  {
+    name: 'progress-update-post',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/progress-update-post',
+    description: '📢 Progress Updates - Generate progress update posts',
+    capabilities: ['Automated posting', 'Progress tracking', 'Updates'],
+    category: 'autonomous',
+    example_use: 'Generate progress updates on GitHub'
+  },
+  {
+    name: 'opportunity-scanner',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/opportunity-scanner',
+    description: 'Autonomous opportunity scanning and identification',
+    capabilities: ['Opportunity detection', 'Market scanning', 'Trend analysis'],
+    category: 'autonomous',
+    example_use: 'Scan for market opportunities'
+  },
+  // ============= ECOSYSTEM =============
+  {
+    name: 'event-router',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/event-router',
+    description: '📨 Event Router - Central webhook ingress',
+    capabilities: ['Webhook validation', 'Event normalization', 'Logging'],
+    category: 'ecosystem',
+    example_use: 'Receives webhooks from GitHub, Vercel'
+  },
+  {
+    name: 'event-dispatcher',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/event-dispatcher',
+    description: '🎯 Event Dispatcher - Intelligent event routing',
+    capabilities: ['Event routing', 'Action mapping', 'Workflow triggering'],
+    category: 'ecosystem',
+    example_use: '{"event_type":"github:push","payload":{...}}'
+  },
+  {
+    name: 'xmrt-mcp-server',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-mcp-server',
+    description: 'XMRT MCP Server - Model Context Protocol server',
+    capabilities: ['MCP protocol', '25+ unified tools', 'Resource subscriptions', 'Prompt templates'],
+    category: 'ecosystem',
+    example_use: 'Connect AI agents via MCP protocol'
+  },
+  // ============= DATABASE =============
+  {
+    name: 'redis-cache',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/redis-cache',
+    description: 'Upstash Redis caching for API responses and rate limiting',
+    capabilities: ['Get/Set cache', 'TTL management', 'Rate limiting'],
+    category: 'database',
+    example_use: '{"action":"get","key":"ecosystem_health"}'
+  },
+  {
+    name: 'schema-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/schema-manager',
+    description: 'Database schema and migrations management',
+    capabilities: ['Schema management', 'Migrations', 'Data access'],
+    category: 'database',
+    example_use: 'Manage database schema'
   }
 ];
 
