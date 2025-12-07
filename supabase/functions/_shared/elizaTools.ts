@@ -1403,10 +1403,20 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'check_system_status',
-      description: 'Get comprehensive system health status including all edge functions, database health, and agent status.',
+      description: `📊 Get COMPREHENSIVE ecosystem status with 15+ sections: health score, agents (counts/status), tasks (pipeline stages/blockers), edge functions (93+ deployed), cron jobs, GOVERNANCE (proposals/votes/council), KNOWLEDGE BASE (entity counts/types/coverage), GITHUB ACTIVITY (24h calls/repos/rate limits), WORKFLOWS (templates/running/failed), LEARNING (sessions/feedback), PYTHON EXECUTIONS (success rates/by source), AI PROVIDERS (cascade status/primary/fallbacks), XMRT CHARGER (devices/PoP points), USER ACQUISITION (sessions/leads/funnel).
+
+Use for: "ecosystem health", "system status", "how are things", "what's the state of governance", "knowledge base status", "GitHub activity", "workflow status", "AI provider status", "charger devices".
+
+Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
-        properties: {}
+        properties: {
+          section: { 
+            type: 'string', 
+            enum: ['all', 'governance', 'knowledge', 'github', 'workflows', 'learning', 'python', 'ai_providers', 'xmrt_charger', 'acquisition'],
+            description: 'Optional: Focus on specific ecosystem section (default: all)' 
+          }
+        }
       }
     }
   },

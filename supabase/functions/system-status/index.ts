@@ -485,13 +485,340 @@ serve(async (req) => {
         error: error.message
       };
     }
+
+    // ====================================================================
+    // 9. ECOSYSTEM DEEP DIVE SECTIONS (NEW)
+    // ====================================================================
+    const last24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+    const last7d = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+
+    // 9A. GOVERNANCE & COUNCIL HEALTH
+    console.log('🏛️ Checking governance status...');
+    try {
+      const { data: proposals, error: govError } = await supabase
+        .from('edge_function_proposals')
+        .select('id, status, created_at, council_votes, voting_phase, executive_deadline, community_deadline')
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (govError) throw govError;
+
+      const pendingProposals = proposals?.filter((p: any) => p.status === 'pending' || p.status === 'voting').length || 0;
+      const approvedLast7d = proposals?.filter((p: any) => p.status === 'approved' && new Date(p.created_at) > new Date(last7d)).length || 0;
+      const rejectedLast7d = proposals?.filter((p: any) => p.status === 'rejected' && new Date(p.created_at) > new Date(last7d)).length || 0;
+      const inVotingPhase = proposals?.filter((p: any) => p.voting_phase && p.voting_phase !== 'completed').length || 0;
+
+      statusReport.components.governance = {
+        status: pendingProposals > 10 ? 'backlog' : 'healthy',
+        pending_proposals: pendingProposals,
+        in_voting_phase: inVotingPhase,
+        approved_last_7d: approvedLast7d,
+        rejected_last_7d: rejectedLast7d,
+        total_proposals: proposals?.length || 0,
+        council_active: inVotingPhase > 0,
+        recent_proposals: proposals?.slice(0, 5).map((p: any) => ({
+          id: p.id,
+          status: p.status,
+          voting_phase: p.voting_phase,
+          created_at: p.created_at
+        }))
+      };
+    } catch (error) {
+      statusReport.components.governance = {
+        status: 'unavailable',
+        error: error.message,
+        pending_proposals: 0
+      };
+    }
+
+    // 9B. KNOWLEDGE BASE HEALTH
+    console.log('🧠 Checking knowledge base...');
+    try {
+      const { data: knowledge, error: kbError } = await supabase
+        .from('knowledge_entities')
+        .select('id, entity_type, confidence_score, created_at');
+
+      if (kbError) throw kbError;
+
+      const entityTypeBreakdown: Record<string, number> = {};
+      knowledge?.forEach((k: any) => {
+        entityTypeBreakdown[k.entity_type] = (entityTypeBreakdown[k.entity_type] || 0) + 1;
+      });
+
+      const avgConfidence = knowledge?.length > 0 
+        ? knowledge.reduce((sum: number, k: any) => sum + (k.confidence_score || 0), 0) / knowledge.length 
+        : 0;
+
+      statusReport.components.knowledge_base = {
+        status: knowledge && knowledge.length > 50 ? 'healthy' : 'sparse',
+        total_entities: knowledge?.length || 0,
+        entity_types: Object.keys(entityTypeBreakdown).length,
+        by_type: entityTypeBreakdown,
+        average_confidence: Math.round(avgConfidence * 100) / 100,
+        coverage: knowledge && knowledge.length > 100 ? 'comprehensive' : (knowledge && knowledge.length > 25 ? 'moderate' : 'sparse')
+      };
+    } catch (error) {
+      statusReport.components.knowledge_base = {
+        status: 'unavailable',
+        error: error.message,
+        total_entities: 0
+      };
+    }
+
+    // 9C. GITHUB ECOSYSTEM ACTIVITY (24h)
+    console.log('🐙 Checking GitHub activity...');
+    try {
+      const { data: githubActivity, error: ghError } = await supabase
+        .from('github_api_usage')
+        .select('action, success, repo, response_time_ms, rate_limit_remaining, created_at')
+        .gte('created_at', last24h);
+
+      if (ghError) throw ghError;
+
+      const totalCalls = githubActivity?.length || 0;
+      const successfulCalls = githubActivity?.filter((g: any) => g.success).length || 0;
+      const uniqueRepos = [...new Set(githubActivity?.map((g: any) => g.repo).filter(Boolean))];
+      const avgResponseTime = totalCalls > 0 
+        ? Math.round(githubActivity!.reduce((sum: number, g: any) => sum + (g.response_time_ms || 0), 0) / totalCalls)
+        : 0;
+      const latestRateLimit = githubActivity?.[0]?.rate_limit_remaining;
+
+      statusReport.components.github_ecosystem = {
+        status: latestRateLimit && latestRateLimit < 100 ? 'throttled' : (totalCalls > 0 ? 'healthy' : 'idle'),
+        api_calls_24h: totalCalls,
+        success_rate: totalCalls > 0 ? Math.round((successfulCalls / totalCalls) * 100) : 100,
+        repos_accessed: uniqueRepos.length,
+        active_repos: uniqueRepos.slice(0, 5),
+        avg_response_time_ms: avgResponseTime,
+        rate_limit_remaining: latestRateLimit || 'unknown'
+      };
+    } catch (error) {
+      statusReport.components.github_ecosystem = {
+        status: 'unavailable',
+        error: error.message,
+        api_calls_24h: 0
+      };
+    }
+
+    // 9D. WORKFLOW ECOSYSTEM
+    console.log('🔄 Checking workflows...');
+    try {
+      const { data: workflows, error: wfError } = await supabase
+        .from('workflow_executions')
+        .select('id, template_name, status, started_at, completed_at')
+        .gte('started_at', last24h);
+
+      if (wfError) throw wfError;
+
+      const { data: templates, error: tplError } = await supabase
+        .from('workflow_templates')
+        .select('id, name, is_active')
+        .eq('is_active', true);
+
+      const running = workflows?.filter((w: any) => w.status === 'running').length || 0;
+      const completed = workflows?.filter((w: any) => w.status === 'completed').length || 0;
+      const failed = workflows?.filter((w: any) => w.status === 'failed').length || 0;
+
+      statusReport.components.workflows = {
+        status: failed > 3 ? 'degraded' : 'healthy',
+        active_templates: templates?.length || 0,
+        running: running,
+        completed_24h: completed,
+        failed_24h: failed,
+        total_executions_24h: workflows?.length || 0,
+        success_rate: workflows && workflows.length > 0 
+          ? Math.round((completed / workflows.length) * 100) 
+          : 100
+      };
+    } catch (error) {
+      statusReport.components.workflows = {
+        status: 'unavailable',
+        error: error.message,
+        active_templates: 0
+      };
+    }
+
+    // 9E. LEARNING & SKILLS PROGRESS
+    console.log('📚 Checking learning status...');
+    try {
+      const { data: learning, error: learnError } = await supabase
+        .from('learning_sessions')
+        .select('id, status, progress_percentage, skill_area, created_at')
+        .gte('created_at', last7d);
+
+      const { data: feedback, error: fbError } = await supabase
+        .from('executive_feedback')
+        .select('id, acknowledged, created_at')
+        .gte('created_at', last7d);
+
+      const inProgress = learning?.filter((l: any) => l.status === 'in_progress').length || 0;
+      const completed = learning?.filter((l: any) => l.status === 'completed').length || 0;
+      const unacknowledgedFeedback = feedback?.filter((f: any) => !f.acknowledged).length || 0;
+
+      statusReport.components.learning = {
+        status: 'healthy',
+        sessions_in_progress: inProgress,
+        sessions_completed_7d: completed,
+        total_sessions_7d: learning?.length || 0,
+        unacknowledged_feedback: unacknowledgedFeedback,
+        feedback_backlog: unacknowledgedFeedback > 10 ? 'high' : 'normal'
+      };
+    } catch (error) {
+      statusReport.components.learning = {
+        status: 'unavailable',
+        error: error.message
+      };
+    }
+
+    // 9F. PYTHON EXECUTION ANALYTICS
+    console.log('🐍 Checking Python executions...');
+    try {
+      const { data: pythonExecs, error: pyError } = await supabase
+        .from('eliza_python_executions')
+        .select('id, exit_code, source, execution_time_ms, created_at')
+        .gte('created_at', last24h);
+
+      if (pyError) throw pyError;
+
+      const total = pythonExecs?.length || 0;
+      const successful = pythonExecs?.filter((p: any) => p.exit_code === 0).length || 0;
+      const bySource: Record<string, number> = {};
+      pythonExecs?.forEach((p: any) => {
+        const source = p.source || 'unknown';
+        bySource[source] = (bySource[source] || 0) + 1;
+      });
+      const avgExecTime = total > 0 
+        ? Math.round(pythonExecs!.reduce((sum: number, p: any) => sum + (p.execution_time_ms || 0), 0) / total)
+        : 0;
+
+      statusReport.components.python_executions = {
+        status: total > 0 && (successful / total) < 0.8 ? 'degraded' : 'healthy',
+        total_24h: total,
+        successful_24h: successful,
+        success_rate: total > 0 ? Math.round((successful / total) * 100) : 100,
+        by_source: bySource,
+        avg_execution_time_ms: avgExecTime
+      };
+    } catch (error) {
+      statusReport.components.python_executions = {
+        status: 'unavailable',
+        error: error.message,
+        total_24h: 0
+      };
+    }
+
+    // 9G. AI PROVIDER STATUS
+    console.log('🤖 Checking AI provider status...');
+    const aiProviders = {
+      lovable_ai: !!Deno.env.get('LOVABLE_API_KEY'),
+      deepseek: !!Deno.env.get('DEEPSEEK_API_KEY'),
+      kimi_k2: !!Deno.env.get('OPENROUTER_API_KEY'),
+      gemini: !!Deno.env.get('GEMINI_API_KEY'),
+      openai: !!Deno.env.get('OPENAI_API_KEY')
+    };
     
-    // 9. Generate Health Summary - UNIFIED SCORING SYSTEM
+    const configuredProviders = Object.entries(aiProviders).filter(([_, v]) => v).map(([k]) => k);
+    const cascadeOrder = ['lovable_ai', 'deepseek', 'kimi_k2', 'gemini', 'openai'];
+    const primaryProvider = cascadeOrder.find(p => aiProviders[p as keyof typeof aiProviders]) || 'none';
+
+    statusReport.components.ai_providers = {
+      status: configuredProviders.length > 0 ? 'healthy' : 'degraded',
+      configured: configuredProviders,
+      cascade_order: cascadeOrder.filter(p => aiProviders[p as keyof typeof aiProviders]),
+      primary_provider: primaryProvider,
+      fallbacks_available: configuredProviders.length - 1,
+      message: configuredProviders.length === 0 
+        ? 'No AI providers configured!' 
+        : `Using ${primaryProvider} with ${configuredProviders.length - 1} fallback(s)`
+    };
+
+    // 9H. XMRT CHARGER DEVICES
+    console.log('🔋 Checking XMRT Charger devices...');
+    try {
+      const { data: devices, error: devError } = await supabase
+        .from('devices')
+        .select('id, device_type, is_active, last_seen_at')
+        .eq('is_active', true);
+
+      const { data: popEvents, error: popError } = await supabase
+        .from('pop_events')
+        .select('id, pop_points, event_type')
+        .gte('created_at', last24h);
+
+      const activeDevices = devices?.filter((d: any) => 
+        d.last_seen_at && new Date(d.last_seen_at) > new Date(Date.now() - 15 * 60 * 1000)
+      ).length || 0;
+
+      const deviceTypeBreakdown: Record<string, number> = {};
+      devices?.forEach((d: any) => {
+        deviceTypeBreakdown[d.device_type || 'unknown'] = (deviceTypeBreakdown[d.device_type || 'unknown'] || 0) + 1;
+      });
+
+      const totalPopPoints = popEvents?.reduce((sum: number, p: any) => sum + (p.pop_points || 0), 0) || 0;
+
+      statusReport.components.xmrt_charger = {
+        status: 'healthy',
+        total_registered_devices: devices?.length || 0,
+        active_devices_15min: activeDevices,
+        by_type: deviceTypeBreakdown,
+        pop_events_24h: popEvents?.length || 0,
+        pop_points_earned_24h: Math.round(totalPopPoints * 100) / 100
+      };
+    } catch (error) {
+      statusReport.components.xmrt_charger = {
+        status: 'unavailable',
+        error: error.message,
+        total_registered_devices: 0
+      };
+    }
+
+    // 9I. USER ACQUISITION METRICS
+    console.log('📈 Checking user acquisition...');
+    try {
+      const { data: sessions, error: sessError } = await supabase
+        .from('conversation_sessions')
+        .select('id, lead_score, acquisition_stage, is_active, created_at')
+        .gte('created_at', last24h);
+
+      const activeSessions = sessions?.filter((s: any) => s.is_active).length || 0;
+      const qualifiedLeads = sessions?.filter((s: any) => s.lead_score && s.lead_score > 50).length || 0;
+      const stageBreakdown: Record<string, number> = {};
+      sessions?.forEach((s: any) => {
+        const stage = s.acquisition_stage || 'new';
+        stageBreakdown[stage] = (stageBreakdown[stage] || 0) + 1;
+      });
+
+      statusReport.components.user_acquisition = {
+        status: 'healthy',
+        sessions_24h: sessions?.length || 0,
+        active_sessions: activeSessions,
+        qualified_leads: qualifiedLeads,
+        by_stage: stageBreakdown,
+        conversion_funnel: {
+          new: stageBreakdown['new'] || 0,
+          engaged: stageBreakdown['engaged'] || 0,
+          qualified: stageBreakdown['qualified'] || 0,
+          converted: stageBreakdown['converted'] || 0
+        }
+      };
+    } catch (error) {
+      statusReport.components.user_acquisition = {
+        status: 'unavailable',
+        error: error.message
+      };
+    }
+
+    // 10. Generate Health Summary - UNIFIED SCORING SYSTEM
     const cronMetrics = extractCronMetrics(statusReport.components.cron_jobs?.all_jobs || []);
+    
+    // Use real Python execution stats from the new section
+    const pythonFailed = statusReport.components.python_executions?.total_24h 
+      ? statusReport.components.python_executions.total_24h - statusReport.components.python_executions.successful_24h
+      : 0;
     
     const healthMetrics = buildHealthMetrics({
       apiKeyHealth: { unhealthy: 0 }, // API key health checked separately
-      pythonExecStats: { failed: 0 }, // Would need separate query
+      pythonExecStats: { failed: pythonFailed },
       taskStats: { blocked: statusReport.components.tasks?.stats?.blocked || 0 },
       cronStats: { 
         failing: statusReport.components.cron_jobs?.failing_jobs || cronMetrics.failing,
@@ -499,8 +826,11 @@ serve(async (req) => {
       },
       agentStats: { error: statusReport.components.agents?.stats?.error || 0 },
       edgeFunctionStats: { overall_error_rate: statusReport.components.edge_functions?.overall_error_rate || 0 },
-      deviceStats: { total: 0, active: 0 },
-      chargingStats: { avg_efficiency: 100, total: 0 },
+      deviceStats: { 
+        total: statusReport.components.xmrt_charger?.total_registered_devices || 0, 
+        active: statusReport.components.xmrt_charger?.active_devices_15min || 0 
+      },
+      chargingStats: { avg_efficiency: 100, total: statusReport.components.xmrt_charger?.pop_events_24h || 0 },
       commandStats: { failed: 0 }
     });
     
@@ -509,7 +839,22 @@ serve(async (req) => {
     statusReport.health_score = healthResult.score;
     statusReport.overall_status = healthResult.status;
     statusReport.health_issues = healthResult.issues;
-    statusReport.scoring_method = 'unified_v1';
+    statusReport.scoring_method = 'unified_v2';
+    
+    // Add ecosystem summary for quick reference
+    statusReport.ecosystem_summary = {
+      agents: `${statusReport.components.agents?.stats?.total || 0} total (${statusReport.components.agents?.stats?.busy || 0} busy)`,
+      tasks: `${statusReport.components.tasks?.stats?.total || 0} total (${statusReport.components.tasks?.stats?.pending || 0} pending, ${statusReport.components.tasks?.stats?.blocked || 0} blocked)`,
+      edge_functions: `${statusReport.components.edge_functions?.total_deployed || 0} deployed (${statusReport.components.edge_functions?.total_active_24h || 0} active)`,
+      governance: `${statusReport.components.governance?.pending_proposals || 0} pending proposals`,
+      knowledge: `${statusReport.components.knowledge_base?.total_entities || 0} entities`,
+      github: `${statusReport.components.github_ecosystem?.api_calls_24h || 0} API calls (${statusReport.components.github_ecosystem?.success_rate || 100}% success)`,
+      workflows: `${statusReport.components.workflows?.active_templates || 0} templates (${statusReport.components.workflows?.running || 0} running)`,
+      python: `${statusReport.components.python_executions?.total_24h || 0} executions (${statusReport.components.python_executions?.success_rate || 100}% success)`,
+      ai_provider: statusReport.components.ai_providers?.message || 'Unknown',
+      xmrt_charger: `${statusReport.components.xmrt_charger?.total_registered_devices || 0} devices (${statusReport.components.xmrt_charger?.active_devices_15min || 0} active)`,
+      user_acquisition: `${statusReport.components.user_acquisition?.sessions_24h || 0} sessions (${statusReport.components.user_acquisition?.qualified_leads || 0} qualified leads)`
+    };
     
     console.log(`✅ System Status Check Complete - Overall: ${statusReport.overall_status} (${statusReport.health_score}/100)`);
     
