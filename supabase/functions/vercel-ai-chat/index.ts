@@ -68,6 +68,10 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Declare AI state variables OUTSIDE try block for catch block access
+let aiProvider: string = 'unknown';
+let aiModel: string = 'gpt-4o-mini';
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -303,8 +307,6 @@ serve(async (req) => {
 
     // ========== STANDARD TEXT PROCESSING (no images or vision failed) ==========
     let API_KEY: string | null = null;
-    let aiProvider: string = 'unknown';
-    let aiModel: string = 'gpt-4o-mini';
     let aiClient: any = null;
 
     if (openaiKey) {
