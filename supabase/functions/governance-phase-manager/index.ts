@@ -24,15 +24,43 @@ serve(async (req) => {
 
     const results: any = { action, timestamp: new Date().toISOString() };
 
+    // ACTION 0: Initialize deadlines for any proposals with null deadlines (CRITICAL FIX)
+    const { data: needsDeadlines, error: initError } = await supabase
+      .from('edge_function_proposals')
+      .select('id, function_name')
+      .eq('status', 'voting')
+      .eq('voting_phase', 'executive')
+      .is('executive_deadline', null);
+
+    if (!initError && needsDeadlines && needsDeadlines.length > 0) {
+      console.log(`🔧 Initializing deadlines for ${needsDeadlines.length} proposals with null deadlines`);
+      
+      for (const proposal of needsDeadlines) {
+        const now = new Date();
+        await supabase
+          .from('edge_function_proposals')
+          .update({
+            voting_started_at: now.toISOString(),
+            executive_deadline: new Date(now.getTime() + 60 * 60 * 1000).toISOString(), // 1 hour
+            community_deadline: new Date(now.getTime() + 25 * 60 * 60 * 1000).toISOString() // 25 hours
+          })
+          .eq('id', proposal.id);
+        
+        console.log(`✅ Set deadlines for: ${proposal.function_name}`);
+      }
+      
+      results.initialized_deadlines = needsDeadlines.length;
+    }
+
     // Action 1: Trigger executive votes for proposals without complete executive votes
     if (action === 'trigger_executive_votes' || action === 'check_all') {
-      // Get all proposals in executive phase that are still within deadline
+      // Get all proposals in executive phase (include null deadlines OR within deadline)
       const { data: execProposals, error: pendingError } = await supabase
         .from('edge_function_proposals')
         .select('id, function_name, voting_phase, executive_deadline, voting_started_at')
         .eq('status', 'voting')
         .eq('voting_phase', 'executive')
-        .gt('executive_deadline', new Date().toISOString());
+        .or(`executive_deadline.is.null,executive_deadline.gt.${new Date().toISOString()}`);
 
       if (pendingError) {
         console.error('Error fetching executive proposals:', pendingError);

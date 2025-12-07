@@ -1,78 +1,18 @@
-import { useEffect, useRef } from "react";
 import UnifiedChat from "@/components/UnifiedChat";
 import PythonShell from "@/components/PythonShell";
 import AgentTaskVisualizer from "@/components/AgentTaskVisualizer";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Bot } from "lucide-react";
-import { MobileNav } from "@/components/MobileNav";
-import { DesktopNav } from "@/components/DesktopNav";
 import { HeroSection } from "@/components/HeroSection";
 
 const Index = () => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-
-  useEffect(() => {
-    const audio = new Audio('/audio/sweet.mp3');
-    audioRef.current = audio;
-
-    const playAudio = () => {
-      audio.play().catch(console.log);
-      document.removeEventListener('click', playAudio);
-    };
-
-    // Try autoplay first, fallback to play on first click
-    audio.play().catch(() => {
-      document.addEventListener('click', playAudio);
-    });
-
-    return () => {
-      audio.pause();
-      document.removeEventListener('click', playAudio);
-    };
-  }, []);
-
   return (
-    <div className="min-h-screen bg-background">
-      <MobileNav />
-      
-      {/* Header */}
-      <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                Suite
-              </h1>
-              <Badge variant="secondary" className="text-xs font-medium">
-                Enterprise
-              </Badge>
-            </div>
-            
-            {/* Desktop Navigation */}
-            <DesktopNav />
-            
-            {/* Status Indicators */}
-            <div className="hidden md:flex items-center gap-2">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="w-1.5 h-1.5 rounded-full bg-suite-success animate-pulse" />
-                <span>Active</span>
-              </div>
-              <div className="w-px h-4 bg-border" />
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Activity className="w-3 h-3" />
-                <span>120+</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <>
       {/* Hero Section with Marketing Banners */}
       <HeroSection />
 
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Main Content Grid */}
         <div className="grid grid-cols-1 gap-6">
           {/* Chat Interface */}
@@ -122,8 +62,8 @@ const Index = () => {
             Powered by autonomous learning • Real-time monitoring • Enterprise AI
           </p>
         </footer>
-      </main>
-    </div>
+      </div>
+    </>
   );
 };
 

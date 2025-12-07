@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
-import { ArrowLeft, Vote, Filter, Plus, Loader2, RefreshCw } from 'lucide-react';
+import { Vote, Plus, Loader2, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ProposalCard } from '@/components/ProposalCard';
@@ -181,7 +180,7 @@ export default function Governance() {
       if (data?.error) throw new Error(data.error);
 
       toast({
-        title: '✅ Proposal Submitted',
+        title: 'Proposal Submitted',
         description: 'Your proposal has been submitted. Executive voting will begin shortly.'
       });
 
@@ -208,271 +207,254 @@ export default function Governance() {
 
   const counts = getCounts();
 
-  return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-10">
-        <div className="container mx-auto px-3 sm:px-4 py-3 sm:py-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-            <div className="flex items-center gap-2 sm:gap-4">
-              <Link to="/">
-                <Button variant="ghost" size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3 text-muted-foreground hover:text-foreground">
-                  <ArrowLeft className="h-4 w-4" />
-                  <span className="hidden sm:inline">Back</span>
-                </Button>
-              </Link>
-              <div className="flex items-center gap-2">
-                <Vote className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
-                <h1 className="text-lg sm:text-xl font-semibold">Governance</h1>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-2 justify-between sm:justify-end">
-              <Badge variant="outline" className="text-suite-warning border-suite-warning/30 bg-suite-warning/10 text-xs sm:text-sm">
-                {counts.voting} awaiting votes
-              </Badge>
-              
-              <div className="flex gap-2">
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={triggerPhaseCheck}
-                  disabled={refreshing}
-                  className="px-2 sm:px-3"
-                >
-                  <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
-                </Button>
-                
-                <Dialog open={proposalDialogOpen} onOpenChange={setProposalDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3">
-                      <Plus className="h-4 w-4" />
-                      <span className="hidden sm:inline">New Proposal</span>
-                    </Button>
-                  </DialogTrigger>
-                  <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto mx-4">
-                    <DialogHeader>
-                      <DialogTitle>Propose New Edge Function</DialogTitle>
-                      <DialogDescription>
-                        Submit a proposal for review. Executives vote within 1 hour, then community votes for 24 hours.
-                      </DialogDescription>
-                    </DialogHeader>
-                    <form onSubmit={handleSubmitProposal} className="space-y-4 mt-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="function_name">Function Name *</Label>
-                        <Input
-                          id="function_name"
-                          placeholder="e.g., my-awesome-function"
-                          value={newProposal.function_name}
-                          onChange={e => setNewProposal(prev => ({ ...prev, function_name: e.target.value }))}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="proposed_by">Your Name / Handle *</Label>
-                        <Input
-                          id="proposed_by"
-                          placeholder="e.g., CommunityMember123"
-                          value={newProposal.proposed_by}
-                          onChange={e => setNewProposal(prev => ({ ...prev, proposed_by: e.target.value }))}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="description">Description *</Label>
-                        <Textarea
-                          id="description"
-                          placeholder="What does this function do?"
-                          value={newProposal.description}
-                          onChange={e => setNewProposal(prev => ({ ...prev, description: e.target.value }))}
-                          rows={3}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="rationale">Rationale *</Label>
-                        <Textarea
-                          id="rationale"
-                          placeholder="Why is this function needed?"
-                          value={newProposal.rationale}
-                          onChange={e => setNewProposal(prev => ({ ...prev, rationale: e.target.value }))}
-                          rows={3}
-                        />
-                      </div>
-                      
-                      <div className="space-y-2">
-                        <Label htmlFor="use_cases">Use Cases (one per line)</Label>
-                        <Textarea
-                          id="use_cases"
-                          placeholder="Automated monitoring&#10;User notifications"
-                          value={newProposal.use_cases}
-                          onChange={e => setNewProposal(prev => ({ ...prev, use_cases: e.target.value }))}
-                          rows={3}
-                        />
-                      </div>
-                      
-                      <Button type="submit" className="w-full" disabled={submitting}>
-                        {submitting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Submitting...
-                          </>
-                        ) : (
-                          'Submit Proposal'
-                        )}
-                      </Button>
-                    </form>
-                  </DialogContent>
-                </Dialog>
-              </div>
-            </div>
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content */}
-      <main className="container mx-auto px-3 sm:px-4 py-4 sm:py-8">
-        {/* Info Banner */}
-        <div className="mb-4 sm:mb-8 p-3 sm:p-4 rounded-lg bg-muted/30 border border-border/60">
-          <p className="text-xs sm:text-sm text-muted-foreground">
-            <strong className="text-foreground">Timed Voting:</strong> Executives have 1 hour to vote, then community has 24 hours. 
-            3/4 executive approvals needed to pass.
-          </p>
-        </div>
-
-        {/* Tabs - Horizontally scrollable on mobile */}
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
-            <TabsList className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 h-auto bg-transparent p-0 min-w-max">
-              <TabsTrigger 
-                value="all" 
-                className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm px-2 sm:px-3"
-              >
-                All ({counts.all})
-              </TabsTrigger>
-              <TabsTrigger 
-                value="voting"
-                className="data-[state=active]:bg-suite-warning data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
-              >
-                <Vote className="h-3 w-3 mr-1" />
-                Voting ({counts.voting})
-              </TabsTrigger>
-              <TabsTrigger 
-                value="approved"
-                className="data-[state=active]:bg-suite-success data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
-              >
-                Approved ({counts.approved})
-              </TabsTrigger>
-              <TabsTrigger 
-                value="rejected"
-                className="data-[state=active]:bg-destructive data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
-              >
-                Rejected ({counts.rejected})
-              </TabsTrigger>
-              {counts.deployed > 0 && (
-                <TabsTrigger 
-                  value="deployed"
-                  className="data-[state=active]:bg-primary data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
-                >
-                  Deployed ({counts.deployed})
-                </TabsTrigger>
-              )}
-            </TabsList>
-          </div>
-
-          {loading ? (
-            <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-            </div>
-          ) : (
-            <>
-              <TabsContent value="all" className="space-y-3 sm:space-y-4 mt-0">
-                {filterProposals('all').length === 0 ? (
-                  <EmptyState message="No proposals yet. Be the first to submit one!" />
-                ) : (
-                  filterProposals('all').map(proposal => (
-                    <ProposalCard 
-                      key={proposal.id} 
-                      proposal={proposal} 
-                      votes={votes[proposal.id] || []}
-                      onVoteSuccess={fetchProposals}
-                    />
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="voting" className="space-y-3 sm:space-y-4 mt-0">
-                {filterProposals('voting').length === 0 ? (
-                  <EmptyState message="No proposals currently in voting" />
-                ) : (
-                  filterProposals('voting').map(proposal => (
-                    <ProposalCard 
-                      key={proposal.id} 
-                      proposal={proposal} 
-                      votes={votes[proposal.id] || []}
-                      onVoteSuccess={fetchProposals}
-                    />
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="approved" className="space-y-3 sm:space-y-4 mt-0">
-                {filterProposals('approved').length === 0 ? (
-                  <EmptyState message="No approved proposals" />
-                ) : (
-                  filterProposals('approved').map(proposal => (
-                    <ProposalCard 
-                      key={proposal.id} 
-                      proposal={proposal} 
-                      votes={votes[proposal.id] || []}
-                      onVoteSuccess={fetchProposals}
-                    />
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="rejected" className="space-y-3 sm:space-y-4 mt-0">
-                {filterProposals('rejected').length === 0 ? (
-                  <EmptyState message="No rejected proposals" />
-                ) : (
-                  filterProposals('rejected').map(proposal => (
-                    <ProposalCard 
-                      key={proposal.id} 
-                      proposal={proposal} 
-                      votes={votes[proposal.id] || []}
-                      onVoteSuccess={fetchProposals}
-                    />
-                  ))
-                )}
-              </TabsContent>
-
-              <TabsContent value="deployed" className="space-y-3 sm:space-y-4 mt-0">
-                {filterProposals('deployed').length === 0 ? (
-                  <EmptyState message="No deployed functions" />
-                ) : (
-                  filterProposals('deployed').map(proposal => (
-                    <ProposalCard 
-                      key={proposal.id} 
-                      proposal={proposal} 
-                      votes={votes[proposal.id] || []}
-                      onVoteSuccess={fetchProposals}
-                    />
-                  ))
-                )}
-              </TabsContent>
-            </>
-          )}
-        </Tabs>
-      </main>
+  const EmptyState = ({ message }: { message: string }) => (
+    <div className="text-center py-12">
+      <Vote className="h-12 w-12 mx-auto mb-4 text-muted-foreground/50" />
+      <p className="text-muted-foreground">{message}</p>
     </div>
   );
-}
 
-function EmptyState({ message }: { message: string }) {
   return (
-    <div className="text-center py-8 sm:py-12 text-muted-foreground">
-      <Filter className="h-10 w-10 sm:h-12 sm:w-12 mx-auto mb-4 opacity-50" />
-      <p className="text-sm sm:text-base">{message}</p>
+    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-7xl">
+      {/* Page Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex items-center gap-2">
+          <Vote className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
+          <h1 className="text-lg sm:text-xl font-semibold">Governance</h1>
+        </div>
+        
+        <div className="flex items-center gap-2 justify-between sm:justify-end">
+          <Badge variant="outline" className="text-suite-warning border-suite-warning/30 bg-suite-warning/10 text-xs sm:text-sm">
+            {counts.voting} awaiting votes
+          </Badge>
+          
+          <div className="flex gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={triggerPhaseCheck}
+              disabled={refreshing}
+              className="px-2 sm:px-3"
+            >
+              <RefreshCw className={`h-4 w-4 ${refreshing ? 'animate-spin' : ''}`} />
+            </Button>
+            
+            <Dialog open={proposalDialogOpen} onOpenChange={setProposalDialogOpen}>
+              <DialogTrigger asChild>
+                <Button size="sm" className="gap-1 sm:gap-2 px-2 sm:px-3">
+                  <Plus className="h-4 w-4" />
+                  <span className="hidden sm:inline">New Proposal</span>
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="sm:max-w-[500px] max-h-[90vh] overflow-y-auto mx-4">
+                <DialogHeader>
+                  <DialogTitle>Propose New Edge Function</DialogTitle>
+                  <DialogDescription>
+                    Submit a proposal for review. Executives vote within 1 hour, then community votes for 24 hours.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleSubmitProposal} className="space-y-4 mt-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="function_name">Function Name *</Label>
+                    <Input
+                      id="function_name"
+                      placeholder="e.g., my-awesome-function"
+                      value={newProposal.function_name}
+                      onChange={e => setNewProposal(prev => ({ ...prev, function_name: e.target.value }))}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="proposed_by">Your Name / Handle *</Label>
+                    <Input
+                      id="proposed_by"
+                      placeholder="e.g., CommunityMember123"
+                      value={newProposal.proposed_by}
+                      onChange={e => setNewProposal(prev => ({ ...prev, proposed_by: e.target.value }))}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="description">Description *</Label>
+                    <Textarea
+                      id="description"
+                      placeholder="What does this function do?"
+                      value={newProposal.description}
+                      onChange={e => setNewProposal(prev => ({ ...prev, description: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="rationale">Rationale *</Label>
+                    <Textarea
+                      id="rationale"
+                      placeholder="Why is this function needed?"
+                      value={newProposal.rationale}
+                      onChange={e => setNewProposal(prev => ({ ...prev, rationale: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="use_cases">Use Cases (one per line)</Label>
+                    <Textarea
+                      id="use_cases"
+                      placeholder="Automated monitoring&#10;User notifications"
+                      value={newProposal.use_cases}
+                      onChange={e => setNewProposal(prev => ({ ...prev, use_cases: e.target.value }))}
+                      rows={3}
+                    />
+                  </div>
+                  
+                  <Button type="submit" className="w-full" disabled={submitting}>
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      'Submit Proposal'
+                    )}
+                  </Button>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+        </div>
+      </div>
+
+      {/* Info Banner */}
+      <div className="mb-4 sm:mb-8 p-3 sm:p-4 rounded-lg bg-muted/30 border border-border/60">
+        <p className="text-xs sm:text-sm text-muted-foreground">
+          <strong className="text-foreground">Timed Voting:</strong> Executives have 1 hour to vote, then community has 24 hours. 
+          3/4 executive approvals needed to pass.
+        </p>
+      </div>
+
+      {/* Tabs - Horizontally scrollable on mobile */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+          <TabsList className="mb-4 sm:mb-6 flex gap-1 sm:gap-2 h-auto bg-transparent p-0 min-w-max">
+            <TabsTrigger 
+              value="all" 
+              className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm px-2 sm:px-3"
+            >
+              All ({counts.all})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="voting"
+              className="data-[state=active]:bg-suite-warning data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+            >
+              <Vote className="h-3 w-3 mr-1" />
+              Voting ({counts.voting})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="approved"
+              className="data-[state=active]:bg-suite-success data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+            >
+              Approved ({counts.approved})
+            </TabsTrigger>
+            <TabsTrigger 
+              value="rejected"
+              className="data-[state=active]:bg-destructive data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+            >
+              Rejected ({counts.rejected})
+            </TabsTrigger>
+            {counts.deployed > 0 && (
+              <TabsTrigger 
+                value="deployed"
+                className="data-[state=active]:bg-primary data-[state=active]:text-white text-xs sm:text-sm px-2 sm:px-3"
+              >
+                Deployed ({counts.deployed})
+              </TabsTrigger>
+            )}
+          </TabsList>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-12">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+          </div>
+        ) : (
+          <>
+            <TabsContent value="all" className="space-y-3 sm:space-y-4 mt-0">
+              {filterProposals('all').length === 0 ? (
+                <EmptyState message="No proposals yet. Be the first to submit one!" />
+              ) : (
+                filterProposals('all').map(proposal => (
+                  <ProposalCard 
+                    key={proposal.id} 
+                    proposal={proposal} 
+                    votes={votes[proposal.id] || []}
+                    onVoteSuccess={fetchProposals}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="voting" className="space-y-3 sm:space-y-4 mt-0">
+              {filterProposals('voting').length === 0 ? (
+                <EmptyState message="No proposals currently in voting" />
+              ) : (
+                filterProposals('voting').map(proposal => (
+                  <ProposalCard 
+                    key={proposal.id} 
+                    proposal={proposal} 
+                    votes={votes[proposal.id] || []}
+                    onVoteSuccess={fetchProposals}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="approved" className="space-y-3 sm:space-y-4 mt-0">
+              {filterProposals('approved').length === 0 ? (
+                <EmptyState message="No approved proposals" />
+              ) : (
+                filterProposals('approved').map(proposal => (
+                  <ProposalCard 
+                    key={proposal.id} 
+                    proposal={proposal} 
+                    votes={votes[proposal.id] || []}
+                    onVoteSuccess={fetchProposals}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="rejected" className="space-y-3 sm:space-y-4 mt-0">
+              {filterProposals('rejected').length === 0 ? (
+                <EmptyState message="No rejected proposals" />
+              ) : (
+                filterProposals('rejected').map(proposal => (
+                  <ProposalCard 
+                    key={proposal.id} 
+                    proposal={proposal} 
+                    votes={votes[proposal.id] || []}
+                    onVoteSuccess={fetchProposals}
+                  />
+                ))
+              )}
+            </TabsContent>
+
+            <TabsContent value="deployed" className="space-y-3 sm:space-y-4 mt-0">
+              {filterProposals('deployed').length === 0 ? (
+                <EmptyState message="No deployed proposals yet" />
+              ) : (
+                filterProposals('deployed').map(proposal => (
+                  <ProposalCard 
+                    key={proposal.id} 
+                    proposal={proposal} 
+                    votes={votes[proposal.id] || []}
+                    onVoteSuccess={fetchProposals}
+                  />
+                ))
+              )}
+            </TabsContent>
+          </>
+        )}
+      </Tabs>
     </div>
   );
 }
