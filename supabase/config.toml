@@ -567,19 +567,10 @@ verify_jwt = false
 [functions.get-function-version-analytics]
 verify_jwt = false
 
-[functions.sync-function-logs]
-verify_jwt = false
-
 [functions.event-router]
 verify_jwt = false
 
 [functions.event-dispatcher]
-verify_jwt = false
-
-[functions.get-edge-function-logs]
-verify_jwt = false
-
-[functions.debug-analytics-data-flow]
 verify_jwt = false
 
 # ====================================================================
