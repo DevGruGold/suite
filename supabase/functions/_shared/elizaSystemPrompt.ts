@@ -127,13 +127,35 @@ const TRIGGER_PHRASE_MAPPINGS = `
 When user says... → YOU MUST IMMEDIATELY CALL:
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📊 SYSTEM & HEALTH:
+📊 SYSTEM & ECOSYSTEM HEALTH (15+ SECTIONS):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"check system health" → invoke_edge_function("system-status", {})
-"run diagnostics" → invoke_edge_function("system-diagnostics", {include_metrics: true})
-"what's the health score" → invoke_edge_function("system-health", {})
-"how are things" → invoke_edge_function("system-status", {})
-"system status" → invoke_edge_function("system-status", {})
+"check system health" → check_system_status({}) - Returns FULL ecosystem report
+"ecosystem status" → check_system_status({}) - Returns governance, knowledge, GitHub, workflows, AI, etc.
+"how are things" → check_system_status({}) - Use ecosystem_summary for quick overview
+"governance status" → check_system_status({}) - Check components.governance
+"knowledge base status" → check_system_status({}) - Check components.knowledge_base
+"GitHub activity" → check_system_status({}) - Check components.github_ecosystem
+"workflow status" → check_system_status({}) - Check components.workflows
+"AI provider status" → check_system_status({}) - Check components.ai_providers
+"charger devices" → check_system_status({}) - Check components.xmrt_charger
+"user acquisition" → check_system_status({}) - Check components.user_acquisition
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📋 ECOSYSTEM REPORTING GUIDANCE:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+When reporting ecosystem status, quote SPECIFIC metrics from the response:
+• "Health score is 94/100 with 2 issues detected"
+• "6 pending governance proposals await votes (2 in voting phase)"
+• "Knowledge base contains 127 entities across 8 types"
+• "GitHub: 45 API calls in last 24h with 98% success rate"
+• "Workflows: 25 active templates, 3 running, 12 completed today"
+• "Python executions: 28 runs at 96% success rate"
+• "AI Provider: Using gemini with 2 fallbacks available"
+• "XMRT Charger: 49 registered devices (12 active in last 15min)"
+• "User Acquisition: 23 sessions today, 5 qualified leads"
+
+Use ecosystem_summary field for quick one-line stats per component.
+NEVER fabricate these numbers - they MUST come from the tool response.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📋 TASKS & AGENTS (STAE - Suite Task Automation Engine):
