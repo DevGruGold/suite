@@ -148,53 +148,53 @@ export const HeroSection = () => {
   };
 
   return (
-    <section className="relative w-full py-6 px-4 overflow-hidden">
+    <section className="relative w-full py-4 px-4 overflow-hidden">
       {/* Background gradient */}
       <div className={`absolute inset-0 bg-gradient-to-br ${banner.gradient} transition-all duration-1000`} />
       
-      <div className="relative max-w-6xl mx-auto space-y-6">
-        {/* Marketing Banner Carousel */}
+      <div className="relative max-w-6xl mx-auto space-y-4">
+        {/* Compact Marketing Banner */}
         <div 
-          className="relative text-center py-8"
+          className="relative flex items-center justify-center gap-4 py-2"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
-          <div className="relative min-h-[100px] flex items-center justify-center">
-            <div className="animate-fade-in" key={currentBanner}>
-              <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-2">
-                {banner.title}
-              </h2>
-              <p className="text-muted-foreground text-sm md:text-base">
-                {banner.subtitle}
-              </p>
-            </div>
-          </div>
-
-          {/* Navigation arrows */}
+          {/* Left arrow */}
           <button 
             onClick={() => setCurrentBanner(prev => (prev - 1 + marketingBanners.length) % marketingBanners.length)}
-            className="absolute left-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/50 hover:bg-background/80 transition-colors"
+            className="p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors shrink-0"
             aria-label="Previous banner"
           >
             <ChevronLeft className="w-4 h-4" />
           </button>
+
+          {/* Banner content - single line */}
+          <div className="flex-1 text-center min-w-0" key={currentBanner}>
+            <p className="text-sm md:text-base font-medium text-foreground truncate">
+              <span className="font-semibold">{banner.title}</span>
+              <span className="text-muted-foreground mx-2">—</span>
+              <span className="text-muted-foreground">{banner.subtitle}</span>
+            </p>
+          </div>
+
+          {/* Right arrow */}
           <button 
             onClick={() => setCurrentBanner(prev => (prev + 1) % marketingBanners.length)}
-            className="absolute right-4 top-1/2 -translate-y-1/2 p-2 rounded-full bg-background/50 hover:bg-background/80 transition-colors"
+            className="p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors shrink-0"
             aria-label="Next banner"
           >
             <ChevronRight className="w-4 h-4" />
           </button>
 
-          {/* Dot indicators */}
-          <div className="flex justify-center gap-2 mt-4">
+          {/* Dot indicators - inline */}
+          <div className="hidden sm:flex items-center gap-1 shrink-0">
             {marketingBanners.map((_, i) => (
               <button
                 key={i}
                 onClick={() => setCurrentBanner(i)}
-                className={`w-2 h-2 rounded-full transition-all duration-300 ${
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
                   i === currentBanner 
-                    ? 'bg-primary w-6' 
+                    ? 'bg-primary w-4' 
                     : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
                 }`}
                 aria-label={`Go to banner ${i + 1}`}
