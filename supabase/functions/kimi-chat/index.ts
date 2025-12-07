@@ -134,6 +134,54 @@ serve(async (req) => {
         );
       }
 
+      // Try DeepSeek fallback for 402/429/500+ errors
+      const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+      if (DEEPSEEK_API_KEY && (response.status === 402 || response.status === 429 || response.status >= 500)) {
+        console.log(`⚠️ OpenRouter returned ${response.status}, trying DeepSeek fallback...`);
+        
+        try {
+          const deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'deepseek-chat',
+              messages: openrouterMessages,
+              temperature: 0.9,
+              max_tokens: 8000,
+            }),
+          });
+          
+          if (deepseekResponse.ok) {
+            const deepseekData = await deepseekResponse.json();
+            const deepseekMessage = deepseekData.choices?.[0]?.message;
+            const deepseekContent = deepseekMessage?.content || "I'm here to help with XMRT-DAO tasks.";
+            
+            console.log('✅ DeepSeek fallback successful');
+            await logger.apiCall("deepseek", deepseekResponse.status, Date.now() - apiStartTime, {
+              fallback: true,
+              originalError: response.status,
+            });
+            
+            return new Response(
+              JSON.stringify({ 
+                success: true, 
+                response: deepseekContent, 
+                hasToolCalls: false, 
+                executive: "kimi-chat", 
+                executiveTitle: "Kimi K2 AI Gateway (DeepSeek Fallback)",
+                fallback: 'deepseek'
+              }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
+          }
+        } catch (deepseekError) {
+          console.warn('⚠️ DeepSeek fallback also failed:', deepseekError.message);
+        }
+      }
+
       if (response.status === 402) {
         return new Response(
           JSON.stringify({
