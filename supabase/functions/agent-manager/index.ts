@@ -98,37 +98,26 @@ function createSupabase(): SupabaseClient {
   });
 }
 
-// ---------- DeepSeek AI Helper (replaces Gemini) ----------
-async function callDeepSeekChat(prompt: string, opts?: { temperature?: number; maxTokens?: number }) {
-  if (!DEEPSEEK_API_KEY) {
-    throw new AppError("DEEPSEEK_API_KEY not configured - cannot perform AI analysis");
+// ---------- AI Helper with Resilient Fallback Cascade ----------
+import { callAIWithFallback } from '../_shared/unifiedAIFallback.ts';
+
+async function callAIWithResilience(prompt: string, opts?: { temperature?: number; maxTokens?: number }) {
+  try {
+    const result = await callAIWithFallback(
+      [{ role: 'user', content: prompt }],
+      {
+        systemPrompt: 'You are an AI agent coordinator for the XMRT ecosystem. Provide concise, actionable analysis for autonomous agent operations. Focus on practical decisions and next steps.',
+        temperature: opts?.temperature ?? 0.2,
+        max_tokens: opts?.maxTokens ?? 512,
+        preferProvider: 'deepseek' // Keep DeepSeek preference for CTO consistency
+      }
+    );
+    
+    const text = typeof result === 'string' ? result : result?.content || '';
+    return { text, raw: result };
+  } catch (error) {
+    throw new AppError(`AI analysis failed after all providers: ${error.message}`);
   }
-
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: [
-        { role: 'system', content: 'You are an AI agent coordinator for the XMRT ecosystem. Provide concise, actionable analysis for autonomous agent operations. Focus on practical decisions and next steps.' },
-        { role: 'user', content: prompt }
-      ],
-      temperature: opts?.temperature ?? 0.2,
-      max_tokens: opts?.maxTokens ?? 512
-    })
-  });
-
-  if (!response.ok) {
-    const text = await response.text().catch(() => "");
-    throw new AppError(`DeepSeek API error: ${response.status} - ${text}`);
-  }
-
-  const result = await response.json();
-  const text = result.choices?.[0]?.message?.content || "";
-  return { text, raw: result };
 }
 
 // ---------- Direct Edge Function Call Helper ----------
@@ -853,9 +842,9 @@ serve(async (req) => {
 
             switch (step.action) {
               case "analyze": {
-                // AI analysis via DeepSeek
+                // AI analysis via unified fallback cascade
                 const prompt = `Analyze: ${JSON.stringify(step.data ?? {})}\nContext: ${JSON.stringify(currentContext ?? {})}\nProvide a short analysis and next decision.`;
-                const gen = await callDeepSeekChat(prompt, { temperature: 0.2, maxTokens: 512 });
+                const gen = await callAIWithResilience(prompt, { temperature: 0.2, maxTokens: 512 });
                 stepResult = { text: gen.text, raw: gen.raw };
                 break;
               }
