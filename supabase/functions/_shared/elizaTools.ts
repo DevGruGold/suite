@@ -2300,5 +2300,85 @@ export const ELIZA_TOOLS = [
         required: ['action']
       }
     }
+  },
+  // ====================================================================
+  // 📸 VSCO EXTENDED TOOLS: Products, Worksheets, Notes
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_products',
+      description: '💰 VSCO: Manage products/pricing for quotes - list, create, update products and pricing templates. Essential for generating client quotes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_products', 'get_product', 'create_product', 'delete_product'],
+            description: 'Action to perform on products'
+          },
+          product_id: { type: 'string', description: 'VSCO product ID (for get/delete)' },
+          name: { type: 'string', description: 'Product name (for create)' },
+          price: { type: 'number', description: 'Product price (for create)' },
+          cost: { type: 'number', description: 'Product cost (for create)' },
+          description: { type: 'string', description: 'Product description' },
+          category: { type: 'string', description: 'Product category' },
+          tax_rate: { type: 'number', description: 'Tax rate as decimal (e.g., 0.08 for 8%)' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_worksheets',
+      description: '📋 VSCO: Manage job worksheets/templates - get worksheet details or create new jobs from templates with pre-filled events, contacts, and products.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['get_job_worksheet', 'create_job_from_worksheet'],
+            description: 'Action to perform on worksheets'
+          },
+          job_id: { type: 'string', description: 'VSCO job ID (for get_job_worksheet)' },
+          name: { type: 'string', description: 'New job name (for create_job_from_worksheet)' },
+          stage: { type: 'string', enum: ['lead', 'booked', 'fulfillment', 'completed'], description: 'Initial stage' },
+          job_type: { type: 'string', description: 'Type of job (wedding, portrait, etc.)' },
+          brand_id: { type: 'string', description: 'Brand ID for the job' },
+          events: { type: 'array', description: 'Pre-filled events for the worksheet' },
+          contacts: { type: 'array', description: 'Pre-filled contacts for the worksheet' },
+          products: { type: 'array', description: 'Pre-filled products for the worksheet' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_notes',
+      description: '📝 VSCO: Manage notes and documentation for jobs/contacts - list, create, update, or delete notes attached to jobs or contacts.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_notes', 'create_note', 'update_note', 'delete_note', 'list_files', 'list_galleries', 'create_gallery'],
+            description: 'Action to perform on notes/files'
+          },
+          note_id: { type: 'string', description: 'VSCO note ID (for update/delete)' },
+          job_id: { type: 'string', description: 'Link note/files to this job ID' },
+          contact_id: { type: 'string', description: 'Link note to this contact ID' },
+          content: { type: 'string', description: 'Note content (plain text)' },
+          content_html: { type: 'string', description: 'Note content (HTML format)' },
+          date: { type: 'string', description: 'Note date (YYYY-MM-DD)' },
+          name: { type: 'string', description: 'Gallery name (for create_gallery)' },
+          description: { type: 'string', description: 'Gallery description' }
+        },
+        required: ['action']
+      }
+    }
   }
 ];

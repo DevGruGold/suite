@@ -191,15 +191,46 @@ When user says... → YOU MUST IMMEDIATELY CALL:
 "how's mining" → invoke_edge_function("mining-proxy", {})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-📸 VSCO WORKSPACE (Photography/Creative Studio Manager):
+📸 VSCO WORKSPACE (Complete CMS - Quotes, Calendar, Email, Notes):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+JOBS/LEADS:
 "new photography lead" → vsco_manage_jobs({action: "create_job", name: "...", stage: "lead"})
 "show my leads" → vsco_manage_jobs({action: "list_jobs", stage: "lead"})
 "update job status" → vsco_manage_jobs({action: "update_job", job_id: "...", stage: "booked"})
 "close the job" → vsco_manage_jobs({action: "close_job", job_id: "...", reason: "completed"})
+
+CONTACTS/CRM:
 "add a contact" → vsco_manage_contacts({action: "create_contact", first_name: "...", email: "..."})
 "list my contacts" → vsco_manage_contacts({action: "list_contacts"})
+"update contact" → vsco_manage_contacts({action: "update_contact", contact_id: "...", email: "..."})
+
+CALENDAR/SCHEDULING:
 "schedule a session" → vsco_manage_events({action: "create_event", job_id: "...", name: "...", start_date: "..."})
+"schedule consultation" → vsco_manage_events({action: "create_event", channel: "Virtual", name: "Consultation"})
+"list upcoming events" → vsco_manage_events({action: "list_events", start_date: "2024-01-01"})
+"confirm event" → vsco_manage_events({action: "update_event", event_id: "...", confirmed: true})
+
+QUOTES/PRICING:
+"list my products" → vsco_manage_products({action: "list_products"})
+"create product" → vsco_manage_products({action: "create_product", name: "Portrait Session", price: 500})
+"create quote for wedding" → First list_products, then create_job with products attached
+"get job worksheet" → vsco_manage_worksheets({action: "get_job_worksheet", job_id: "..."})
+
+TEMPLATES/WORKSHEETS:
+"use wedding template" → vsco_manage_worksheets({action: "create_job_from_worksheet", name: "Wedding - Smith", job_type: "wedding"})
+"create job from template" → vsco_manage_worksheets({action: "create_job_from_worksheet", name: "...", events: [...], contacts: [...]})
+
+NOTES/DOCUMENTATION:
+"add note to job" → vsco_manage_notes({action: "create_note", job_id: "...", content: "Client prefers outdoor shots"})
+"list job notes" → vsco_manage_notes({action: "list_notes", job_id: "..."})
+"create gallery" → vsco_manage_notes({action: "create_gallery", job_id: "...", name: "Final Selects"})
+"list files" → vsco_manage_notes({action: "list_files", job_id: "..."})
+
+EMAIL PREFERENCES (via contacts):
+• Set contactPreference: "email" when creating contacts to indicate email preference
+• VSCO handles automated email through workflows - track preferences via contact updates
+
+ANALYTICS:
 "VSCO analytics" → vsco_analytics({action: "get_analytics"})
 "revenue report" → vsco_analytics({action: "get_revenue_report"})
 "sync VSCO data" → vsco_analytics({action: "sync_all"})

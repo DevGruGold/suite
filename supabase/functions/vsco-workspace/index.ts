@@ -775,6 +775,360 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ====================================================================
+      // PRODUCTS/QUOTES
+      // ====================================================================
+      case 'list_products': {
+        const params: Record<string, string> = {};
+        if (data.page) params.page = String(data.page);
+        if (data.per_page) params.perPage = String(data.per_page);
+        
+        const response = await vscoRequest(supabase, '/products', { params }, executive);
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const products = response.data?.products || [];
+          // Sync to local DB
+          for (const product of products) {
+            await supabase.from('vsco_products').upsert({
+              vsco_id: product.id,
+              name: product.name,
+              description: product.description,
+              price: product.price,
+              cost: product.cost,
+              tax_rate: product.taxRate,
+              product_type_id: product.productTypeId,
+              category: product.category,
+              is_active: product.isActive !== false,
+              raw_data: product,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: 'vsco_id' });
+          }
+          result = { success: true, products, synced: products.length };
+        }
+        break;
+      }
+
+      case 'get_product': {
+        if (!data.product_id) {
+          result = { success: false, error: 'product_id required' };
+          break;
+        }
+        const response = await vscoRequest(supabase, `/products/${data.product_id}`, {}, executive);
+        result = response.error ? { success: false, error: response.error } : { success: true, product: response.data };
+        break;
+      }
+
+      case 'create_product': {
+        const productPayload: any = {
+          name: data.name,
+          price: data.price,
+        };
+        if (data.description) productPayload.description = data.description;
+        if (data.cost) productPayload.cost = data.cost;
+        if (data.tax_rate) productPayload.taxRate = data.tax_rate;
+        if (data.category) productPayload.category = data.category;
+
+        const response = await vscoRequest(supabase, '/products', {
+          method: 'POST',
+          body: productPayload,
+        }, executive);
+
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const product = response.data;
+          await supabase.from('vsco_products').upsert({
+            vsco_id: product.id,
+            name: product.name,
+            price: product.price,
+            cost: product.cost,
+            description: product.description,
+            category: product.category,
+            raw_data: product,
+            synced_at: new Date().toISOString(),
+          }, { onConflict: 'vsco_id' });
+          result = { success: true, product };
+        }
+        break;
+      }
+
+      case 'delete_product': {
+        if (!data.product_id) {
+          result = { success: false, error: 'product_id required' };
+          break;
+        }
+        const response = await vscoRequest(supabase, `/products/${data.product_id}`, {
+          method: 'DELETE',
+        }, executive);
+        
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          await supabase.from('vsco_products').delete().eq('vsco_id', data.product_id);
+          result = { success: true, deleted: true };
+        }
+        break;
+      }
+
+      // ====================================================================
+      // WORKSHEETS/QUOTE TEMPLATES
+      // ====================================================================
+      case 'get_job_worksheet': {
+        if (!data.job_id) {
+          result = { success: false, error: 'job_id required' };
+          break;
+        }
+        const response = await vscoRequest(supabase, `/jobs/${data.job_id}/worksheet`, {}, executive);
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          // Store worksheet for reference
+          await supabase.from('vsco_worksheets').upsert({
+            vsco_job_id: data.job_id,
+            events: response.data?.events || [],
+            contacts: response.data?.contacts || [],
+            products: response.data?.products || [],
+            raw_data: response.data,
+            synced_at: new Date().toISOString(),
+          }, { onConflict: 'vsco_job_id' });
+          result = { success: true, worksheet: response.data };
+        }
+        break;
+      }
+
+      case 'create_job_from_worksheet': {
+        // Create a new job using worksheet data (template-based creation)
+        const worksheetPayload: any = {
+          name: data.name,
+          stage: data.stage || 'lead',
+        };
+        if (data.events) worksheetPayload.events = data.events;
+        if (data.contacts) worksheetPayload.contacts = data.contacts;
+        if (data.products) worksheetPayload.products = data.products;
+        if (data.job_type) worksheetPayload.jobType = data.job_type;
+        if (data.brand_id) worksheetPayload.brandId = data.brand_id;
+
+        const response = await vscoRequest(supabase, '/jobs', {
+          method: 'POST',
+          body: worksheetPayload,
+        }, executive);
+
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const job = response.data;
+          // Sync job
+          await supabase.from('vsco_jobs').upsert({
+            vsco_id: job.id,
+            name: job.name,
+            stage: job.stage,
+            job_type: job.jobType,
+            raw_data: job,
+            synced_at: new Date().toISOString(),
+          }, { onConflict: 'vsco_id' });
+          result = { success: true, job, created_with_worksheet: true };
+        }
+        break;
+      }
+
+      // ====================================================================
+      // NOTES
+      // ====================================================================
+      case 'list_notes': {
+        const params: Record<string, string> = {};
+        if (data.job_id) params.jobId = data.job_id;
+        if (data.contact_id) params.contactId = data.contact_id;
+        if (data.page) params.page = String(data.page);
+
+        const response = await vscoRequest(supabase, '/notes', { params }, executive);
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const notes = response.data?.notes || [];
+          for (const note of notes) {
+            await supabase.from('vsco_notes').upsert({
+              vsco_id: note.id,
+              vsco_job_id: note.jobId,
+              vsco_contact_id: note.contactId,
+              content_html: note.contentHtml,
+              content_text: note.contentText,
+              note_date: note.date,
+              author: note.author,
+              raw_data: note,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: 'vsco_id' });
+          }
+          result = { success: true, notes, synced: notes.length };
+        }
+        break;
+      }
+
+      case 'create_note': {
+        const notePayload: any = {
+          contentHtml: data.content_html || data.content,
+        };
+        if (data.job_id) notePayload.jobId = data.job_id;
+        if (data.contact_id) notePayload.contactId = data.contact_id;
+        if (data.date) notePayload.date = data.date;
+
+        const response = await vscoRequest(supabase, '/notes', {
+          method: 'POST',
+          body: notePayload,
+        }, executive);
+
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const note = response.data;
+          await supabase.from('vsco_notes').upsert({
+            vsco_id: note.id,
+            vsco_job_id: note.jobId,
+            vsco_contact_id: note.contactId,
+            content_html: note.contentHtml,
+            content_text: note.contentText,
+            raw_data: note,
+            synced_at: new Date().toISOString(),
+          }, { onConflict: 'vsco_id' });
+          result = { success: true, note };
+        }
+        break;
+      }
+
+      case 'update_note': {
+        if (!data.note_id) {
+          result = { success: false, error: 'note_id required' };
+          break;
+        }
+        const updatePayload: any = {};
+        if (data.content_html || data.content) updatePayload.contentHtml = data.content_html || data.content;
+        if (data.date) updatePayload.date = data.date;
+
+        const response = await vscoRequest(supabase, `/notes/${data.note_id}`, {
+          method: 'PATCH',
+          body: updatePayload,
+        }, executive);
+
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const note = response.data;
+          await supabase.from('vsco_notes').upsert({
+            vsco_id: note.id,
+            content_html: note.contentHtml,
+            content_text: note.contentText,
+            raw_data: note,
+            synced_at: new Date().toISOString(),
+          }, { onConflict: 'vsco_id' });
+          result = { success: true, note };
+        }
+        break;
+      }
+
+      case 'delete_note': {
+        if (!data.note_id) {
+          result = { success: false, error: 'note_id required' };
+          break;
+        }
+        const response = await vscoRequest(supabase, `/notes/${data.note_id}`, {
+          method: 'DELETE',
+        }, executive);
+        
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          await supabase.from('vsco_notes').delete().eq('vsco_id', data.note_id);
+          result = { success: true, deleted: true };
+        }
+        break;
+      }
+
+      // ====================================================================
+      // FILES & GALLERIES
+      // ====================================================================
+      case 'list_files': {
+        const params: Record<string, string> = {};
+        if (data.job_id) params.jobId = data.job_id;
+        if (data.page) params.page = String(data.page);
+
+        const response = await vscoRequest(supabase, '/files', { params }, executive);
+        if (response.error) {
+          result = { success: false, error: response.error };
+        } else {
+          const files = response.data?.files || [];
+          for (const file of files) {
+            await supabase.from('vsco_files').upsert({
+              vsco_id: file.id,
+              vsco_job_id: file.jobId,
+              vsco_gallery_id: file.galleryId,
+              filename: file.filename,
+              file_type: file.fileType,
+              file_size: file.fileSize,
+              url: file.url,
+              raw_data: file,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: 'vsco_id' });
+          }
+          result = { success: true, files, synced: files.length };
+        }
+        break;
+      }
+
+      case 'list_galleries': {
+        const params: Record<string, string> = {};
+        if (data.job_id) params.jobId = data.job_id;
+        if (data.page) params.page = String(data.page);
+
+        const response = await vscoRequest(supabase, '/galleries', { params }, executive);
+        result = response.error ? { success: false, error: response.error } : { success: true, galleries: response.data?.galleries || [] };
+        break;
+      }
+
+      case 'create_gallery': {
+        const galleryPayload: any = {
+          name: data.name,
+        };
+        if (data.job_id) galleryPayload.jobId = data.job_id;
+        if (data.description) galleryPayload.description = data.description;
+
+        const response = await vscoRequest(supabase, '/galleries', {
+          method: 'POST',
+          body: galleryPayload,
+        }, executive);
+        result = response.error ? { success: false, error: response.error } : { success: true, gallery: response.data };
+        break;
+      }
+
+      // ====================================================================
+      // CUSTOM FIELDS & DISCOUNTS
+      // ====================================================================
+      case 'list_custom_fields': {
+        const response = await vscoRequest(supabase, '/custom-fields', {}, executive);
+        result = response.error ? { success: false, error: response.error } : { success: true, custom_fields: response.data?.customFields || [] };
+        break;
+      }
+
+      case 'list_discounts': {
+        const response = await vscoRequest(supabase, '/discounts', {}, executive);
+        result = response.error ? { success: false, error: response.error } : { success: true, discounts: response.data?.discounts || [] };
+        break;
+      }
+
+      case 'create_discount': {
+        const discountPayload: any = {
+          name: data.name,
+          amount: data.amount,
+          discountType: data.discount_type || 'fixed', // fixed or percent
+        };
+
+        const response = await vscoRequest(supabase, '/discounts', {
+          method: 'POST',
+          body: discountPayload,
+        }, executive);
+        result = response.error ? { success: false, error: response.error } : { success: true, discount: response.data };
+        break;
+      }
+
       default:
         result = { success: false, error: `Unknown action: ${action}` };
     }
