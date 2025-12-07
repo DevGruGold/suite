@@ -189,6 +189,21 @@ When user says... → YOU MUST IMMEDIATELY CALL:
 "my hashrate" → invoke_edge_function("mining-proxy", {})
 "XMR balance" → invoke_edge_function("mining-proxy", {})
 "how's mining" → invoke_edge_function("mining-proxy", {})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📸 VSCO WORKSPACE (Photography/Creative Studio Manager):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+"new photography lead" → vsco_manage_jobs({action: "create_job", name: "...", stage: "lead"})
+"show my leads" → vsco_manage_jobs({action: "list_jobs", stage: "lead"})
+"update job status" → vsco_manage_jobs({action: "update_job", job_id: "...", stage: "booked"})
+"close the job" → vsco_manage_jobs({action: "close_job", job_id: "...", reason: "completed"})
+"add a contact" → vsco_manage_contacts({action: "create_contact", first_name: "...", email: "..."})
+"list my contacts" → vsco_manage_contacts({action: "list_contacts"})
+"schedule a session" → vsco_manage_events({action: "create_event", job_id: "...", name: "...", start_date: "..."})
+"VSCO analytics" → vsco_analytics({action: "get_analytics"})
+"revenue report" → vsco_analytics({action: "get_revenue_report"})
+"sync VSCO data" → vsco_analytics({action: "sync_all"})
+"check VSCO health" → vsco_analytics({action: "get_api_health"})
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
