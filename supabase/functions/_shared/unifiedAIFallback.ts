@@ -185,7 +185,7 @@ async function callKimi(
         'X-Title': 'XMRT Eliza'
       },
       body: JSON.stringify({
-        model: 'kimi/kimi-k2-0905',
+        model: 'moonshotai/kimi-k2',
         messages: requestMessages,
         temperature: options.temperature || 0.9,
         max_tokens: options.max_tokens || 8000,

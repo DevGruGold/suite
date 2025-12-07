@@ -367,7 +367,7 @@ serve(async (req) => {
               success: true, 
               response: kimiResult.data.response, 
               provider: 'kimi', 
-              model: 'kimi-k2-0905',
+              model: 'moonshotai/kimi-k2',
               executive: 'vercel-ai-chat', 
               executiveTitle: 'Chief Innovation Officer (CIO) [Kimi K2]' 
             }),
