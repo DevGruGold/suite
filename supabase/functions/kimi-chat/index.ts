@@ -107,9 +107,11 @@ serve(async (req) => {
       headers: {
         "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
         "Content-Type": "application/json",
+        "HTTP-Referer": "https://xmrt.pro",
+        "X-Title": "XMRT Eliza"
       },
       body: JSON.stringify({
-        model: "kimi/kimi-k2-0905", // Kimi K2 model on OpenRouter
+        model: "moonshotai/kimi-k2", // Kimi K2 model on OpenRouter
         messages: openrouterMessages,
         temperature: 0.9,
         max_tokens: 8000,
@@ -205,7 +207,7 @@ serve(async (req) => {
 
     await logger.apiCall("openrouter", response.status, apiDuration, {
       tokens: data.usage,
-      model: "kimi/kimi-k2-0905",
+      model: "moonshotai/kimi-k2",
     });
 
     // Return the response
