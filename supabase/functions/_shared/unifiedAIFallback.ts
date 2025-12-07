@@ -10,7 +10,7 @@ export interface UnifiedAIOptions {
   max_tokens?: number;
   systemPrompt?: string;
   tools?: Array<any>;
-  preferProvider?: 'lovable' | 'deepseek' | 'gemini';
+  preferProvider?: 'lovable' | 'deepseek' | 'kimi' | 'gemini';
 }
 
 export interface AIMessage {
@@ -157,6 +157,68 @@ async function callLovable(
 }
 
 /**
+ * Call Kimi K2 via OpenRouter API
+ */
+async function callKimi(
+  messages: AIMessage[],
+  options: UnifiedAIOptions = {}
+): Promise<ProviderResult> {
+  const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+  
+  if (!OPENROUTER_API_KEY) {
+    return { success: false, provider: 'kimi', error: 'OPENROUTER_API_KEY not configured' };
+  }
+
+  try {
+    console.log('🦊 Attempting Kimi K2 via OpenRouter...');
+    
+    const requestMessages = options.systemPrompt
+      ? [{ role: 'system', content: options.systemPrompt }, ...messages]
+      : messages;
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://xmrt.pro',
+        'X-Title': 'XMRT Eliza'
+      },
+      body: JSON.stringify({
+        model: 'kimi/kimi-k2-0905',
+        messages: requestMessages,
+        temperature: options.temperature || 0.9,
+        max_tokens: options.max_tokens || 8000,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`⚠️ Kimi K2 failed (${response.status}):`, errorText);
+      return { success: false, provider: 'kimi', error: `${response.status}: ${errorText}` };
+    }
+
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+
+    if (!message) {
+      return { success: false, provider: 'kimi', error: 'No message in response' };
+    }
+
+    console.log('✅ Kimi K2 successful');
+    
+    if (message.tool_calls?.length > 0) {
+      return { success: true, provider: 'kimi', message };
+    }
+    
+    return { success: true, provider: 'kimi', content: message.content || '' };
+  } catch (error) {
+    console.warn('⚠️ Kimi K2 error:', error.message);
+    return { success: false, provider: 'kimi', error: error.message };
+  }
+}
+
+/**
  * Call Gemini API directly
  */
 async function callGemini(
@@ -233,11 +295,14 @@ export async function callAIWithFallback(
   const errors: string[] = [];
   
   // Define provider order based on preference
+  // Default cascade: Lovable → DeepSeek → Kimi → Gemini
   const providers = options.preferProvider === 'deepseek'
-    ? [callDeepSeek, callLovable, callGemini]
+    ? [callDeepSeek, callLovable, callKimi, callGemini]
+    : options.preferProvider === 'kimi'
+    ? [callKimi, callLovable, callDeepSeek, callGemini]
     : options.preferProvider === 'gemini'
-    ? [callGemini, callLovable, callDeepSeek]
-    : [callLovable, callDeepSeek, callGemini]; // Default: Lovable first
+    ? [callGemini, callLovable, callDeepSeek, callKimi]
+    : [callLovable, callDeepSeek, callKimi, callGemini]; // Default: Lovable first
 
   for (const providerFn of providers) {
     const result = await providerFn(messages, options);
@@ -288,6 +353,7 @@ export function getAvailableProviders(): string[] {
   
   if (Deno.env.get('LOVABLE_API_KEY')) available.push('lovable');
   if (Deno.env.get('DEEPSEEK_API_KEY')) available.push('deepseek');
+  if (Deno.env.get('OPENROUTER_API_KEY')) available.push('kimi');
   if (Deno.env.get('GEMINI_API_KEY')) available.push('gemini');
   
   return available;

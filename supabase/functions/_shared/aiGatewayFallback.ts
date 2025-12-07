@@ -13,6 +13,64 @@ export interface AIGatewayOptions {
 }
 
 /**
+ * Call Kimi K2 via OpenRouter as fallback
+ */
+async function callKimiFallback(
+  messages: Array<{ role: string; content: string }>,
+  options: AIGatewayOptions = {}
+): Promise<any> {
+  const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+  
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY not configured - Kimi fallback unavailable');
+  }
+
+  console.log('🦊 Falling back to Kimi K2 via OpenRouter...');
+  
+  const requestMessages = options.systemPrompt
+    ? [{ role: 'system', content: options.systemPrompt }, ...messages]
+    : messages;
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://xmrt.pro',
+      'X-Title': 'XMRT Eliza'
+    },
+    body: JSON.stringify({
+      model: 'kimi/kimi-k2-0905',
+      messages: requestMessages,
+      temperature: options.temperature || 0.9,
+      max_tokens: options.max_tokens || 8000,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ Kimi fallback failed:', response.status, errorText);
+    throw new Error(`Kimi fallback failed: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const message = data.choices?.[0]?.message;
+
+  if (!message) {
+    throw new Error('No message in Kimi response');
+  }
+
+  console.log('✅ Kimi K2 fallback successful');
+
+  if (message.tool_calls?.length > 0) {
+    console.log(`🔧 Kimi returned ${message.tool_calls.length} tool calls`);
+    return message;
+  }
+
+  return message.content || '';
+}
+
+/**
  * Call DeepSeek API as fallback when Lovable fails
  */
 async function callDeepSeekFallback(
@@ -127,13 +185,28 @@ export async function callLovableAIGateway(
     const errorText = await response.text();
     console.warn('⚠️ Lovable AI Gateway error:', response.status, errorText);
     
-    // For 402/429/5xx errors - try DeepSeek fallback
-    if ((response.status === 402 || response.status === 429 || response.status >= 500) && DEEPSEEK_API_KEY) {
-      console.log(`🔄 Lovable returned ${response.status}, attempting DeepSeek fallback...`);
-      try {
-        return await callDeepSeekFallback(messages, options);
-      } catch (deepseekError) {
-        console.error('❌ DeepSeek fallback failed:', deepseekError.message);
+    // For 402/429/5xx errors - try fallback cascade: DeepSeek → Kimi
+    const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+    
+    if (response.status === 402 || response.status === 429 || response.status >= 500) {
+      // Try DeepSeek first
+      if (DEEPSEEK_API_KEY) {
+        console.log(`🔄 Lovable returned ${response.status}, attempting DeepSeek fallback...`);
+        try {
+          return await callDeepSeekFallback(messages, options);
+        } catch (deepseekError) {
+          console.warn('⚠️ DeepSeek fallback failed:', deepseekError.message);
+        }
+      }
+      
+      // Try Kimi K2 as second fallback
+      if (OPENROUTER_API_KEY) {
+        console.log(`🔄 DeepSeek unavailable, attempting Kimi K2 fallback...`);
+        try {
+          return await callKimiFallback(messages, options);
+        } catch (kimiError) {
+          console.warn('⚠️ Kimi K2 fallback failed:', kimiError.message);
+        }
       }
     }
     

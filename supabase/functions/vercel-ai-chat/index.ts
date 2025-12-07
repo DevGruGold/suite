@@ -341,6 +341,42 @@ serve(async (req) => {
       } catch (error) {
         console.warn('DeepSeek fallback failed:', error);
       }
+    }
+    
+    // ========== PRIORITY 4.5: Kimi K2 via OpenRouter (between DeepSeek and Gemini) ==========
+    if (!API_KEY && openRouterKey) {
+      console.log('⚠️ Trying Kimi K2 via OpenRouter fallback');
+      try {
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+        const fallbackSupabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+        
+        const kimiResult = await fallbackSupabase.functions.invoke('kimi-chat', {
+          body: { 
+            messages, 
+            conversationHistory, 
+            userContext, 
+            miningStats, 
+            systemVersion,
+            session_credentials 
+          }
+        });
+
+        if (!kimiResult.error && kimiResult.data?.response) {
+          return new Response(
+            JSON.stringify({ 
+              success: true, 
+              response: kimiResult.data.response, 
+              provider: 'kimi', 
+              model: 'kimi-k2-0905',
+              executive: 'vercel-ai-chat', 
+              executiveTitle: 'Chief Innovation Officer (CIO) [Kimi K2]' 
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      } catch (error) {
+        console.warn('Kimi K2 fallback failed:', error);
+      }
     } else if (geminiKey || GEMINI_API_KEY) {
       API_KEY = geminiKey || GEMINI_API_KEY;
       aiProvider = 'gemini';
