@@ -1,7 +1,7 @@
 /**
  * Backend AI Gateway Fallback
  * Provides Lovable AI Gateway access for all edge functions
- * Auto-fallback to DeepSeek when Lovable fails (402/429/500)
+ * Fallback cascade: Lovable → DeepSeek → Kimi K2 → Gemini (FREE ultimate fallback)
  */
 
 export interface AIGatewayOptions {
@@ -10,6 +10,68 @@ export interface AIGatewayOptions {
   max_tokens?: number;
   systemPrompt?: string;
   tools?: Array<any>;
+}
+
+/**
+ * Call Gemini as ultimate fallback (FREE tier available)
+ */
+async function callGeminiFallback(
+  messages: Array<{ role: string; content: string }>,
+  options: AIGatewayOptions = {}
+): Promise<any> {
+  const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+  
+  if (!GEMINI_API_KEY) {
+    throw new Error('GEMINI_API_KEY not configured - Gemini fallback unavailable');
+  }
+
+  console.log('💎 Falling back to Gemini (FREE tier)...');
+  
+  // Convert messages to Gemini format
+  const systemPrompt = options.systemPrompt || messages.find(m => m.role === 'system')?.content || '';
+  const conversationMessages = messages.filter(m => m.role !== 'system');
+  
+  // Build contents array for Gemini
+  const contents = conversationMessages.map(msg => ({
+    role: msg.role === 'assistant' ? 'model' : 'user',
+    parts: [{ text: msg.content }]
+  }));
+  
+  // Prepend system prompt to first user message if present
+  if (systemPrompt && contents.length > 0 && contents[0].role === 'user') {
+    contents[0].parts[0].text = `${systemPrompt}\n\n${contents[0].parts[0].text}`;
+  }
+
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        contents,
+        generationConfig: {
+          temperature: options.temperature || 0.7,
+          maxOutputTokens: options.max_tokens || 2000
+        }
+      })
+    }
+  );
+
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ Gemini fallback failed:', response.status, errorText);
+    throw new Error(`Gemini fallback failed: ${response.status} - ${errorText}`);
+  }
+
+  const data = await response.json();
+  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+
+  if (!content) {
+    throw new Error('No content in Gemini response');
+  }
+
+  console.log('✅ Gemini fallback successful (FREE tier)');
+  return content;
 }
 
 /**
@@ -43,7 +105,7 @@ async function callKimiFallback(
       model: 'moonshotai/kimi-k2',
       messages: requestMessages,
       temperature: options.temperature || 0.9,
-      max_tokens: options.max_tokens || 8000,
+      max_tokens: options.max_tokens || 2000, // Reduced from 8000 to stay within credit limits
     }),
   });
 
@@ -206,6 +268,17 @@ export async function callLovableAIGateway(
           return await callKimiFallback(messages, options);
         } catch (kimiError) {
           console.warn('⚠️ Kimi K2 fallback failed:', kimiError.message);
+        }
+      }
+      
+      // Try Gemini as ULTIMATE fallback (FREE tier)
+      const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+      if (GEMINI_API_KEY) {
+        console.log(`🔄 Paid providers exhausted, attempting Gemini FREE fallback...`);
+        try {
+          return await callGeminiFallback(messages, options);
+        } catch (geminiError) {
+          console.warn('⚠️ Gemini fallback failed:', geminiError.message);
         }
       }
     }

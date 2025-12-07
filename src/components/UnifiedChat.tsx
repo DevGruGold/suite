@@ -70,8 +70,9 @@ interface UnifiedMessage {
     execution_time_ms?: number;
   }>;
   reasoning?: ReasoningStep[];
-  executive?: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat';
+  executive?: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'lovable-chat';
   executiveTitle?: string;
+  providerUsed?: string; // AI provider that generated the response (e.g., 'Gemini', 'DeepSeek', 'Lovable AI')
   isCouncilDeliberation?: boolean;
   councilDeliberation?: any;
 }
@@ -1278,8 +1279,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         console.log('No reasoning data in response');
       }
 
-      // Extract tool calls from window if available
+      // Extract tool calls and provider info from window if available
       const toolCalls = (window as any).__lastElizaToolCalls || [];
+      const providerUsed = (window as any).__lastElizaProvider || '';
+      const executiveTitle = (window as any).__lastElizaExecutiveTitle || '';
       
       const elizaMessage: UnifiedMessage = {
         id: `eliza-${Date.now()}`,
@@ -1290,7 +1293,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         timestamp: new Date(),
         confidence: 0.95,
         reasoning: reasoning.length > 0 ? reasoning : undefined,
-        tool_calls: toolCalls.length > 0 ? toolCalls : undefined
+        tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
+        providerUsed: providerUsed || undefined,
+        executiveTitle: executiveTitle || undefined
       };
 
       setMessages(prev => [...prev, elizaMessage]);
@@ -1696,8 +1701,13 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                       </div>
                     )}
                     
-                      <div className="text-xs opacity-60 mt-2">
-                        {formatTime(message.timestamp)}
+                      <div className="text-xs opacity-60 mt-2 flex items-center justify-between gap-2">
+                        <span>{formatTime(message.timestamp)}</span>
+                        {message.sender === 'assistant' && message.providerUsed && (
+                          <span className="text-[10px] text-muted-foreground/70 font-medium">
+                            via {message.providerUsed}
+                          </span>
+                        )}
                       </div>
                     </div>
                   </div>
