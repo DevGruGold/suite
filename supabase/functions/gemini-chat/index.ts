@@ -1,6 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callLovableAIGateway } from '../_shared/aiGatewayFallback.ts';
 import { generateExecutiveSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
@@ -15,6 +14,97 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Convert OpenAI tool format to Gemini function declaration format
+function convertToolsToGeminiFormat(tools: any[]): any[] {
+  return tools.map(tool => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    parameters: tool.function.parameters
+  }));
+}
+
+// Fallback to DeepSeek API
+async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
+  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+  if (!DEEPSEEK_API_KEY) return null;
+  
+  console.log('🔄 Trying DeepSeek fallback...');
+  
+  try {
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages,
+        tools,
+        tool_choice: tools ? 'auto' : undefined,
+        temperature: 0.7,
+        max_tokens: 4000,
+      }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ DeepSeek fallback successful');
+      return {
+        content: data.choices?.[0]?.message?.content || '',
+        tool_calls: data.choices?.[0]?.message?.tool_calls || [],
+        provider: 'deepseek',
+        model: 'deepseek-chat'
+      };
+    }
+  } catch (error) {
+    console.warn('⚠️ DeepSeek fallback failed:', error.message);
+  }
+  return null;
+}
+
+// Fallback to Kimi K2 via OpenRouter
+async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
+  const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+  if (!OPENROUTER_API_KEY) return null;
+  
+  console.log('🔄 Trying Kimi K2 fallback via OpenRouter...');
+  
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://xmrt.pro',
+        'X-Title': 'XMRT Eliza'
+      },
+      body: JSON.stringify({
+        model: 'moonshotai/kimi-k2',
+        messages,
+        tools,
+        tool_choice: tools ? 'auto' : undefined,
+        temperature: 0.9,
+        max_tokens: 8000,
+      }),
+    });
+    
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ Kimi K2 fallback successful');
+      return {
+        content: data.choices?.[0]?.message?.content || '',
+        tool_calls: data.choices?.[0]?.message?.tool_calls || [],
+        provider: 'openrouter',
+        model: 'moonshotai/kimi-k2'
+      };
+    }
+  } catch (error) {
+    console.warn('⚠️ Kimi K2 fallback failed:', error.message);
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -27,7 +117,8 @@ serve(async (req) => {
       userContext = { ip: 'unknown', isFounder: false }, 
       miningStats = null, 
       systemVersion = null,
-      councilMode = false
+      councilMode = false,
+      images = []
     } = await req.json();
     
     await logger.info('Request received', 'ai_interaction', { 
@@ -35,7 +126,8 @@ serve(async (req) => {
       hasHistory: conversationHistory?.length > 0,
       userContext,
       executive: 'CIO',
-      councilMode
+      councilMode,
+      hasImages: images?.length > 0
     });
 
     if (!messages || !Array.isArray(messages)) {
@@ -44,23 +136,23 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Invalid request: messages must be an array',
-          received: typeof messages
+          error: { type: 'validation_error', code: 400, message: 'Invalid request: messages must be an array' }
         }),
-        { 
-          status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    console.log('👁️ CIO Executive - Processing request via Lovable AI Gateway');
+    console.log('👁️ CIO Executive (Gemini) - Processing with full capabilities');
 
-    // In council mode, use simplified prompt (no tools, just perspective)
+    // Initialize Supabase client
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // Build system prompt
     let contextualPrompt: string;
     
     if (councilMode) {
-      console.log('🏛️ Council mode - using simplified prompt (no tools)');
       contextualPrompt = `You are the Chief Information Officer (CIO) of XMRT DAO - a multimodal AI executive specializing in vision and information processing.
 
 Your role in this council deliberation:
@@ -69,17 +161,11 @@ Your role in this council deliberation:
 - Be concise and actionable (2-3 paragraphs maximum)
 - State your confidence level (0-100%)
 
-User Context:
-${userContext ? `IP: ${userContext.ip}, Founder: ${userContext.isFounder}` : 'Anonymous'}
-
-Mining Stats:
-${miningStats ? `Hash Rate: ${miningStats.hashRate || miningStats.hashrate || 0} H/s, Shares: ${miningStats.validShares || 0}` : 'Not available'}
-
-User Question: ${messages[messages.length - 1]?.content || ''}
+User Context: ${userContext ? `IP: ${userContext.ip}, Founder: ${userContext.isFounder}` : 'Anonymous'}
+Mining Stats: ${miningStats ? `Hash Rate: ${miningStats.hashRate || miningStats.hashrate || 0} H/s, Shares: ${miningStats.validShares || 0}` : 'Not available'}
 
 Provide a focused, expert perspective from the CIO viewpoint.`;
     } else {
-      // Full mode with tools
       const executivePrompt = generateExecutiveSystemPrompt('CIO');
       contextualPrompt = await buildContextualPrompt(executivePrompt, {
         conversationHistory,
@@ -89,69 +175,307 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
       });
     }
 
-    // Prepare messages for Lovable AI Gateway
-    const aiMessages = councilMode 
-      ? messages  // In council mode, use simplified messages
-      : [{ role: 'system', content: contextualPrompt }, ...messages];
+    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+    
+    if (!GEMINI_API_KEY) {
+      console.warn('⚠️ GEMINI_API_KEY not configured, trying fallbacks...');
+      
+      const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+      
+      // Try DeepSeek fallback
+      const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
+      if (deepseekResult) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: deepseekResult.content,
+            hasToolCalls: false,
+            executive: 'gemini-chat',
+            executiveTitle: 'Chief Information Officer (CIO) [DeepSeek Fallback]',
+            provider: deepseekResult.provider,
+            model: deepseekResult.model,
+            fallback: 'deepseek'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Try Kimi K2 fallback
+      const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
+      if (kimiResult) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: kimiResult.content,
+            hasToolCalls: false,
+            executive: 'gemini-chat',
+            executiveTitle: 'Chief Information Officer (CIO) [Kimi K2 Fallback]',
+            provider: kimiResult.provider,
+            model: kimiResult.model,
+            fallback: 'kimi'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      throw new Error('GEMINI_API_KEY is not configured and all fallbacks failed');
+    }
 
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-    
-    console.log('📤 Calling Lovable AI Gateway (CIO mode) with tools...');
-    
+    console.log('📤 Calling Gemini API...');
     const apiStartTime = Date.now();
-    let response = await callLovableAIGateway(aiMessages, {
-      model: 'google/gemini-2.5-pro',
-      temperature: 0.7,
-      max_tokens: 4000,
-      tools: ELIZA_TOOLS,
-      tool_choice: 'auto'
-    });
     
-    // If AI wants to use tools, execute them
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      console.log(`🔧 CIO executing ${response.tool_calls.length} tool(s)`);
+    // Build Gemini request
+    const systemPrompt = contextualPrompt;
+    const userMessages = messages;
+    const lastUserMessage = userMessages.filter((m: any) => m.role === 'user').pop();
+    const userText = typeof lastUserMessage?.content === 'string' 
+      ? lastUserMessage.content 
+      : 'Help me with XMRT DAO';
+    
+    // Build parts array for Gemini
+    const parts: any[] = [{ text: `${systemPrompt}\n\nUser: ${userText}` }];
+    
+    // Add images if present (Gemini's native strength)
+    if (images && images.length > 0) {
+      console.log(`🖼️ Processing ${images.length} images for vision analysis`);
+      for (const imageBase64 of images) {
+        const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+        if (matches) {
+          parts.push({
+            inline_data: {
+              mime_type: matches[1],
+              data: matches[2]
+            }
+          });
+        }
+      }
+    }
+    
+    // Prepare function declarations for tool calling
+    const geminiTools = convertToolsToGeminiFormat(ELIZA_TOOLS);
+    
+    let geminiResponse = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{ parts }],
+          tools: councilMode ? undefined : [{ functionDeclarations: geminiTools.slice(0, 20) }], // Gemini has tool limit
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: councilMode ? 800 : 4000
+          }
+        })
+      }
+    );
+
+    const apiDuration = Date.now() - apiStartTime;
+    let aiProvider = 'gemini';
+    let aiModel = 'gemini-2.0-flash-exp';
+
+    // ========== HANDLE API ERRORS WITH FALLBACK CASCADE ==========
+    if (!geminiResponse.ok) {
+      const errorText = await geminiResponse.text();
+      console.error('❌ Gemini API error:', geminiResponse.status, errorText);
+      await logger.apiCall('gemini', geminiResponse.status, apiDuration, { error: errorText });
+
+      if (geminiResponse.status === 402 || geminiResponse.status === 429 || geminiResponse.status >= 500) {
+        console.log(`⚠️ Gemini returned ${geminiResponse.status}, trying fallback cascade...`);
+        
+        const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+        
+        // Try DeepSeek fallback
+        const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
+        if (deepseekResult) {
+          if (deepseekResult.tool_calls && deepseekResult.tool_calls.length > 0) {
+            console.log(`🔧 Executing ${deepseekResult.tool_calls.length} tool(s) from DeepSeek`);
+            const toolResults = [];
+            for (const toolCall of deepseekResult.tool_calls) {
+              const result = await executeToolCall(supabase, toolCall, 'CIO', SUPABASE_URL, SERVICE_ROLE_KEY);
+              toolResults.push({ tool_call_id: toolCall.id, role: 'tool', content: JSON.stringify(result) });
+            }
+            
+            const secondResult = await callDeepSeekFallback([
+              ...aiMessages,
+              { role: 'assistant', content: deepseekResult.content, tool_calls: deepseekResult.tool_calls },
+              ...toolResults
+            ]);
+            
+            if (secondResult) {
+              return new Response(
+                JSON.stringify({
+                  success: true,
+                  response: secondResult.content,
+                  hasToolCalls: true,
+                  toolCallsExecuted: deepseekResult.tool_calls.length,
+                  executive: 'gemini-chat',
+                  executiveTitle: 'Chief Information Officer (CIO) [DeepSeek Fallback]',
+                  provider: 'deepseek',
+                  model: 'deepseek-chat',
+                  fallback: 'deepseek'
+                }),
+                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+              );
+            }
+          }
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              response: deepseekResult.content,
+              hasToolCalls: false,
+              executive: 'gemini-chat',
+              executiveTitle: 'Chief Information Officer (CIO) [DeepSeek Fallback]',
+              provider: deepseekResult.provider,
+              model: deepseekResult.model,
+              fallback: 'deepseek'
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        // Try Kimi K2 fallback
+        const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
+        if (kimiResult) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              response: kimiResult.content,
+              hasToolCalls: false,
+              executive: 'gemini-chat',
+              executiveTitle: 'Chief Information Officer (CIO) [Kimi K2 Fallback]',
+              provider: kimiResult.provider,
+              model: kimiResult.model,
+              fallback: 'kimi'
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: {
+            type: geminiResponse.status === 402 ? 'payment_required' : 
+                  geminiResponse.status === 429 ? 'rate_limit' : 'service_unavailable',
+            code: geminiResponse.status,
+            message: errorText,
+            service: 'gemini-chat',
+            canRetry: geminiResponse.status !== 402,
+            suggestedAction: geminiResponse.status === 402 ? 'add_credits' : 'try_alternative'
+          }
+        }),
+        { status: geminiResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const geminiData = await geminiResponse.json();
+    const candidate = geminiData.candidates?.[0];
+    const contentParts = candidate?.content?.parts || [];
+    
+    // Extract text and function calls
+    let textContent = '';
+    const functionCalls: any[] = [];
+    
+    for (const part of contentParts) {
+      if (part.text) {
+        textContent += part.text;
+      }
+      if (part.functionCall) {
+        functionCalls.push({
+          id: `gemini_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: part.functionCall.name,
+            arguments: JSON.stringify(part.functionCall.args || {})
+          }
+        });
+      }
+    }
+
+    // ========== EXECUTE TOOL CALLS ==========
+    if (functionCalls.length > 0 && !councilMode) {
+      console.log(`🔧 CIO executing ${functionCalls.length} tool(s)`);
       
       const toolResults = [];
-      for (const toolCall of response.tool_calls) {
+      for (const toolCall of functionCalls) {
         const result = await executeToolCall(supabase, toolCall, 'CIO', SUPABASE_URL, SERVICE_ROLE_KEY);
         toolResults.push({
-          tool_call_id: toolCall.id,
-          role: 'tool',
-          content: JSON.stringify(result)
+          functionResponse: {
+            name: toolCall.function.name,
+            response: result
+          }
         });
       }
       
-      // Call AI again with tool results
-      response = await callLovableAIGateway([
-        ...aiMessages,
-        { role: 'assistant', content: response.content || '', tool_calls: response.tool_calls },
-        ...toolResults
-      ], {
-        model: 'google/gemini-2.5-pro',
-        temperature: 0.7,
-        max_tokens: 4000
+      // Make follow-up call with tool results
+      const secondResponse = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [
+              { parts },
+              { role: 'model', parts: contentParts },
+              { role: 'function', parts: toolResults }
+            ],
+            generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
+          })
+        }
+      );
+      
+      if (secondResponse.ok) {
+        const secondData = await secondResponse.json();
+        const secondContent = secondData.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (secondContent) {
+          textContent = secondContent;
+        }
+      }
+      
+      console.log(`✅ CIO Executive responded with ${functionCalls.length} tool calls executed`);
+      await logger.apiCall('gemini', 200, Date.now() - apiStartTime, {
+        model: aiModel,
+        toolCalls: functionCalls.length
       });
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: textContent,
+          hasToolCalls: true,
+          toolCallsExecuted: functionCalls.length,
+          executive: 'gemini-chat',
+          executiveTitle: 'Chief Information Officer (CIO)',
+          provider: aiProvider,
+          model: aiModel,
+          confidence: 85
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
-    const apiDuration = Date.now() - apiStartTime;
-    
+
     console.log(`✅ CIO Executive responded in ${apiDuration}ms`);
-    await logger.apiCall('lovable_gateway', 200, apiDuration, { 
+    await logger.apiCall('gemini', 200, apiDuration, { 
       executive: 'CIO',
-      responseLength: response.length 
+      responseLength: textContent?.length || 0,
+      model: aiModel,
+      vision: images?.length > 0
     });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        response: response,
+        response: textContent || "I'm here to help with XMRT-DAO tasks.",
+        hasToolCalls: false,
         executive: 'gemini-chat',
         executiveTitle: 'Chief Information Officer (CIO)',
-        provider: 'lovable_gateway',
-        model: 'google/gemini-2.5-pro',
-        confidence: 85
+        provider: aiProvider,
+        model: aiModel,
+        confidence: 85,
+        vision_analysis: images?.length > 0
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
@@ -163,7 +487,6 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
     const errorMessage = error instanceof Error ? error.message : String(error);
     let statusCode = 500;
     
-    // Detect error types for structured response
     if (errorMessage.includes('402') || errorMessage.includes('Payment Required')) {
       statusCode = 402;
     } else if (errorMessage.includes('429') || errorMessage.includes('Rate limit')) {
@@ -182,7 +505,7 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
           details: {
             timestamp: new Date().toISOString(),
             executive: 'CIO',
-            model: 'google/gemini-2.5-pro'
+            model: 'gemini-2.0-flash-exp'
           },
           canRetry: statusCode !== 402,
           suggestedAction: statusCode === 402 ? 'add_credits' : 'try_alternative'
