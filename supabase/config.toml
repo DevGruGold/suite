@@ -681,3 +681,16 @@ body = '{"action":"auto_resolve_blockers","data":{}}'
 function_name = "suite-task-automation-engine"
 schedule = "0 4 * * *"
 body = '{"action":"update_template_performance","data":{"time_window_hours":168}}'
+
+# ====================================================================
+# VSCO WORKSPACE INTEGRATION
+# ====================================================================
+
+[functions.vsco-workspace]
+verify_jwt = false
+
+# VSCO Data Sync - Every 6 hours at :50
+[[edge_runtime.scheduled_functions]]
+function_name = "vsco-workspace"
+schedule = "50 */6 * * *"
+body = '{"action":"sync_all","data":{}}'

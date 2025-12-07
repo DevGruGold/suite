@@ -5801,6 +5801,303 @@ export type Database = {
         }
         Relationships: []
       }
+      vsco_api_logs: {
+        Row: {
+          action: string
+          created_at: string | null
+          endpoint: string | null
+          error_message: string | null
+          executive: string | null
+          id: string
+          method: string | null
+          request_payload: Json | null
+          response_data: Json | null
+          response_time_ms: number | null
+          status_code: number | null
+          success: boolean | null
+        }
+        Insert: {
+          action: string
+          created_at?: string | null
+          endpoint?: string | null
+          error_message?: string | null
+          executive?: string | null
+          id?: string
+          method?: string | null
+          request_payload?: Json | null
+          response_data?: Json | null
+          response_time_ms?: number | null
+          status_code?: number | null
+          success?: boolean | null
+        }
+        Update: {
+          action?: string
+          created_at?: string | null
+          endpoint?: string | null
+          error_message?: string | null
+          executive?: string | null
+          id?: string
+          method?: string | null
+          request_payload?: Json | null
+          response_data?: Json | null
+          response_time_ms?: number | null
+          status_code?: number | null
+          success?: boolean | null
+        }
+        Relationships: []
+      }
+      vsco_brands: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name: string
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_contacts: {
+        Row: {
+          brand_id: string | null
+          cell_phone: string | null
+          company_name: string | null
+          created_at: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          kind: string | null
+          last_name: string | null
+          name: string | null
+          phone: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          brand_id?: string | null
+          cell_phone?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          kind?: string | null
+          last_name?: string | null
+          name?: string | null
+          phone?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          brand_id?: string | null
+          cell_phone?: string | null
+          company_name?: string | null
+          created_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          kind?: string | null
+          last_name?: string | null
+          name?: string | null
+          phone?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_events: {
+        Row: {
+          channel: string | null
+          confirmed: boolean | null
+          created_at: string | null
+          end_date: string | null
+          end_time: string | null
+          event_type: string | null
+          id: string
+          location_address: string | null
+          name: string | null
+          raw_data: Json | null
+          start_date: string | null
+          start_time: string | null
+          synced_at: string | null
+          vsco_id: string
+          vsco_job_id: string | null
+        }
+        Insert: {
+          channel?: string | null
+          confirmed?: boolean | null
+          created_at?: string | null
+          end_date?: string | null
+          end_time?: string | null
+          event_type?: string | null
+          id?: string
+          location_address?: string | null
+          name?: string | null
+          raw_data?: Json | null
+          start_date?: string | null
+          start_time?: string | null
+          synced_at?: string | null
+          vsco_id: string
+          vsco_job_id?: string | null
+        }
+        Update: {
+          channel?: string | null
+          confirmed?: boolean | null
+          created_at?: string | null
+          end_date?: string | null
+          end_time?: string | null
+          event_type?: string | null
+          id?: string
+          location_address?: string | null
+          name?: string | null
+          raw_data?: Json | null
+          start_date?: string | null
+          start_time?: string | null
+          synced_at?: string | null
+          vsco_id?: string
+          vsco_job_id?: string | null
+        }
+        Relationships: []
+      }
+      vsco_jobs: {
+        Row: {
+          account_balance: number | null
+          booking_date: string | null
+          brand_id: string | null
+          closed: boolean | null
+          closed_reason: string | null
+          created_at: string | null
+          event_date: string | null
+          id: string
+          job_type: string | null
+          lead_confidence: string | null
+          lead_rating: number | null
+          lead_source: string | null
+          lead_status: string | null
+          name: string | null
+          raw_data: Json | null
+          stage: string | null
+          synced_at: string | null
+          total_cost: number | null
+          total_revenue: number | null
+          vsco_id: string
+        }
+        Insert: {
+          account_balance?: number | null
+          booking_date?: string | null
+          brand_id?: string | null
+          closed?: boolean | null
+          closed_reason?: string | null
+          created_at?: string | null
+          event_date?: string | null
+          id?: string
+          job_type?: string | null
+          lead_confidence?: string | null
+          lead_rating?: number | null
+          lead_source?: string | null
+          lead_status?: string | null
+          name?: string | null
+          raw_data?: Json | null
+          stage?: string | null
+          synced_at?: string | null
+          total_cost?: number | null
+          total_revenue?: number | null
+          vsco_id: string
+        }
+        Update: {
+          account_balance?: number | null
+          booking_date?: string | null
+          brand_id?: string | null
+          closed?: boolean | null
+          closed_reason?: string | null
+          created_at?: string | null
+          event_date?: string | null
+          id?: string
+          job_type?: string | null
+          lead_confidence?: string | null
+          lead_rating?: number | null
+          lead_source?: string | null
+          lead_status?: string | null
+          name?: string | null
+          raw_data?: Json | null
+          stage?: string | null
+          synced_at?: string | null
+          total_cost?: number | null
+          total_revenue?: number | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_orders: {
+        Row: {
+          balance_due: number | null
+          created_at: string | null
+          id: string
+          order_date: string | null
+          order_number: string | null
+          raw_data: Json | null
+          status: string | null
+          subtotal: number | null
+          synced_at: string | null
+          tax_total: number | null
+          total: number | null
+          vsco_id: string
+          vsco_job_id: string | null
+        }
+        Insert: {
+          balance_due?: number | null
+          created_at?: string | null
+          id?: string
+          order_date?: string | null
+          order_number?: string | null
+          raw_data?: Json | null
+          status?: string | null
+          subtotal?: number | null
+          synced_at?: string | null
+          tax_total?: number | null
+          total?: number | null
+          vsco_id: string
+          vsco_job_id?: string | null
+        }
+        Update: {
+          balance_due?: number | null
+          created_at?: string | null
+          id?: string
+          order_date?: string | null
+          order_number?: string | null
+          raw_data?: Json | null
+          status?: string | null
+          subtotal?: number | null
+          synced_at?: string | null
+          tax_total?: number | null
+          total?: number | null
+          vsco_id?: string
+          vsco_job_id?: string | null
+        }
+        Relationships: []
+      }
       webhook_configs: {
         Row: {
           created_at: string | null

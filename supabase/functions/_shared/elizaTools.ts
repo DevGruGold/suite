@@ -2191,5 +2191,114 @@ export const ELIZA_TOOLS = [
         }
       }
     }
+  },
+
+  // ====================================================================
+  // 📸 VSCO WORKSPACE TOOLS (Studio Manager for Photography/Creative)
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_jobs',
+      description: '📸 VSCO: Manage leads and jobs in VSCO Workspace - list, create, update, or close jobs/leads. Perfect for tracking photography clients from inquiry to completion.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_jobs', 'get_job', 'create_job', 'update_job', 'close_job', 'sync_jobs'],
+            description: 'Action to perform on jobs/leads'
+          },
+          job_id: { type: 'string', description: 'VSCO job ID (required for get/update/close)' },
+          name: { type: 'string', description: 'Job/lead name (for create/update)' },
+          stage: { 
+            type: 'string', 
+            enum: ['lead', 'booked', 'fulfillment', 'completed'],
+            description: 'Job stage in pipeline'
+          },
+          lead_rating: { type: 'number', description: 'Lead quality rating 1-5 (for create/update)' },
+          lead_confidence: { type: 'string', enum: ['low', 'medium', 'high'], description: 'Confidence level' },
+          lead_source: { type: 'string', description: 'How the lead was acquired' },
+          job_type: { type: 'string', description: 'Type of job (wedding, portrait, etc.)' },
+          event_date: { type: 'string', description: 'Event date (YYYY-MM-DD)' },
+          reason: { type: 'string', description: 'Close reason (for close action)' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_contacts',
+      description: '📇 VSCO: Manage contacts in VSCO Workspace CRM - list, create, or update contacts (people, companies, locations).',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_contacts', 'get_contact', 'create_contact', 'update_contact', 'sync_contacts'],
+            description: 'Action to perform on contacts'
+          },
+          contact_id: { type: 'string', description: 'VSCO contact ID (for get/update)' },
+          kind: { type: 'string', enum: ['person', 'company', 'location'], description: 'Contact type' },
+          first_name: { type: 'string', description: 'First name' },
+          last_name: { type: 'string', description: 'Last name' },
+          email: { type: 'string', description: 'Email address' },
+          phone: { type: 'string', description: 'Phone number' },
+          cell_phone: { type: 'string', description: 'Cell phone number' },
+          company_name: { type: 'string', description: 'Company name' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_events',
+      description: '📅 VSCO: Manage calendar events in VSCO Workspace - schedule sessions, meetings, consultations linked to jobs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_events', 'get_event', 'create_event', 'update_event'],
+            description: 'Action to perform on events'
+          },
+          event_id: { type: 'string', description: 'VSCO event ID (for get/update)' },
+          job_id: { type: 'string', description: 'Link event to this job ID' },
+          name: { type: 'string', description: 'Event name/title' },
+          event_type: { type: 'string', description: 'Type of event (session, consultation, etc.)' },
+          channel: { type: 'string', enum: ['InPerson', 'Phone', 'Virtual'], description: 'Event channel/medium' },
+          start_date: { type: 'string', description: 'Start date (YYYY-MM-DD)' },
+          start_time: { type: 'string', description: 'Start time (HH:MM)' },
+          end_date: { type: 'string', description: 'End date (YYYY-MM-DD)' },
+          end_time: { type: 'string', description: 'End time (HH:MM)' },
+          location_address: { type: 'string', description: 'Location/address for in-person events' },
+          confirmed: { type: 'boolean', description: 'Whether event is confirmed' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_analytics',
+      description: '📊 VSCO: Get analytics and reports from VSCO Workspace - pipeline stats, revenue reports, sync data, check API health.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['get_analytics', 'get_revenue_report', 'sync_all', 'get_api_health', 'list_brands', 'list_webhooks'],
+            description: 'Analytics action to perform'
+          },
+          include_closed: { type: 'boolean', description: 'Include closed jobs in analytics (default: false)' }
+        },
+        required: ['action']
+      }
+    }
   }
 ];

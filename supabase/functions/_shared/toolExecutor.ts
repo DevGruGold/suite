@@ -1329,11 +1329,54 @@ export async function executeToolCall(
           : { success: true, result: advanceResult.data };
         break;
 
+      // ====================================================================
+      // VSCO WORKSPACE TOOLS
+      // ====================================================================
+      case 'vsco_manage_jobs':
+        console.log(`📸 [${executiveName}] VSCO Manage Jobs: ${parsedArgs.action}`);
+        const vscoJobsResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoJobsResult.error
+          ? { success: false, error: vscoJobsResult.error.message }
+          : { success: true, result: vscoJobsResult.data };
+        break;
+
+      case 'vsco_manage_contacts':
+        console.log(`📇 [${executiveName}] VSCO Manage Contacts: ${parsedArgs.action}`);
+        const vscoContactsResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoContactsResult.error
+          ? { success: false, error: vscoContactsResult.error.message }
+          : { success: true, result: vscoContactsResult.data };
+        break;
+
+      case 'vsco_manage_events':
+        console.log(`📅 [${executiveName}] VSCO Manage Events: ${parsedArgs.action}`);
+        const vscoEventsResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoEventsResult.error
+          ? { success: false, error: vscoEventsResult.error.message }
+          : { success: true, result: vscoEventsResult.data };
+        break;
+
+      case 'vsco_analytics':
+        console.log(`📊 [${executiveName}] VSCO Analytics: ${parsedArgs.action}`);
+        const vscoAnalyticsResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoAnalyticsResult.error
+          ? { success: false, error: vscoAnalyticsResult.error.message }
+          : { success: true, result: vscoAnalyticsResult.data };
+        break;
+
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, vsco_manage_jobs, vsco_manage_contacts, vsco_manage_events, vsco_analytics, and more.`
         };
     }
     
@@ -1382,5 +1425,37 @@ export async function executeToolCall(
       error: errorMessage,
       learning_point: learningPoint
     };
+  }
+}
+
+// Add VSCO tool handlers to the switch statement by exporting a helper
+export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any, executiveName: string): Promise<any> | null {
+  switch (name) {
+    case 'vsco_manage_jobs':
+      console.log(`📸 [${executiveName}] VSCO Manage Jobs: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'vsco_manage_contacts':
+      console.log(`📇 [${executiveName}] VSCO Manage Contacts: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'vsco_manage_events':
+      console.log(`📅 [${executiveName}] VSCO Manage Events: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'vsco_analytics':
+      console.log(`📊 [${executiveName}] VSCO Analytics: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    default:
+      return null;
   }
 }
