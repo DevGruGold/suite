@@ -1129,8 +1129,62 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ====================================================================
+      // DISCOVERY & HEALTH ACTIONS
+      // ====================================================================
+      case 'list_actions':
+      case 'help': {
+        result = {
+          success: true,
+          actions: {
+            discovery: ['list_actions', 'help', 'health', 'get_api_health'],
+            studio: ['get_studio', 'list_brands', 'create_brand'],
+            jobs: ['list_jobs', 'get_job', 'create_job', 'update_job', 'close_job'],
+            contacts: ['list_contacts', 'get_contact', 'create_contact', 'update_contact'],
+            events: ['list_events', 'get_event', 'create_event', 'update_event', 'delete_event'],
+            orders: ['list_orders', 'get_order', 'create_order', 'update_order', 'list_payments', 'create_payment', 'list_taxes', 'create_tax'],
+            products: ['list_products', 'get_product', 'create_product', 'delete_product'],
+            worksheets: ['list_worksheets', 'create_worksheet', 'create_worksheet_item'],
+            notes: ['list_notes', 'create_note'],
+            files: ['list_files', 'upload_file', 'delete_file', 'list_galleries', 'create_gallery'],
+            webhooks: ['list_webhooks', 'create_webhook', 'delete_webhook'],
+            analytics: ['get_analytics_summary'],
+            custom: ['list_custom_fields', 'list_discounts', 'create_discount'],
+          },
+          usage: {
+            example: '{ "action": "list_jobs", "data": { "stage": "lead" } }',
+            stages: ['lead', 'quote', 'booked', 'completed', 'cancelled'],
+            contact_kinds: ['person', 'company'],
+          },
+          description: 'VSCO Workspace API integration for photography business management. Manages jobs, contacts, events, orders, products, and analytics.',
+        };
+        break;
+      }
+
+      case 'health':
+      case 'get_api_health': {
+        const testStart = Date.now();
+        const testResponse = await vscoRequest(supabase, '/studio', {}, executive);
+        const latency = Date.now() - testStart;
+        
+        result = {
+          success: true,
+          api_status: testResponse.error ? 'error' : 'connected',
+          api_configured: !!VSCO_API_KEY,
+          latency_ms: latency,
+          error: testResponse.error || null,
+          timestamp: new Date().toISOString(),
+          base_url: BASE_URL,
+        };
+        break;
+      }
+
       default:
-        result = { success: false, error: `Unknown action: ${action}` };
+        result = { 
+          success: false, 
+          error: `Unknown action: ${action}. Use action="list_actions" to see available actions.`,
+          hint: 'Call with { "action": "list_actions" } to discover all available VSCO Workspace actions.'
+        };
     }
 
     console.log(`📸 [VSCO Workspace] Result:`, result);
