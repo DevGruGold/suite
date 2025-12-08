@@ -290,7 +290,7 @@ serve(async (req) => {
     if (images && images.length > 0) {
       console.log(`🖼️ Images detected (${images.length}) - routing to vision-capable model`);
       
-      const geminiResult = await callGeminiFallback(aiMessages, images);
+      const geminiResult = await callGeminiFallback(aiMessages, images, supabase, SUPABASE_URL, SERVICE_ROLE_KEY);
       if (geminiResult) {
         return new Response(
           JSON.stringify({
@@ -330,7 +330,7 @@ serve(async (req) => {
       }
       
       // Try Gemini fallback
-      const geminiResult = await callGeminiFallback(aiMessages);
+      const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY);
       if (geminiResult) {
         return new Response(
           JSON.stringify({
@@ -430,7 +430,7 @@ serve(async (req) => {
         }
         
         // Try Gemini fallback
-        const geminiResult = await callGeminiFallback(aiMessages);
+        const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY);
         if (geminiResult) {
           return new Response(
             JSON.stringify({
