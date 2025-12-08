@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,19 +17,12 @@ const categoryTemplates: Record<string, string> = {
   general: `Follow standard patterns with proper CORS, error handling, logging, and Supabase client initialization. Include activity logging for important operations.`
 };
 
-// Generate code using DeepSeek AI
+// Generate code using AI fallback cascade
 async function generateEdgeFunctionCode(
   supabase: any,
   proposal: any,
   category: string
-): Promise<{ code: string; explanation: string }> {
-  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-  
-  if (!DEEPSEEK_API_KEY) {
-    console.log('⚠️ DeepSeek API key not configured, using template-based generation');
-    return generateTemplateCode(proposal, category);
-  }
-
+): Promise<{ code: string; explanation: string; ai_provider: string }> {
   const categoryGuidance = categoryTemplates[category] || categoryTemplates.general;
   
   const codeGenPrompt = `Generate a production-ready Deno edge function for Supabase based on this approved proposal:
@@ -58,52 +52,35 @@ ${proposal.implementation_code || 'No specific implementation notes provided.'}
 Generate ONLY the TypeScript code, no markdown, no explanations. The code should be complete and ready to deploy.`;
 
   try {
-    const response = await fetch('https://api.deepseek.com/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: [
-          { 
-            role: 'system', 
-            content: 'You are an expert Deno/TypeScript developer specializing in Supabase Edge Functions. Generate clean, production-ready code following best practices. Output ONLY code, no markdown formatting or explanations.' 
-          },
-          { role: 'user', content: codeGenPrompt }
-        ],
+    console.log('🔄 Generating edge function code with AI fallback cascade...');
+    const generatedCode = await generateTextWithFallback(codeGenPrompt, 
+      'You are an expert Deno/TypeScript developer specializing in Supabase Edge Functions. Generate clean, production-ready code following best practices. Output ONLY code, no markdown formatting or explanations.',
+      {
         temperature: 0.3,
-        max_tokens: 4000
-      }),
-    });
-
-    if (!response.ok) {
-      throw new Error(`DeepSeek API error: ${response.status}`);
-    }
-
-    const data = await response.json();
-    let generatedCode = data.choices?.[0]?.message?.content || '';
+        maxTokens: 4000,
+        useFullElizaContext: false
+      }
+    );
     
     // Clean up any markdown formatting
-    generatedCode = generatedCode
+    const cleanedCode = generatedCode
       .replace(/```typescript\n?/g, '')
       .replace(/```ts\n?/g, '')
       .replace(/```\n?/g, '')
       .trim();
 
-    // Generate explanation
-    const explanation = `Code generated using DeepSeek AI based on proposal specifications. Category: ${category}. Includes ${categoryGuidance.split('.')[0].toLowerCase()}.`;
+    const explanation = `Code generated using AI fallback cascade based on proposal specifications. Category: ${category}. Includes ${categoryGuidance.split('.')[0].toLowerCase()}.`;
 
-    return { code: generatedCode, explanation };
+    console.log('✅ Edge function code generated via AI cascade');
+    return { code: cleanedCode, explanation, ai_provider: 'ai_cascade' };
   } catch (error) {
-    console.error('DeepSeek code generation failed:', error);
+    console.warn('⚠️ AI code generation failed, using template:', error);
     return generateTemplateCode(proposal, category);
   }
 }
 
 // Fallback template-based code generation
-function generateTemplateCode(proposal: any, category: string): { code: string; explanation: string } {
+function generateTemplateCode(proposal: any, category: string): { code: string; explanation: string; ai_provider: string } {
   const functionName = proposal.function_name.replace(/-/g, '_');
   
   const code = `import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -170,7 +147,8 @@ serve(async (req) => {
 
   return {
     code,
-    explanation: 'Template-based code generated. Requires manual implementation of core business logic.'
+    explanation: 'Template-based code generated. Requires manual implementation of core business logic.',
+    ai_provider: 'template_fallback'
   };
 }
 
@@ -184,7 +162,6 @@ function determineCategory(proposal: any): string {
     return category;
   }
   
-  // Infer from name/description
   if (name.includes('monitor') || name.includes('health') || name.includes('metric') || description.includes('monitoring')) {
     return 'monitoring';
   }
@@ -262,9 +239,9 @@ serve(async (req) => {
     const category = determineCategory(proposal);
     console.log(`📂 Category determined: ${category}`);
 
-    // Step 1: Generate edge function code using AI
+    // Step 1: Generate edge function code using AI fallback cascade
     console.log('🤖 Generating edge function code...');
-    const { code: generatedCode, explanation: codeExplanation } = await generateEdgeFunctionCode(
+    const { code: generatedCode, explanation: codeExplanation, ai_provider } = await generateEdgeFunctionCode(
       supabase,
       proposal,
       category
@@ -300,6 +277,7 @@ serve(async (req) => {
       },
       generated_code: generatedCode,
       code_explanation: codeExplanation,
+      ai_provider,
       next_steps: [
         `Create file: supabase/functions/${proposal.function_name}/index.ts`,
         'Add function entry to supabase/config.toml',
@@ -335,6 +313,7 @@ serve(async (req) => {
 **Approved by:** ${approverNames}
 **Category:** ${category}
 **Estimated Complexity:** ${finalAnalysis.implementation_plan.estimated_complexity}
+**AI Provider:** ${ai_provider}
 
 ### Description
 ${proposal.description}
@@ -374,7 +353,8 @@ Category-specific patterns applied: ${category}
           approved_by: approverNames,
           workflow: 'governance_approval',
           category,
-          has_generated_code: true
+          has_generated_code: true,
+          ai_provider
         }
       })
       .select()
@@ -386,7 +366,7 @@ Category-specific patterns applied: ${category}
       console.log(`✅ Created implementation task: ${task?.id}`);
     }
 
-    // Step 5: Try to create GitHub PR (if github-integration is available)
+    // Step 5: Try to create GitHub issue
     let githubPR = null;
     try {
       const prBody = `## Governance Approved: ${proposal.function_name}
@@ -394,6 +374,7 @@ Category-specific patterns applied: ${category}
 **Proposal ID:** ${proposal_id}
 **Category:** ${category}
 **Approved By:** ${approverNames}
+**AI Provider:** ${ai_provider}
 
 ### Description
 ${proposal.description}
@@ -414,7 +395,7 @@ ${generatedCode.substring(0, 1500)}${generatedCode.length > 1500 ? '\n// ... (tr
 \`\`\`
 
 ---
-*This PR was automatically created by the governance workflow after executive council approval.*
+*This issue was automatically created by the governance workflow after executive council approval.*
 `;
 
       const { data: ghData, error: ghError } = await supabase.functions.invoke('github-integration', {
@@ -451,6 +432,7 @@ ${generatedCode.substring(0, 1500)}${generatedCode.length > 1500 ? '\n// ... (tr
           approved_by: approverNames,
           category,
           has_generated_code: true,
+          ai_provider,
           final_analysis: finalAnalysis
         }
       });
@@ -468,6 +450,7 @@ ${generatedCode.substring(0, 1500)}${generatedCode.length > 1500 ? '\n// ... (tr
             function_name: proposal.function_name,
             proposer: proposal.proposed_by,
             category,
+            ai_provider,
             next_steps: finalAnalysis.next_steps
           }
         });
@@ -484,18 +467,17 @@ ${generatedCode.substring(0, 1500)}${generatedCode.length > 1500 ? '\n// ... (tr
         task_id: task?.id,
         github_issue_created: !!githubPR,
         github_issue_number: githubPR?.number,
-        has_generated_code: true,
-        final_analysis: finalAnalysis,
-        message: `Proposal approved and queued with AI-generated ${category} function code. Task ID: ${task?.id}`
+        ai_provider,
+        final_analysis: finalAnalysis
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error: any) {
-    console.error('❌ Execute approved proposal error:', error);
+    console.error('Execute Approved Proposal Error:', error);
     return new Response(
       JSON.stringify({ error: error.message }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });

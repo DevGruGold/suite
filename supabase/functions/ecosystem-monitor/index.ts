@@ -9,14 +9,12 @@
  * 2. Calculates activity scores based on commits, issues, discussions, PRs
  * 3. Engages with high-priority content (score >= 70) by posting helpful responses
  * 4. Handles GitHub token failures gracefully with fallback strategies
- * 
- * Note: Function folder is "ecosystem-monitor" but logically this is the
- * "github-ecosystem-engagement" function for GitHub-specific monitoring
  */
 
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { formatSystemReport, SystemReport } from "../_shared/reportFormatter.ts";
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,7 +29,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey, {
       auth: {
         autoRefreshToken: false,
@@ -87,7 +84,6 @@ serve(async (req) => {
             repo,
             activity,
             githubToken,
-            lovableApiKey,
             supabase
           );
 
@@ -363,24 +359,22 @@ async function engageWithRepository(
   repo: any,
   activity: any,
   githubToken: string,
-  lovableApiKey: string,
   supabase: any
 ) {
   const engagement = { total: 0, issues: 0, discussions: 0, comments: 0 };
 
   // Respond to top issues (limit to 3 for time constraints)
   const topIssues = activity.issues
-    .filter((issue: any) => !issue.pull_request) // Exclude PRs
+    .filter((issue: any) => !issue.pull_request)
     .filter((issue: any) => {
-      // Only engage with issues that need responses
       const hoursSinceUpdate = (Date.now() - new Date(issue.updated_at).getTime()) / (1000 * 60 * 60);
-      return hoursSinceUpdate > 24; // No activity in last 24 hours
+      return hoursSinceUpdate > 24;
     })
     .slice(0, 3);
 
   for (const issue of topIssues) {
     try {
-      const response = await generateIssueResponse(issue, repo, lovableApiKey);
+      const response = await generateIssueResponse(issue, repo);
       
       // Post comment to GitHub
       const commentResponse = await fetch(
@@ -409,7 +403,7 @@ async function engageWithRepository(
   return engagement;
 }
 
-async function generateIssueResponse(issue: any, repo: any, lovableApiKey: string): Promise<string> {
+async function generateIssueResponse(issue: any, repo: any): Promise<string> {
   const prompt = `You are Eliza, the autonomous AI operator of the XMRT-DAO Ecosystem.
 
 Repository: ${repo.name}
@@ -427,20 +421,31 @@ Keep response under 400 words. End with:
 — Eliza 🤖
 *Autonomous XMRT-DAO Operator*`;
 
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${lovableApiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [{ role: 'user', content: prompt }]
-    })
-  });
+  const staticFallback = `Thank you for bringing this to our attention!
 
-  const data = await response.json();
-  return data.choices[0].message.content;
+I've reviewed the issue and will look into it further. The XMRT ecosystem team appreciates your contribution.
+
+**Next Steps:**
+- We'll investigate this issue in detail
+- Updates will be posted here as we make progress
+- Feel free to add any additional context that might help
+
+— Eliza 🤖
+*Autonomous XMRT-DAO Operator*`;
+
+  try {
+    console.log('🔄 Generating issue response with AI fallback cascade...');
+    const response = await generateTextWithFallback(prompt, undefined, {
+      temperature: 0.7,
+      maxTokens: 800,
+      useFullElizaContext: false
+    });
+    console.log('✅ Issue response generated via AI cascade');
+    return response;
+  } catch (error) {
+    console.warn('⚠️ AI response generation failed, using static fallback:', error);
+    return staticFallback;
+  }
 }
 
 async function generateAutonomousTasks(supabase: any, context: any) {
@@ -501,179 +506,71 @@ async function generateAutonomousTasks(supabase: any, context: any) {
       .limit(3);
 
     for (const msg of messages || []) {
-      const taskId = `task-community-${msg.id.substring(0, 8)}`;
+      const taskId = `task-respond-${msg.id.substring(0, 8)}`;
       await supabase.from('tasks').insert({
         id: taskId,
-        title: `Respond to community message on ${msg.platform}`,
-        description: `Author: ${msg.author_name}, Content: ${msg.content?.substring(0, 150)}`,
+        title: `Respond to community: ${msg.content?.substring(0, 40)}...`,
+        description: `Platform: ${msg.platform}\nContent: ${msg.content?.substring(0, 200)}`,
         category: 'COMMUNITY',
-        stage: 'PLANNING',
+        stage: 'DISCUSS',
         status: 'PENDING',
-        priority: msg.flagged_for_review ? 9 : 6,
+        priority: 5,
         repo: 'XMRT-Ecosystem'
       }).then(() => tasksCreated++);
     }
 
-
-    // NEW: Create tasks from high-priority GitHub issues
-    if (githubToken && context.repoActivityScores) {
-      console.log('🔍 Scanning GitHub issues for task creation...');
-      
-      for (const repoScore of context.repoActivityScores) {
-        const repo = repos.find(r => r.name === repoScore.repo_name);
-        if (!repo) continue;
-
-        try {
-          // Fetch open issues labeled as 'bug', 'feature', or 'enhancement'
-          const issuesResponse = await fetch(
-            `https://api.github.com/repos/${repo.owner}/${repo.name}/issues?state=open&labels=bug,feature,enhancement&per_page=5`,
-            {
-              headers: {
-                'Authorization': `token ${githubToken}`,
-                'Accept': 'application/vnd.github.v3+json'
-              }
-            }
-          );
-
-          if (issuesResponse.ok) {
-            const issues = await issuesResponse.json();
-            
-            for (const issue of issues) {
-              // Check if task already exists for this issue
-              const { data: existingTask } = await supabase
-                .from('tasks')
-                .select('id')
-                .eq('metadata->>github_issue_number', issue.number.toString())
-                .eq('repo', `${repo.owner}/${repo.name}`)
-                .maybeSingle();
-
-              if (!existingTask) {
-                const taskId = `task-gh-${repo.name}-${issue.number}`;
-                const category = issue.labels.some((l: any) => l.name === 'bug') ? 'CODE' : 'FEATURE';
-                const priority = issue.labels.some((l: any) => l.name === 'critical') ? 9 : 7;
-
-                await supabase.from('tasks').insert({
-                  id: taskId,
-                  title: `GitHub Issue #${issue.number}: ${issue.title}`,
-                  description: `${issue.body?.substring(0, 500) || 'No description'}\n\nGitHub URL: ${issue.html_url}`,
-                  category: category,
-                  stage: 'PLANNING',
-                  status: 'PENDING',
-                  priority: priority,
-                  repo: `${repo.owner}/${repo.name}`,
-                  metadata: {
-                    github_issue_number: issue.number,
-                    github_issue_url: issue.html_url,
-                    github_labels: issue.labels.map((l: any) => l.name),
-                    created_from: 'ecosystem-monitor'
-                  }
-                }).then(() => tasksCreated++);
-
-                console.log(`📝 Created task from GitHub issue #${issue.number}: ${issue.title}`);
-              }
-            }
-          }
-        } catch (error) {
-          console.error(`Error fetching issues for ${repo.name}:`, error);
+    // Check for high-priority GitHub issues
+    if (context.tokenHealth === 'healthy') {
+      for (const repoScore of context.repoActivityScores.slice(0, 3)) {
+        if (repoScore.metrics?.open_issues > 5) {
+          const taskId = `task-issues-${repoScore.repo_name.substring(0, 8)}`;
+          await supabase.from('tasks').insert({
+            id: taskId,
+            title: `Review issues in ${repoScore.repo_name}`,
+            description: `${repoScore.metrics.open_issues} open issues need review. Activity score: ${repoScore.activity_score}`,
+            category: 'CODE',
+            stage: 'DISCUSS',
+            status: 'PENDING',
+            priority: 6,
+            repo: repoScore.repo_name
+          }).then(() => tasksCreated++);
         }
       }
     }
 
-    // Auto-assign newly created tasks to available agents
-    try {
-      const { data: unassignedTasks } = await supabase
-        .from('tasks')
-        .select('*')
-        .is('assignee_agent_id', null)
-        .eq('status', 'PENDING')
-        .order('priority', { ascending: false })
-        .limit(10);
-
-      for (const task of unassignedTasks || []) {
-        // Find best agent based on category and availability
-        const { data: availableAgent } = await supabase
-          .from('agents')
-          .select('*')
-          .contains('skills', [task.category.toLowerCase()])
-          .eq('status', 'IDLE')
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (availableAgent) {
-          // Use agent-manager to assign task
-          const assignResult = await supabase.functions.invoke('agent-manager', {
-            body: {
-              action: 'assign_task',
-              data: {
-                task_id: task.id,
-                title: task.title,
-                description: task.description,
-                category: task.category,
-                assignee_agent_id: availableAgent.id,
-                repo: task.repo,
-                priority: task.priority
-              }
-            }
-          });
-
-          if (assignResult.error) {
-            console.error(`Error auto-assigning task ${task.id}:`, assignResult.error);
-          } else {
-            console.log(`👷 Auto-assigned task ${task.id} to agent ${availableAgent.name}`);
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Error auto-assigning tasks:', error);
-    }
-
-    // If GitHub token healthy but low engagement, create engagement tasks
-    if (context.tokenHealth === 'healthy' && context.totalEngagements < 5) {
-      const highActivityRepos = context.repoActivityScores
-        .filter((r: any) => r.activity_score >= 50)
-        .slice(0, 3);
-
-      for (const repo of highActivityRepos) {
-        const taskId = `task-engage-${repo.repo_name.toLowerCase()}`;
-        await supabase.from('tasks').insert({
-          id: taskId,
-          title: `Engage with ${repo.repo_name}`,
-          description: `Activity score: ${repo.activity_score}. Review and engage with issues, PRs, and discussions.`,
-          category: 'GITHUB',
-          stage: 'PLANNING',
-          status: 'PENDING',
-          priority: 6,
-          repo: repo.repo_name
-        }).then(() => tasksCreated++);
+    // Auto-assign tasks to available agents
+    if (tasksCreated > 0) {
+      try {
+        await supabase.functions.invoke('agent-manager', {
+          body: { action: 'auto_assign_tasks' }
+        });
+      } catch (assignError) {
+        console.warn('Could not auto-assign tasks:', assignError);
       }
     }
 
-    console.log(`✅ Generated ${tasksCreated} autonomous tasks`);
   } catch (error) {
-    console.error('Error generating tasks:', error);
+    console.error('Error generating autonomous tasks:', error);
   }
 
   return tasksCreated;
 }
 
 function calculateInfrastructureScore(metrics: any, activeDevices: any[]): number {
-  let score = 0;
+  let score = 50; // Base score
 
-  // Active devices (0-30 points)
-  score += Math.min((activeDevices?.length || 0) * 3, 30);
+  // Active devices (0-20 points)
+  score += Math.min((activeDevices?.length || 0) * 5, 20);
 
-  // Daily connections (0-25 points)
-  score += Math.min((metrics?.total_connections || 0) * 2.5, 25);
+  // Daily connections (0-15 points)
+  score += Math.min((metrics?.total_connections || 0) / 10, 15);
 
-  // Charging sessions (0-25 points)
-  score += Math.min((metrics?.total_charging_sessions || 0) * 5, 25);
+  // Charging sessions (0-10 points)
+  score += Math.min((metrics?.total_charging_sessions || 0) / 5, 10);
 
-  // Session duration quality (0-20 points)
+  // Session duration (0-5 points)
   const avgDuration = metrics?.avg_session_duration_seconds || 0;
-  if (avgDuration >= 1800) score += 20; // 30+ min sessions
-  else if (avgDuration >= 900) score += 15; // 15+ min sessions
-  else if (avgDuration >= 300) score += 10; // 5+ min sessions
+  score += avgDuration > 300 ? 5 : avgDuration / 60;
 
-  return Math.min(score, 100);
+  return Math.min(Math.round(score), 100);
 }

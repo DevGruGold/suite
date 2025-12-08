@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { callAIWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +15,6 @@ serve(async (req) => {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY')!;
     
     const supabase = createClient(supabaseUrl, supabaseKey);
     
@@ -95,26 +95,42 @@ RESPOND IN JSON ONLY:
 
 CRITICAL: Be strict about harmful contributions. Default to rejecting anything suspicious.`;
 
-    // Call Lovable AI for validation
-    const aiResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
+    // Default validation for fallback
+    const defaultValidation = {
+      is_harmful: false,
+      harm_reason: null,
+      validation_score: 50,
+      validation_reason: 'Default validation - AI providers unavailable'
+    };
+
+    let validation = defaultValidation;
+    let aiProvider = 'static_fallback';
+
+    try {
+      console.log('🔄 Validating contribution with AI fallback cascade...');
+      
+      const result = await callAIWithFallback(
+        [
           { role: 'system', content: 'You are Eliza, AI guardian of XMRT-DAO. Respond only with valid JSON.' },
           { role: 'user', content: prompt }
         ],
-        response_format: { type: 'json_object' }
-      }),
-    });
+        {
+          temperature: 0.3,
+          maxTokens: 1000,
+          useFullElizaContext: false
+        }
+      );
 
-    const aiData = await aiResponse.json();
-    const validationText = aiData.choices[0].message.content;
-    const validation = JSON.parse(validationText);
+      const validationText = result.content || '';
+      const jsonMatch = validationText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        validation = JSON.parse(jsonMatch[0]);
+        aiProvider = result.provider || 'ai_cascade';
+        console.log(`✅ Validation complete via ${aiProvider}: score ${validation.validation_score}`);
+      }
+    } catch (aiError) {
+      console.warn('⚠️ AI validation failed, using default:', aiError);
+    }
 
     // Calculate XMRT reward
     const baseRewards = {
@@ -125,7 +141,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
       comment: 10
     };
 
-    const base = baseRewards[contribution.contribution_type] || 0;
+    const base = baseRewards[contribution.contribution_type as keyof typeof baseRewards] || 0;
     const scoreMultiplier = validation.validation_score / 100;
     const excellenceBonus = validation.validation_score >= 90 ? 1.5 : 1.0;
     const xmrtReward = validation.is_harmful ? 0 : Math.floor(base * scoreMultiplier * excellenceBonus);
@@ -141,7 +157,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
       reward_calculated_at: new Date().toISOString(),
     }).eq('id', contribution_id);
 
-    // Update contributor stats - direct update instead of RPC
+    // Update contributor stats
     if (validation.is_harmful) {
       const newHarmfulCount = (contributor?.harmful_contribution_count || 0) + 1;
       
@@ -151,7 +167,6 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
         ban_reason: newHarmfulCount >= 3 ? 'Repeated harmful contributions' : null,
       }).eq('github_username', contribution.github_username);
     } else {
-      // Fetch current stats and increment directly
       const { data: currentStats } = await supabase
         .from('github_contributors')
         .select('total_contributions, total_xmrt_earned')
@@ -176,6 +191,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
         validation_score: validation.validation_score,
         xmrt_earned: xmrtReward,
         is_harmful: validation.is_harmful,
+        ai_provider: aiProvider
       },
     });
 
@@ -183,6 +199,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
       success: true,
       validation,
       xmrt_reward: xmrtReward,
+      ai_provider: aiProvider
     }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });

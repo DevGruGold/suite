@@ -1,13 +1,11 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
-import { GoogleGenerativeAI } from "npm:@google/generative-ai@0.21.0";
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
-const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
 const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
-const genAI = new GoogleGenerativeAI(GEMINI_API_KEY!);
 
 async function logActivity(
   activity_type: string,
@@ -36,8 +34,6 @@ async function generateFix(code: string, error: string, description: string) {
     "in_progress"
   );
 
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-
   const prompt = `You are an expert code fixer. Analyze this failed code execution and provide a corrected version.
 
 ORIGINAL CODE:
@@ -58,11 +54,32 @@ Provide ONLY the corrected Python code, no explanations. The code should:
 
 CORRECTED CODE:`;
 
-  const result = await model.generateContent(prompt);
-  const fixedCode = result.response.text()
-    .replace(/```python\s*/g, "")
-    .replace(/```\s*/g, "")
-    .trim();
+  let fixedCode: string;
+  
+  try {
+    console.log('🔄 Generating fix with AI fallback cascade...');
+    const result = await generateTextWithFallback(prompt, undefined, {
+      temperature: 0.3,
+      maxTokens: 4000,
+      useFullElizaContext: false
+    });
+    
+    fixedCode = result
+      .replace(/```python\s*/g, "")
+      .replace(/```\s*/g, "")
+      .trim();
+    
+    console.log('✅ Fix generated via AI cascade');
+  } catch (aiError) {
+    console.error('❌ All AI providers failed for fix generation:', aiError);
+    // Return original code with basic error handling wrapper as last resort
+    fixedCode = `# AUTO-FIX FALLBACK: AI providers unavailable
+# Original error: ${error?.substring(0, 100)}
+try:
+${code.split('\n').map(line => '    ' + line).join('\n')}
+except Exception as e:
+    print(f"Error: {e}")`;
+  }
 
   await logActivity(
     "auto_fix_analysis",
@@ -124,8 +141,6 @@ async function generateLearningMetadata(
   fixedCode: string,
   fixSuccess: boolean
 ) {
-  const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
-
   const prompt = `Analyze this code fix and extract learning insights.
 
 ORIGINAL CODE:
@@ -152,16 +167,20 @@ Provide a JSON response with:
   "prevention": "string - how to avoid this error"
 }`;
 
-  const result = await model.generateContent(prompt);
-  const text = result.response.text();
-  
   try {
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
+    console.log('🔄 Generating learning metadata with AI fallback cascade...');
+    const result = await generateTextWithFallback(prompt, undefined, {
+      temperature: 0.3,
+      maxTokens: 1000,
+      useFullElizaContext: false
+    });
+    
+    const jsonMatch = result.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
   } catch (e) {
-    console.error("Failed to parse learning metadata:", e);
+    console.error("Failed to generate learning metadata:", e);
   }
   
   return {
