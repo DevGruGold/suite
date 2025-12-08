@@ -32,6 +32,16 @@ interface WorkflowExecution {
   failedStep?: string;
 }
 
+// Helper function to map workflow progress to pipeline stages
+function getStageForProgress(stepIndex: number, totalSteps: number): string {
+  const progress = (stepIndex + 1) / totalSteps;
+  if (progress <= 0.2) return 'DISCUSS';
+  if (progress <= 0.4) return 'PLAN';
+  if (progress <= 0.7) return 'EXECUTE';
+  if (progress <= 0.9) return 'VERIFY';
+  return 'INTEGRATE';
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -107,26 +117,96 @@ serve(async (req) => {
       console.error('Failed to create workflow steps records:', stepsError);
     }
     
-    // Log workflow start
+    // ========== CREATE REAL TASK IN PIPELINE ==========
+    // Find an IDLE agent to assign the task to
+    let assignedAgentId: string | null = null;
+    let assignedAgentName: string | null = null;
+    
+    const { data: idleAgent } = await supabase
+      .from('agents')
+      .select('id, name')
+      .eq('status', 'IDLE')
+      .limit(1)
+      .single();
+    
+    if (idleAgent) {
+      assignedAgentId = idleAgent.id;
+      assignedAgentName = idleAgent.name;
+      console.log(`📋 Assigned workflow to agent: ${idleAgent.name}`);
+    }
+    
+    // Create the visual pipeline task
+    const pipelineTaskId = `task-${execution.id}`;
+    const { data: pipelineTask, error: taskError } = await supabase
+      .from('tasks')
+      .insert({
+        id: pipelineTaskId,
+        title: execution.name,
+        description: execution.description || `Executing ${execution.steps.length} workflow steps`,
+        repo: 'xmrt-suite',
+        category: 'infrastructure',
+        stage: 'DISCUSS',
+        status: 'IN_PROGRESS',
+        priority: 7,
+        progress_percentage: 0,
+        stage_started_at: new Date().toISOString(),
+        assignee_agent_id: assignedAgentId,
+        metadata: { 
+          workflow_id: execution.id, 
+          total_steps: execution.steps.length,
+          step_names: execution.steps.map(s => s.name)
+        }
+      })
+      .select()
+      .single();
+    
+    if (taskError) {
+      console.error('Failed to create pipeline task:', taskError);
+    } else {
+      console.log(`✅ Created pipeline task: ${pipelineTaskId}`);
+      
+      // Mark agent as BUSY and increment workload
+      if (assignedAgentId) {
+        await supabase
+          .from('agents')
+          .update({ 
+            status: 'BUSY',
+            current_workload: idleAgent?.current_workload ? idleAgent.current_workload + 1 : 1
+          })
+          .eq('id', assignedAgentId);
+      }
+    }
+    
+    // Log workflow start with task_id linkage
     await supabase.from('eliza_activity_log').insert({
       activity_type: 'multi_step_workflow',
       title: `🎬 Started: ${execution.name}`,
-      description: `Executing ${execution.steps.length} steps in the background`,
+      description: `Executing ${execution.steps.length} steps${assignedAgentName ? ` (Agent: ${assignedAgentName})` : ''}`,
+      task_id: pipelineTaskId,
+      agent_id: assignedAgentId,
       metadata: {
         workflow_id: execution.id,
         total_steps: execution.steps.length,
-        steps: execution.steps.map(s => s.name)
+        steps: execution.steps.map(s => s.name),
+        assigned_agent: assignedAgentName
       },
       status: 'running'
     });
     
     // Execute steps sequentially with background processing
     const executeWorkflow = async () => {
+      let currentStage = 'DISCUSS';
+      
       for (let i = 0; i < execution.steps.length; i++) {
         const step = execution.steps[i];
         execution.currentStepIndex = i;
         step.status = 'running';
         step.startTime = new Date().toISOString();
+        
+        // Calculate progress and new stage
+        const progressPercent = Math.round(((i + 0.5) / execution.steps.length) * 100);
+        const newStage = getStageForProgress(i, execution.steps.length);
+        const stageChanged = newStage !== currentStage;
         
         // Update database: workflow execution and step status
         await supabase
@@ -142,6 +222,23 @@ serve(async (req) => {
           })
           .eq('workflow_execution_id', dbExecution.id)
           .eq('step_index', i);
+        
+        // ========== UPDATE PIPELINE TASK IN REAL-TIME ==========
+        const taskUpdate: any = {
+          progress_percentage: progressPercent,
+          stage: newStage,
+          updated_at: new Date().toISOString()
+        };
+        if (stageChanged) {
+          taskUpdate.stage_started_at = new Date().toISOString();
+          currentStage = newStage;
+          console.log(`📊 Task moved to stage: ${newStage} (${progressPercent}%)`);
+        }
+        
+        await supabase
+          .from('tasks')
+          .update(taskUpdate)
+          .eq('id', pipelineTaskId);
         
         console.log(`🔄 Executing step ${i + 1}/${execution.steps.length}: ${step.name}`);
         
@@ -198,16 +295,33 @@ serve(async (req) => {
             .eq('workflow_execution_id', dbExecution.id)
             .eq('step_index', i);
           
-          // Log step completion
+          // Update pipeline task progress after step completion
+          const completedProgressPercent = Math.round(((i + 1) / execution.steps.length) * 100);
+          const completedStage = getStageForProgress(i, execution.steps.length);
+          
+          await supabase
+            .from('tasks')
+            .update({
+              progress_percentage: completedProgressPercent,
+              stage: completedStage,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', pipelineTaskId);
+          
+          // Log step completion with task_id linkage
           await supabase.from('eliza_activity_log').insert({
             activity_type: 'workflow_step_completed',
             title: `✅ Step ${i + 1}/${execution.steps.length}: ${step.name}`,
-            description: `Completed in ${step.duration}ms`,
+            description: `Completed in ${step.duration}ms (${completedProgressPercent}% → ${completedStage})`,
+            task_id: pipelineTaskId,
+            agent_id: assignedAgentId,
             metadata: {
               workflow_id: execution.id,
               step_id: step.id,
               step_index: i,
               duration_ms: step.duration,
+              current_stage: completedStage,
+              progress_percent: completedProgressPercent,
               result_summary: result.success !== undefined ? (result.success ? 'Success' : 'Partial Success') : 'Completed',
               result_preview: JSON.stringify(result).substring(0, 200)
             },
@@ -247,11 +361,34 @@ serve(async (req) => {
             })
             .eq('workflow_id', execution.id);
           
-          // Log step failure
+          // ========== MARK PIPELINE TASK AS BLOCKED ==========
+          await supabase
+            .from('tasks')
+            .update({
+              status: 'BLOCKED',
+              blocking_reason: `Step ${i + 1} failed: ${stepError.message}`,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', pipelineTaskId);
+          
+          // Release agent back to IDLE on failure
+          if (assignedAgentId) {
+            await supabase
+              .from('agents')
+              .update({ 
+                status: 'IDLE',
+                current_workload: Math.max(0, (idleAgent?.current_workload || 1) - 1)
+              })
+              .eq('id', assignedAgentId);
+          }
+          
+          // Log step failure with task_id linkage
           await supabase.from('eliza_activity_log').insert({
             activity_type: 'workflow_step_failed',
             title: `❌ Failed at Step ${i + 1}/${execution.steps.length}: ${step.name}`,
             description: `Error: ${stepError.message}`,
+            task_id: pipelineTaskId,
+            agent_id: assignedAgentId,
             metadata: {
               workflow_id: execution.id,
               step_id: step.id,
@@ -294,11 +431,38 @@ serve(async (req) => {
           })
           .eq('workflow_id', execution.id);
         
-        // Log workflow completion
+        // ========== MARK PIPELINE TASK AS COMPLETED ==========
+        await supabase
+          .from('tasks')
+          .update({
+            status: 'COMPLETED',
+            stage: 'INTEGRATE',
+            progress_percentage: 100,
+            resolution_notes: `Workflow completed: ${execution.steps.length} steps executed successfully in ${execution.finalResult.total_duration}ms`,
+            completed_at: new Date().toISOString(),
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', pipelineTaskId);
+        
+        // Release agent back to IDLE
+        if (assignedAgentId) {
+          await supabase
+            .from('agents')
+            .update({ 
+              status: 'IDLE',
+              current_workload: Math.max(0, (idleAgent?.current_workload || 1) - 1)
+            })
+            .eq('id', assignedAgentId);
+          console.log(`✅ Released agent ${assignedAgentName} back to IDLE`);
+        }
+        
+        // Log workflow completion with task_id linkage
         await supabase.from('eliza_activity_log').insert({
           activity_type: 'multi_step_workflow',
           title: `🎉 Completed: ${execution.name}`,
           description: `All ${execution.steps.length} steps completed successfully`,
+          task_id: pipelineTaskId,
+          agent_id: assignedAgentId,
           metadata: {
             workflow_id: execution.id,
             total_steps: execution.steps.length,
