@@ -2070,15 +2070,29 @@ Response includes ecosystem_summary with one-line stats for each component.`,
     type: 'function',
     function: {
       name: 'search_knowledge',
-      description: '🔍 Search the knowledge base by type, search term, or confidence score. Find stored knowledge entities.',
+      description: '🔍 RECALL/FIND ENTITIES: Search the knowledge base to recall stored entities by NAME, type, or description. Use search_term to find entities like "party favor photo", "VSCO", etc. This is how you REMEMBER things that were stored previously. Use this when users say "recall X", "remember X", "what was X", "find entity X".',
       parameters: {
         type: 'object',
         properties: {
-          search_term: { type: 'string', description: 'Text to search for in entity names and descriptions' },
-          entity_type: { type: 'string', description: 'Filter by entity type (concept, tool, skill, person, etc.)' },
+          search_term: { type: 'string', description: 'Entity name or text to search for (e.g., "party favor photo", "VSCO workspace")' },
+          entity_type: { type: 'string', description: 'Filter by entity type (concept, tool, skill, person, project, etc.)' },
           min_confidence: { type: 'number', description: 'Minimum confidence score (0-1)' },
           limit: { type: 'number', description: 'Maximum results to return (default 20)' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall_entity',
+      description: '🧠 RECALL/REMEMBER: Find a previously stored entity by its name. Use this when users ask "what was X", "recall X", "remember the entity X", "find X in knowledge base". This is an intuitive alias for search_knowledge.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'The name of the entity to recall (e.g., "party favor photo", "VSCO")' }
+        },
+        required: ['name']
       }
     }
   },

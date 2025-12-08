@@ -1157,6 +1157,16 @@ export async function executeToolCall(
           : { success: true, result: searchKnowledgeResult.data };
         break;
 
+      case 'recall_entity':
+        console.log(`🧠 [${executiveName}] Recall Entity: ${parsedArgs.name}`);
+        const recallResult = await supabase.functions.invoke('knowledge-manager', {
+          body: { action: 'search_knowledge', data: { search_term: parsedArgs.name } }
+        });
+        result = recallResult.error
+          ? { success: false, error: recallResult.error.message }
+          : { success: true, result: recallResult.data };
+        break;
+
       case 'create_knowledge_relationship':
         console.log(`🔗 [${executiveName}] Create Knowledge Relationship`);
         const createRelResult = await supabase.functions.invoke('knowledge-manager', {
