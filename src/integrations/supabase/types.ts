@@ -224,6 +224,7 @@ export type Database = {
           current_workload: number | null
           heartbeat_ms: number | null
           id: string
+          is_superduper: boolean | null
           last_seen: string | null
           max_concurrent_tasks: number | null
           metadata: Json
@@ -234,6 +235,7 @@ export type Database = {
           spawn_reason: string | null
           spawned_by: string | null
           status: Database["public"]["Enums"]["agent_status"]
+          superduper_agent_id: string | null
           updated_at: string
           version: string | null
         }
@@ -244,6 +246,7 @@ export type Database = {
           current_workload?: number | null
           heartbeat_ms?: number | null
           id: string
+          is_superduper?: boolean | null
           last_seen?: string | null
           max_concurrent_tasks?: number | null
           metadata?: Json
@@ -254,6 +257,7 @@ export type Database = {
           spawn_reason?: string | null
           spawned_by?: string | null
           status?: Database["public"]["Enums"]["agent_status"]
+          superduper_agent_id?: string | null
           updated_at?: string
           version?: string | null
         }
@@ -264,6 +268,7 @@ export type Database = {
           current_workload?: number | null
           heartbeat_ms?: number | null
           id?: string
+          is_superduper?: boolean | null
           last_seen?: string | null
           max_concurrent_tasks?: number | null
           metadata?: Json
@@ -274,10 +279,19 @@ export type Database = {
           spawn_reason?: string | null
           spawned_by?: string | null
           status?: Database["public"]["Enums"]["agent_status"]
+          superduper_agent_id?: string | null
           updated_at?: string
           version?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "agents_superduper_agent_id_fkey"
+            columns: ["superduper_agent_id"]
+            isOneToOne: false
+            referencedRelation: "superduper_agents"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       anomaly_resolutions: {
         Row: {
@@ -4918,6 +4932,60 @@ export type Database = {
           verified_at?: string | null
           verified_by?: string | null
           wallet_address?: string | null
+        }
+        Relationships: []
+      }
+      superduper_agents: {
+        Row: {
+          agent_name: string
+          category: string | null
+          combined_capabilities: Json | null
+          created_at: string | null
+          description: string | null
+          display_name: string
+          edge_function_name: string
+          execution_count: number | null
+          failure_count: number | null
+          id: string
+          is_active: boolean | null
+          priority: number | null
+          status: string | null
+          success_count: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          agent_name: string
+          category?: string | null
+          combined_capabilities?: Json | null
+          created_at?: string | null
+          description?: string | null
+          display_name: string
+          edge_function_name: string
+          execution_count?: number | null
+          failure_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          priority?: number | null
+          status?: string | null
+          success_count?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          agent_name?: string
+          category?: string | null
+          combined_capabilities?: Json | null
+          created_at?: string | null
+          description?: string | null
+          display_name?: string
+          edge_function_name?: string
+          execution_count?: number | null
+          failure_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          priority?: number | null
+          status?: string | null
+          success_count?: number | null
+          updated_at?: string | null
         }
         Relationships: []
       }
