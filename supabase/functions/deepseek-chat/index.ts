@@ -143,12 +143,19 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   return null;
 }
 
-// Fallback to Gemini API with tool_code detection
-async function callGeminiFallback(messages: any[], images?: string[], supabase?: any, SUPABASE_URL?: string, SERVICE_ROLE_KEY?: string): Promise<any> {
+// Fallback to Gemini API with native tool calling and tool_code detection
+async function callGeminiFallback(
+  messages: any[], 
+  images?: string[], 
+  supabase?: any, 
+  SUPABASE_URL?: string, 
+  SERVICE_ROLE_KEY?: string,
+  tools?: any[]
+): Promise<any> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   if (!GEMINI_API_KEY) return null;
   
-  console.log('🔄 Trying Gemini fallback...');
+  console.log('🔄 Trying Gemini fallback with native tool calling...');
   
   try {
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
@@ -167,6 +174,17 @@ async function callGeminiFallback(messages: any[], images?: string[], supabase?:
       }
     }
     
+    // Convert ELIZA_TOOLS to Gemini's function declarations format
+    const geminiTools = tools && tools.length > 0 ? [{
+      functionDeclarations: tools.map(t => ({
+        name: t.function.name,
+        description: t.function.description,
+        parameters: t.function.parameters
+      }))
+    }] : undefined;
+    
+    console.log(`📦 Passing ${tools?.length || 0} tools to Gemini`);
+    
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -174,20 +192,61 @@ async function callGeminiFallback(messages: any[], images?: string[], supabase?:
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
+          tools: geminiTools,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
         })
       }
     );
     
     if (response.ok) {
       const data = await response.json();
-      let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      const responseParts = data.candidates?.[0]?.content?.parts || [];
+      
+      // Check for native function calls from Gemini
+      const functionCalls = responseParts.filter((p: any) => p.functionCall);
+      if (functionCalls.length > 0 && supabase && SUPABASE_URL && SERVICE_ROLE_KEY) {
+        console.log(`🔧 Gemini returned ${functionCalls.length} native function calls - executing...`);
+        const toolResults = [];
+        
+        for (const fc of functionCalls) {
+          const toolCall = {
+            id: `gemini_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            type: 'function',
+            function: { 
+              name: fc.functionCall.name, 
+              arguments: JSON.stringify(fc.functionCall.args || {}) 
+            }
+          };
+          console.log(`  → Executing: ${fc.functionCall.name}`);
+          const result = await executeToolCall(supabase, toolCall, 'CTO', SUPABASE_URL, SERVICE_ROLE_KEY);
+          toolResults.push({ tool: fc.functionCall.name, result });
+        }
+        
+        // Synthesize results into natural response
+        const resultSummary = toolResults.map(r => {
+          const resultStr = typeof r.result === 'string' ? r.result : JSON.stringify(r.result);
+          return `**${r.tool}:** ${resultStr.slice(0, 500)}${resultStr.length > 500 ? '...' : ''}`;
+        }).join('\n\n');
+        
+        return { 
+          content: `I executed ${toolResults.length} operation(s):\n\n${resultSummary}`, 
+          provider: 'gemini', 
+          model: 'gemini-2.0-flash-exp', 
+          toolsExecuted: toolResults.length,
+          tool_calls: functionCalls.map((fc: any) => ({
+            function: { name: fc.functionCall.name, arguments: JSON.stringify(fc.functionCall.args) }
+          }))
+        };
+      }
+      
+      // Extract text response
+      let text = responseParts.find((p: any) => p.text)?.text;
       if (text) {
         console.log('✅ Gemini fallback successful');
         
-        // Check for tool_code blocks and execute them
+        // Fallback: Check for tool_code blocks in text response
         if (text.includes('```tool_code') && supabase && SUPABASE_URL && SERVICE_ROLE_KEY) {
-          console.log('🔧 Detected tool_code blocks in Gemini response - executing...');
+          console.log('🔧 Detected tool_code blocks in Gemini text response - executing...');
           const textToolCalls = parseToolCodeBlocks(text);
           if (textToolCalls && textToolCalls.length > 0) {
             const toolResults = [];
@@ -195,7 +254,6 @@ async function callGeminiFallback(messages: any[], images?: string[], supabase?:
               const result = await executeToolCall(supabase, toolCall, 'CTO', SUPABASE_URL, SERVICE_ROLE_KEY);
               toolResults.push({ tool: toolCall.function.name, result });
             }
-            // Remove tool_code blocks and append results
             text = text.replace(/```tool_code[\s\S]*?```/g, '').trim();
             text += `\n\n**Tool Execution Results:**\n${toolResults.map(r => `- ${r.tool}: ${JSON.stringify(r.result).slice(0, 200)}...`).join('\n')}`;
             return { content: text, provider: 'gemini', model: 'gemini-2.0-flash-exp', toolsExecuted: toolResults.length };
@@ -204,6 +262,9 @@ async function callGeminiFallback(messages: any[], images?: string[], supabase?:
         
         return { content: text, provider: 'gemini', model: 'gemini-2.0-flash-exp' };
       }
+    } else {
+      const errorText = await response.text();
+      console.warn('⚠️ Gemini API error:', response.status, errorText);
     }
   } catch (error) {
     console.warn('⚠️ Gemini fallback failed:', error.message);
@@ -290,7 +351,7 @@ serve(async (req) => {
     if (images && images.length > 0) {
       console.log(`🖼️ Images detected (${images.length}) - routing to vision-capable model`);
       
-      const geminiResult = await callGeminiFallback(aiMessages, images, supabase, SUPABASE_URL, SERVICE_ROLE_KEY);
+      const geminiResult = await callGeminiFallback(aiMessages, images, supabase, SUPABASE_URL, SERVICE_ROLE_KEY, ELIZA_TOOLS);
       if (geminiResult) {
         return new Response(
           JSON.stringify({
@@ -330,7 +391,7 @@ serve(async (req) => {
       }
       
       // Try Gemini fallback
-      const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY);
+      const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY, ELIZA_TOOLS);
       if (geminiResult) {
         return new Response(
           JSON.stringify({
@@ -430,7 +491,7 @@ serve(async (req) => {
         }
         
         // Try Gemini fallback
-        const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY);
+        const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY, ELIZA_TOOLS);
         if (geminiResult) {
           return new Response(
             JSON.stringify({
