@@ -162,7 +162,7 @@ Four specialized AI executives with distinct roles:
 
 Tier 1 - Cloud AI Executives (95%+ requests):
 - vercel-ai-chat (CSO), deepseek-chat (CTO), gemini-chat (CIO), openai-chat (CAO)
-- All 93+ edge functions use aiGatewayFallback.ts for automatic resilience
+- All 93+ edge functions use unifiedAIFallback.ts for automatic resilience
 
 Tier 2 - Lovable AI Gateway:
 - Automatic fallback via ai.gateway.lovable.dev

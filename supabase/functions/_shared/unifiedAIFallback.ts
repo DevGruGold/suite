@@ -503,3 +503,57 @@ export function getAvailableProviders(): string[] {
   
   return available;
 }
+
+/**
+ * Legacy alias for backward compatibility
+ * Routes through the unified fallback cascade
+ */
+export async function callLovableAIGateway(
+  messages: Array<{ role: string; content: string; tool_calls?: any }>,
+  options: UnifiedAIOptions = {}
+): Promise<any> {
+  const result = await callAIWithFallback(messages as AIMessage[], options);
+  
+  // Return in legacy format for compatibility
+  if (typeof result === 'object' && result.message) {
+    return result.message;
+  }
+  if (typeof result === 'object' && result.content) {
+    return result.content;
+  }
+  return result;
+}
+
+/**
+ * Generate text embeddings using Gemini
+ */
+export async function generateEmbedding(text: string): Promise<number[]> {
+  const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
+  
+  if (!GEMINI_API_KEY) {
+    throw new Error('Embedding generation requires GEMINI_API_KEY');
+  }
+
+  console.log('🧠 Generating embedding via Gemini...');
+  
+  const response = await fetch(
+    `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        content: { parts: [{ text }] }
+      }),
+    }
+  );
+  
+  if (!response.ok) {
+    const errorText = await response.text();
+    console.error('❌ Gemini embedding failed:', errorText);
+    throw new Error(`Gemini embedding failed: ${response.status} - ${errorText}`);
+  }
+  
+  const data = await response.json();
+  console.log('✅ Embedding generated successfully');
+  return data.embedding.values;
+}

@@ -3,7 +3,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateElizaSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
-import { callLovableAIGateway } from '../_shared/aiGatewayFallback.ts';
+import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
 import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 
 const corsHeaders = {
