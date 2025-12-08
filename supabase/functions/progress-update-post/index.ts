@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,13 +23,7 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('📊 Eliza generating progress update...');
-    
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!GEMINI_API_KEY) {
-      console.error('❌ GEMINI_API_KEY not configured');
-      throw new Error('GEMINI_API_KEY not configured');
-    }
+    console.log('📊 Eliza generating progress update with AI fallback cascade...');
     
     const GITHUB_TOKEN = Deno.env.get('GITHUB_TOKEN') || Deno.env.get('GITHUB_TOKEN_PROOF_OF_LIFE');
     if (!GITHUB_TOKEN) {
@@ -209,23 +204,34 @@ ${workflowsText}
 
 Format as GitHub markdown. Sign off as Eliza with the CAO (analytics) attribution.`;
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-      })
-    });
-
-    const geminiData = await geminiResponse.json();
-    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `## ${statusEmoji} Quick Status Update (${time} UTC)
+    // Static fallback for when all AI providers fail
+    const staticFallback = `## ${statusEmoji} Quick Status Update (${time} UTC)
 
 **Status:** ${statusText}
 **Completions:** ${completedCount} | **Failures:** ${failedCount}
 **Active Agents:** ${activeCount} | **Blockers:** ${blockedCount}
+**Python Success:** ${pythonRate}% | **Function Success:** ${functionRate}%
 
 — Eliza 📊`;
+
+    // Use AI fallback cascade: Lovable → DeepSeek → Kimi → Gemini
+    let discussionBody: string;
+    let aiProvider = 'static';
+    
+    try {
+      console.log('🔄 Generating content with AI fallback cascade (Lovable → DeepSeek → Kimi → Gemini)...');
+      const result = await generateTextWithFallback(prompt, undefined, {
+        temperature: 0.7,
+        maxTokens: 1024,
+        useFullElizaContext: false
+      });
+      discussionBody = result.content;
+      aiProvider = result.provider;
+      console.log(`✅ Progress update generated using ${aiProvider} provider`);
+    } catch (aiError) {
+      console.warn('⚠️ All AI providers failed, using static template:', aiError);
+      discussionBody = staticFallback;
+    }
 
     // Create GitHub discussion
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
@@ -266,7 +272,8 @@ Format as GitHub markdown. Sign off as Eliza with the CAO (analytics) attributio
         blocked_tasks_count: blockedCount,
         blocked_tasks: blockedTasks?.map(t => t.title),
         python_success_rate: pythonRate,
-        function_success_rate: functionRate
+        function_success_rate: functionRate,
+        ai_provider_used: aiProvider
       },
       status: 'completed'
     });
@@ -275,7 +282,8 @@ Format as GitHub markdown. Sign off as Eliza with the CAO (analytics) attributio
       JSON.stringify({
         success: true,
         discussion_url: discussion?.url,
-        discussion_id: discussion?.id
+        discussion_id: discussion?.id,
+        ai_provider: aiProvider
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
