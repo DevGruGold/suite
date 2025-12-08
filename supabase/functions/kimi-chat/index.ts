@@ -129,7 +129,7 @@ async function callGeminiFallback(messages: any[], images?: string[]): Promise<a
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
+          generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
         })
       }
     );
@@ -273,7 +273,7 @@ serve(async (req) => {
               { role: "system", content: systemPrompt },
               { role: "user", content: contentParts }
             ],
-            max_tokens: 4000
+            max_tokens: 8000
           }),
         });
         

@@ -924,7 +924,7 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                 contents: [{ parts }],
                 generationConfig: {
                   temperature: 0.7,
-                  maxOutputTokens: 4000
+                  maxOutputTokens: 8000
                 }
               })
             }
@@ -1090,7 +1090,7 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                         contents: [{ parts }],
                         generationConfig: {
                           temperature: 0.7,
-                          maxOutputTokens: 4000
+                          maxOutputTokens: 8000
                         },
                         tools: [{ functionDeclarations: visionTools }]
                       })
@@ -1128,7 +1128,7 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                           headers: { 'Content-Type': 'application/json' },
                           body: JSON.stringify({
                             contents: [{ parts: followUpParts }],
-                            generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
+                            generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
                           })
                         }
                       );
@@ -1213,7 +1213,7 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                     body: JSON.stringify({
                       model: 'anthropic/claude-3-haiku',
                       messages: [{ role: 'user', content: contentParts }],
-                      max_tokens: 4000,
+                      max_tokens: 8000,
                       tools: openRouterTools,
                       tool_choice: 'auto'
                     })

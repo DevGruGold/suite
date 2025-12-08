@@ -105,7 +105,7 @@ Provide a focused, expert perspective from the CAO viewpoint.`;
     let response = await callLovableAIGateway(aiMessages, {
       model: 'google/gemini-2.5-flash',
       temperature: 0.7,
-      max_tokens: councilMode ? 1000 : 4000,
+      max_tokens: councilMode ? 4000 : 8000,
       systemPrompt: councilMode ? contextualPrompt : undefined,
       tools: councilMode ? undefined : ELIZA_TOOLS,
       tool_choice: councilMode ? undefined : 'auto'

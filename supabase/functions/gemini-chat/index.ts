@@ -43,7 +43,7 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
         tools,
         tool_choice: tools ? 'auto' : undefined,
         temperature: 0.7,
-        max_tokens: 4000,
+        max_tokens: 8000,
       }),
     });
     
@@ -264,7 +264,7 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
           tools: councilMode ? undefined : [{ functionDeclarations: geminiTools.slice(0, 20) }], // Gemini has tool limit
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: councilMode ? 800 : 4000
+            maxOutputTokens: councilMode ? 4000 : 8000
           }
         })
       }
@@ -422,7 +422,7 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
               { role: 'model', parts: contentParts },
               { role: 'function', parts: toolResults }
             ],
-            generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
+            generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
           })
         }
       );
