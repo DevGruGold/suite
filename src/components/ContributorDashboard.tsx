@@ -83,14 +83,25 @@ export const ContributorDashboard = () => {
     // Fetch mining stats
     try {
       const { data: miningData } = await supabase.functions.invoke('mining-proxy');
-      if (miningData?.workers) {
+      if (miningData) {
         const workers = Array.isArray(miningData.workers) ? miningData.workers : [];
-        const totalHash = workers.reduce((sum: number, w: any) => sum + (w.hashrate || 0), 0);
-        setStats(prev => ({
-          ...prev,
-          miningWorkers: workers.length,
-          totalHashrate: totalHash
-        }));
+        
+        if (workers.length > 0) {
+          // Use individual workers from pool
+          const totalHash = workers.reduce((sum: number, w: any) => sum + (w.hash || w.hashrate || 0), 0);
+          setStats(prev => ({
+            ...prev,
+            miningWorkers: workers.length,
+            totalHashrate: totalHash
+          }));
+        } else if (miningData.hash || miningData.hashrate) {
+          // Fallback to global stats when workers array is empty
+          setStats(prev => ({
+            ...prev,
+            miningWorkers: 1,
+            totalHashrate: miningData.hash || miningData.hashrate || 0
+          }));
+        }
       }
     } catch (e) {
       console.log('Mining stats unavailable');
