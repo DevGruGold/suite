@@ -101,12 +101,37 @@ function parseToolCodeBlocks(content: string): Array<any> | null {
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
+// Detect if query needs data (should force tool calls)
+function needsDataRetrieval(messages: any[]): boolean {
+  const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
+  const dataKeywords = ['what is', 'show me', 'check', 'status', 'how much', 'how many', 'get', 'list', 'find', 'current', 'mining', 'hashrate', 'workers', 'health', 'agents', 'tasks', 'ecosystem', 'stats'];
+  return dataKeywords.some(k => lastUser.includes(k));
+}
+
+// CRITICAL TOOL CALLING INSTRUCTION
+const TOOL_CALLING_MANDATE = `
+🚨 CRITICAL TOOL CALLING RULES:
+1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
+2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
+3. DIRECTLY invoke functions - the system will handle execution
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function
+5. If you need current data, ALWAYS use tools. Never guess or make up data.
+`;
+
 // Fallback to Kimi K2 via OpenRouter
 async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
   if (!OPENROUTER_API_KEY) return null;
   
   console.log('🔄 Trying Kimi K2 fallback via OpenRouter...');
+  
+  // Inject tool calling mandate
+  const enhancedMessages = messages.map(m => 
+    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+  );
+  
+  const forceTools = needsDataRetrieval(messages);
+  console.log(`📊 Kimi - Data retrieval needed: ${forceTools}`);
   
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -119,9 +144,9 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
       },
       body: JSON.stringify({
         model: 'moonshotai/kimi-k2',
-        messages,
+        messages: enhancedMessages,
         tools,
-        tool_choice: tools ? 'auto' : undefined,
+        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
         temperature: 0.9,
         max_tokens: 8000,
       }),
