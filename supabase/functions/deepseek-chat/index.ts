@@ -50,6 +50,57 @@ function parseDeepSeekToolCalls(content: string): Array<any> | null {
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
+// Parser for Gemini/Kimi tool_code block format (fallback responses)
+function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  // Pattern: ```tool_code blocks
+  const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const code = match[1].trim();
+    
+    // Parse invoke_edge_function({ function_name: "...", payload: {...} })
+    const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+    if (invokeMatch) {
+      try {
+        let argsStr = `{${invokeMatch[1]}}`;
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const args = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: 'invoke_edge_function', arguments: JSON.stringify(args) }
+        });
+      } catch (e) {
+        console.warn('Failed to parse invoke_edge_function from tool_code:', e.message);
+      }
+      continue;
+    }
+    
+    // Parse direct function calls like check_system_status({}) or system_status()
+    const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
+    if (directMatch) {
+      const funcName = directMatch[1];
+      let argsStr = directMatch[2] || '{}';
+      try {
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const parsedArgs = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: funcName, arguments: JSON.stringify(parsedArgs) }
+        });
+      } catch (e) {
+        console.warn(`Failed to parse ${funcName} from tool_code:`, e.message);
+      }
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
 // Fallback to Kimi K2 via OpenRouter
 async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
@@ -92,8 +143,8 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   return null;
 }
 
-// Fallback to Gemini API
-async function callGeminiFallback(messages: any[], images?: string[]): Promise<any> {
+// Fallback to Gemini API with tool_code detection
+async function callGeminiFallback(messages: any[], images?: string[], supabase?: any, SUPABASE_URL?: string, SERVICE_ROLE_KEY?: string): Promise<any> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   if (!GEMINI_API_KEY) return null;
   
@@ -130,9 +181,27 @@ async function callGeminiFallback(messages: any[], images?: string[]): Promise<a
     
     if (response.ok) {
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text;
+      let text = data.candidates?.[0]?.content?.parts?.[0]?.text;
       if (text) {
         console.log('✅ Gemini fallback successful');
+        
+        // Check for tool_code blocks and execute them
+        if (text.includes('```tool_code') && supabase && SUPABASE_URL && SERVICE_ROLE_KEY) {
+          console.log('🔧 Detected tool_code blocks in Gemini response - executing...');
+          const textToolCalls = parseToolCodeBlocks(text);
+          if (textToolCalls && textToolCalls.length > 0) {
+            const toolResults = [];
+            for (const toolCall of textToolCalls) {
+              const result = await executeToolCall(supabase, toolCall, 'CTO', SUPABASE_URL, SERVICE_ROLE_KEY);
+              toolResults.push({ tool: toolCall.function.name, result });
+            }
+            // Remove tool_code blocks and append results
+            text = text.replace(/```tool_code[\s\S]*?```/g, '').trim();
+            text += `\n\n**Tool Execution Results:**\n${toolResults.map(r => `- ${r.tool}: ${JSON.stringify(r.result).slice(0, 200)}...`).join('\n')}`;
+            return { content: text, provider: 'gemini', model: 'gemini-2.0-flash-exp', toolsExecuted: toolResults.length };
+          }
+        }
+        
         return { content: text, provider: 'gemini', model: 'gemini-2.0-flash-exp' };
       }
     }
