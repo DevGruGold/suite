@@ -2,7 +2,12 @@
  * Backend AI Gateway Fallback
  * Provides Lovable AI Gateway access for all edge functions
  * Fallback cascade: Lovable → DeepSeek → Kimi K2 → Gemini (FREE ultimate fallback)
+ * 
+ * ENHANCED: All providers now receive full Eliza intelligence context
  */
+
+import { generateElizaSystemPrompt } from './elizaSystemPrompt.ts';
+import { ELIZA_TOOLS } from './elizaTools.ts';
 
 export interface AIGatewayOptions {
   model?: 'google/gemini-2.5-flash' | 'google/gemini-2.5-pro' | 'openai/gpt-5-mini';
@@ -10,10 +15,54 @@ export interface AIGatewayOptions {
   max_tokens?: number;
   systemPrompt?: string;
   tools?: Array<any>;
+  // Eliza context enrichment
+  userContext?: any;
+  miningStats?: any;
+  useFullElizaContext?: boolean; // Default true
+}
+
+/**
+ * Get effective system prompt - uses full Eliza if not provided
+ */
+function getEffectiveSystemPrompt(options: AIGatewayOptions): string | undefined {
+  if (options.systemPrompt && options.systemPrompt.length > 1000) {
+    return options.systemPrompt;
+  }
+  
+  if (options.useFullElizaContext === false) {
+    return options.systemPrompt;
+  }
+  
+  // DEFAULT: Use full Eliza system prompt
+  console.log('🧠 Gemini fallback: Enriching with full Eliza system prompt...');
+  return generateElizaSystemPrompt(
+    options.userContext,
+    options.miningStats,
+    null,
+    'eliza',
+    'Chief Strategy Officer'
+  );
+}
+
+/**
+ * Get effective tools - uses ELIZA_TOOLS if not provided
+ */
+function getEffectiveTools(options: AIGatewayOptions): any[] {
+  if (options.tools && options.tools.length > 0) {
+    return options.tools;
+  }
+  
+  if (options.useFullElizaContext === false) {
+    return [];
+  }
+  
+  console.log('🔧 Gemini fallback: Including ELIZA_TOOLS...');
+  return ELIZA_TOOLS;
 }
 
 /**
  * Call Gemini as ultimate fallback (FREE tier available)
+ * ENHANCED: Now includes full Eliza system prompt and tool calling support
  */
 async function callGeminiFallback(
   messages: Array<{ role: string; content: string }>,
@@ -25,21 +74,41 @@ async function callGeminiFallback(
     throw new Error('GEMINI_API_KEY not configured - Gemini fallback unavailable');
   }
 
-  console.log('💎 Falling back to Gemini (FREE tier)...');
+  console.log('💎 Falling back to Gemini with full Eliza intelligence...');
   
-  // Convert messages to Gemini format
-  const systemPrompt = options.systemPrompt || messages.find(m => m.role === 'system')?.content || '';
+  const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+  const effectiveTools = getEffectiveTools(options);
+  
+  // Convert messages to Gemini format (exclude system messages)
   const conversationMessages = messages.filter(m => m.role !== 'system');
-  
-  // Build contents array for Gemini
   const contents = conversationMessages.map(msg => ({
     role: msg.role === 'assistant' ? 'model' : 'user',
     parts: [{ text: msg.content }]
   }));
+
+  const requestBody: any = {
+    contents,
+    generationConfig: {
+      temperature: options.temperature || 0.7,
+      maxOutputTokens: options.max_tokens || 2000
+    }
+  };
   
-  // Prepend system prompt to first user message if present
-  if (systemPrompt && contents.length > 0 && contents[0].role === 'user') {
-    contents[0].parts[0].text = `${systemPrompt}\n\n${contents[0].parts[0].text}`;
+  // Add system instruction with full Eliza prompt
+  if (effectiveSystemPrompt) {
+    requestBody.systemInstruction = { parts: [{ text: effectiveSystemPrompt }] };
+  }
+  
+  // Add tool definitions for Gemini (convert to Gemini format)
+  if (effectiveTools.length > 0) {
+    requestBody.tools = [{
+      functionDeclarations: effectiveTools.slice(0, 30).map(tool => ({
+        name: tool.function.name,
+        description: tool.function.description,
+        parameters: tool.function.parameters
+      }))
+    }];
+    console.log(`🔧 Gemini fallback: Enabled ${Math.min(effectiveTools.length, 30)} tools`);
   }
 
   const response = await fetch(
@@ -47,13 +116,7 @@ async function callGeminiFallback(
     {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents,
-        generationConfig: {
-          temperature: options.temperature || 0.7,
-          maxOutputTokens: options.max_tokens || 2000
-        }
-      })
+      body: JSON.stringify(requestBody)
     }
   );
 
@@ -64,18 +127,43 @@ async function callGeminiFallback(
   }
 
   const data = await response.json();
-  const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const parts = data.candidates?.[0]?.content?.parts;
 
-  if (!content) {
+  if (!parts || parts.length === 0) {
     throw new Error('No content in Gemini response');
   }
+  
+  // Check for function calls (Gemini's tool call format)
+  const functionCall = parts.find((p: any) => p.functionCall);
+  if (functionCall) {
+    console.log(`🔧 Gemini returned function call: ${functionCall.functionCall.name}`);
+    // Convert to OpenAI format for compatibility
+    return {
+      role: 'assistant',
+      content: null,
+      tool_calls: [{
+        id: `gemini_${Date.now()}`,
+        type: 'function',
+        function: {
+          name: functionCall.functionCall.name,
+          arguments: JSON.stringify(functionCall.functionCall.args || {})
+        }
+      }]
+    };
+  }
 
-  console.log('✅ Gemini fallback successful (FREE tier)');
+  const content = parts[0]?.text;
+  if (!content) {
+    throw new Error('No text content in Gemini response');
+  }
+
+  console.log('✅ Gemini fallback successful with Eliza intelligence');
   return content;
 }
 
 /**
  * Call Kimi K2 via OpenRouter as fallback
+ * ENHANCED: Now includes full Eliza system prompt and tool calling support
  */
 async function callKimiFallback(
   messages: Array<{ role: string; content: string }>,
@@ -87,11 +175,29 @@ async function callKimiFallback(
     throw new Error('OPENROUTER_API_KEY not configured - Kimi fallback unavailable');
   }
 
-  console.log('🦊 Falling back to Kimi K2 via OpenRouter...');
+  console.log('🦊 Falling back to Kimi K2 with full Eliza intelligence...');
   
-  const requestMessages = options.systemPrompt
-    ? [{ role: 'system', content: options.systemPrompt }, ...messages]
-    : messages;
+  const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+  const effectiveTools = getEffectiveTools(options);
+  
+  const requestMessages = [
+    { role: 'system', content: effectiveSystemPrompt || 'You are a helpful AI assistant.' },
+    ...messages.filter(m => m.role !== 'system')
+  ];
+
+  const requestBody: any = {
+    model: 'moonshotai/kimi-k2',
+    messages: requestMessages,
+    temperature: options.temperature || 0.7,
+    max_tokens: options.max_tokens || 2000,
+  };
+  
+  // Include tools for Kimi
+  if (effectiveTools.length > 0) {
+    requestBody.tools = effectiveTools.slice(0, 40);
+    requestBody.tool_choice = 'auto';
+    console.log(`🔧 Kimi fallback: Enabled ${Math.min(effectiveTools.length, 40)} tools`);
+  }
 
   const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
     method: 'POST',
@@ -101,12 +207,7 @@ async function callKimiFallback(
       'HTTP-Referer': 'https://xmrt.pro',
       'X-Title': 'XMRT Eliza'
     },
-    body: JSON.stringify({
-      model: 'moonshotai/kimi-k2',
-      messages: requestMessages,
-      temperature: options.temperature || 0.9,
-      max_tokens: options.max_tokens || 2000, // Reduced from 8000 to stay within credit limits
-    }),
+    body: JSON.stringify(requestBody),
   });
 
   if (!response.ok) {
@@ -122,7 +223,7 @@ async function callKimiFallback(
     throw new Error('No message in Kimi response');
   }
 
-  console.log('✅ Kimi K2 fallback successful');
+  console.log('✅ Kimi K2 fallback successful with Eliza intelligence');
 
   if (message.tool_calls?.length > 0) {
     console.log(`🔧 Kimi returned ${message.tool_calls.length} tool calls`);
@@ -134,6 +235,7 @@ async function callKimiFallback(
 
 /**
  * Call DeepSeek API as fallback when Lovable fails
+ * ENHANCED: Now includes full Eliza system prompt and tool calling support
  */
 async function callDeepSeekFallback(
   messages: Array<{ role: string; content: string }>,
@@ -145,11 +247,15 @@ async function callDeepSeekFallback(
     throw new Error('DEEPSEEK_API_KEY not configured - no fallback available');
   }
 
-  console.log('🔄 Falling back to DeepSeek CTO...');
+  console.log('🔄 Falling back to DeepSeek with full Eliza intelligence...');
   
-  const requestMessages = options.systemPrompt
-    ? [{ role: 'system', content: options.systemPrompt }, ...messages]
-    : messages;
+  const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+  const effectiveTools = getEffectiveTools(options);
+  
+  const requestMessages = [
+    { role: 'system', content: effectiveSystemPrompt || 'You are a helpful AI assistant.' },
+    ...messages.filter(m => m.role !== 'system')
+  ];
 
   const requestBody: any = {
     model: 'deepseek-chat',
@@ -158,9 +264,11 @@ async function callDeepSeekFallback(
     max_tokens: options.max_tokens || 4000,
   };
 
-  if (options.tools?.length) {
-    requestBody.tools = options.tools.slice(0, 50);
+  // Include tools for DeepSeek
+  if (effectiveTools.length > 0) {
+    requestBody.tools = effectiveTools.slice(0, 50);
     requestBody.tool_choice = 'auto';
+    console.log(`🔧 DeepSeek fallback: Enabled ${Math.min(effectiveTools.length, 50)} tools`);
   }
 
   const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -185,7 +293,7 @@ async function callDeepSeekFallback(
     throw new Error('No message in DeepSeek response');
   }
 
-  console.log('✅ DeepSeek fallback successful');
+  console.log('✅ DeepSeek fallback successful with Eliza intelligence');
 
   if (message.tool_calls?.length > 0) {
     console.log(`🔧 DeepSeek returned ${message.tool_calls.length} tool calls`);

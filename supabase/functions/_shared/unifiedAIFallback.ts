@@ -1,16 +1,27 @@
 /**
  * Unified AI Fallback Service
- * Provides resilient AI calls with Lovable → DeepSeek → Gemini cascade
- * Ensures edge functions never fail due to single provider outages
+ * Provides resilient AI calls with Lovable → DeepSeek → Kimi → Gemini cascade
+ * 
+ * ENHANCED: Now includes full Eliza intelligence (system prompt, tools, memory)
+ * to ensure ALL fallback providers are equally intelligent as lovable-chat.
  */
+
+import { generateElizaSystemPrompt } from './elizaSystemPrompt.ts';
+import { ELIZA_TOOLS } from './elizaTools.ts';
 
 export interface UnifiedAIOptions {
   model?: string;
   temperature?: number;
-  max_tokens?: number;
+  maxTokens?: number;
+  max_tokens?: number; // Alias for compatibility
   systemPrompt?: string;
   tools?: Array<any>;
   preferProvider?: 'lovable' | 'deepseek' | 'kimi' | 'gemini';
+  // Eliza intelligence context
+  userContext?: any;
+  miningStats?: any;
+  executiveName?: string;
+  useFullElizaContext?: boolean; // Default true - use full Eliza intelligence
 }
 
 export interface AIMessage {
@@ -28,6 +39,48 @@ interface ProviderResult {
 }
 
 /**
+ * Get the effective system prompt - uses full Eliza prompt if not provided
+ */
+function getEffectiveSystemPrompt(options: UnifiedAIOptions): string {
+  if (options.systemPrompt && options.systemPrompt.length > 1000) {
+    // Already has rich context
+    return options.systemPrompt;
+  }
+  
+  if (options.useFullElizaContext === false) {
+    // Explicitly disabled
+    return options.systemPrompt || 'You are a helpful AI assistant.';
+  }
+  
+  // DEFAULT: Use full Eliza system prompt for intelligence parity
+  console.log('🧠 Enriching with full Eliza system prompt...');
+  return generateElizaSystemPrompt(
+    options.userContext,
+    options.miningStats,
+    null,
+    'eliza',
+    options.executiveName || 'Chief Strategy Officer'
+  );
+}
+
+/**
+ * Get effective tools - uses ELIZA_TOOLS if not provided
+ */
+function getEffectiveTools(options: UnifiedAIOptions): any[] {
+  if (options.tools && options.tools.length > 0) {
+    return options.tools;
+  }
+  
+  if (options.useFullElizaContext === false) {
+    return [];
+  }
+  
+  // DEFAULT: Use full Eliza tools for capability parity
+  console.log('🔧 Including all ELIZA_TOOLS for fallback provider...');
+  return ELIZA_TOOLS;
+}
+
+/**
  * Call DeepSeek API directly
  */
 async function callDeepSeek(
@@ -41,11 +94,30 @@ async function callDeepSeek(
   }
 
   try {
-    console.log('🔄 Attempting DeepSeek AI...');
+    console.log('🔄 Attempting DeepSeek AI with full Eliza context...');
     
-    const requestMessages = options.systemPrompt
-      ? [{ role: 'system', content: options.systemPrompt }, ...messages]
-      : messages;
+    const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+    const effectiveTools = getEffectiveTools(options);
+    
+    const requestMessages = [
+      { role: 'system', content: effectiveSystemPrompt },
+      ...messages.filter(m => m.role !== 'system')
+    ];
+
+    const maxTokens = options.maxTokens || options.max_tokens || 4000;
+    
+    const requestBody: any = {
+      model: 'deepseek-chat',
+      messages: requestMessages,
+      temperature: options.temperature || 0.7,
+      max_tokens: maxTokens,
+    };
+    
+    // Include tools for full capability
+    if (effectiveTools.length > 0) {
+      requestBody.tools = effectiveTools.slice(0, 50); // DeepSeek limit
+      requestBody.tool_choice = 'auto';
+    }
 
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -53,13 +125,7 @@ async function callDeepSeek(
         'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
         'Content-Type': 'application/json',
       },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: requestMessages,
-        temperature: options.temperature || 0.7,
-        max_tokens: options.max_tokens || 4000,
-        ...(options.tools?.length ? { tools: options.tools, tool_choice: 'auto' } : {}),
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -75,10 +141,10 @@ async function callDeepSeek(
       return { success: false, provider: 'deepseek', error: 'No message in response' };
     }
 
-    console.log('✅ DeepSeek AI successful');
+    console.log('✅ DeepSeek AI successful with Eliza intelligence');
     
-    // Return full message if tool calls present
     if (message.tool_calls?.length > 0) {
+      console.log(`🔧 DeepSeek returned ${message.tool_calls.length} tool calls`);
       return { success: true, provider: 'deepseek', message };
     }
     
@@ -103,21 +169,27 @@ async function callLovable(
   }
 
   try {
-    console.log('🌐 Attempting Lovable AI Gateway...');
+    console.log('🌐 Attempting Lovable AI Gateway with full Eliza context...');
     
-    const requestMessages = options.systemPrompt
-      ? [{ role: 'system', content: options.systemPrompt }, ...messages]
-      : messages;
+    const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+    const effectiveTools = getEffectiveTools(options);
+    
+    const requestMessages = [
+      { role: 'system', content: effectiveSystemPrompt },
+      ...messages.filter(m => m.role !== 'system')
+    ];
+
+    const maxTokens = options.maxTokens || options.max_tokens || 2000;
 
     const requestBody: any = {
       model: options.model || 'google/gemini-2.5-flash',
       messages: requestMessages,
       temperature: options.temperature || 0.7,
-      max_tokens: options.max_tokens || 2000,
+      max_tokens: maxTokens,
     };
 
-    if (options.tools?.length) {
-      requestBody.tools = options.tools.slice(0, 39); // Limit tools
+    if (effectiveTools.length > 0) {
+      requestBody.tools = effectiveTools.slice(0, 39); // Lovable limit
       requestBody.tool_choice = 'auto';
     }
 
@@ -146,6 +218,7 @@ async function callLovable(
     console.log('✅ Lovable AI Gateway successful');
     
     if (message.tool_calls?.length > 0) {
+      console.log(`🔧 Lovable returned ${message.tool_calls.length} tool calls`);
       return { success: true, provider: 'lovable', message };
     }
     
@@ -170,11 +243,30 @@ async function callKimi(
   }
 
   try {
-    console.log('🦊 Attempting Kimi K2 via OpenRouter...');
+    console.log('🦊 Attempting Kimi K2 via OpenRouter with full Eliza context...');
     
-    const requestMessages = options.systemPrompt
-      ? [{ role: 'system', content: options.systemPrompt }, ...messages]
-      : messages;
+    const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+    const effectiveTools = getEffectiveTools(options);
+    
+    const requestMessages = [
+      { role: 'system', content: effectiveSystemPrompt },
+      ...messages.filter(m => m.role !== 'system')
+    ];
+
+    const maxTokens = options.maxTokens || options.max_tokens || 2000;
+
+    const requestBody: any = {
+      model: 'moonshotai/kimi-k2',
+      messages: requestMessages,
+      temperature: options.temperature || 0.7,
+      max_tokens: maxTokens, // Reduced for credit limits
+    };
+    
+    // Include tools for Kimi
+    if (effectiveTools.length > 0) {
+      requestBody.tools = effectiveTools.slice(0, 40);
+      requestBody.tool_choice = 'auto';
+    }
 
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -184,12 +276,7 @@ async function callKimi(
         'HTTP-Referer': 'https://xmrt.pro',
         'X-Title': 'XMRT Eliza'
       },
-      body: JSON.stringify({
-        model: 'moonshotai/kimi-k2',
-        messages: requestMessages,
-        temperature: options.temperature || 0.9,
-        max_tokens: options.max_tokens || 8000,
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -205,9 +292,10 @@ async function callKimi(
       return { success: false, provider: 'kimi', error: 'No message in response' };
     }
 
-    console.log('✅ Kimi K2 successful');
+    console.log('✅ Kimi K2 successful with Eliza intelligence');
     
     if (message.tool_calls?.length > 0) {
+      console.log(`🔧 Kimi returned ${message.tool_calls.length} tool calls`);
       return { success: true, provider: 'kimi', message };
     }
     
@@ -219,7 +307,7 @@ async function callKimi(
 }
 
 /**
- * Call Gemini API directly
+ * Call Gemini API directly with tool calling support
  */
 async function callGemini(
   messages: AIMessage[],
@@ -232,32 +320,46 @@ async function callGemini(
   }
 
   try {
-    console.log('💎 Attempting Gemini AI...');
+    console.log('💎 Attempting Gemini AI with full Eliza context...');
     
-    // Convert messages to Gemini format
-    const contents = messages.map(msg => ({
+    const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+    const effectiveTools = getEffectiveTools(options);
+    
+    // Convert messages to Gemini format (excluding system messages)
+    const userMessages = messages.filter(m => m.role !== 'system');
+    const contents = userMessages.map(msg => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
       parts: [{ text: msg.content }],
     }));
 
-    // Add system instruction if provided
-    const systemInstruction = options.systemPrompt
-      ? { parts: [{ text: options.systemPrompt }] }
-      : undefined;
+    const maxTokens = options.maxTokens || options.max_tokens || 2000;
+
+    const requestBody: any = {
+      contents,
+      systemInstruction: { parts: [{ text: effectiveSystemPrompt }] },
+      generationConfig: {
+        temperature: options.temperature || 0.7,
+        maxOutputTokens: maxTokens,
+      },
+    };
+    
+    // Add tool definitions for Gemini (convert to Gemini format)
+    if (effectiveTools.length > 0) {
+      requestBody.tools = [{
+        functionDeclarations: effectiveTools.slice(0, 30).map(tool => ({
+          name: tool.function.name,
+          description: tool.function.description,
+          parameters: tool.function.parameters
+        }))
+      }];
+    }
 
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents,
-          systemInstruction,
-          generationConfig: {
-            temperature: options.temperature || 0.7,
-            maxOutputTokens: options.max_tokens || 2000,
-          },
-        }),
+        body: JSON.stringify(requestBody),
       }
     );
 
@@ -268,13 +370,38 @@ async function callGemini(
     }
 
     const data = await response.json();
-    const content = data.candidates?.[0]?.content?.parts?.[0]?.text;
-
-    if (!content) {
+    const parts = data.candidates?.[0]?.content?.parts;
+    
+    if (!parts || parts.length === 0) {
       return { success: false, provider: 'gemini', error: 'No content in response' };
     }
 
-    console.log('✅ Gemini AI successful');
+    console.log('✅ Gemini AI successful with Eliza intelligence');
+    
+    // Check for function calls (Gemini's tool call format)
+    const functionCall = parts.find((p: any) => p.functionCall);
+    if (functionCall) {
+      console.log(`🔧 Gemini returned function call: ${functionCall.functionCall.name}`);
+      // Convert to OpenAI format for compatibility
+      return {
+        success: true,
+        provider: 'gemini',
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{
+            id: `gemini_${Date.now()}`,
+            type: 'function',
+            function: {
+              name: functionCall.functionCall.name,
+              arguments: JSON.stringify(functionCall.functionCall.args || {})
+            }
+          }]
+        }
+      };
+    }
+    
+    const content = parts[0]?.text || '';
     return { success: true, provider: 'gemini', content };
   } catch (error) {
     console.warn('⚠️ Gemini error:', error.message);
@@ -284,7 +411,9 @@ async function callGemini(
 
 /**
  * Unified AI call with automatic fallback cascade
- * Order: Lovable → DeepSeek → Gemini
+ * Order: Lovable → DeepSeek → Kimi → Gemini
+ * 
+ * ENHANCED: All providers now receive full Eliza intelligence context
  * 
  * Returns either the content string (for text responses) or full message object (for tool calls)
  */
@@ -293,6 +422,9 @@ export async function callAIWithFallback(
   options: UnifiedAIOptions = {}
 ): Promise<string | any> {
   const errors: string[] = [];
+  
+  // Log context enrichment
+  console.log('🧠 callAIWithFallback: Using full Eliza intelligence context for all providers');
   
   // Define provider order based on preference
   // Default cascade: Lovable → DeepSeek → Kimi → Gemini
@@ -310,9 +442,9 @@ export async function callAIWithFallback(
     if (result.success) {
       // Return full message object if tool calls present
       if (result.message) {
-        return result.message;
+        return { ...result.message, provider: result.provider };
       }
-      return result.content || '';
+      return { content: result.content || '', provider: result.provider };
     }
     
     errors.push(`${result.provider}: ${result.error}`);
