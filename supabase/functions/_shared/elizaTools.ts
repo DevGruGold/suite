@@ -163,7 +163,7 @@ export const ELIZA_TOOLS = [
           type: 'object',
           properties: {
             user_message: { type: 'string', description: 'Current user message to analyze' },
-            conversation_history: { type: 'array', description: 'Optional: recent conversation messages for context' },
+            conversation_history: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } }, description: 'Optional: recent conversation messages for context' },
             session_key: { type: 'string', description: 'Session key to track services interested in' }
           },
           required: ['user_message']
@@ -631,6 +631,7 @@ export const ELIZA_TOOLS = [
             description: { type: 'string', description: 'Description of what the workflow does' },
             steps: { 
               type: 'array',
+              items: { type: 'object', properties: { type: { type: 'string' }, name: { type: 'string' }, config: { type: 'object' } } },
               description: 'Array of workflow steps with type, name, and configuration'
             },
             tags: {
@@ -2357,9 +2358,9 @@ Response includes ecosystem_summary with one-line stats for each component.`,
           stage: { type: 'string', enum: ['lead', 'booked', 'fulfillment', 'completed'], description: 'Initial stage' },
           job_type: { type: 'string', description: 'Type of job (wedding, portrait, etc.)' },
           brand_id: { type: 'string', description: 'Brand ID for the job' },
-          events: { type: 'array', description: 'Pre-filled events for the worksheet' },
-          contacts: { type: 'array', description: 'Pre-filled contacts for the worksheet' },
-          products: { type: 'array', description: 'Pre-filled products for the worksheet' }
+          events: { type: 'array', items: { type: 'object' }, description: 'Pre-filled events for the worksheet' },
+          contacts: { type: 'array', items: { type: 'object' }, description: 'Pre-filled contacts for the worksheet' },
+          products: { type: 'array', items: { type: 'object' }, description: 'Pre-filled products for the worksheet' }
         },
         required: ['action']
       }
