@@ -406,6 +406,9 @@ verify_jwt = false
 [functions.validate-github-contribution]
 verify_jwt = false
 
+[functions.ingest-github-contribution]
+verify_jwt = false
+
 [functions.process-contributor-reward]
 verify_jwt = false
 

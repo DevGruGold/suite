@@ -2,11 +2,12 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { Trophy, GitCommit, DollarSign, TrendingUp, Cpu, Battery, Users, Zap, ExternalLink } from 'lucide-react';
+import { Trophy, GitCommit, DollarSign, TrendingUp, Cpu, Battery, Zap, ExternalLink, CheckCircle, XCircle, Clock } from 'lucide-react';
 import { GitHubPATInput } from './GitHubContributorRegistration';
 import { SkeletonCard } from './ui/skeleton-card';
 import MiningLeaderboard from './MiningLeaderboard';
 import XMRTChargerLeaderboard from './XMRTChargerLeaderboard';
+import { Badge } from './ui/badge';
 
 interface Contributor {
   github_username: string;
@@ -16,6 +17,20 @@ interface Contributor {
   avg_validation_score: number;
   target_repo_owner: string;
   target_repo_name: string;
+  last_contribution_at?: string;
+}
+
+interface Contribution {
+  id: string;
+  github_username: string;
+  contribution_type: string;
+  repo_name: string;
+  repo_owner: string;
+  is_validated: boolean;
+  validation_score: number | null;
+  xmrt_earned: number;
+  created_at: string;
+  github_url?: string;
 }
 
 interface SummaryStats {
@@ -29,6 +44,7 @@ interface SummaryStats {
 
 export const ContributorDashboard = () => {
   const [contributors, setContributors] = useState<Contributor[]>([]);
+  const [recentContributions, setRecentContributions] = useState<Contribution[]>([]);
   const [showPATInput, setShowPATInput] = useState(false);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<SummaryStats>({
@@ -49,6 +65,11 @@ export const ContributorDashboard = () => {
         event: '*',
         schema: 'public',
         table: 'github_contributors'
+      }, () => fetchData())
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'github_contributions'
       }, () => fetchData())
       .subscribe();
 
@@ -78,6 +99,17 @@ export const ContributorDashboard = () => {
         githubContributors: contributorsData.length,
         githubCredits: totalCredits
       }));
+    }
+
+    // Fetch recent contributions with XMRT earned
+    const { data: contributionsData } = await supabase
+      .from('github_contributions')
+      .select('id, github_username, contribution_type, repo_name, repo_owner, is_validated, validation_score, xmrt_earned, created_at, github_url')
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    if (contributionsData) {
+      setRecentContributions(contributionsData);
     }
 
     // Fetch mining stats
@@ -306,11 +338,93 @@ export const ContributorDashboard = () => {
                         </div>
                       </div>
                     </div>
-                  ))
-                )}
-              </div>
-            </CardContent>
-          </Card>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Recent Contributions with XMRT */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Clock className="w-5 h-5 text-muted-foreground" />
+              Recent Contributions
+            </CardTitle>
+            <CardDescription>
+              Latest validated contributions and XMRT rewards
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {recentContributions.length === 0 ? (
+                <p className="text-center text-muted-foreground py-4">
+                  No contributions yet. Start contributing to earn XMRT!
+                </p>
+              ) : (
+                recentContributions.map((contribution) => (
+                  <div
+                    key={contribution.id}
+                    className="flex items-center justify-between p-3 rounded-lg border bg-card/50 hover:bg-accent/5 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      {contribution.is_validated ? (
+                        contribution.xmrt_earned > 0 ? (
+                          <CheckCircle className="w-5 h-5 text-green-500" />
+                        ) : (
+                          <XCircle className="w-5 h-5 text-destructive" />
+                        )
+                      ) : (
+                        <Clock className="w-5 h-5 text-muted-foreground animate-pulse" />
+                      )}
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">@{contribution.github_username}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {contribution.contribution_type}
+                          </Badge>
+                        </div>
+                        <div className="text-xs text-muted-foreground">
+                          {contribution.repo_owner}/{contribution.repo_name}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-4">
+                      {contribution.validation_score !== null && (
+                        <div className="text-sm">
+                          <span className={
+                            contribution.validation_score >= 90 ? 'text-green-500' :
+                            contribution.validation_score >= 70 ? 'text-primary' :
+                            contribution.validation_score >= 50 ? 'text-suite-warning' :
+                            'text-destructive'
+                          }>
+                            {contribution.validation_score}/100
+                          </span>
+                        </div>
+                      )}
+                      <div className="text-right min-w-[80px]">
+                        <div className="font-bold text-primary">
+                          +{contribution.xmrt_earned.toLocaleString()}
+                        </div>
+                        <div className="text-xs text-muted-foreground">XMRT</div>
+                      </div>
+                      {contribution.github_url && (
+                        <a
+                          href={contribution.github_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-muted-foreground hover:text-primary"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </CardContent>
+        </Card>
 
           {/* How it Works */}
           <Card>

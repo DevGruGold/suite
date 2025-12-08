@@ -141,7 +141,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
       reward_calculated_at: new Date().toISOString(),
     }).eq('id', contribution_id);
 
-    // Update contributor stats
+    // Update contributor stats - direct update instead of RPC
     if (validation.is_harmful) {
       const newHarmfulCount = (contributor?.harmful_contribution_count || 0) + 1;
       
@@ -151,13 +151,18 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
         ban_reason: newHarmfulCount >= 3 ? 'Repeated harmful contributions' : null,
       }).eq('github_username', contribution.github_username);
     } else {
-      // Update positive stats
-      await supabase.rpc('increment', {
-        table_name: 'github_contributors',
-        column_name: 'total_contributions',
-        filter_column: 'github_username',
-        filter_value: contribution.github_username
-      });
+      // Fetch current stats and increment directly
+      const { data: currentStats } = await supabase
+        .from('github_contributors')
+        .select('total_contributions, total_xmrt_earned')
+        .eq('github_username', contribution.github_username)
+        .single();
+
+      await supabase.from('github_contributors').update({
+        total_contributions: (currentStats?.total_contributions || 0) + 1,
+        total_xmrt_earned: (currentStats?.total_xmrt_earned || 0) + xmrtReward,
+        last_contribution_at: new Date().toISOString()
+      }).eq('github_username', contribution.github_username);
     }
 
     // Log activity
