@@ -355,13 +355,16 @@ export async function callLovableAIGateway(
     const errorText = await response.text();
     console.warn('⚠️ Lovable AI Gateway error:', response.status, errorText);
     
-    // For 402/429/5xx errors - try fallback cascade: DeepSeek → Kimi
+    // For 400 (schema errors), 402/429/5xx errors - try fallback cascade: DeepSeek → Kimi → Gemini
     const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
+    const shouldFallback = response.status === 400 || response.status === 402 || response.status === 429 || response.status >= 500;
     
-    if (response.status === 402 || response.status === 429 || response.status >= 500) {
+    if (shouldFallback) {
+      console.log(`🔄 Lovable returned ${response.status}, initiating fallback cascade...`);
+      
       // Try DeepSeek first
       if (DEEPSEEK_API_KEY) {
-        console.log(`🔄 Lovable returned ${response.status}, attempting DeepSeek fallback...`);
+        console.log(`🔄 Attempting DeepSeek fallback...`);
         try {
           return await callDeepSeekFallback(messages, options);
         } catch (deepseekError) {
