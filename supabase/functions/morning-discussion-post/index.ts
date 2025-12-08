@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -22,13 +23,7 @@ serve(async (req) => {
     
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('🌅 Eliza generating morning discussion post...');
-    
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!GEMINI_API_KEY) {
-      console.error('❌ GEMINI_API_KEY not configured');
-      throw new Error('GEMINI_API_KEY not configured');
-    }
+    console.log('🌅 Eliza generating morning discussion post with AI fallback cascade...');
     
     const GITHUB_TOKEN = Deno.env.get('GITHUB_TOKEN') || Deno.env.get('GITHUB_TOKEN_PROOF_OF_LIFE');
     if (!GITHUB_TOKEN) {
@@ -189,25 +184,37 @@ ${overnightSummary}
 
 Format as GitHub markdown with emojis. Sign off as Eliza.`;
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 2048 }
-      })
-    });
-
-    const geminiData = await geminiResponse.json();
-    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `## 🌅 Morning Check-in - ${today}
+    // Static fallback for when all AI providers fail
+    const staticFallback = `## 🌅 Morning Check-in - ${today}
 
 **System Health:** ${healthScore}/100
 **Active Agents:** ${busyAgents.length} busy, ${idleAgents.length} idle
 **Tasks:** ${pendingTasks?.length || 0} active (${blockedTasks.length} blocked)
+**Python Success Rate:** ${pythonSuccessRate}%
+**Function Success Rate:** ${functionSuccessRate}%
 
 Morning check-in for ${today}.
 
 — Eliza 🌅`;
+
+    // Use AI fallback cascade: Lovable → DeepSeek → Kimi → Gemini
+    let discussionBody: string;
+    let aiProvider = 'static';
+    
+    try {
+      console.log('🔄 Generating content with AI fallback cascade (Lovable → DeepSeek → Kimi → Gemini)...');
+      const result = await generateTextWithFallback(prompt, undefined, {
+        temperature: 0.8,
+        maxTokens: 2048,
+        useFullElizaContext: false
+      });
+      discussionBody = result.content;
+      aiProvider = result.provider;
+      console.log(`✅ Morning discussion generated using ${aiProvider} provider`);
+    } catch (aiError) {
+      console.warn('⚠️ All AI providers failed, using static template:', aiError);
+      discussionBody = staticFallback;
+    }
 
     // Create GitHub discussion
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
@@ -248,7 +255,8 @@ Morning check-in for ${today}.
         idle_agents: idleAgents.map(a => a.name),
         health_score: healthScore,
         python_success_rate: pythonSuccessRate,
-        function_success_rate: functionSuccessRate
+        function_success_rate: functionSuccessRate,
+        ai_provider_used: aiProvider
       },
       status: 'completed'
     });
@@ -257,7 +265,8 @@ Morning check-in for ${today}.
       JSON.stringify({
         success: true,
         discussion_url: discussion?.url,
-        discussion_id: discussion?.id
+        discussion_id: discussion?.id,
+        ai_provider: aiProvider
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );

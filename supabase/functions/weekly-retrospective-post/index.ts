@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,10 +17,7 @@ serve(async (req) => {
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    console.log('📈 Eliza generating weekly retrospective...');
-    
-    const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-    if (!GEMINI_API_KEY) throw new Error('GEMINI_API_KEY not configured');
+    console.log('📈 Eliza generating weekly retrospective with AI fallback cascade...');
 
     const weekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
     const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
@@ -302,25 +300,37 @@ ${communityIdeasText}
 
 Format as GitHub markdown with emojis. This is a strategic document - make it substantive. Sign off as CSO (Chief Strategy Officer).`;
 
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        contents: [{ parts: [{ text: prompt }] }],
-        generationConfig: { temperature: 0.8, maxOutputTokens: 3500 }
-      })
-    });
-
-    const geminiData = await geminiResponse.json();
-    const discussionBody = geminiData.candidates?.[0]?.content?.parts?.[0]?.text || `## 📈 Weekly Retrospective: ${weekStart} - ${weekEnd}
+    // Static fallback for when all AI providers fail
+    const staticFallback = `## 📈 Weekly Retrospective: ${weekStart} - ${weekEnd}
 
 **Activities:** ${thisWeekTotal} (${activityTrend} from last week)
 **Tasks Completed:** ${thisWeekTasksCount}
 **System Health:** ${healthScore}/100
+**Python Success Rate:** ${pythonSuccessRate}%
+**Function Success Rate:** ${functionSuccessRate}%
 
 Weekly retrospective for ${weekStart} to ${weekEnd}.
 
 — CSO 📈`;
+
+    // Use AI fallback cascade: Lovable → DeepSeek → Kimi → Gemini
+    let discussionBody: string;
+    let aiProvider = 'static';
+    
+    try {
+      console.log('🔄 Generating content with AI fallback cascade (Lovable → DeepSeek → Kimi → Gemini)...');
+      const result = await generateTextWithFallback(prompt, undefined, {
+        temperature: 0.8,
+        maxTokens: 3500,
+        useFullElizaContext: false
+      });
+      discussionBody = result.content;
+      aiProvider = result.provider;
+      console.log(`✅ Weekly retrospective generated using ${aiProvider} provider`);
+    } catch (aiError) {
+      console.warn('⚠️ All AI providers failed, using static template:', aiError);
+      discussionBody = staticFallback;
+    }
 
     // Create GitHub discussion
     const { data: discussionData, error: discussionError } = await supabase.functions.invoke('github-integration', {
@@ -366,7 +376,8 @@ Weekly retrospective for ${weekStart} to ${weekEnd}.
         problem_functions: problemFunctions,
         health_score: healthScore,
         proposals_approved: proposalsApproved,
-        proposals_rejected: proposalsRejected
+        proposals_rejected: proposalsRejected,
+        ai_provider_used: aiProvider
       },
       status: 'completed'
     });
@@ -375,7 +386,8 @@ Weekly retrospective for ${weekStart} to ${weekEnd}.
       JSON.stringify({
         success: true,
         discussion_url: discussion?.url,
-        discussion_id: discussion?.id
+        discussion_id: discussion?.id,
+        ai_provider: aiProvider
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
