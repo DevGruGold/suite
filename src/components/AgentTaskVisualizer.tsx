@@ -411,15 +411,24 @@ export function AgentTaskVisualizer() {
       
       if (updateError) throw updateError;
       
-      // Log activity for agent notification
+      // Log activity to unified activity log (supports nullable text agent_id)
       const activityTitle = isForward 
         ? `Task queued for execution: ${draggedTask.title}`
         : `Task sent back for discussion: ${draggedTask.title}`;
       
-      await supabase.from('agent_activities').insert({
-        agent_id: draggedTask.assignee_agent_id || 'system',
-        activity: activityTitle,
-        level: isForward ? 'info' : 'warning'
+      await supabase.from('eliza_activity_log').insert({
+        activity_type: 'task_stage_change',
+        title: activityTitle,
+        description: `Task moved from ${fromLabel} to ${toLabel}`,
+        status: 'completed',
+        task_id: draggedTask.id,
+        agent_id: draggedTask.assignee_agent_id || null,
+        metadata: {
+          from_stage: draggedTask.stage,
+          to_stage: targetStage,
+          direction: isForward ? 'forward' : 'backward',
+          task_title: draggedTask.title
+        }
       });
       
       // Show toast notification
