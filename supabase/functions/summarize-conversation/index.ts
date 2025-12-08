@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,15 +15,6 @@ serve(async (req) => {
 
   try {
     const { session_id, messages } = await req.json();
-    const lovableApiKey = Deno.env.get('LOVABLE_API_KEY');
-
-    if (!lovableApiKey) {
-      console.error('Lovable API key not configured');
-      return new Response(JSON.stringify({ error: 'API key not configured' }), {
-        status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
-    }
 
     console.log(`📝 Summarizing conversation for session ${session_id}...`);
 
@@ -31,33 +23,34 @@ serve(async (req) => {
       `${msg.message_type}: ${msg.content}`
     ).join('\n');
 
-    // Generate summary using Lovable AI
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${lovableApiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          {
-            role: 'system',
-            content: 'Create a concise summary of this conversation. Focus on key topics, decisions, and action items. Keep it under 200 words.'
-          },
-          { role: 'user', content: conversationText }
-        ],
-      }),
-    });
+    const prompt = `Create a concise summary of this conversation. Focus on key topics, decisions, and action items. Keep it under 200 words.
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error('AI Gateway error:', errorText);
-      throw new Error(`AI Gateway error: ${errorText}`);
+CONVERSATION:
+${conversationText}
+
+SUMMARY:`;
+
+    const staticFallback = `Conversation summary for session ${session_id}:
+- ${messages.length} messages exchanged
+- Topics discussed: General conversation
+- Key points: See full conversation for details`;
+
+    let summary: string;
+    let aiProvider = 'static_fallback';
+
+    try {
+      console.log('🔄 Generating summary with AI fallback cascade...');
+      summary = await generateTextWithFallback(prompt, undefined, {
+        temperature: 0.5,
+        maxTokens: 500,
+        useFullElizaContext: false
+      });
+      aiProvider = 'ai_cascade';
+      console.log('✅ Summary generated via AI cascade');
+    } catch (aiError) {
+      console.warn('⚠️ All AI providers failed, using static fallback:', aiError);
+      summary = staticFallback;
     }
-
-    const data = await response.json();
-    const summary = data.choices[0]?.message?.content;
 
     // Store summary in database
     const supabase = createClient(
@@ -73,7 +66,10 @@ serve(async (req) => {
         message_count: messages.length,
         start_message_id: messages[0]?.id,
         end_message_id: messages[messages.length - 1]?.id,
-        metadata: { generated_at: new Date().toISOString() }
+        metadata: { 
+          generated_at: new Date().toISOString(),
+          ai_provider: aiProvider
+        }
       })
       .select()
       .single();
@@ -83,10 +79,15 @@ serve(async (req) => {
       throw insertError;
     }
 
-    console.log(`✅ Created summary for session ${session_id}`);
+    console.log(`✅ Created summary for session ${session_id} using ${aiProvider}`);
 
     return new Response(
-      JSON.stringify({ success: true, summary_id: summaryData.id, summary }),
+      JSON.stringify({ 
+        success: true, 
+        summary_id: summaryData.id, 
+        summary,
+        ai_provider: aiProvider
+      }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
