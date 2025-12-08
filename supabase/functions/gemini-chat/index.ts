@@ -6,6 +6,16 @@ import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { executeToolCall } from '../_shared/toolExecutor.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  TOOL_CALLING_MANDATE,
+  parseToolCodeBlocks,
+  parseConversationalToolIntent,
+  convertToolsToGeminiFormat,
+  needsDataRetrieval,
+  retrieveMemoryContexts,
+  callDeepSeekFallback,
+  callKimiFallback
+} from '../_shared/executiveHelpers.ts';
 
 const logger = EdgeFunctionLogger('cio-executive');
 
@@ -13,201 +23,6 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-// Parser for tool_code blocks from fallback responses
-function parseToolCodeBlocks(content: string): Array<any> | null {
-  const toolCalls: Array<any> = [];
-  const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
-  let match;
-  
-  while ((match = toolCodeRegex.exec(content)) !== null) {
-    const code = match[1].trim();
-    
-    const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
-    if (invokeMatch) {
-      try {
-        let argsStr = `{${invokeMatch[1]}}`;
-        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
-        const args = JSON.parse(argsStr);
-        toolCalls.push({
-          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          type: 'function',
-          function: { name: 'invoke_edge_function', arguments: JSON.stringify(args) }
-        });
-      } catch (e) { console.warn('Failed to parse invoke_edge_function:', e.message); }
-      continue;
-    }
-    
-    const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
-    if (directMatch) {
-      const funcName = directMatch[1];
-      let argsStr = directMatch[2] || '{}';
-      try {
-        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
-        toolCalls.push({
-          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          type: 'function',
-          function: { name: funcName, arguments: JSON.parse(argsStr) ? JSON.stringify(JSON.parse(argsStr)) : '{}' }
-        });
-      } catch (e) { console.warn(`Failed to parse ${funcName}:`, e.message); }
-    }
-  }
-  
-  return toolCalls.length > 0 ? toolCalls : null;
-}
-
-// Convert OpenAI tool format to Gemini function declaration format
-function convertToolsToGeminiFormat(tools: any[]): any[] {
-  return tools.map(tool => ({
-    name: tool.function.name,
-    description: tool.function.description,
-    parameters: tool.function.parameters
-  }));
-}
-
-// Detect if query needs data (should force tool calls)
-function needsDataRetrieval(messages: any[]): boolean {
-  const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
-  const dataKeywords = ['what is', 'show me', 'check', 'status', 'how much', 'how many', 'get', 'list', 'find', 'current', 'mining', 'hashrate', 'workers', 'health', 'agents', 'tasks', 'ecosystem', 'stats'];
-  return dataKeywords.some(k => lastUser.includes(k));
-}
-
-// Parse conversational tool intent (e.g., "I'm going to call get_mining_stats")
-function parseConversationalToolIntent(content: string): Array<any> | null {
-  const toolCalls: Array<any> = [];
-  const patterns = [
-    /(?:call(?:ing)?|use|invoke|execute|run|check(?:ing)?)\s+(?:the\s+)?(?:function\s+|tool\s+)?[`"']?(\w+)[`"']?/gi,
-    /let me (?:call|check|get|invoke)\s+[`"']?(\w+)[`"']?/gi,
-    /I(?:'ll| will) (?:call|invoke|use)\s+[`"']?(\w+)[`"']?/gi
-  ];
-  
-  const knownTools = ['get_mining_stats', 'get_system_status', 'get_ecosystem_metrics', 'search_knowledge', 'invoke_edge_function', 'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks'];
-  
-  for (const pattern of patterns) {
-    let match;
-    while ((match = pattern.exec(content)) !== null) {
-      const funcName = match[1];
-      if (knownTools.includes(funcName) && !toolCalls.find(t => t.function.name === funcName)) {
-        toolCalls.push({
-          id: `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`,
-          type: 'function',
-          function: { name: funcName, arguments: '{}' }
-        });
-      }
-    }
-  }
-  return toolCalls.length > 0 ? toolCalls : null;
-}
-
-// CRITICAL TOOL CALLING INSTRUCTION - prepended to all fallback prompts
-const TOOL_CALLING_MANDATE = `
-🚨 CRITICAL TOOL CALLING RULES:
-1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
-2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
-3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function
-5. If you need current data, ALWAYS use tools. Never guess or make up data.
-`;
-
-// Fallback to DeepSeek API
-async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
-  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-  if (!DEEPSEEK_API_KEY) return null;
-  
-  console.log('🔄 Trying DeepSeek fallback...');
-  
-  // Inject tool calling mandate into system message
-  const enhancedMessages = messages.map(m => 
-    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
-  );
-  
-  // Force tool_choice if query needs data
-  const forceTools = needsDataRetrieval(messages);
-  console.log(`📊 Data retrieval needed: ${forceTools}, tool_choice: ${forceTools ? 'required' : 'auto'}`);
-  
-  try {
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: enhancedMessages,
-        tools,
-        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
-        temperature: 0.7,
-        max_tokens: 8000,
-      }),
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ DeepSeek fallback successful');
-      return {
-        content: data.choices?.[0]?.message?.content || '',
-        tool_calls: data.choices?.[0]?.message?.tool_calls || [],
-        provider: 'deepseek',
-        model: 'deepseek-chat'
-      };
-    }
-  } catch (error) {
-    console.warn('⚠️ DeepSeek fallback failed:', error.message);
-  }
-  return null;
-}
-
-// Fallback to Kimi K2 via OpenRouter
-async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
-  const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
-  if (!OPENROUTER_API_KEY) return null;
-  
-  console.log('🔄 Trying Kimi K2 fallback via OpenRouter...');
-  
-  // Inject tool calling mandate into system message
-  const enhancedMessages = messages.map(m => 
-    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
-  );
-  
-  // Force tool_choice if query needs data
-  const forceTools = needsDataRetrieval(messages);
-  console.log(`📊 Kimi - Data retrieval needed: ${forceTools}, tool_choice: ${forceTools ? 'required' : 'auto'}`);
-  
-  try {
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://xmrt.pro',
-        'X-Title': 'XMRT Eliza'
-      },
-      body: JSON.stringify({
-        model: 'moonshotai/kimi-k2',
-        messages: enhancedMessages,
-        tools,
-        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
-        temperature: 0.9,
-        max_tokens: 8000,
-      }),
-    });
-    
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ Kimi K2 fallback successful');
-      return {
-        content: data.choices?.[0]?.message?.content || '',
-        tool_calls: data.choices?.[0]?.message?.tool_calls || [],
-        provider: 'openrouter',
-        model: 'moonshotai/kimi-k2'
-      };
-    }
-  } catch (error) {
-    console.warn('⚠️ Kimi K2 fallback failed:', error.message);
-  }
-  return null;
-}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -253,6 +68,15 @@ serve(async (req) => {
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
+    // ========== PHASE: MEMORY RETRIEVAL ==========
+    let memoryContexts: any[] = [];
+    if (userContext?.sessionKey) {
+      memoryContexts = await retrieveMemoryContexts(supabase, userContext.sessionKey);
+      if (memoryContexts.length > 0) {
+        console.log(`📚 Retrieved ${memoryContexts.length} memory contexts for CIO`);
+      }
+    }
+
     // Build system prompt - ALWAYS with tool access
     let contextualPrompt: string;
     
@@ -289,6 +113,11 @@ First call tools to gather data, then provide a focused, data-driven CIO perspec
         miningStats,
         systemVersion
       });
+      
+      // Inject memory contexts
+      if (memoryContexts.length > 0) {
+        contextualPrompt += `\n\nRelevant Memories:\n${memoryContexts.slice(0, 5).map(m => `- [${m.type}] ${m.content}`).join('\n')}`;
+      }
     }
 
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');

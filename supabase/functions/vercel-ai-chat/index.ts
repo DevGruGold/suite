@@ -6,6 +6,17 @@ import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
 import { createOpenAI } from "npm:@ai-sdk/openai@1.0.0";
 import { generateText, tool } from "npm:ai@4.0.0";
 import { z } from "npm:zod@3.24.1";
+import { executeToolCall } from '../_shared/toolExecutor.ts';
+import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
+import {
+  TOOL_CALLING_MANDATE,
+  parseToolCodeBlocks,
+  needsDataRetrieval,
+  retrieveMemoryContexts,
+  callDeepSeekFallback,
+  callKimiFallback,
+  callGeminiFallback
+} from '../_shared/executiveHelpers.ts';
 
 /**
  * Local intelligence fallback - generates contextual responses without external AI APIs
@@ -517,6 +528,15 @@ serve(async (req) => {
     const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
     const supabase = createClient(supabaseUrl, supabaseKey);
     
+    // ========== PHASE: MEMORY RETRIEVAL ==========
+    let memoryContexts: any[] = [];
+    if (userContext?.sessionKey) {
+      memoryContexts = await retrieveMemoryContexts(supabase, userContext.sessionKey);
+      if (memoryContexts.length > 0) {
+        console.log(`📚 Retrieved ${memoryContexts.length} memory contexts for CSO`);
+      }
+    }
+    
     // Proactive intelligence: Auto-check system state based on user input
     const proactiveChecks: any[] = [];
     const lowerInput = userInput.toLowerCase();
@@ -542,13 +562,19 @@ serve(async (req) => {
       });
     }
     
-    // Build enhanced system prompt with current context
-    const systemPrompt = generateElizaSystemPrompt({
+    // Build enhanced system prompt with current context and memory
+    let systemPrompt = generateElizaSystemPrompt({
       conversationHistory,
       userContext,
       miningStats,
       systemVersion
     });
+    
+    // Inject memory contexts and tool calling mandate
+    if (memoryContexts.length > 0) {
+      systemPrompt += `\n\nRelevant Memories:\n${memoryContexts.slice(0, 5).map(m => `- [${m.type}] ${m.content}`).join('\n')}`;
+    }
+    systemPrompt = TOOL_CALLING_MANDATE + systemPrompt;
 
     // Call AI SDK with tool calling support
     const { text, toolCalls, toolResults, usage, finishReason } = await generateText({
