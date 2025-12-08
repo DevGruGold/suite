@@ -222,21 +222,58 @@ async function callGeminiFallback(
           toolResults.push({ tool: fc.functionCall.name, result });
         }
         
-        // Synthesize results into natural response
+        // Make follow-up call to synthesize results into natural language
+        console.log('🔄 Making follow-up call to synthesize tool results...');
+        const userQuery = messages[messages.length - 1]?.parts?.[0]?.text || 
+                          messages[messages.length - 1]?.content || 'the request';
+        
+        const synthesisPrompt = {
+          parts: [{
+            text: `You are the Chief Technology Officer (CTO). The user asked: "${userQuery}"
+
+You executed tools and got these results:
+${toolResults.map(r => `- ${r.tool}: ${JSON.stringify(r.result)}`).join('\n')}
+
+Synthesize these results into a natural, helpful response. Be concise (1-3 sentences). Don't mention tool names or that you executed tools. Just present the information naturally as if you already knew it.`
+          }]
+        };
+
+        try {
+          const synthesisResponse = await fetch(
+            `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+            {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                contents: [synthesisPrompt],
+                generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
+              })
+            }
+          );
+
+          if (synthesisResponse.ok) {
+            const synthesisData = await synthesisResponse.json();
+            const synthesizedText = synthesisData.candidates?.[0]?.content?.parts?.[0]?.text;
+            if (synthesizedText) {
+              console.log('✅ Tool results synthesized into natural language');
+              return { 
+                content: synthesizedText, 
+                provider: 'gemini', 
+                model: 'gemini-2.0-flash-exp', 
+                toolsExecuted: toolResults.length 
+              };
+            }
+          }
+        } catch (synthError) {
+          console.warn('⚠️ Synthesis call failed, falling back to raw results:', synthError.message);
+        }
+        
+        // Fallback to formatted results if synthesis fails
         const resultSummary = toolResults.map(r => {
           const resultStr = typeof r.result === 'string' ? r.result : JSON.stringify(r.result);
-          return `**${r.tool}:** ${resultStr.slice(0, 500)}${resultStr.length > 500 ? '...' : ''}`;
-        }).join('\n\n');
-        
-        return { 
-          content: `I executed ${toolResults.length} operation(s):\n\n${resultSummary}`, 
-          provider: 'gemini', 
-          model: 'gemini-2.0-flash-exp', 
-          toolsExecuted: toolResults.length,
-          tool_calls: functionCalls.map((fc: any) => ({
-            function: { name: fc.functionCall.name, arguments: JSON.stringify(fc.functionCall.args) }
-          }))
-        };
+          return `${r.tool}: ${resultStr.slice(0, 300)}`;
+        }).join('\n');
+        return { content: resultSummary, provider: 'gemini', model: 'gemini-2.0-flash-exp', toolsExecuted: toolResults.length };
       }
       
       // Extract text response
@@ -254,9 +291,30 @@ async function callGeminiFallback(
               const result = await executeToolCall(supabase, toolCall, 'CTO', SUPABASE_URL, SERVICE_ROLE_KEY);
               toolResults.push({ tool: toolCall.function.name, result });
             }
-            text = text.replace(/```tool_code[\s\S]*?```/g, '').trim();
-            text += `\n\n**Tool Execution Results:**\n${toolResults.map(r => `- ${r.tool}: ${JSON.stringify(r.result).slice(0, 200)}...`).join('\n')}`;
-            return { content: text, provider: 'gemini', model: 'gemini-2.0-flash-exp', toolsExecuted: toolResults.length };
+            // Synthesize tool_code results into natural language
+            const userQuery = messages[messages.length - 1]?.parts?.[0]?.text || 
+                              messages[messages.length - 1]?.content || 'the request';
+            try {
+              const synthResp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+                {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    contents: [{ parts: [{ text: `User asked: "${userQuery}"\n\nTool results:\n${toolResults.map(r => `- ${r.tool}: ${JSON.stringify(r.result)}`).join('\n')}\n\nSynthesize into a natural 1-3 sentence response. Don't mention tools.` }] }],
+                    generationConfig: { temperature: 0.7, maxOutputTokens: 1000 }
+                  })
+                }
+              );
+              if (synthResp.ok) {
+                const synthData = await synthResp.json();
+                const synthText = synthData.candidates?.[0]?.content?.parts?.[0]?.text;
+                if (synthText) {
+                  return { content: synthText, provider: 'gemini', model: 'gemini-2.0-flash-exp', toolsExecuted: toolResults.length };
+                }
+              }
+            } catch (e) { console.warn('Synthesis failed:', e.message); }
+            return { content: toolResults.map(r => `${r.tool}: ${JSON.stringify(r.result).slice(0, 300)}`).join('\n'), provider: 'gemini', model: 'gemini-2.0-flash-exp', toolsExecuted: toolResults.length };
           }
         }
         
