@@ -65,12 +65,65 @@ function convertToolsToGeminiFormat(tools: any[]): any[] {
   }));
 }
 
+// Detect if query needs data (should force tool calls)
+function needsDataRetrieval(messages: any[]): boolean {
+  const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
+  const dataKeywords = ['what is', 'show me', 'check', 'status', 'how much', 'how many', 'get', 'list', 'find', 'current', 'mining', 'hashrate', 'workers', 'health', 'agents', 'tasks', 'ecosystem', 'stats'];
+  return dataKeywords.some(k => lastUser.includes(k));
+}
+
+// Parse conversational tool intent (e.g., "I'm going to call get_mining_stats")
+function parseConversationalToolIntent(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  const patterns = [
+    /(?:call(?:ing)?|use|invoke|execute|run|check(?:ing)?)\s+(?:the\s+)?(?:function\s+|tool\s+)?[`"']?(\w+)[`"']?/gi,
+    /let me (?:call|check|get|invoke)\s+[`"']?(\w+)[`"']?/gi,
+    /I(?:'ll| will) (?:call|invoke|use)\s+[`"']?(\w+)[`"']?/gi
+  ];
+  
+  const knownTools = ['get_mining_stats', 'get_system_status', 'get_ecosystem_metrics', 'search_knowledge', 'invoke_edge_function', 'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks'];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const funcName = match[1];
+      if (knownTools.includes(funcName) && !toolCalls.find(t => t.function.name === funcName)) {
+        toolCalls.push({
+          id: `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: funcName, arguments: '{}' }
+        });
+      }
+    }
+  }
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// CRITICAL TOOL CALLING INSTRUCTION - prepended to all fallback prompts
+const TOOL_CALLING_MANDATE = `
+🚨 CRITICAL TOOL CALLING RULES:
+1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
+2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
+3. DIRECTLY invoke functions - the system will handle execution
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function
+5. If you need current data, ALWAYS use tools. Never guess or make up data.
+`;
+
 // Fallback to DeepSeek API
 async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
   const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
   if (!DEEPSEEK_API_KEY) return null;
   
   console.log('🔄 Trying DeepSeek fallback...');
+  
+  // Inject tool calling mandate into system message
+  const enhancedMessages = messages.map(m => 
+    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+  );
+  
+  // Force tool_choice if query needs data
+  const forceTools = needsDataRetrieval(messages);
+  console.log(`📊 Data retrieval needed: ${forceTools}, tool_choice: ${forceTools ? 'required' : 'auto'}`);
   
   try {
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -81,9 +134,9 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
       },
       body: JSON.stringify({
         model: 'deepseek-chat',
-        messages,
+        messages: enhancedMessages,
         tools,
-        tool_choice: tools ? 'auto' : undefined,
+        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
         temperature: 0.7,
         max_tokens: 8000,
       }),
@@ -112,6 +165,15 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   
   console.log('🔄 Trying Kimi K2 fallback via OpenRouter...');
   
+  // Inject tool calling mandate into system message
+  const enhancedMessages = messages.map(m => 
+    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+  );
+  
+  // Force tool_choice if query needs data
+  const forceTools = needsDataRetrieval(messages);
+  console.log(`📊 Kimi - Data retrieval needed: ${forceTools}, tool_choice: ${forceTools ? 'required' : 'auto'}`);
+  
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -123,9 +185,9 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
       },
       body: JSON.stringify({
         model: 'moonshotai/kimi-k2',
-        messages,
+        messages: enhancedMessages,
         tools,
-        tool_choice: tools ? 'auto' : undefined,
+        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
         temperature: 0.9,
         max_tokens: 8000,
       }),
