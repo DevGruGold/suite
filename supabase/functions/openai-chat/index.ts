@@ -57,11 +57,11 @@ serve(async (req) => {
 
     console.log('📊 CAO Executive - Processing request via Lovable AI Gateway');
 
-    // In council mode, use simplified prompt (no tools, just perspective)
+    // Build context-aware prompt - ALWAYS with tool access
     let contextualPrompt: string;
     
     if (councilMode) {
-      console.log('🏛️ Council mode - using simplified prompt (no tools)');
+      console.log('🏛️ Council mode - CAO with FULL tool access for data-driven insights');
       contextualPrompt = `You are the Chief Analytics Officer (CAO) of XMRT DAO - an AI executive specializing in complex reasoning and strategic analysis.
 
 Your role in this council deliberation:
@@ -70,15 +70,22 @@ Your role in this council deliberation:
 - Be concise and actionable (2-3 paragraphs maximum)
 - State your confidence level (0-100%)
 
-User Context:
-${userContext ? `IP: ${userContext.ip}, Founder: ${userContext.isFounder}` : 'Anonymous'}
+🔧 CRITICAL - DATA-DRIVEN MANDATE:
+You have FULL access to all tools. ALWAYS proactively call relevant tools to gather REAL data before answering:
+- get_mining_stats: Current hashrate, workers, earnings data
+- get_system_status: System health, component status, metrics
+- get_ecosystem_metrics: DAO stats, governance, workflow execution
+- search_knowledge: Query knowledge base for relevant context
+- invoke_edge_function: Call any of 100+ edge functions for specific data
 
-Mining Stats:
-${miningStats ? `Hash Rate: ${miningStats.hashRate || miningStats.hashrate || 0} H/s, Shares: ${miningStats.validShares || 0}` : 'Not available'}
+DO NOT give opinions without querying real data first. Your analytical perspective must be DATA-BACKED.
+
+User Context: ${userContext ? `IP: ${userContext.ip}, Founder: ${userContext.isFounder}` : 'Anonymous'}
+Mining Stats: ${miningStats ? `Hash Rate: ${miningStats.hashRate || miningStats.hashrate || 0} H/s, Shares: ${miningStats.validShares || 0}` : 'Not available'}
 
 User Question: ${messages[messages.length - 1]?.content || ''}
 
-Provide a focused, expert perspective from the CAO viewpoint.`;
+First call tools to gather data, then provide a focused, data-driven CAO perspective.`;
     } else {
       // Full mode with tools
       const executivePrompt = generateExecutiveSystemPrompt('CAO');
@@ -90,25 +97,22 @@ Provide a focused, expert perspective from the CAO viewpoint.`;
       });
     }
 
-    // Prepare messages for Lovable AI Gateway
-    const aiMessages = councilMode 
-      ? messages  // In council mode, use simplified messages
-      : [{ role: 'system', content: contextualPrompt }, ...messages];
+    // ALWAYS include system prompt and tools - even in council mode
+    const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
     
-    console.log('📤 Calling Lovable AI Gateway (CAO mode)...');
+    console.log('📤 Calling Lovable AI Gateway (CAO mode with tools)...');
     
     const apiStartTime = Date.now();
     let response = await callLovableAIGateway(aiMessages, {
       model: 'google/gemini-2.5-flash',
       temperature: 0.7,
-      max_tokens: councilMode ? 4000 : 8000,
-      systemPrompt: councilMode ? contextualPrompt : undefined,
-      tools: councilMode ? undefined : ELIZA_TOOLS,
-      tool_choice: councilMode ? undefined : 'auto'
+      max_tokens: 8000,
+      tools: ELIZA_TOOLS,  // ALWAYS include tools
+      tool_choice: 'auto'
     });
     
     // If AI wants to use tools, execute them

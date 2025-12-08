@@ -191,11 +191,12 @@ serve(async (req) => {
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
-    // Build system prompt
+    // Build system prompt - ALWAYS with tool access
     let contextualPrompt: string;
     
     if (councilMode) {
-      contextualPrompt = `You are the Chief Information Officer (CIO) of XMRT DAO - a multimodal AI executive specializing in vision and information processing.
+      console.log('🏛️ Council mode - CIO with FULL tool access for data-driven insights');
+      contextualPrompt = `You are the Chief Information Officer (CIO) of XMRT DAO - a multimodal AI executive specializing in vision, information processing, and system intelligence.
 
 Your role in this council deliberation:
 - Provide your expert perspective on the user's question
@@ -203,10 +204,21 @@ Your role in this council deliberation:
 - Be concise and actionable (2-3 paragraphs maximum)
 - State your confidence level (0-100%)
 
+🔧 CRITICAL - DATA-DRIVEN MANDATE:
+You have FULL access to all tools. ALWAYS proactively call relevant tools to gather REAL data before answering:
+- get_mining_stats: Current hashrate, workers, mining performance
+- get_system_status: System health, component status, infrastructure metrics
+- get_ecosystem_metrics: DAO governance, workflows, execution stats
+- search_knowledge: Query knowledge base for context
+- invoke_edge_function: Call any of 100+ edge functions for specific data
+- get_edge_function_logs: Check function execution history
+
+DO NOT give opinions without querying real data first. Your information-driven perspective must be DATA-BACKED.
+
 User Context: ${userContext ? `IP: ${userContext.ip}, Founder: ${userContext.isFounder}` : 'Anonymous'}
 Mining Stats: ${miningStats ? `Hash Rate: ${miningStats.hashRate || miningStats.hashrate || 0} H/s, Shares: ${miningStats.validShares || 0}` : 'Not available'}
 
-Provide a focused, expert perspective from the CIO viewpoint.`;
+First call tools to gather data, then provide a focused, data-driven CIO perspective.`;
     } else {
       const executivePrompt = generateExecutiveSystemPrompt('CIO');
       contextualPrompt = await buildContextualPrompt(executivePrompt, {
@@ -296,6 +308,7 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
     // Prepare function declarations for tool calling
     const geminiTools = convertToolsToGeminiFormat(ELIZA_TOOLS);
     
+    // ALWAYS include tools - expand to 40 most critical tools for council mode too
     let geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
       {
@@ -303,10 +316,10 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           contents: [{ parts }],
-          tools: councilMode ? undefined : [{ functionDeclarations: geminiTools.slice(0, 20) }], // Gemini has tool limit
+          tools: [{ functionDeclarations: geminiTools.slice(0, 40) }], // Expanded to 40 tools, always enabled
           generationConfig: {
             temperature: 0.7,
-            maxOutputTokens: councilMode ? 4000 : 8000
+            maxOutputTokens: 8000
           }
         })
       }
@@ -448,9 +461,9 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
       }
     }
 
-    // ========== EXECUTE TOOL CALLS ==========
-    if (functionCalls.length > 0 && !councilMode) {
-      console.log(`🔧 CIO executing ${functionCalls.length} tool(s)`);
+    // ========== EXECUTE TOOL CALLS (including council mode) ==========
+    if (functionCalls.length > 0) {
+      console.log(`🔧 CIO executing ${functionCalls.length} tool(s)${councilMode ? ' in council mode' : ''}`);
       
       const toolResults = [];
       for (const toolCall of functionCalls) {
