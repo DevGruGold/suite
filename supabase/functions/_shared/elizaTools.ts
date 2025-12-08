@@ -2000,6 +2000,7 @@ Response includes ecosystem_summary with one-line stats for each component.`,
           },
           actions: {
             type: "array",
+            items: { type: "object", properties: { action_type: { type: "string" }, target: { type: "string" }, config: { type: "object" } } },
             description: "Array of actions to execute (trigger_workflow, assign_task, create_issue, call_function)"
           },
           conditions: {

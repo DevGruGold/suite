@@ -51,6 +51,73 @@ function parseDeepSeekToolCalls(content: string): Array<any> | null {
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
+// Parser for Gemini/Kimi tool_code block format
+function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  // Pattern: ```tool_code blocks (Gemini, Kimi style)
+  const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const code = match[1].trim();
+    
+    // Parse invoke_edge_function({ function_name: "...", payload: {...} })
+    const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+    if (invokeMatch) {
+      try {
+        // Clean up the args string to be valid JSON
+        let argsStr = `{${invokeMatch[1]}}`;
+        // Handle unquoted keys by adding quotes
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":');
+        // Handle single quotes
+        argsStr = argsStr.replace(/'/g, '"');
+        // Fix double-quoted keys
+        argsStr = argsStr.replace(/""+/g, '"');
+        
+        const args = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: 'invoke_edge_function',
+            arguments: JSON.stringify(args)
+          }
+        });
+      } catch (e) {
+        console.warn('Failed to parse invoke_edge_function from tool_code:', e.message);
+      }
+      continue;
+    }
+    
+    // Parse direct function calls like check_system_status({}) or system_status()
+    const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
+    if (directMatch) {
+      const funcName = directMatch[1];
+      let argsStr = directMatch[2] || '{}';
+      
+      try {
+        // Clean up args
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const parsedArgs = JSON.parse(argsStr);
+        
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: funcName,
+            arguments: JSON.stringify(parsedArgs)
+          }
+        });
+      } catch (e) {
+        console.warn(`Failed to parse ${funcName} from tool_code:`, e.message);
+      }
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
 // Helper function to log tool execution to activity log
 async function logToolExecution(supabase: any, toolName: string, args: any, status: 'started' | 'completed' | 'failed', result?: any, error?: any) {
   try {
@@ -1556,6 +1623,18 @@ You are looking at the user RIGHT NOW through their webcam. This means:
               // Remove tool call text from content to avoid displaying it
               message.content = message.content.replace(/<｜tool▁calls▁begin｜>.*?<｜tool▁calls▁end｜>/s, '').trim();
             }
+          }
+        }
+        
+        // Check for tool_code blocks (Gemini, Kimi, OpenRouter style)
+        if (message.content && message.content.includes('```tool_code')) {
+          console.log(`⚠️ Detected tool_code blocks in response - parsing...`);
+          const parsedToolCalls = parseToolCodeBlocks(message.content);
+          if (parsedToolCalls && parsedToolCalls.length > 0) {
+            console.log(`🔧 Parsed ${parsedToolCalls.length} tool calls from tool_code blocks`);
+            message.tool_calls = parsedToolCalls;
+            // Remove tool_code blocks from content to avoid displaying them
+            message.content = message.content.replace(/```tool_code[\s\S]*?```/g, '').trim();
           }
         }
       }
