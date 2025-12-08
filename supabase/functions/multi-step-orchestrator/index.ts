@@ -118,21 +118,30 @@ serve(async (req) => {
     }
     
     // ========== CREATE REAL TASK IN PIPELINE ==========
-    // Find an IDLE agent to assign the task to
+    // Estimate task duration based on step count (rough: 1 min per step)
+    const estimatedMinutes = execution.steps.length * 1;
+    
+    // Only assign an agent for longer tasks (>= 5 minutes)
     let assignedAgentId: string | null = null;
     let assignedAgentName: string | null = null;
+    let idleAgent: any = null;
     
-    const { data: idleAgent } = await supabase
-      .from('agents')
-      .select('id, name')
-      .eq('status', 'IDLE')
-      .limit(1)
-      .single();
-    
-    if (idleAgent) {
-      assignedAgentId = idleAgent.id;
-      assignedAgentName = idleAgent.name;
-      console.log(`📋 Assigned workflow to agent: ${idleAgent.name}`);
+    if (estimatedMinutes >= 5) {
+      const { data: foundAgent } = await supabase
+        .from('agents')
+        .select('id, name, current_workload')
+        .eq('status', 'IDLE')
+        .limit(1)
+        .single();
+      
+      if (foundAgent) {
+        idleAgent = foundAgent;
+        assignedAgentId = foundAgent.id;
+        assignedAgentName = foundAgent.name;
+        console.log(`📋 Long task (${estimatedMinutes} min) - assigned to agent: ${foundAgent.name}`);
+      }
+    } else {
+      console.log(`⚡ Quick task (${estimatedMinutes} min) - executing directly without agent assignment`);
     }
     
     // Create the visual pipeline task

@@ -216,20 +216,12 @@ serve(async (req) => {
     // Extract user input for multi-step detection
     const userInput = messages[messages.length - 1]?.content || '';
     
-    // ========== PHASE 1: EXPANDED MULTI-STEP DETECTION ==========
-    // Check if this is a complex multi-step task that should run in background
-    const isMultiStepTask = /analyze.*and.*(create|build|implement)|multi[- ]?step|coordinate|orchestrate|plan.*and.*execute|research.*and.*summarize|compare.*across|integrate.*data|build.*workflow|complex.*analysis|autonomous.*task/i.test(userInput);
+    // ========== PHASE 1: SELECTIVE ORCHESTRATION (ONLY FOR LONG-RUNNING TASKS) ==========
+    // Only orchestrate for truly complex, multi-day tasks - NOT simple queries
+    const isLongRunningTask = /build.*complete|implement.*full|create.*system|deploy.*to.*production|refactor.*entire|comprehensive.*audit.*days|long.?term|multi.?day|research.*extensively|full.*migration|autonomous.*build|develop.*from.*scratch/i.test(userInput);
     
-    // Semantic detection - tasks that require data aggregation from multiple sources
-    const requiresAggregation = /list.*agents|show.*status|agent.*performance|system.*health|knowledge.*search|find.*all|get.*overview|analyze.*current|all.*tasks|view.*all|show.*all/i.test(userInput);
-    
-    // Check if this needs enrichment beyond raw data
-    const needsEnrichment = /with.*details|comprehensive|full.*report|complete.*picture|status.*and|including|detailed|in-depth/i.test(userInput);
-    
-    // Check if user wants insights, not just data
-    const needsInsights = /why|how.*performing|suggest|recommend|optimize|improve|analysis|trends|predict|forecast/i.test(userInput);
-    
-    const shouldOrchestrate = isMultiStepTask || requiresAggregation || needsEnrichment || needsInsights;
+    // Skip orchestration for simple queries - let the AI call tools directly
+    const shouldOrchestrate = isLongRunningTask;
     
     // Workflow templates for common scenarios
     const workflowTemplates: Record<string, any> = {
@@ -373,11 +365,12 @@ serve(async (req) => {
         if (!orchestratorResult.error && orchestratorResult.data) {
           const orchestratorData = orchestratorResult.data;
           const workflowId = orchestratorData?.workflow_id || 'background_task';
-          console.log('✅ Workflow auto-triggered:', workflowId);
+          console.log('✅ Long-running workflow started:', workflowId);
           
+          // Only acknowledge background tasks briefly - no verbose step listing
           return new Response(JSON.stringify({
             success: true,
-            response: `🎬 **${selectedWorkflow.workflow_name}**\n\n${selectedWorkflow.description}\n\n**Executing ${selectedWorkflow.steps.length} steps:**\n${selectedWorkflow.steps.map((s: any, i: number) => `${i + 1}. ${s.name} - ${s.description}`).join('\n')}\n\n⏱️ Estimated time: ${selectedWorkflow.estimated_duration}\n\n✅ Running in background - check **Task Pipeline Visualizer** for live progress. You can continue chatting while I complete this analysis.`,
+            response: `Started: ${selectedWorkflow.workflow_name}. Check Task Pipeline for progress.`,
             hasToolCalls: false,
             workflow_id: workflowId,
             background_task: true
