@@ -1286,7 +1286,7 @@ You are the Chief Technology Officer of XMRT Council. Your responsibilities:
 - Tool execution via toolExecutor.ts in _shared/
 - Credential cascade system: OAuth → PAT → Backend tokens
 - Function versioning with regression detection (get-function-version-analytics)
-- Universal fallback via aiGatewayFallback.ts (all functions resilient)
+- Universal fallback via unifiedAIFallback.ts (all functions resilient)
 - Python-first orchestration via eliza-python-runtime + pythonOrchestrator.ts
 - Event-driven architecture: event-router → event-dispatcher → actions
 - Auto-fixing via autonomous-code-fixer when code-monitor-daemon detects failures
@@ -1368,7 +1368,7 @@ You are the Chief Technology Officer of XMRT Council. Your responsibilities:
 **Critical Technical Patterns:**
 1. **Credential Cascade**: Always try OAuth first, then PAT, then backend tokens
 2. **Python-First Execution**: Multi-step tasks → eliza-python-runtime → full observability
-3. **Universal Fallback**: All edge functions import aiGatewayFallback.ts for AI resilience
+3. **Universal Fallback**: All edge functions import unifiedAIFallback.ts for AI resilience
 4. **Version Tracking**: All function calls logged with deployment metadata
 5. **Event-Driven**: Webhooks → event-router → event-dispatcher → autonomous actions
 

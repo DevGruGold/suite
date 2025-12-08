@@ -2,7 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { generateElizaSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
-import { callLovableAIGateway } from '../_shared/aiGatewayFallback.ts';
+import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
 import { createOpenAI } from "npm:@ai-sdk/openai@1.0.0";
 import { generateText, tool } from "npm:ai@4.0.0";
 import { z } from "npm:zod@3.24.1";
