@@ -88,78 +88,89 @@ serve(async (req) => {
 async function registerSuperDuperAgents(supabase: any) {
   console.log('📋 Registering SuperDuper agents with agent-manager...');
 
-  // Fetch all SuperDuper agents (once table is created)
-  // For now, return registration plan
-  
-  const superDuperAgents = [
-    {
-      name: "SuperDuper Social Intelligence",
-      role: "social_intelligence",
-      skills: ["trending_content", "viral_posts", "social_media_analysis", "meme_generation"],
-      description: "Finds trending content, creates viral posts, and analyzes social engagement"
-    },
-    {
-      name: "SuperDuper Financial Advisor", 
-      role: "financial_intelligence",
-      skills: ["treasury_analysis", "compound_returns", "credit_analysis", "tokenomics"],
-      description: "Analyzes treasury, calculates returns, and optimizes token economics"
-    },
-    {
-      name: "SuperDuper Code Architect",
-      role: "code_quality",
-      skills: ["code_review", "architecture", "security_scan", "workflow_automation"],
-      description: "Reviews code, designs architecture, and ensures quality"
-    },
-    {
-      name: "SuperDuper Communication Master",
-      role: "communication",
-      skills: ["email_drafting", "investor_outreach", "persona_creation", "networking"],
-      description: "Drafts communications and manages outreach campaigns"
-    },
-    {
-      name: "SuperDuper Content Studio",
-      role: "content_production",
-      skills: ["video_analysis", "podcast_creation", "newsletter_optimization", "article_summary"],
-      description: "Produces content across all media platforms"
-    }
-  ];
+  // Fetch all SuperDuper agents from the database (SINGLE SOURCE OF TRUTH)
+  const { data: superDuperAgents, error: fetchError } = await supabase
+    .from('superduper_agents')
+    .select('*')
+    .eq('is_active', true)
+    .order('priority', { ascending: true });
+
+  if (fetchError) {
+    console.error('Failed to fetch superduper_agents:', fetchError);
+    throw new Error(`Database fetch failed: ${fetchError.message}`);
+  }
+
+  if (!superDuperAgents || superDuperAgents.length === 0) {
+    return {
+      registered: 0,
+      failed: 0,
+      message: 'No SuperDuper agents found in database. Run migration to populate.',
+      details: []
+    };
+  }
+
+  console.log(`Found ${superDuperAgents.length} SuperDuper agents in database`);
 
   // Register with agent-manager
   const registrationResults = [];
   
   for (const agent of superDuperAgents) {
     try {
+      // Transform database record to agent-manager format
+      const agentData = {
+        name: agent.display_name,
+        role: agent.category || 'specialist',
+        skills: agent.combined_capabilities || [],
+        description: agent.description,
+        metadata: {
+          superduper: true,
+          edge_function: agent.edge_function_name,
+          superduper_agent_id: agent.id
+        }
+      };
+
       // Call agent-manager to create agent
       const { data, error } = await supabase.functions.invoke('agent-manager', {
         body: {
           action: 'create_agent',
-          agent_data: agent
+          agent_data: agentData
         }
       });
 
       registrationResults.push({
-        agent: agent.name,
+        agent: agent.display_name,
+        agent_name: agent.agent_name,
+        edge_function: agent.edge_function_name,
         status: error ? 'failed' : 'registered',
         error: error?.message
       });
 
+      // Update execution count in superduper_agents
+      await supabase
+        .from('superduper_agents')
+        .update({ execution_count: agent.execution_count + 1 })
+        .eq('id', agent.id);
+
       // Log to activity
       await supabase.from('eliza_activity_log').insert({
         activity_type: 'agent_registration',
-        title: `🤖 SuperDuper Agent Registered: ${agent.name}`,
-        description: `Registered ${agent.name} with agent-manager`,
+        title: `🤖 SuperDuper Agent Registered: ${agent.display_name}`,
+        description: `Registered ${agent.display_name} (${agent.agent_name}) with agent-manager`,
         metadata: {
-          agent: agent.name,
-          role: agent.role,
-          skills: agent.skills
+          agent: agent.display_name,
+          agent_name: agent.agent_name,
+          edge_function: agent.edge_function_name,
+          category: agent.category,
+          capabilities: agent.combined_capabilities
         },
         status: 'completed'
       });
 
     } catch (error: any) {
-      console.error(`Failed to register ${agent.name}:`, error);
+      console.error(`Failed to register ${agent.display_name}:`, error);
       registrationResults.push({
-        agent: agent.name,
+        agent: agent.display_name,
+        agent_name: agent.agent_name,
         status: 'error',
         error: error.message
       });
@@ -167,6 +178,7 @@ async function registerSuperDuperAgents(supabase: any) {
   }
 
   return {
+    total_in_database: superDuperAgents.length,
     registered: registrationResults.filter(r => r.status === 'registered').length,
     failed: registrationResults.filter(r => r.status !== 'registered').length,
     details: registrationResults
