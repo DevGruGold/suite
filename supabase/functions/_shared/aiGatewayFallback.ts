@@ -90,7 +90,7 @@ async function callGeminiFallback(
     contents,
     generationConfig: {
       temperature: options.temperature || 0.7,
-      maxOutputTokens: options.max_tokens || 2000
+      maxOutputTokens: options.max_tokens || 8000
     }
   };
   
@@ -189,7 +189,7 @@ async function callKimiFallback(
     model: 'moonshotai/kimi-k2',
     messages: requestMessages,
     temperature: options.temperature || 0.7,
-    max_tokens: options.max_tokens || 2000,
+    max_tokens: options.max_tokens || 8000,
   };
   
   // Include tools for Kimi
@@ -261,7 +261,7 @@ async function callDeepSeekFallback(
     model: 'deepseek-chat',
     messages: requestMessages,
     temperature: options.temperature || 0.7,
-    max_tokens: options.max_tokens || 4000,
+    max_tokens: options.max_tokens || 8000,
   };
 
   // Include tools for DeepSeek
@@ -333,7 +333,7 @@ export async function callLovableAIGateway(
       ? [{ role: 'system', content: options.systemPrompt }, ...messages]
       : messages,
     temperature: options.temperature || 0.7,
-    max_tokens: options.max_tokens || 2000
+    max_tokens: options.max_tokens || 8000
   };
   
   if (options.tools && options.tools.length > 0) {

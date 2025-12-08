@@ -150,7 +150,7 @@ serve(async (req) => {
               contents: [{ parts }],
               generationConfig: {
                 temperature: 0.7,
-                maxOutputTokens: 4000
+                maxOutputTokens: 8000
               }
             })
           }
@@ -214,7 +214,7 @@ serve(async (req) => {
           body: JSON.stringify({
             model: 'gpt-4o', // Vision-capable model
             messages: formattedMessages,
-            max_tokens: 4000
+            max_tokens: 8000
           })
         });
         
@@ -273,7 +273,7 @@ serve(async (req) => {
           body: JSON.stringify({
             model: 'anthropic/claude-3-haiku',
             messages: [{ role: 'user', content: contentParts }],
-            max_tokens: 4000
+            max_tokens: 8000
           })
         });
         

@@ -117,7 +117,7 @@ async function callDeepSeek(
       ...messages.filter(m => m.role !== 'system')
     ];
 
-    const maxTokens = options.maxTokens || options.max_tokens || 4000;
+    const maxTokens = options.maxTokens || options.max_tokens || 8000;
     
     const requestBody: any = {
       model: 'deepseek-chat',
