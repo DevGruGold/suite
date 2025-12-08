@@ -7,6 +7,18 @@ import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { executeToolCall } from '../_shared/toolExecutor.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  TOOL_CALLING_MANDATE,
+  parseDeepSeekToolCalls,
+  parseToolCodeBlocks,
+  parseConversationalToolIntent,
+  needsDataRetrieval,
+  retrieveMemoryContexts,
+  callDeepSeekFallback,
+  callKimiFallback,
+  callGeminiFallback,
+  synthesizeToolResults
+} from '../_shared/executiveHelpers.ts';
 
 const logger = EdgeFunctionLogger('cao-executive');
 
@@ -15,6 +27,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const MAX_TOOL_ITERATIONS = 5;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -28,7 +41,8 @@ serve(async (req) => {
       userContext = { ip: 'unknown', isFounder: false }, 
       miningStats = null, 
       systemVersion = null,
-      councilMode = false
+      councilMode = false,
+      images = []
     } = await req.json();
     
     await logger.info('Request received', 'ai_interaction', { 
@@ -36,7 +50,8 @@ serve(async (req) => {
       hasHistory: conversationHistory?.length > 0,
       userContext,
       executive: 'CAO',
-      councilMode
+      councilMode,
+      hasImages: images?.length > 0
     });
 
     if (!messages || !Array.isArray(messages)) {
@@ -55,9 +70,86 @@ serve(async (req) => {
       );
     }
 
-    console.log('📊 CAO Executive - Processing request via Lovable AI Gateway');
+    console.log('📊 CAO Executive - Processing request with full capabilities');
 
-    // Build context-aware prompt - ALWAYS with tool access
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    // ========== PHASE: MEMORY RETRIEVAL ==========
+    let enrichedConversationHistory = conversationHistory || {};
+    let memoryContexts = conversationHistory?.memoryContexts || [];
+
+    if (memoryContexts.length === 0 && userContext?.sessionKey) {
+      memoryContexts = await retrieveMemoryContexts(supabase, userContext.sessionKey);
+      if (memoryContexts.length > 0) {
+        enrichedConversationHistory = {
+          ...enrichedConversationHistory,
+          memoryContexts
+        };
+      }
+    }
+
+    // ========== PHASE: VISION ROUTING ==========
+    if (images && images.length > 0) {
+      console.log(`🖼️ Images detected (${images.length}) - routing to Gemini Vision`);
+      
+      const executivePrompt = generateExecutiveSystemPrompt('CAO');
+      const contextualPrompt = await buildContextualPrompt(executivePrompt, {
+        conversationHistory: enrichedConversationHistory,
+        userContext,
+        miningStats,
+        systemVersion
+      });
+      
+      const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS, images);
+      
+      if (geminiResult) {
+        // Execute any tool calls from Gemini
+        if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
+          console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini Vision`);
+          const toolResults = [];
+          for (const toolCall of geminiResult.tool_calls) {
+            const result = await executeToolCall(supabase, toolCall, 'CAO', SUPABASE_URL, SERVICE_ROLE_KEY);
+            toolResults.push({ tool: toolCall.function.name, result });
+          }
+          
+          const userQuery = messages[messages.length - 1]?.content || '';
+          const synthesized = await synthesizeToolResults(toolResults, userQuery, 'Chief Analytics Officer (CAO)');
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              response: synthesized || geminiResult.content,
+              hasToolCalls: true,
+              toolCallsExecuted: geminiResult.tool_calls.length,
+              executive: 'openai-chat',
+              executiveTitle: 'Chief Analytics Officer (CAO) [Vision]',
+              provider: 'gemini',
+              model: 'gemini-2.0-flash-exp',
+              vision_analysis: true
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: geminiResult.content,
+            executive: 'openai-chat',
+            executiveTitle: 'Chief Analytics Officer (CAO) [Vision]',
+            provider: 'gemini',
+            model: 'gemini-2.0-flash-exp',
+            vision_analysis: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // ========== PHASE: BUILD CONTEXT ==========
     let contextualPrompt: string;
     
     if (councilMode) {
@@ -70,40 +162,27 @@ Your role in this council deliberation:
 - Be concise and actionable (2-3 paragraphs maximum)
 - State your confidence level (0-100%)
 
-🔧 CRITICAL - DATA-DRIVEN MANDATE:
-You have FULL access to all tools. ALWAYS proactively call relevant tools to gather REAL data before answering:
-- get_mining_stats: Current hashrate, workers, earnings data
-- get_system_status: System health, component status, metrics
-- get_ecosystem_metrics: DAO stats, governance, workflow execution
-- search_knowledge: Query knowledge base for relevant context
-- invoke_edge_function: Call any of 100+ edge functions for specific data
-
-DO NOT give opinions without querying real data first. Your analytical perspective must be DATA-BACKED.
+${TOOL_CALLING_MANDATE}
 
 User Context: ${userContext ? `IP: ${userContext.ip}, Founder: ${userContext.isFounder}` : 'Anonymous'}
 Mining Stats: ${miningStats ? `Hash Rate: ${miningStats.hashRate || miningStats.hashrate || 0} H/s, Shares: ${miningStats.validShares || 0}` : 'Not available'}
-
-User Question: ${messages[messages.length - 1]?.content || ''}
+${memoryContexts.length > 0 ? `\nRelevant Memories:\n${memoryContexts.slice(0, 5).map(m => `- [${m.type}] ${m.content}`).join('\n')}` : ''}
 
 First call tools to gather data, then provide a focused, data-driven CAO perspective.`;
     } else {
-      // Full mode with tools
       const executivePrompt = generateExecutiveSystemPrompt('CAO');
       contextualPrompt = await buildContextualPrompt(executivePrompt, {
-        conversationHistory,
+        conversationHistory: enrichedConversationHistory,
         userContext,
         miningStats,
         systemVersion
       });
     }
 
-    // ALWAYS include system prompt and tools - even in council mode
     const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
-
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+    const forceTools = needsDataRetrieval(messages);
     
+    console.log(`📊 Data retrieval needed: ${forceTools}`);
     console.log('📤 Calling Lovable AI Gateway (CAO mode with tools)...');
     
     const apiStartTime = Date.now();
@@ -111,48 +190,83 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
       model: 'google/gemini-2.5-flash',
       temperature: 0.7,
       max_tokens: 8000,
-      tools: ELIZA_TOOLS,  // ALWAYS include tools
-      tool_choice: 'auto'
+      tools: ELIZA_TOOLS,
+      tool_choice: forceTools ? 'required' : 'auto'
     });
     
-    // If AI wants to use tools, execute them
-    if (response.tool_calls && response.tool_calls.length > 0) {
-      console.log(`🔧 CAO executing ${response.tool_calls.length} tool(s)`);
+    let totalToolsExecuted = 0;
+    let iteration = 0;
+    let conversationMessages = [...aiMessages];
+    
+    // ========== PHASE: TOOL EXECUTION LOOP ==========
+    while (iteration < MAX_TOOL_ITERATIONS) {
+      // Check for tool calls (native or text-embedded)
+      let toolCalls = response.tool_calls || [];
+      
+      // Also check for text-embedded tool calls
+      if ((!toolCalls || toolCalls.length === 0) && response.content) {
+        const textToolCalls = parseToolCodeBlocks(response.content) || 
+                             parseDeepSeekToolCalls(response.content) ||
+                             parseConversationalToolIntent(response.content);
+        if (textToolCalls && textToolCalls.length > 0) {
+          toolCalls = textToolCalls;
+        }
+      }
+      
+      if (!toolCalls || toolCalls.length === 0) break;
+      
+      console.log(`🔧 CAO Iteration ${iteration + 1}: Executing ${toolCalls.length} tool(s)`);
       
       const toolResults = [];
-      for (const toolCall of response.tool_calls) {
+      for (const toolCall of toolCalls) {
         const result = await executeToolCall(supabase, toolCall, 'CAO', SUPABASE_URL, SERVICE_ROLE_KEY);
         toolResults.push({
           tool_call_id: toolCall.id,
           role: 'tool',
           content: JSON.stringify(result)
         });
+        totalToolsExecuted++;
       }
       
+      // Add assistant message with tool calls and tool results
+      conversationMessages.push({
+        role: 'assistant',
+        content: response.content || '',
+        tool_calls: toolCalls
+      });
+      conversationMessages.push(...toolResults);
+      
       // Call AI again with tool results
-      response = await callLovableAIGateway([
-        ...aiMessages,
-        { role: 'assistant', content: response.content || '', tool_calls: response.tool_calls },
-        ...toolResults
-      ], {
+      response = await callLovableAIGateway(conversationMessages, {
         model: 'google/gemini-2.5-flash',
         temperature: 0.7,
-        max_tokens: 4000
+        max_tokens: 8000
       });
+      
+      if (!response) break;
+      iteration++;
     }
     
     const apiDuration = Date.now() - apiStartTime;
     
-    console.log(`✅ CAO Executive responded in ${apiDuration}ms`);
+    // Clean response content
+    let finalContent = typeof response === 'string' ? response : (response?.content || response);
+    if (typeof finalContent === 'string' && finalContent.includes('```tool_code')) {
+      finalContent = finalContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
+    }
+    
+    console.log(`✅ CAO Executive responded in ${apiDuration}ms (${totalToolsExecuted} tools executed)`);
     await logger.apiCall('lovable_gateway', 200, apiDuration, { 
       executive: 'CAO',
-      responseLength: response.length 
+      toolsExecuted: totalToolsExecuted
     });
 
     return new Response(
       JSON.stringify({ 
         success: true, 
-        response: response,
+        response: finalContent,
+        hasToolCalls: totalToolsExecuted > 0,
+        toolCallsExecuted: totalToolsExecuted,
         executive: 'openai-chat',
         executiveTitle: 'Chief Analytics Officer (CAO)',
         provider: 'lovable_gateway',
@@ -165,6 +279,74 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
   } catch (error) {
     console.error('❌ CAO Executive error:', error);
     await logger.error('Function execution failed', error, 'error');
+    
+    // ========== FALLBACK CASCADE ==========
+    console.log('⚠️ Primary AI failed, trying fallback cascade...');
+    
+    try {
+      const { messages, conversationHistory, userContext, miningStats, systemVersion } = await req.clone().json();
+      const executivePrompt = generateExecutiveSystemPrompt('CAO');
+      const contextualPrompt = await buildContextualPrompt(executivePrompt, {
+        conversationHistory,
+        userContext,
+        miningStats,
+        systemVersion
+      });
+      const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+      
+      // Try DeepSeek
+      const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
+      if (deepseekResult) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: deepseekResult.content,
+            executive: 'openai-chat',
+            executiveTitle: 'Chief Analytics Officer (CAO) [DeepSeek Fallback]',
+            provider: 'deepseek',
+            model: 'deepseek-chat',
+            fallback: 'deepseek'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Try Kimi K2
+      const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
+      if (kimiResult) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: kimiResult.content,
+            executive: 'openai-chat',
+            executiveTitle: 'Chief Analytics Officer (CAO) [Kimi K2 Fallback]',
+            provider: 'openrouter',
+            model: 'moonshotai/kimi-k2',
+            fallback: 'kimi'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      // Try Gemini
+      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
+      if (geminiResult) {
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: geminiResult.content,
+            executive: 'openai-chat',
+            executiveTitle: 'Chief Analytics Officer (CAO) [Gemini Fallback]',
+            provider: 'gemini',
+            model: 'gemini-2.0-flash-exp',
+            fallback: 'gemini'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } catch (fallbackError) {
+      console.error('❌ All fallbacks failed:', fallbackError);
+    }
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     let statusCode = 500;
