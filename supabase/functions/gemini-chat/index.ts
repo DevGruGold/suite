@@ -14,6 +14,48 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Parser for tool_code blocks from fallback responses
+function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const code = match[1].trim();
+    
+    const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+    if (invokeMatch) {
+      try {
+        let argsStr = `{${invokeMatch[1]}}`;
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const args = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: 'invoke_edge_function', arguments: JSON.stringify(args) }
+        });
+      } catch (e) { console.warn('Failed to parse invoke_edge_function:', e.message); }
+      continue;
+    }
+    
+    const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
+    if (directMatch) {
+      const funcName = directMatch[1];
+      let argsStr = directMatch[2] || '{}';
+      try {
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: funcName, arguments: JSON.parse(argsStr) ? JSON.stringify(JSON.parse(argsStr)) : '{}' }
+        });
+      } catch (e) { console.warn(`Failed to parse ${funcName}:`, e.message); }
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
 // Convert OpenAI tool format to Gemini function declaration format
 function convertToolsToGeminiFormat(tools: any[]): any[] {
   return tools.map(tool => ({
@@ -392,6 +434,17 @@ Provide a focused, expert perspective from the CIO viewpoint.`;
             arguments: JSON.stringify(part.functionCall.args || {})
           }
         });
+      }
+    }
+    
+    // Check for tool_code blocks in text content (fallback style)
+    if (textContent.includes('```tool_code') && functionCalls.length === 0) {
+      console.log('🔧 Detected tool_code blocks in Gemini text - parsing...');
+      const textToolCalls = parseToolCodeBlocks(textContent);
+      if (textToolCalls && textToolCalls.length > 0) {
+        console.log(`🔧 Parsed ${textToolCalls.length} tool calls from tool_code blocks`);
+        functionCalls.push(...textToolCalls);
+        textContent = textContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
       }
     }
 

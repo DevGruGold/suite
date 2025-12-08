@@ -68,6 +68,75 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Parser for tool_code blocks from fallback responses
+function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const code = match[1].trim();
+    
+    const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+    if (invokeMatch) {
+      try {
+        let argsStr = `{${invokeMatch[1]}}`;
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const args = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: 'invoke_edge_function', arguments: JSON.stringify(args) }
+        });
+      } catch (e) { console.warn('Failed to parse invoke_edge_function:', e.message); }
+      continue;
+    }
+    
+    const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
+    if (directMatch) {
+      const funcName = directMatch[1];
+      let argsStr = directMatch[2] || '{}';
+      try {
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: funcName, arguments: JSON.stringify(JSON.parse(argsStr)) }
+        });
+      } catch (e) { console.warn(`Failed to parse ${funcName}:`, e.message); }
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// Execute parsed tool calls via Supabase functions
+async function executeToolCodeCalls(toolCalls: any[], supabaseUrl: string, serviceRoleKey: string): Promise<any[]> {
+  const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+  const supabase = createClient(supabaseUrl, serviceRoleKey);
+  const results = [];
+  
+  for (const toolCall of toolCalls) {
+    const funcName = toolCall.function?.name;
+    let args = {};
+    try { args = JSON.parse(toolCall.function?.arguments || '{}'); } catch {}
+    
+    console.log(`🔧 Executing tool_code call: ${funcName}`);
+    
+    if (funcName === 'invoke_edge_function') {
+      const { function_name, payload } = args as any;
+      const { data, error } = await supabase.functions.invoke(function_name, { body: payload || {} });
+      results.push({ tool: function_name, result: error ? { error: error.message } : data });
+    } else {
+      // Map direct function calls to edge functions
+      const { data, error } = await supabase.functions.invoke(funcName.replace(/_/g, '-'), { body: args });
+      results.push({ tool: funcName, result: error ? { error: error.message } : data });
+    }
+  }
+  
+  return results;
+}
+
 // Declare AI state variables OUTSIDE try block for catch block access
 let aiProvider: string = 'unknown';
 let aiModel: string = 'gpt-4o-mini';
@@ -158,10 +227,22 @@ serve(async (req) => {
         
         if (geminiResponse.ok) {
           const geminiData = await geminiResponse.json();
-          const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+          let geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
           
           if (geminiText) {
             console.log('✅ Gemini Vision analysis successful');
+            
+            // Check for tool_code blocks and execute them
+            if (geminiText.includes('```tool_code')) {
+              console.log('🔧 Detected tool_code blocks in Gemini Vision response - executing...');
+              const textToolCalls = parseToolCodeBlocks(geminiText);
+              if (textToolCalls && textToolCalls.length > 0) {
+                const toolResults = await executeToolCodeCalls(textToolCalls, SUPABASE_URL, SERVICE_ROLE_KEY);
+                geminiText = geminiText.replace(/```tool_code[\s\S]*?```/g, '').trim();
+                geminiText += `\n\n**Tool Execution Results:**\n${toolResults.map(r => `- ${r.tool}: ${JSON.stringify(r.result).slice(0, 200)}...`).join('\n')}`;
+              }
+            }
+            
             return new Response(
               JSON.stringify({
                 success: true,
