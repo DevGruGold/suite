@@ -1,4 +1,6 @@
 // Unified Data Service - Single source of truth for all XMRT data
+import { supabase } from '@/integrations/supabase/client';
+
 export interface MiningStats {
   hashRate: number;
   validShares: number;
@@ -12,15 +14,99 @@ export interface MiningStats {
 export interface UserContext {
   ip: string;
   isFounder: boolean;
+  founderConfidence: number;
+  founderSignals: string[];
   timestamp: number;
 }
+
+export interface FounderValidation {
+  isFounder: boolean;
+  confidence: number;
+  signals: string[];
+}
+
+// Known founder IP - this is the primary identification signal
+const FOUNDER_IP = '190.211.120.214';
 
 class UnifiedDataService {
   private miningStatsCache: { data: MiningStats | null; timestamp: number } = { data: null, timestamp: 0 };
   private userContextCache: { data: UserContext | null; timestamp: number } = { data: null, timestamp: 0 };
   private readonly CACHE_DURATION = 30000; // 30 seconds
 
-  // Get user context (IP and founder status)
+  // Multi-signal founder validation
+  async validateFounderStatus(ip: string): Promise<FounderValidation> {
+    const signals: string[] = [];
+    let confidence = 0;
+
+    // Signal 1: Direct IP match to known founder IP (PRIMARY - 100 points)
+    if (ip === FOUNDER_IP) {
+      signals.push('ip_match_known_founder');
+      confidence += 100;
+      console.log('🎖️ Founder validation: IP matches known founder IP');
+    }
+
+    // Signal 2: Database founder flag in user_profiles.metadata
+    try {
+      const { data: profileData } = await supabase
+        .from('user_profiles')
+        .select('metadata, total_xmrt_earned')
+        .eq('ip_address', ip)
+        .maybeSingle();
+      
+      // Type-safe access to metadata.founder
+      const metadata = profileData?.metadata as Record<string, unknown> | null;
+      if (metadata?.founder === true) {
+        signals.push('db_founder_flag');
+        confidence += 50;
+        console.log('🎖️ Founder validation: Database founder flag is true');
+      }
+
+      // Signal 3: High XMRT earnings (founder has significant history)
+      if (profileData?.total_xmrt_earned && profileData.total_xmrt_earned > 100000) {
+        signals.push('high_xmrt_earnings');
+        confidence += 20;
+        console.log('🎖️ Founder validation: High XMRT earnings detected');
+      }
+    } catch (error) {
+      console.warn('Failed to query user_profiles for founder validation:', error);
+    }
+
+    // Signal 4: Device connection history from this IP
+    try {
+      const { data: deviceSessions } = await supabase
+        .from('battery_sessions')
+        .select('device_id')
+        .eq('ip_address', ip)
+        .order('started_at', { ascending: false })
+        .limit(10);
+      
+      if (deviceSessions && deviceSessions.length >= 5) {
+        signals.push('consistent_device_usage');
+        confidence += 10;
+        console.log('🎖️ Founder validation: Consistent device usage pattern');
+      }
+    } catch (error) {
+      console.warn('Failed to query device sessions for founder validation:', error);
+    }
+
+    // Signal 5: localStorage backup (for testing/development)
+    if (localStorage.getItem('isProjectFounder') === 'true') {
+      signals.push('localstorage_flag');
+      confidence += 10;
+    }
+
+    const isFounder = confidence >= 50; // Need at least database flag OR IP match
+    
+    console.log(`🎖️ Founder validation complete: ${isFounder ? 'CONFIRMED' : 'NOT FOUNDER'} (confidence: ${confidence}, signals: ${signals.join(', ')})`);
+    
+    return {
+      isFounder,
+      confidence: Math.min(confidence, 100),
+      signals
+    };
+  }
+
+  // Get user context (IP and founder status) - NOW QUERIES DATABASE
   async getUserContext(): Promise<UserContext> {
     const now = Date.now();
     
@@ -30,26 +116,31 @@ class UnifiedDataService {
     }
 
     try {
+      // Get current IP
       const response = await fetch('https://api.ipify.org?format=json');
       const data = await response.json();
       const ip = data.ip || 'Unknown';
       
-      // Check founder status
-      const founderIP = localStorage.getItem('founderIP');
-      if (!founderIP) {
-        localStorage.setItem('founderIP', ip);
-      }
+      console.log('📡 Current IP:', ip);
       
-      const isFounder = founderIP === ip || localStorage.getItem('isProjectFounder') === 'true';
+      // Validate founder status using multi-signal approach
+      const founderValidation = await this.validateFounderStatus(ip);
       
       const userContext: UserContext = {
         ip,
-        isFounder,
+        isFounder: founderValidation.isFounder,
+        founderConfidence: founderValidation.confidence,
+        founderSignals: founderValidation.signals,
         timestamp: now
       };
 
       // Cache the result
       this.userContextCache = { data: userContext, timestamp: now };
+      
+      if (founderValidation.isFounder) {
+        console.log('🎖️ FOUNDER STATUS CONFIRMED for IP:', ip);
+      }
+      
       return userContext;
       
     } catch (error) {
@@ -59,6 +150,8 @@ class UnifiedDataService {
       const fallback: UserContext = {
         ip: 'Unknown',
         isFounder: localStorage.getItem('isProjectFounder') === 'true',
+        founderConfidence: 0,
+        founderSignals: [],
         timestamp: now
       };
       
