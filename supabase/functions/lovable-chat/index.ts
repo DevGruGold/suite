@@ -1070,6 +1070,17 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                   
                   console.log(`📸 Calling Gemini Vision API with ${images.length} images`);
                   
+                // Add action-oriented system instruction for concise responses
+                const actionDirective = 'CRITICAL: Be CONCISE. Never explain what you will do - just do it. Present results naturally. 1-3 sentences max for simple queries.';
+                parts[0].text = `${actionDirective}\n\n${parts[0].text}`;
+                
+                // Include tools for vision fallback (converted to Gemini format)
+                const visionTools = ELIZA_TOOLS.slice(0, 20).map(tool => ({
+                  name: tool.function.name,
+                  description: tool.function.description,
+                  parameters: tool.function.parameters
+                }));
+                
                 const geminiResponse = await fetch(
                   `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
                     {
@@ -1080,31 +1091,75 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                         generationConfig: {
                           temperature: 0.7,
                           maxOutputTokens: 4000
-                        }
+                        },
+                        tools: [{ functionDeclarations: visionTools }]
                       })
                     }
                   );
                   
                   if (geminiResponse.ok) {
                     const geminiData = await geminiResponse.json();
-                    const geminiText = geminiData.candidates?.[0]?.content?.parts?.[0]?.text;
+                    const geminiParts = geminiData.candidates?.[0]?.content?.parts;
                     
-                    if (geminiText) {
-                      console.log('✅ Gemini Vision fallback successful');
-                      aiProvider = 'gemini';
-                      aiModel = 'gemini-2.0-flash-exp';
-                      aiExecutiveTitle = 'Chief Strategy Officer (CSO) [Vision Fallback]';
-                      message = { role: 'assistant', content: geminiText };
-                      // Skip DeepSeek fallback since Gemini succeeded
+                    // Check for function calls first
+                    const functionCall = geminiParts?.find((p: any) => p.functionCall);
+                    if (functionCall) {
+                      console.log(`🔧 Gemini Vision returned function call: ${functionCall.functionCall.name}`);
+                      // Execute the tool and continue
+                      const toolResult = await executeToolCall(supabase, {
+                        id: `gemini_vision_${Date.now()}`,
+                        type: 'function',
+                        function: { 
+                          name: functionCall.functionCall.name, 
+                          arguments: JSON.stringify(functionCall.functionCall.args || {})
+                        }
+                      }, SUPABASE_URL, SERVICE_ROLE_KEY);
+                      
+                      // Make follow-up call with tool result
+                      const followUpParts = [
+                        ...parts,
+                        { text: `Tool result for ${functionCall.functionCall.name}: ${JSON.stringify(toolResult)}. Synthesize this into a natural, concise response.` }
+                      ];
+                      
+                      const followUpResponse = await fetch(
+                        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+                        {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            contents: [{ parts: followUpParts }],
+                            generationConfig: { temperature: 0.7, maxOutputTokens: 2000 }
+                          })
+                        }
+                      );
+                      
+                      if (followUpResponse.ok) {
+                        const followUpData = await followUpResponse.json();
+                        const synthesizedText = followUpData.candidates?.[0]?.content?.parts?.[0]?.text;
+                        if (synthesizedText) {
+                          console.log('✅ Gemini Vision with tool execution successful');
+                          aiProvider = 'gemini';
+                          aiModel = 'gemini-2.0-flash-exp';
+                          aiExecutiveTitle = 'Chief Strategy Officer (CSO) [Vision + Tools]';
+                          message = { role: 'assistant', content: synthesizedText };
+                        }
+                      }
+                    } else {
+                      const geminiText = geminiParts?.[0]?.text;
+                      if (geminiText) {
+                        console.log('✅ Gemini Vision fallback successful');
+                        aiProvider = 'gemini';
+                        aiModel = 'gemini-2.0-flash-exp';
+                        aiExecutiveTitle = 'Chief Strategy Officer (CSO) [Vision Fallback]';
+                        message = { role: 'assistant', content: geminiText };
+                      }
                     }
                   } else {
                     const errorText = await geminiResponse.text();
                     console.warn('⚠️ Gemini Vision fallback failed:', errorText);
-                    // Continue to DeepSeek fallback
                   }
                 } catch (geminiError) {
                   console.warn('⚠️ Gemini Vision error:', geminiError.message);
-                  // Continue to DeepSeek fallback
                 }
               } else {
                 console.warn('⚠️ GEMINI_API_KEY not configured - trying OpenRouter');
@@ -1137,6 +1192,16 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                     });
                   }
                   
+                  // Add action directive to OpenRouter vision
+                  const actionDirective = 'CRITICAL: Be CONCISE. Never explain what you will do - just do it. Present results naturally. 1-3 sentences max.';
+                  contentParts[0].text = `${actionDirective}\n\n${contentParts[0].text}`;
+                  
+                  // Include tools for OpenRouter vision fallback
+                  const openRouterTools = ELIZA_TOOLS.slice(0, 30).map(tool => ({
+                    type: 'function',
+                    function: tool.function
+                  }));
+                  
                   const openRouterResponse = await fetch('https://openrouter.ai/api/v1/chat/completions', {
                     method: 'POST',
                     headers: {
@@ -1146,9 +1211,11 @@ You are looking at the user RIGHT NOW through their webcam. This means:
                       'X-Title': 'XMRT Eliza'
                     },
                     body: JSON.stringify({
-                      model: 'anthropic/claude-3-haiku', // Fast, cheap, vision-capable
+                      model: 'anthropic/claude-3-haiku',
                       messages: [{ role: 'user', content: contentParts }],
-                      max_tokens: 4000
+                      max_tokens: 4000,
+                      tools: openRouterTools,
+                      tool_choice: 'auto'
                     })
                   });
                   

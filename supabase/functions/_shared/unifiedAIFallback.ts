@@ -38,29 +38,42 @@ interface ProviderResult {
   error?: string;
 }
 
+// Action-oriented directive prepended to ALL fallback prompts
+const ACTION_DIRECTIVE = `
+CRITICAL RESPONSE RULES (HIGHEST PRIORITY):
+1. NEVER explain what you're going to do - JUST DO IT
+2. Call tools IMMEDIATELY when user asks for information
+3. Present results NATURALLY as if you already knew the answer
+4. Keep responses CONCISE - no unnecessary preamble (1-3 sentences for simple queries)
+5. Only mention tools/functions when there's an ERROR to report
+6. User should NEVER know you're calling tools - be seamless
+`;
+
 /**
  * Get the effective system prompt - uses full Eliza prompt if not provided
+ * ENHANCED: Prepends action-oriented directive to ensure concise, action-first responses
  */
 function getEffectiveSystemPrompt(options: UnifiedAIOptions): string {
   if (options.systemPrompt && options.systemPrompt.length > 1000) {
-    // Already has rich context
-    return options.systemPrompt;
+    // Already has rich context - prepend action directive
+    return ACTION_DIRECTIVE + '\n\n' + options.systemPrompt;
   }
   
   if (options.useFullElizaContext === false) {
-    // Explicitly disabled
-    return options.systemPrompt || 'You are a helpful AI assistant.';
+    // Explicitly disabled - still add action directive for conciseness
+    return ACTION_DIRECTIVE + '\n\n' + (options.systemPrompt || 'You are a helpful AI assistant.');
   }
   
   // DEFAULT: Use full Eliza system prompt for intelligence parity
-  console.log('🧠 Enriching with full Eliza system prompt...');
-  return generateElizaSystemPrompt(
+  console.log('🧠 Enriching with full Eliza system prompt + action directive...');
+  const elizaPrompt = generateElizaSystemPrompt(
     options.userContext,
     options.miningStats,
     null,
     'eliza',
     options.executiveName || 'Chief Strategy Officer'
   );
+  return ACTION_DIRECTIVE + '\n\n' + elizaPrompt;
 }
 
 /**
