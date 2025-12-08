@@ -600,6 +600,19 @@ serve(async (req) => {
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     
+    // Log founder status for debugging
+    const isFounder = userContext?.isFounder === true || userContext?.ip === '190.211.120.214';
+    if (isFounder) {
+      console.log('🎖️ ════════════════════════════════════════════════');
+      console.log('🎖️ FOUNDER SESSION DETECTED');
+      console.log(`🎖️ IP: ${userContext?.ip || 'Unknown'}`);
+      console.log(`🎖️ Confidence: ${userContext?.founderConfidence || 'N/A'}`);
+      console.log(`🎖️ Signals: ${userContext?.founderSignals?.join(', ') || 'Direct IP match'}`);
+      console.log('🎖️ ════════════════════════════════════════════════');
+    } else {
+      console.log(`👤 Standard user session - IP: ${userContext?.ip || 'Unknown'}`);
+    }
+    
     // Log if images are being passed
     if (images && images.length > 0) {
       console.log(`🖼️ Processing ${images.length} image attachment(s) for vision analysis`);
@@ -629,7 +642,7 @@ serve(async (req) => {
     let aiProvider = 'lovable_gateway'; // Mutable for fallback
     let aiModel = 'google/gemini-2.5-flash';
     const aiExecutive = 'lovable-chat';
-    let aiExecutiveTitle = 'Chief Strategy Officer (CSO)';
+    let aiExecutiveTitle = isFounder ? 'Chief Strategy Officer (CSO) - Founder Session' : 'Chief Strategy Officer (CSO)';
 
     console.log(`🎯 ${aiExecutiveTitle} - Processing request`);
     

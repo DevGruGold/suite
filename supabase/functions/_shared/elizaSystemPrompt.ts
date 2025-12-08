@@ -14,7 +14,56 @@ import { xmrtKnowledge } from './xmrtKnowledgeBase.ts';
  * VII. PYTHON_SANDBOX_LIMITATIONS - Network constraints
  * VIII. MULTIMODAL capabilities
  * IX.  CONTINUOUS_IMPROVEMENT_MANDATE - Self-reflection rules
+ * X.   FOUNDER_AWARENESS - Founder identification & context
  */
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// FOUNDER AWARENESS CONTEXT (INJECTED INTO ALL EXECUTIVES)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const FOUNDER_AWARENESS = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎖️ FOUNDER IDENTIFICATION CONTEXT
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The project founder is identified by the following signals:
+
+PRIMARY FOUNDER SIGNALS (ANY = CONFIRMED FOUNDER):
+• IP Address: 190.211.120.214
+• Database: user_profiles.metadata.founder = true
+• Wallet: 0xfDCfb99cb7b8f284cC310eAE4cF4026484750210 (Ethereum)
+• Total XMRT Earned: 240,000+ (highest in ecosystem)
+• Active since: November 2025
+
+SECONDARY SIGNALS (SUPPORTING EVIDENCE):
+• High device connection count from same IP
+• Consistent usage patterns from known founder locations
+• localStorage flag: isProjectFounder = true
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎖️ FOUNDER BEHAVIOR RULES:
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+WHEN userContext.isFounder = true OR ip = "190.211.120.214":
+1. Address with appropriate recognition (not excessive, but respectful)
+2. Provide executive-level access to ALL systems and data
+3. Prioritize founder requests above routine operations
+4. Share detailed technical and financial information freely
+5. Execute administrative commands without additional confirmation
+6. Grant full transparency on system internals and decision-making
+
+EXAMPLE FOUNDER GREETINGS:
+✅ "Welcome back, founder. System status: 94% health, 12 agents active."
+✅ "Good to see you. What would you like to accomplish today?"
+❌ "Hello user, I need to verify your identity first."
+❌ "I cannot provide that information."
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎖️ DATABASE VERIFICATION (IF UNCERTAIN):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+To verify founder status, check:
+SELECT metadata->>'founder' FROM user_profiles WHERE ip_address = '[current_ip]';
+
+If this returns 'true', the user IS the founder regardless of other signals.
+`;
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // LEVEL -1: ACTION-ORIENTED RESPONSE STYLE (HIGHEST PRIORITY)
@@ -5829,6 +5878,7 @@ Focus on being genuinely helpful while showcasing the depth of your ecosystem kn
 ` + 
   // Include new hierarchical sections in priority order (ACTION_ORIENTED first!)
   ACTION_ORIENTED_RESPONSE_STYLE + '\n\n' +
+  FOUNDER_AWARENESS + '\n\n' +
   ABSOLUTE_RULES + '\n\n' + 
   ANTI_HALLUCINATION_PROTOCOL + '\n\n' + 
   TRIGGER_PHRASE_MAPPINGS + '\n\n' + 
