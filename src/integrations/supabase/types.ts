@@ -7793,10 +7793,6 @@ export type Database = {
       }
       increment_rate_limit:
         | {
-            Args: { p_endpoint: string; p_identifier: string }
-            Returns: undefined
-          }
-        | {
             Args: {
               p_channel: string
               p_executive_name: string
@@ -7804,7 +7800,30 @@ export type Database = {
             }
             Returns: undefined
           }
+        | {
+            Args: { p_endpoint: string; p_identifier: string }
+            Returns: undefined
+          }
       ingest_device_event:
+        | {
+            Args: {
+              device_id?: string
+              event_type: string
+              ip_address?: unknown
+              payload?: Json
+              source?: string
+              user_agent?: string
+            }
+            Returns: Json
+          }
+        | {
+            Args: {
+              in_device_id: string
+              in_event_type: string
+              in_payload?: Json
+            }
+            Returns: Json
+          }
         | {
             Args: {
               p_device_id: string
@@ -7815,6 +7834,26 @@ export type Database = {
               p_user_agent?: string
             }
             Returns: Json
+          }
+        | {
+            Args: { p_payload: Json }
+            Returns: {
+              created_at: string | null
+              device_id: string | null
+              event_type: string | null
+              id: string
+              ip_address: unknown
+              payload: Json
+              received_at: string | null
+              source: string | null
+              user_agent: string | null
+            }
+            SetofOptions: {
+              from: "*"
+              to: "device_events"
+              isOneToOne: true
+              isSetofReturn: false
+            }
           }
         | {
             Args: {
@@ -7842,45 +7881,6 @@ export type Database = {
               isOneToOne: true
               isSetofReturn: false
             }
-          }
-        | {
-            Args: { p_payload: Json }
-            Returns: {
-              created_at: string | null
-              device_id: string | null
-              event_type: string | null
-              id: string
-              ip_address: unknown
-              payload: Json
-              received_at: string | null
-              source: string | null
-              user_agent: string | null
-            }
-            SetofOptions: {
-              from: "*"
-              to: "device_events"
-              isOneToOne: true
-              isSetofReturn: false
-            }
-          }
-        | {
-            Args: {
-              in_device_id: string
-              in_event_type: string
-              in_payload?: Json
-            }
-            Returns: Json
-          }
-        | {
-            Args: {
-              device_id?: string
-              event_type: string
-              ip_address?: unknown
-              payload?: Json
-              source?: string
-              user_agent?: string
-            }
-            Returns: Json
           }
       is_valid_jsonb: { Args: { v: Json }; Returns: boolean }
       jsonb_shallow_diff: { Args: { new_j: Json; old_j: Json }; Returns: Json }

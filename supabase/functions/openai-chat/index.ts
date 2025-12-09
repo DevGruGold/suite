@@ -19,6 +19,7 @@ import {
   callGeminiFallback,
   synthesizeToolResults
 } from '../_shared/executiveHelpers.ts';
+import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
 
 const logger = EdgeFunctionLogger('cao-executive');
 
@@ -280,8 +281,8 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
     console.error('❌ CAO Executive error:', error);
     await logger.error('Function execution failed', error, 'error');
     
-    // ========== FALLBACK CASCADE ==========
-    console.log('⚠️ Primary AI failed, trying fallback cascade...');
+    // ========== FALLBACK CASCADE WITH TOOL EXECUTION ==========
+    console.log('⚠️ Primary AI failed, trying fallback cascade with tool execution...');
     
     try {
       const { messages, conversationHistory, userContext, miningStats, systemVersion } = await req.clone().json();
@@ -293,59 +294,99 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
         systemVersion
       });
       const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+      const userQuery = messages[messages.length - 1]?.content || '';
       
-      // Try DeepSeek
+      const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+      const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+      
+      // Try DeepSeek with tool execution
       const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
       if (deepseekResult) {
+        const processed = await processFallbackWithToolExecution(
+          deepseekResult, supabase, 'Chief Analytics Officer (CAO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: deepseekResult.content,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'openai-chat',
             executiveTitle: 'Chief Analytics Officer (CAO) [DeepSeek Fallback]',
-            provider: 'deepseek',
-            model: 'deepseek-chat',
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'deepseek'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      // Try Kimi K2
+      // Try Kimi K2 with tool execution
       const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
       if (kimiResult) {
+        const processed = await processFallbackWithToolExecution(
+          kimiResult, supabase, 'Chief Analytics Officer (CAO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: kimiResult.content,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'openai-chat',
             executiveTitle: 'Chief Analytics Officer (CAO) [Kimi K2 Fallback]',
-            provider: 'openrouter',
-            model: 'moonshotai/kimi-k2',
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'kimi'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      // Try Gemini
+      // Try Gemini with tool execution
       const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
       if (geminiResult) {
+        const processed = await processFallbackWithToolExecution(
+          geminiResult, supabase, 'Chief Analytics Officer (CAO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: geminiResult.content,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'openai-chat',
             executiveTitle: 'Chief Analytics Officer (CAO) [Gemini Fallback]',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash-exp',
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'gemini'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
+      
+      // EMERGENCY: All AI providers failed - use static fallback
+      console.log('🚨 All AI providers failed, using emergency static fallback');
+      const emergencyResult = await emergencyStaticFallback(
+        userQuery, supabase, 'Chief Analytics Officer (CAO)', SUPABASE_URL, SERVICE_ROLE_KEY
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: emergencyResult.content,
+          hasToolCalls: emergencyResult.hasToolCalls,
+          toolCallsExecuted: emergencyResult.toolCallsExecuted,
+          executive: 'openai-chat',
+          executiveTitle: 'Chief Analytics Officer (CAO) [Emergency Static]',
+          provider: emergencyResult.provider,
+          model: emergencyResult.model,
+          fallback: 'emergency_static'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     } catch (fallbackError) {
-      console.error('❌ All fallbacks failed:', fallbackError);
+      console.error('❌ All fallbacks including emergency failed:', fallbackError);
     }
     
     const errorMessage = error instanceof Error ? error.message : String(error);

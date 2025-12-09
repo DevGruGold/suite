@@ -15,6 +15,7 @@ import {
   callKimiFallback,
   callGeminiFallback
 } from '../_shared/executiveHelpers.ts';
+import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
 
 const logger = EdgeFunctionLogger('cto-executive');
 
@@ -135,45 +136,72 @@ serve(async (req) => {
     }
     
     if (!DEEPSEEK_API_KEY) {
-      console.warn('⚠️ DEEPSEEK_API_KEY not configured, trying fallbacks...');
+      console.warn('⚠️ DEEPSEEK_API_KEY not configured, trying fallbacks with tool execution...');
+      const userQuery = messages[messages.length - 1]?.content || '';
       
-      // Try Kimi K2 fallback
+      // Try Kimi K2 fallback with tool execution
       const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
       if (kimiResult) {
+        const processed = await processFallbackWithToolExecution(
+          kimiResult, supabase, 'Chief Technology Officer (CTO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: kimiResult.content,
-            hasToolCalls: false,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'deepseek-chat',
             executiveTitle: 'Chief Technology Officer (CTO) [Kimi K2 Fallback]',
-            provider: kimiResult.provider,
-            model: kimiResult.model,
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'kimi'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      // Try Gemini fallback
-      const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY, ELIZA_TOOLS);
+      // Try Gemini fallback with tool execution
+      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
       if (geminiResult) {
+        const processed = await processFallbackWithToolExecution(
+          geminiResult, supabase, 'Chief Technology Officer (CTO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: geminiResult.content,
-            hasToolCalls: false,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'deepseek-chat',
             executiveTitle: 'Chief Technology Officer (CTO) [Gemini Fallback]',
-            provider: geminiResult.provider,
-            model: geminiResult.model,
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'gemini'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      throw new Error('DEEPSEEK_API_KEY is not configured and all fallbacks failed');
+      // EMERGENCY: All AI providers failed - use static fallback
+      console.log('🚨 All AI providers failed, using emergency static fallback');
+      const emergencyResult = await emergencyStaticFallback(
+        userQuery, supabase, 'Chief Technology Officer (CTO)', SUPABASE_URL, SERVICE_ROLE_KEY
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: emergencyResult.content,
+          hasToolCalls: emergencyResult.hasToolCalls,
+          toolCallsExecuted: emergencyResult.toolCallsExecuted,
+          executive: 'deepseek-chat',
+          executiveTitle: 'Chief Technology Officer (CTO) [Emergency Static]',
+          provider: emergencyResult.provider,
+          model: emergencyResult.model,
+          fallback: 'emergency_static'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
     console.log('📤 Calling DeepSeek API with tools...');
