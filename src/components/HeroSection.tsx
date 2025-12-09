@@ -94,9 +94,9 @@ export const HeroSection = () => {
       }
 
       setStats({
-        totalExecutions: executions.count || 1000000,
-        activeAgents: agents.count || 12,
-        activeTasks: tasks.count || 6,
+        totalExecutions: executions.count || 0,
+        activeAgents: agents.count || 0,
+        activeTasks: tasks.count || 0,
         healthScore,
         healthStatus,
         healthIssues
