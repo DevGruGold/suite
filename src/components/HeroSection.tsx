@@ -66,7 +66,7 @@ export const HeroSection = () => {
     const fetchStats = async () => {
       // Fetch basic counts and health from activity log
       const [executions, agents, tasks, healthLog] = await Promise.all([
-        supabase.from('eliza_activity_log').select('*', { count: 'exact', head: true }),
+        supabase.from('eliza_activity_log').select('*', { count: 'estimated', head: true }),
         supabase.from('agents').select('*', { count: 'exact', head: true }).in('status', ['IDLE', 'BUSY']),
         supabase.from('tasks').select('*', { count: 'exact', head: true }).in('status', ['PENDING', 'IN_PROGRESS']),
         // Get most recent health check from activity log
