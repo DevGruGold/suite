@@ -16,6 +16,7 @@ import {
   callDeepSeekFallback,
   callKimiFallback
 } from '../_shared/executiveHelpers.ts';
+import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
 
 const logger = EdgeFunctionLogger('cio-executive');
 
@@ -123,47 +124,74 @@ First call tools to gather data, then provide a focused, data-driven CIO perspec
     const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
     
     if (!GEMINI_API_KEY) {
-      console.warn('⚠️ GEMINI_API_KEY not configured, trying fallbacks...');
+      console.warn('⚠️ GEMINI_API_KEY not configured, trying fallbacks with tool execution...');
       
       const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+      const userQuery = messages[messages.length - 1]?.content || '';
       
-      // Try DeepSeek fallback
+      // Try DeepSeek fallback with tool execution
       const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
       if (deepseekResult) {
+        const processed = await processFallbackWithToolExecution(
+          deepseekResult, supabase, 'Chief Information Officer (CIO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: deepseekResult.content,
-            hasToolCalls: false,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'gemini-chat',
             executiveTitle: 'Chief Information Officer (CIO) [DeepSeek Fallback]',
-            provider: deepseekResult.provider,
-            model: deepseekResult.model,
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'deepseek'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      // Try Kimi K2 fallback
+      // Try Kimi K2 fallback with tool execution
       const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
       if (kimiResult) {
+        const processed = await processFallbackWithToolExecution(
+          kimiResult, supabase, 'Chief Information Officer (CIO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+        );
         return new Response(
           JSON.stringify({
             success: true,
-            response: kimiResult.content,
-            hasToolCalls: false,
+            response: processed.content,
+            hasToolCalls: processed.hasToolCalls,
+            toolCallsExecuted: processed.toolCallsExecuted,
             executive: 'gemini-chat',
             executiveTitle: 'Chief Information Officer (CIO) [Kimi K2 Fallback]',
-            provider: kimiResult.provider,
-            model: kimiResult.model,
+            provider: processed.provider,
+            model: processed.model,
             fallback: 'kimi'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
-      throw new Error('GEMINI_API_KEY is not configured and all fallbacks failed');
+      // EMERGENCY: All AI providers failed - use static fallback
+      console.log('🚨 All AI providers failed, using emergency static fallback');
+      const emergencyResult = await emergencyStaticFallback(
+        userQuery, supabase, 'Chief Information Officer (CIO)', SUPABASE_URL, SERVICE_ROLE_KEY
+      );
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: emergencyResult.content,
+          hasToolCalls: emergencyResult.hasToolCalls,
+          toolCallsExecuted: emergencyResult.toolCallsExecuted,
+          executive: 'gemini-chat',
+          executiveTitle: 'Chief Information Officer (CIO) [Emergency Static]',
+          provider: emergencyResult.provider,
+          model: emergencyResult.model,
+          fallback: 'emergency_static'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     console.log('📤 Calling Gemini API...');
@@ -227,77 +255,74 @@ First call tools to gather data, then provide a focused, data-driven CIO perspec
       await logger.apiCall('gemini', geminiResponse.status, apiDuration, { error: errorText });
 
       if (geminiResponse.status === 402 || geminiResponse.status === 429 || geminiResponse.status >= 500) {
-        console.log(`⚠️ Gemini returned ${geminiResponse.status}, trying fallback cascade...`);
+        console.log(`⚠️ Gemini returned ${geminiResponse.status}, trying fallback cascade with tool execution...`);
         
         const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+        const userQuery = messages[messages.length - 1]?.content || '';
         
-        // Try DeepSeek fallback
+        // Try DeepSeek fallback with unified tool execution
         const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
         if (deepseekResult) {
-          if (deepseekResult.tool_calls && deepseekResult.tool_calls.length > 0) {
-            console.log(`🔧 Executing ${deepseekResult.tool_calls.length} tool(s) from DeepSeek`);
-            const toolResults = [];
-            for (const toolCall of deepseekResult.tool_calls) {
-              const result = await executeToolCall(supabase, toolCall, 'CIO', SUPABASE_URL, SERVICE_ROLE_KEY);
-              toolResults.push({ tool_call_id: toolCall.id, role: 'tool', content: JSON.stringify(result) });
-            }
-            
-            const secondResult = await callDeepSeekFallback([
-              ...aiMessages,
-              { role: 'assistant', content: deepseekResult.content, tool_calls: deepseekResult.tool_calls },
-              ...toolResults
-            ]);
-            
-            if (secondResult) {
-              return new Response(
-                JSON.stringify({
-                  success: true,
-                  response: secondResult.content,
-                  hasToolCalls: true,
-                  toolCallsExecuted: deepseekResult.tool_calls.length,
-                  executive: 'gemini-chat',
-                  executiveTitle: 'Chief Information Officer (CIO) [DeepSeek Fallback]',
-                  provider: 'deepseek',
-                  model: 'deepseek-chat',
-                  fallback: 'deepseek'
-                }),
-                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
-            }
-          }
-          
+          const processed = await processFallbackWithToolExecution(
+            deepseekResult, supabase, 'Chief Information Officer (CIO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+          );
           return new Response(
             JSON.stringify({
               success: true,
-              response: deepseekResult.content,
-              hasToolCalls: false,
+              response: processed.content,
+              hasToolCalls: processed.hasToolCalls,
+              toolCallsExecuted: processed.toolCallsExecuted,
               executive: 'gemini-chat',
               executiveTitle: 'Chief Information Officer (CIO) [DeepSeek Fallback]',
-              provider: deepseekResult.provider,
-              model: deepseekResult.model,
+              provider: processed.provider,
+              model: processed.model,
               fallback: 'deepseek'
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
-        // Try Kimi K2 fallback
+        // Try Kimi K2 fallback with unified tool execution
         const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
         if (kimiResult) {
+          const processed = await processFallbackWithToolExecution(
+            kimiResult, supabase, 'Chief Information Officer (CIO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
+          );
           return new Response(
             JSON.stringify({
               success: true,
-              response: kimiResult.content,
-              hasToolCalls: false,
+              response: processed.content,
+              hasToolCalls: processed.hasToolCalls,
+              toolCallsExecuted: processed.toolCallsExecuted,
               executive: 'gemini-chat',
               executiveTitle: 'Chief Information Officer (CIO) [Kimi K2 Fallback]',
-              provider: kimiResult.provider,
-              model: kimiResult.model,
+              provider: processed.provider,
+              model: processed.model,
               fallback: 'kimi'
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+        
+        // EMERGENCY: All AI providers failed - use static fallback
+        console.log('🚨 All AI providers failed, using emergency static fallback');
+        const emergencyResult = await emergencyStaticFallback(
+          userQuery, supabase, 'Chief Information Officer (CIO)', SUPABASE_URL, SERVICE_ROLE_KEY
+        );
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: emergencyResult.content,
+            hasToolCalls: emergencyResult.hasToolCalls,
+            toolCallsExecuted: emergencyResult.toolCallsExecuted,
+            executive: 'gemini-chat',
+            executiveTitle: 'Chief Information Officer (CIO) [Emergency Static]',
+            provider: emergencyResult.provider,
+            model: emergencyResult.model,
+            fallback: 'emergency_static'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
 
       return new Response(
