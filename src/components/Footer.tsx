@@ -1,19 +1,13 @@
-import { Github, Twitter, Mail, Phone } from "lucide-react";
+import { Github, Twitter, Mail } from "lucide-react";
 import { Button } from "./ui/button";
 
 export function Footer() {
-  const openWhatsApp = () => {
-    const message = "Hello, I'm interested in learning more about Suite Enterprise AI Platform.";
-    const encodedMessage = encodeURIComponent(message);
-    window.open(`https://wa.me/50661500559?text=${encodedMessage}`, '_blank');
-  };
-
   const openEmail = () => {
-    const subject = "Suite Enterprise AI Platform Inquiry";
-    const body = "Hello,\n\nI'm interested in learning more about Suite Enterprise AI Platform.\n\nBest regards,";
+    const subject = "XMRT-DAO Inquiry";
+    const body = "Hello,\n\nI'm interested in learning more about XMRT-DAO and Suite.\n\nBest regards,";
     const encodedSubject = encodeURIComponent(subject);
     const encodedBody = encodeURIComponent(body);
-    window.location.href = `mailto:support@suite.ai?subject=${encodedSubject}&body=${encodedBody}`;
+    window.location.href = `mailto:xmrtsolutions@gmail.com?subject=${encodedSubject}&body=${encodedBody}`;
   };
 
   return (
@@ -21,7 +15,7 @@ export function Footer() {
       <div className="container mx-auto px-3 sm:px-4 lg:px-6">
         <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
           <div className="text-muted-foreground text-xs sm:text-sm text-center sm:text-left">
-            © 2025 Suite. Enterprise AI Platform.
+            © 2026 XMRT-DAO. All rights reserved.
           </div>
           <div className="flex gap-3 sm:gap-4 items-center">
             <Button
@@ -33,17 +27,8 @@ export function Footer() {
             >
               <Mail className="w-4 h-4 sm:w-5 sm:h-5" />
             </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={openWhatsApp}
-              className="text-muted-foreground hover:text-primary transition-colors h-8 w-8 sm:h-10 sm:w-10"
-              aria-label="Contact via WhatsApp"
-            >
-              <Phone className="w-4 h-4 sm:w-5 sm:h-5" />
-            </Button>
             <a
-              href="https://twitter.com/SuiteAI"
+              href="https://twitter.com/XMRTDAO"
               target="_blank"
               rel="noopener noreferrer"
               className="text-muted-foreground hover:text-primary transition-colors p-2"
