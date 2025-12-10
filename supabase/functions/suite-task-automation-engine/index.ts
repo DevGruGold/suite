@@ -63,7 +63,7 @@ serve(async (req) => {
       // CREATE TASK FROM TEMPLATE
       // ====================================================================
       case 'create_from_template': {
-        const { template_name, title, description, priority, auto_assign = true } = data;
+        const { template_name, title, description, priority, repo, auto_assign = true } = data;
 
         if (!template_name || !title) {
           throw new Error('template_name and title are required');
@@ -84,12 +84,17 @@ serve(async (req) => {
         // Generate task description from template
         const taskDescription = description || template.description_template.replace('{{title}}', title);
 
+        // Generate unique task ID
+        const taskId = `task-${crypto.randomUUID()}`;
+
         // Create task
         const { data: task, error: taskError } = await supabase
           .from('tasks')
           .insert({
+            id: taskId,
             title,
             description: taskDescription,
+            repo: repo || 'xmrt-ecosystem',
             category: template.category,
             stage: template.default_stage,
             priority: priority ?? template.default_priority,
