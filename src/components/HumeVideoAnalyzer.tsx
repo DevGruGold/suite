@@ -361,6 +361,7 @@ export const HumeVideoAnalyzer: React.FC<HumeVideoAnalyzerProps> = ({
           playsInline
           muted
           className="w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
         />
         <canvas ref={canvasRef} className="hidden" />
         

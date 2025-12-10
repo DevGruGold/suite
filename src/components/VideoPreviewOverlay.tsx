@@ -124,6 +124,7 @@ export const VideoPreviewOverlay: React.FC<VideoPreviewOverlayProps> = ({
           muted
           playsInline
           className="w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
         />
         {emotions.length > 0 && (
           <div className="absolute bottom-0 right-0 bg-background/80 rounded-tl-lg px-1">
@@ -179,6 +180,7 @@ export const VideoPreviewOverlay: React.FC<VideoPreviewOverlayProps> = ({
           muted
           playsInline
           className="w-full h-full object-cover"
+          style={{ transform: 'scaleX(-1)' }}
         />
         
         {/* Analysis indicator */}

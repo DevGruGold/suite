@@ -207,6 +207,7 @@ export const LiveCameraProcessor: React.FC<LiveCameraProcessorProps> = ({
         <video
           ref={videoRef}
           className={`w-48 h-36 rounded-lg border ${isActive ? 'block' : 'hidden'}`}
+          style={{ transform: 'scaleX(-1)' }}
           muted
           playsInline
         />

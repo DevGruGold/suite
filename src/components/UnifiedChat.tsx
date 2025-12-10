@@ -231,6 +231,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // Video frame capture for multimodal mode
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [videoReady, setVideoReady] = useState(false);
+  const [latestVideoFrame, setLatestVideoFrame] = useState<string | null>(null);
+  const continuousCaptureRef = useRef<NodeJS.Timeout | null>(null);
   
   // Pre-initialize video element when multimodal mode activates
   useEffect(() => {
@@ -264,8 +266,58 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       }
     }
   }, [humeState?.mode, humeState?.videoStream]);
+
+  // Continuous video frame capture every 3 seconds in multimodal mode
+  useEffect(() => {
+    if (humeState?.mode === 'multimodal' && humeState?.videoStream && videoReady) {
+      console.log('👁️ Starting continuous video capture (every 3s)');
+      
+      const captureFrame = async () => {
+        if (!videoRef.current || videoRef.current.readyState < 2) return;
+        
+        try {
+          const canvas = document.createElement('canvas');
+          canvas.width = videoRef.current.videoWidth || 640;
+          canvas.height = videoRef.current.videoHeight || 480;
+          const ctx = canvas.getContext('2d');
+          if (ctx) {
+            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+            const frame = canvas.toDataURL('image/jpeg', 0.7);
+            setLatestVideoFrame(frame);
+            console.log('📸 Continuous capture: frame updated');
+          }
+        } catch (err) {
+          console.error('Continuous capture error:', err);
+        }
+      };
+      
+      // Capture immediately, then every 3 seconds
+      captureFrame();
+      continuousCaptureRef.current = setInterval(captureFrame, 3000);
+      
+      return () => {
+        if (continuousCaptureRef.current) {
+          clearInterval(continuousCaptureRef.current);
+          continuousCaptureRef.current = null;
+        }
+      };
+    } else {
+      // Clear capture when not in multimodal mode
+      if (continuousCaptureRef.current) {
+        clearInterval(continuousCaptureRef.current);
+        continuousCaptureRef.current = null;
+      }
+      setLatestVideoFrame(null);
+    }
+  }, [humeState?.mode, humeState?.videoStream, videoReady]);
   
   const captureVideoFrame = useCallback(async (): Promise<string | null> => {
+    // Use pre-captured frame if available (from continuous capture)
+    if (latestVideoFrame) {
+      console.log('📸 Using pre-captured continuous frame');
+      return latestVideoFrame;
+    }
+    
     console.log('📹 Video capture attempt:', {
       mode: humeState?.mode,
       hasVideoStream: !!humeState?.videoStream,
@@ -344,7 +396,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       console.error('Failed to capture video frame:', error);
       return null;
     }
-  }, [humeState?.videoStream, humeState?.mode, videoReady]);
+  }, [humeState?.videoStream, humeState?.mode, videoReady, latestVideoFrame]);
 
   // Clean up video element on unmount
   useEffect(() => {
