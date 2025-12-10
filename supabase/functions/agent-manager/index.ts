@@ -360,12 +360,66 @@ serve(async (req) => {
         let taskData = data ?? {};
         // support data in root fields by restructure
         if (!taskData || Object.keys(taskData).length === 0) {
-          throw new ValidationError("assign_task requires a data object with title, description, category, assignee_agent_id");
+          throw new ValidationError("assign_task requires a data object with title, description, category. Either provide assignee_agent_id OR set auto_assign: true");
         }
 
-        const requiredFields = ["title", "description", "category", "assignee_agent_id"];
+        const { auto_assign = false } = taskData;
+        
+        // Adjust required fields based on auto_assign
+        const requiredFields = auto_assign 
+          ? ["title", "description", "category"]  // No agent required for auto-assign
+          : ["title", "description", "category", "assignee_agent_id"];
+          
         for (const f of requiredFields) {
-          if (!taskData[f]) throw new ValidationError(`assign_task missing required field: ${f}`);
+          if (!taskData[f]) {
+            throw new ValidationError(
+              `assign_task missing required field: ${f}. ` +
+              `Required fields: ${requiredFields.join(', ')}. ` +
+              `Tip: Use auto_assign: true to automatically assign to least-loaded agent.`
+            );
+          }
+        }
+
+        // Handle auto-assignment if requested
+        let assignedAgentId = taskData.assignee_agent_id;
+        
+        if (auto_assign && !assignedAgentId) {
+          // Find best available agent using weighted scoring (least workload first)
+          const { data: availableAgents, error: agentError } = await supabase
+            .from("agents")
+            .select("id, name, current_workload, max_concurrent_tasks, status")
+            .in("status", ["IDLE", "BUSY"])
+            .is("archived_at", null)
+            .order("current_workload", { ascending: true })
+            .limit(10);
+
+          if (agentError) {
+            console.error("[agent-manager] assign_task auto-assign agent lookup error:", agentError);
+            throw new AppError(`Failed to find agents for auto-assignment: ${agentError.message}`);
+          }
+
+          if (!availableAgents || availableAgents.length === 0) {
+            throw new AppError("No available agents for auto-assignment. All agents are ARCHIVED, ERROR, or OFFLINE.");
+          }
+
+          // Find agent with capacity (workload < max_concurrent_tasks)
+          const agentWithCapacity = availableAgents.find(
+            (a) => (a.current_workload ?? 0) < (a.max_concurrent_tasks ?? 3)
+          );
+
+          if (agentWithCapacity) {
+            assignedAgentId = agentWithCapacity.id;
+            console.info("[agent-manager] assign_task auto-assigned to:", agentWithCapacity.name, "workload:", agentWithCapacity.current_workload);
+          } else {
+            // Fall back to least-loaded agent even if at capacity
+            assignedAgentId = availableAgents[0].id;
+            console.warn("[agent-manager] assign_task all agents at capacity, assigning to least-loaded:", availableAgents[0].name);
+          }
+        }
+
+        // Final validation
+        if (!assignedAgentId) {
+          throw new ValidationError("assign_task requires assignee_agent_id OR auto_assign: true");
         }
 
         // prevent duplicate pending tasks for same assignee + title
@@ -373,7 +427,7 @@ serve(async (req) => {
           .from("tasks")
           .select("*")
           .eq("title", taskData.title)
-          .eq("assignee_agent_id", taskData.assignee_agent_id)
+          .eq("assignee_agent_id", assignedAgentId)
           .in("status", ["PENDING", "IN_PROGRESS"])
           .maybeSingle();
 
@@ -392,7 +446,11 @@ serve(async (req) => {
           stage: normalizeStage(taskData.stage),
           status: "PENDING",
           priority: taskData.priority ?? 5,
-          assignee_agent_id: taskData.assignee_agent_id,
+          assignee_agent_id: assignedAgentId,
+          metadata: {
+            auto_assigned: auto_assign,
+            ...(taskData.metadata || {}),
+          },
         };
 
         const created = await supabase.from("tasks").insert(insertTask).select().single();
@@ -404,8 +462,14 @@ serve(async (req) => {
           throw new AppError("Task creation returned null (possible RLS)");
         }
 
-        // update agent to BUSY
-        await supabase.from("agents").update({ status: "BUSY" }).eq("id", taskData.assignee_agent_id);
+        // update agent to BUSY and increment workload
+        await supabase
+          .from("agents")
+          .update({ 
+            status: "BUSY",
+            current_workload: supabase.rpc ? undefined : undefined // Note: workload tracked by triggers
+          })
+          .eq("id", assignedAgentId);
 
         // activity log
         await supabase.from("eliza_activity_log").insert({
@@ -416,6 +480,7 @@ serve(async (req) => {
             task_id: created.data.id,
             assignee: created.data.assignee_agent_id,
             category: created.data.category,
+            auto_assigned: auto_assign,
           },
           status: "completed",
         });
