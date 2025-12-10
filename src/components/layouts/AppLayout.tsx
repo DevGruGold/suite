@@ -1,7 +1,6 @@
 import { Outlet, useLocation } from "react-router-dom";
 import { MobileNav } from "@/components/MobileNav";
 import { DesktopNav } from "@/components/DesktopNav";
-import { Badge } from "@/components/ui/badge";
 import { Activity } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -39,13 +38,11 @@ export const AppLayout = () => {
       <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-14">
-            <div className="flex items-center gap-3">
-              <h1 className="text-xl font-semibold tracking-tight text-foreground">
-                Suite
-              </h1>
-              <Badge variant="secondary" className="text-xs font-medium">
-                Enterprise
-              </Badge>
+            <div className="flex items-center gap-2">
+              <h1 className="text-xl font-semibold tracking-tight text-foreground">Suite</h1>
+              <span className="text-[10px] font-medium text-muted-foreground/70 uppercase tracking-widest">
+                beta
+              </span>
             </div>
             
             {/* Desktop Navigation */}
