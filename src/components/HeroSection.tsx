@@ -127,8 +127,12 @@ export const HeroSection = () => {
       })
       .subscribe();
 
+    // Poll every 30 seconds for fresher health data
+    const pollInterval = setInterval(fetchStats, 30000);
+
     return () => {
       supabase.removeChannel(channel);
+      clearInterval(pollInterval);
     };
   }, []);
 
