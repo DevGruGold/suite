@@ -4,6 +4,75 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Button } from "@/components/ui/button";
+
+// Currency formatting helpers
+const formatCurrencyDisplay = (value: number): string => {
+  if (value === 0) return "";
+  return new Intl.NumberFormat('en-US').format(value);
+};
+
+const parseCurrencyInput = (value: string): number => {
+  const cleaned = value.replace(/[^0-9]/g, '');
+  return parseInt(cleaned) || 0;
+};
+
+const formatCurrency = (value: number) => {
+  return new Intl.NumberFormat('en-US', { 
+    style: 'currency', 
+    currency: 'USD', 
+    maximumFractionDigits: 0 
+  }).format(value);
+};
+
+// Currency input component
+const CurrencyInput = ({ 
+  value, 
+  onChange, 
+  placeholder,
+  label
+}: { 
+  value: number; 
+  onChange: (val: number) => void; 
+  placeholder: string;
+  label: string;
+}) => {
+  const [displayValue, setDisplayValue] = useState(formatCurrencyDisplay(value));
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const raw = e.target.value;
+    const parsed = parseCurrencyInput(raw);
+    setDisplayValue(formatCurrencyDisplay(parsed));
+    onChange(parsed);
+  };
+
+  const handleFocus = () => {
+    if (value === 0) setDisplayValue("");
+  };
+
+  const handleBlur = () => {
+    setDisplayValue(formatCurrencyDisplay(value));
+  };
+
+  return (
+    <div>
+      <Label className="text-xs text-muted-foreground">{label}</Label>
+      <div className="relative">
+        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
+        <Input
+          type="text"
+          inputMode="numeric"
+          value={displayValue}
+          onChange={handleChange}
+          onFocus={handleFocus}
+          onBlur={handleBlur}
+          placeholder={placeholder}
+          className="pl-6"
+        />
+      </div>
+    </div>
+  );
+};
 
 const SavingsCalculator = () => {
   const [employeeCount, setEmployeeCount] = useState(500);
@@ -13,20 +82,12 @@ const SavingsCalculator = () => {
   const [cooSalary, setCooSalary] = useState(2000000);
 
   const totalExecComp = ceoSalary + ctoSalary + cfoSalary + cooSalary;
-  const aiCost = 100000; // Annual AI executive cost
+  const aiCost = 100000;
   const annualSavings = Math.max(0, totalExecComp - aiCost);
   const perEmployeeRaise = employeeCount > 0 ? annualSavings / employeeCount : 0;
   const percentageIncrease = employeeCount > 0 && totalExecComp > 0 
-    ? (perEmployeeRaise / 60000) * 100 // Assuming $60k average salary
+    ? (perEmployeeRaise / 60000) * 100
     : 0;
-
-  const formatCurrency = (value: number) => {
-    return new Intl.NumberFormat('en-US', { 
-      style: 'currency', 
-      currency: 'USD', 
-      maximumFractionDigits: 0 
-    }).format(value);
-  };
 
   return (
     <Card>
@@ -58,11 +119,28 @@ const SavingsCalculator = () => {
                 className="flex-1"
               />
               <Input
-                type="number"
-                value={employeeCount}
-                onChange={(e) => setEmployeeCount(parseInt(e.target.value) || 0)}
+                type="text"
+                inputMode="numeric"
+                value={employeeCount || ""}
+                onChange={(e) => setEmployeeCount(parseInt(e.target.value.replace(/[^0-9]/g, '')) || 0)}
                 className="w-24"
+                placeholder="500"
               />
+            </div>
+            {/* Quick presets */}
+            <div className="flex flex-wrap gap-1">
+              {[100, 500, 1000, 5000].map(count => (
+                <Button
+                  key={count}
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setEmployeeCount(count)}
+                  className="text-xs h-6 px-2"
+                >
+                  {count.toLocaleString()}
+                </Button>
+              ))}
             </div>
           </div>
 
@@ -73,42 +151,30 @@ const SavingsCalculator = () => {
               Executive Compensation
             </Label>
             <div className="grid grid-cols-2 gap-2">
-              <div>
-                <Label className="text-xs text-muted-foreground">CEO</Label>
-                <Input
-                  type="number"
-                  value={ceoSalary}
-                  onChange={(e) => setCeoSalary(parseFloat(e.target.value) || 0)}
-                  placeholder="5000000"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">CTO</Label>
-                <Input
-                  type="number"
-                  value={ctoSalary}
-                  onChange={(e) => setCtoSalary(parseFloat(e.target.value) || 0)}
-                  placeholder="3000000"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">CFO</Label>
-                <Input
-                  type="number"
-                  value={cfoSalary}
-                  onChange={(e) => setCfoSalary(parseFloat(e.target.value) || 0)}
-                  placeholder="2500000"
-                />
-              </div>
-              <div>
-                <Label className="text-xs text-muted-foreground">COO</Label>
-                <Input
-                  type="number"
-                  value={cooSalary}
-                  onChange={(e) => setCooSalary(parseFloat(e.target.value) || 0)}
-                  placeholder="2000000"
-                />
-              </div>
+              <CurrencyInput
+                label="CEO"
+                value={ceoSalary}
+                onChange={setCeoSalary}
+                placeholder="5,000,000"
+              />
+              <CurrencyInput
+                label="CTO"
+                value={ctoSalary}
+                onChange={setCtoSalary}
+                placeholder="3,000,000"
+              />
+              <CurrencyInput
+                label="CFO"
+                value={cfoSalary}
+                onChange={setCfoSalary}
+                placeholder="2,500,000"
+              />
+              <CurrencyInput
+                label="COO"
+                value={cooSalary}
+                onChange={setCooSalary}
+                placeholder="2,000,000"
+              />
             </div>
           </div>
         </div>
