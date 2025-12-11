@@ -581,7 +581,8 @@ Deno.serve(async (req) => {
         };
         if (data.order_date) orderPayload.orderDate = data.order_date;
 
-        const response = await vscoRequest(supabase, '/order', {
+        // Use nested endpoint: POST /job/{job_id}/order (not /order)
+        const response = await vscoRequest(supabase, `/job/${data.job_id}/order`, {
           method: 'POST',
           body: orderPayload,
         }, executive);
