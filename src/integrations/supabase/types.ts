@@ -1485,6 +1485,87 @@ export type Database = {
         }
         Relationships: []
       }
+      corporate_license_applications: {
+        Row: {
+          annual_executive_compensation: number | null
+          application_status: string
+          company_name: string
+          company_size: number
+          compliance_commitment: boolean | null
+          contact_email: string
+          contact_name: string
+          contact_phone: string | null
+          contact_title: string | null
+          created_at: string
+          current_ceo_salary: number | null
+          current_cfo_salary: number | null
+          current_coo_salary: number | null
+          current_cto_salary: number | null
+          estimated_savings: number | null
+          filled_by: string
+          id: string
+          industry: string | null
+          metadata: Json | null
+          notes: string | null
+          per_employee_redistribution: number | null
+          session_key: string | null
+          tier_requested: string
+          updated_at: string
+        }
+        Insert: {
+          annual_executive_compensation?: number | null
+          application_status?: string
+          company_name: string
+          company_size: number
+          compliance_commitment?: boolean | null
+          contact_email: string
+          contact_name: string
+          contact_phone?: string | null
+          contact_title?: string | null
+          created_at?: string
+          current_ceo_salary?: number | null
+          current_cfo_salary?: number | null
+          current_coo_salary?: number | null
+          current_cto_salary?: number | null
+          estimated_savings?: number | null
+          filled_by?: string
+          id?: string
+          industry?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          per_employee_redistribution?: number | null
+          session_key?: string | null
+          tier_requested?: string
+          updated_at?: string
+        }
+        Update: {
+          annual_executive_compensation?: number | null
+          application_status?: string
+          company_name?: string
+          company_size?: number
+          compliance_commitment?: boolean | null
+          contact_email?: string
+          contact_name?: string
+          contact_phone?: string | null
+          contact_title?: string | null
+          created_at?: string
+          current_ceo_salary?: number | null
+          current_cfo_salary?: number | null
+          current_coo_salary?: number | null
+          current_cto_salary?: number | null
+          estimated_savings?: number | null
+          filled_by?: string
+          id?: string
+          industry?: string | null
+          metadata?: Json | null
+          notes?: string | null
+          per_employee_redistribution?: number | null
+          session_key?: string | null
+          tier_requested?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       dao_members: {
         Row: {
           created_at: string

@@ -11,6 +11,7 @@ import Index from "./pages/Index";
 import Treasury from "./pages/Treasury";
 import Council from "./pages/Council";
 import Governance from "./pages/Governance";
+import Licensing from "./pages/Licensing";
 
 const queryClient = new QueryClient();
 
@@ -37,6 +38,7 @@ const App = () => (
               <Route path="/contributors" element={<Contributors />} />
               <Route path="/credentials" element={<Credentials />} />
               <Route path="/governance" element={<Governance />} />
+              <Route path="/licensing" element={<Licensing />} />
             </Route>
           </Routes>
         </BrowserRouter>
