@@ -89,8 +89,8 @@ serve(async (req) => {
       }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const contactId = contactResult.data?.result?.id || contactResult.data?.id;
-    console.log(`✅ Contact created: ${contactId}`);
+    const contactId = contactResult.data?.contact?.id;
+    console.log(`✅ Contact created: ${contactId} (keys: ${Object.keys(contactResult.data || {}).join(', ')})`);
 
     // Step 2: Create job/lead in VSCO (this triggers the automation!)
     console.log(`2️⃣ Creating SuiteEnterprise job in VSCO...`);
@@ -118,8 +118,8 @@ serve(async (req) => {
       }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-    const jobId = jobResult.data?.result?.id || jobResult.data?.id;
-    console.log(`✅ Job created: ${jobId}`);
+    const jobId = jobResult.data?.job?.id;
+    console.log(`✅ Job created: ${jobId} (keys: ${Object.keys(jobResult.data || {}).join(', ')})`);
 
     // Step 3: Link contact to job
     console.log(`3️⃣ Linking contact to job...`);
@@ -154,7 +154,7 @@ serve(async (req) => {
       }
     });
 
-    const orderId = orderResult.data?.result?.id || orderResult.data?.id;
+    const orderId = orderResult.data?.order?.id;
     if (orderId) {
       console.log(`✅ Order created: ${orderId}`);
     } else {
