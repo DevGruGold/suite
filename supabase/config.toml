@@ -479,6 +479,9 @@ verify_jwt = false
 [functions.get-edge-function-logs]
 verify_jwt = false
 
+[functions.get-my-feedback]
+verify_jwt = false
+
 [functions.debug-analytics-data-flow]
 verify_jwt = false
 
