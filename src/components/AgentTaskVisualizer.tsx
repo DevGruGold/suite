@@ -26,6 +26,7 @@ import {
 import { TaskProgressRing, TaskProgressBar } from './TaskProgressRing';
 import { AgentTaskSummary } from './AgentTaskSummary';
 import { TaskDetailSheet } from './TaskDetailSheet';
+import { AgentDetailSheet } from './AgentDetailSheet';
 
 interface Task {
   id: string;
@@ -100,9 +101,13 @@ interface AgentCardProps {
   agent: Agent;
   taskCount: number;
   assignedTasks: Task[];
+  onAgentClick: (agent: Agent) => void;
+  onTaskDropToAgent: (e: DragEvent<HTMLDivElement>, agentId: string) => void;
+  isDragOverAgent: boolean;
+  hasDraggedTask: boolean;
 }
 
-function AgentCard({ agent, taskCount, assignedTasks }: AgentCardProps) {
+function AgentCard({ agent, taskCount, assignedTasks, onAgentClick, onTaskDropToAgent, isDragOverAgent, hasDraggedTask }: AgentCardProps) {
   const isActive = agent.status === 'BUSY';
   const shortName = agent.name.split(' - ')[0].split(' ')[0];
   
@@ -113,20 +118,30 @@ function AgentCard({ agent, taskCount, assignedTasks }: AgentCardProps) {
   }, null);
   const hasUrgent = urgentTask && (urgentTask.progress_percentage || 0) >= 75;
   
+  const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+  
   return (
     <div 
-      className={`p-2.5 rounded-lg border transition-all hover:scale-[1.02] ${
-        hasUrgent
-          ? 'border-red-500/50 bg-red-500/10 animate-pulse'
-          : isActive 
-            ? 'border-green-500/50 bg-green-500/10' 
-            : 'border-blue-500/30 bg-blue-500/5'
-      }`}
+      onClick={() => onAgentClick(agent)}
+      onDragOver={handleDragOver}
+      onDrop={(e) => onTaskDropToAgent(e, agent.id)}
+      className={`p-2.5 rounded-lg border transition-all cursor-pointer ${
+        isDragOverAgent
+          ? 'border-primary bg-primary/20 ring-2 ring-primary/50 scale-105'
+          : hasUrgent
+            ? 'border-red-500/50 bg-red-500/10 animate-pulse'
+            : isActive 
+              ? 'border-green-500/50 bg-green-500/10' 
+              : 'border-blue-500/30 bg-blue-500/5'
+      } ${hasDraggedTask ? 'hover:border-primary hover:bg-primary/10' : 'hover:scale-[1.02]'}`}
     >
       <div className="flex items-center gap-2">
         <div 
           className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            hasUrgent ? 'bg-red-500 animate-pulse' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
+            isDragOverAgent ? 'bg-primary' : hasUrgent ? 'bg-red-500 animate-pulse' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
           }`} 
         />
         <span className="text-xs font-medium truncate text-foreground">{shortName}</span>
@@ -140,8 +155,8 @@ function AgentCard({ agent, taskCount, assignedTasks }: AgentCardProps) {
       )}
       
       <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
-        <span className={hasUrgent ? 'text-red-400' : isActive ? 'text-green-400' : 'text-blue-400'}>
-          {hasUrgent ? 'URGENT' : agent.status}
+        <span className={isDragOverAgent ? 'text-primary' : hasUrgent ? 'text-red-400' : isActive ? 'text-green-400' : 'text-blue-400'}>
+          {isDragOverAgent ? 'DROP HERE' : hasUrgent ? 'URGENT' : agent.status}
         </span>
         <span>•</span>
         <span>{taskCount} task{taskCount !== 1 ? 's' : ''}</span>
@@ -384,6 +399,11 @@ export function AgentTaskVisualizer() {
   // Task detail sheet state
   const [selectedTask, setSelectedTask] = useState<Task | null>(null);
   const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+  
+  // Agent detail sheet state
+  const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
+  const [isAgentSheetOpen, setIsAgentSheetOpen] = useState(false);
+  const [dragOverAgentId, setDragOverAgentId] = useState<string | null>(null);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -392,6 +412,124 @@ export function AgentTaskVisualizer() {
 
   const handleTaskUpdate = (updatedTask: Task) => {
     setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+  };
+  
+  const handleAgentClick = (agent: Agent) => {
+    setSelectedAgent(agent);
+    setIsAgentSheetOpen(true);
+  };
+  
+  const handleTaskReassign = async (taskId: string, newAgentId: string | null) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const oldAgentId = task.assignee_agent_id;
+    const newAgent = newAgentId ? agentMap.get(newAgentId) : null;
+    const oldAgent = oldAgentId ? agentMap.get(oldAgentId) : null;
+    
+    try {
+      // Update task in database
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ 
+          assignee_agent_id: newAgentId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', taskId);
+      
+      if (updateError) throw updateError;
+      
+      // Update agent workloads
+      if (oldAgentId) {
+        await supabase
+          .from('agents')
+          .update({ 
+            current_workload: Math.max(0, (oldAgent?.current_workload || 1) - 1),
+            status: 'IDLE'
+          })
+          .eq('id', oldAgentId);
+      }
+      
+      if (newAgentId) {
+        await supabase
+          .from('agents')
+          .update({ 
+            current_workload: (newAgent?.current_workload || 0) + 1,
+            status: 'BUSY'
+          })
+          .eq('id', newAgentId);
+      }
+      
+      // Log activity
+      await supabase.from('eliza_activity_log').insert({
+        activity_type: 'task_reassigned',
+        title: newAgentId 
+          ? `Task assigned to ${newAgent?.name || 'agent'}`
+          : `Task unassigned from ${oldAgent?.name || 'agent'}`,
+        description: `"${task.title}" ${newAgentId ? `reassigned to ${newAgent?.name}` : 'unassigned'}`,
+        status: 'completed',
+        task_id: taskId,
+        agent_id: newAgentId || oldAgentId || null,
+        metadata: {
+          task_title: task.title,
+          old_agent_id: oldAgentId,
+          new_agent_id: newAgentId,
+          old_agent_name: oldAgent?.name,
+          new_agent_name: newAgent?.name,
+        }
+      });
+      
+      // Update local state
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, assignee_agent_id: newAgentId } : t
+      ));
+      
+      // Update agents state
+      setAgents(prev => prev.map(a => {
+        if (a.id === oldAgentId) {
+          return { ...a, current_workload: Math.max(0, (a.current_workload || 1) - 1), status: 'IDLE' };
+        }
+        if (a.id === newAgentId) {
+          return { ...a, current_workload: (a.current_workload || 0) + 1, status: 'BUSY' };
+        }
+        return a;
+      }));
+      
+      toast({
+        title: newAgentId ? 'Task reassigned' : 'Task unassigned',
+        description: newAgentId 
+          ? `"${task.title.slice(0, 30)}..." assigned to ${newAgent?.name}`
+          : `"${task.title.slice(0, 30)}..." unassigned`,
+      });
+      
+    } catch (err) {
+      console.error('[AgentTaskVisualizer] Failed to reassign task:', err);
+      toast({
+        title: 'Failed to reassign task',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      });
+      throw err;
+    }
+  };
+  
+  const handleTaskDropToAgent = async (e: DragEvent<HTMLDivElement>, agentId: string) => {
+    e.preventDefault();
+    setDragOverAgentId(null);
+    
+    if (!draggedTask) return;
+    if (draggedTask.assignee_agent_id === agentId) {
+      setDraggedTask(null);
+      return;
+    }
+    
+    setIsUpdating(true);
+    try {
+      await handleTaskReassign(draggedTask.id, agentId);
+    } finally {
+      setIsUpdating(false);
+      setDraggedTask(null);
+    }
   };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>, task: Task) => {
@@ -693,6 +831,10 @@ export function AgentTaskVisualizer() {
               agent={agent} 
               taskCount={getAgentTaskCount(agent.id)}
               assignedTasks={getAgentTasks(agent.id)}
+              onAgentClick={handleAgentClick}
+              onTaskDropToAgent={handleTaskDropToAgent}
+              isDragOverAgent={dragOverAgentId === agent.id}
+              hasDraggedTask={!!draggedTask}
             />
           ))}
           {agents.length === 0 && (
@@ -744,6 +886,16 @@ export function AgentTaskVisualizer() {
         onOpenChange={setIsDetailSheetOpen}
         agentName={selectedTask?.assignee_agent_id ? agentMap.get(selectedTask.assignee_agent_id)?.name || null : null}
         onTaskUpdate={handleTaskUpdate}
+      />
+      
+      {/* Agent Detail Sheet */}
+      <AgentDetailSheet
+        agent={selectedAgent}
+        isOpen={isAgentSheetOpen}
+        onClose={() => setIsAgentSheetOpen(false)}
+        onTaskReassign={handleTaskReassign}
+        onTaskDrop={(taskId) => handleTaskReassign(taskId, selectedAgent?.id || null)}
+        draggedTaskId={draggedTask?.id || null}
       />
     </div>
   );

@@ -1392,7 +1392,9 @@ export type Database = {
           acquisition_stage: string | null
           conversion_event: string | null
           created_at: string
+          device_fingerprint: string | null
           id: string
+          ip_address: unknown
           is_active: boolean | null
           last_qualification_at: string | null
           lead_score: number | null
@@ -1403,13 +1405,16 @@ export type Database = {
           tier_preference: string | null
           title: string | null
           updated_at: string
+          user_agent: string | null
           user_profile_id: string | null
         }
         Insert: {
           acquisition_stage?: string | null
           conversion_event?: string | null
           created_at?: string
+          device_fingerprint?: string | null
           id?: string
+          ip_address?: unknown
           is_active?: boolean | null
           last_qualification_at?: string | null
           lead_score?: number | null
@@ -1420,13 +1425,16 @@ export type Database = {
           tier_preference?: string | null
           title?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_profile_id?: string | null
         }
         Update: {
           acquisition_stage?: string | null
           conversion_event?: string | null
           created_at?: string
+          device_fingerprint?: string | null
           id?: string
+          ip_address?: unknown
           is_active?: boolean | null
           last_qualification_at?: string | null
           lead_score?: number | null
@@ -1437,6 +1445,7 @@ export type Database = {
           tier_preference?: string | null
           title?: string | null
           updated_at?: string
+          user_agent?: string | null
           user_profile_id?: string | null
         }
         Relationships: [
@@ -3442,6 +3451,112 @@ export type Database = {
             columns: ["device_id"]
             isOneToOne: false
             referencedRelation: "devices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ip_correlation_events: {
+        Row: {
+          consent_given: boolean | null
+          consent_timestamp: string | null
+          correlation_confidence: number | null
+          correlation_factors: Json | null
+          created_at: string | null
+          device_fingerprint: string | null
+          id: string
+          ip_address: unknown
+          observed_at: string | null
+          source_id: string
+          source_session_key: string | null
+          source_type: string
+          user_agent: string | null
+          user_profile_id: string | null
+        }
+        Insert: {
+          consent_given?: boolean | null
+          consent_timestamp?: string | null
+          correlation_confidence?: number | null
+          correlation_factors?: Json | null
+          created_at?: string | null
+          device_fingerprint?: string | null
+          id?: string
+          ip_address: unknown
+          observed_at?: string | null
+          source_id?: string
+          source_session_key?: string | null
+          source_type: string
+          user_agent?: string | null
+          user_profile_id?: string | null
+        }
+        Update: {
+          consent_given?: boolean | null
+          consent_timestamp?: string | null
+          correlation_confidence?: number | null
+          correlation_factors?: Json | null
+          created_at?: string | null
+          device_fingerprint?: string | null
+          id?: string
+          ip_address?: unknown
+          observed_at?: string | null
+          source_id?: string
+          source_session_key?: string | null
+          source_type?: string
+          user_agent?: string | null
+          user_profile_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ip_correlation_events_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      ip_correlation_matches: {
+        Row: {
+          chat_session_id: string | null
+          device_session_id: string | null
+          expires_at: string | null
+          id: string
+          ip_address: unknown
+          match_confidence: number | null
+          match_factors: Json | null
+          matched_at: string | null
+          user_acknowledged: boolean | null
+          user_profile_id: string | null
+        }
+        Insert: {
+          chat_session_id?: string | null
+          device_session_id?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: unknown
+          match_confidence?: number | null
+          match_factors?: Json | null
+          matched_at?: string | null
+          user_acknowledged?: boolean | null
+          user_profile_id?: string | null
+        }
+        Update: {
+          chat_session_id?: string | null
+          device_session_id?: string | null
+          expires_at?: string | null
+          id?: string
+          ip_address?: unknown
+          match_confidence?: number | null
+          match_factors?: Json | null
+          matched_at?: string | null
+          user_acknowledged?: boolean | null
+          user_profile_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ip_correlation_matches_user_profile_id_fkey"
+            columns: ["user_profile_id"]
+            isOneToOne: false
+            referencedRelation: "user_profiles"
             referencedColumns: ["id"]
           },
         ]
