@@ -1672,7 +1672,142 @@ export async function executeToolCall(
           : { success: true, result: syncContribResult.data };
         break;
 
-      default:
+      
+    // ==================== ECOSYSTEM COORDINATION TOOLS ====================
+    case 'trigger_ecosystem_coordination': {
+      try {
+        const cycleType = args.cycle_type || 'standard';
+        console.log(`🚀 Triggering ${cycleType} ecosystem coordination...`);
+        
+        const response = await fetch('https://xmrt-ecosystem.vercel.app/api/tick', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ cycle_type: cycleType }),
+          signal: AbortSignal.timeout(120000) // 2 minute timeout
+        });
+        
+        if (!response.ok) {
+          return {
+            success: false,
+            error: `Coordination trigger failed: ${response.status} ${response.statusText}`
+          };
+        }
+        
+        const data = await response.json();
+        
+        return {
+          success: true,
+          message: `Ecosystem coordination cycle (${cycleType}) completed successfully`,
+          timestamp: data.timestamp,
+          agents_discovered: data.agents?.length || 0,
+          health_checks_performed: data.health_checks?.length || 0,
+          coordination_summary: data.summary || 'Coordination cycle completed',
+          details: data
+        };
+      } catch (error) {
+        console.error('Ecosystem coordination error:', error);
+        return {
+          success: false,
+          error: `Failed to trigger coordination: ${error.message}`
+        };
+      }
+    }
+    
+    case 'get_ecosystem_status': {
+      try {
+        console.log('📊 Fetching ecosystem status...');
+        
+        // Query agents endpoint
+        const agentsResponse = await fetch('https://xmrt-ecosystem.vercel.app/api/agents', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(30000)
+        });
+        
+        // Query system info
+        const systemResponse = await fetch('https://xmrt-ecosystem.vercel.app/api/index', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(30000)
+        });
+        
+        const agentsData = agentsResponse.ok ? await agentsResponse.json() : { agents: [] };
+        const systemData = systemResponse.ok ? await systemResponse.json() : { status: 'unknown' };
+        
+        return {
+          success: true,
+          ecosystem_health: systemData.status || 'healthy',
+          version: systemData.version || 'unknown',
+          total_agents: agentsData.agents?.length || 0,
+          agents: agentsData.agents || [],
+          timestamp: new Date().toISOString(),
+          deployment_url: 'https://xmrt-ecosystem.vercel.app',
+          message: `Ecosystem status: ${agentsData.agents?.length || 0} agents discovered`
+        };
+      } catch (error) {
+        console.error('Get ecosystem status error:', error);
+        return {
+          success: false,
+          error: `Failed to get ecosystem status: ${error.message}`
+        };
+      }
+    }
+    
+    case 'query_ecosystem_agents': {
+      try {
+        const filterBy = args.filter_by || 'all';
+        console.log(`🔍 Querying ecosystem agents (filter: ${filterBy})...`);
+        
+        const response = await fetch('https://xmrt-ecosystem.vercel.app/api/agents', {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          signal: AbortSignal.timeout(30000)
+        });
+        
+        if (!response.ok) {
+          return {
+            success: false,
+            error: `Agent query failed: ${response.status}`
+          };
+        }
+        
+        const data = await response.json();
+        let agents = data.agents || [];
+        
+        // Apply filters
+        if (filterBy === 'active') {
+          agents = agents.filter(a => a.status === 'active' || a.status === 'online');
+        } else if (filterBy === 'supabase') {
+          agents = agents.filter(a => a.source === 'xmrtcouncil_supabase' || a.type === 'supabase_edge_function');
+        } else if (filterBy === 'vercel') {
+          agents = agents.filter(a => a.type === 'vercel_api' || a.source?.includes('vercel'));
+        } else if (filterBy === 'priority') {
+          agents = agents.sort((a, b) => (a.priority || 5) - (b.priority || 5));
+        }
+        
+        return {
+          success: true,
+          total_agents: agents.length,
+          filter_applied: filterBy,
+          agents: agents,
+          agent_summary: agents.map(a => ({
+            name: a.name || a.display_name,
+            type: a.type,
+            status: a.status,
+            source: a.source
+          })),
+          message: `Found ${agents.length} agents matching filter: ${filterBy}`
+        };
+      } catch (error) {
+        console.error('Query ecosystem agents error:', error);
+        return {
+          success: false,
+          error: `Failed to query agents: ${error.message}`
+        };
+      }
+    }
+
+    default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
