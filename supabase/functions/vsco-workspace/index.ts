@@ -258,9 +258,11 @@ Deno.serve(async (req) => {
         if (data.lead_rating) updatePayload.leadRating = data.lead_rating;
         if (data.lead_confidence) updatePayload.leadConfidence = data.lead_confidence;
         if (data.job_type) updatePayload.jobType = data.job_type;
+        if (data.job_type_id) updatePayload.jobTypeId = data.job_type_id; // Use ID for automation trigger
 
+        // Táve API requires PUT for updates (not PATCH)
         const response = await vscoRequest(supabase, `/job/${data.job_id}`, {
-          method: 'PATCH',
+          method: 'PUT',
           body: updatePayload,
         }, executive);
 
