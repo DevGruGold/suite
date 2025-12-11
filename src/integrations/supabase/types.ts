@@ -6079,6 +6079,135 @@ export type Database = {
         }
         Relationships: []
       }
+      vsco_custom_fields: {
+        Row: {
+          created_at: string | null
+          entity_type: string | null
+          field_type: string | null
+          id: string
+          name: string | null
+          options: Json | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          entity_type?: string | null
+          field_type?: string | null
+          id?: string
+          name?: string | null
+          options?: Json | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          entity_type?: string | null
+          field_type?: string | null
+          id?: string
+          name?: string | null
+          options?: Json | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_discount_types: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_discounts: {
+        Row: {
+          amount: number | null
+          created_at: string | null
+          discount_type: string | null
+          id: string
+          name: string | null
+          percent: number | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          amount?: number | null
+          created_at?: string | null
+          discount_type?: string | null
+          id?: string
+          name?: string | null
+          percent?: number | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          amount?: number | null
+          created_at?: string | null
+          discount_type?: string | null
+          id?: string
+          name?: string | null
+          percent?: number | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_event_types: {
+        Row: {
+          color: string | null
+          created_at: string | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          color?: string | null
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
       vsco_events: {
         Row: {
           channel: string | null
@@ -6175,6 +6304,162 @@ export type Database = {
         }
         Relationships: []
       }
+      vsco_galleries: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          files_count: number | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+          vsco_job_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          files_count?: number | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+          vsco_job_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          files_count?: number | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+          vsco_job_id?: string | null
+        }
+        Relationships: []
+      }
+      vsco_job_closed_reasons: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          outcome: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          outcome?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          outcome?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_job_contacts: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_primary: boolean | null
+          raw_data: Json | null
+          role: string | null
+          synced_at: string | null
+          vsco_contact_id: string
+          vsco_id: string
+          vsco_job_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          raw_data?: Json | null
+          role?: string | null
+          synced_at?: string | null
+          vsco_contact_id: string
+          vsco_id: string
+          vsco_job_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_primary?: boolean | null
+          raw_data?: Json | null
+          role?: string | null
+          synced_at?: string | null
+          vsco_contact_id?: string
+          vsco_id?: string
+          vsco_job_id?: string
+        }
+        Relationships: []
+      }
+      vsco_job_roles: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_job_types: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
       vsco_jobs: {
         Row: {
           account_balance: number | null
@@ -6240,6 +6525,60 @@ export type Database = {
           synced_at?: string | null
           total_cost?: number | null
           total_revenue?: number | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_lead_sources: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_lead_statuses: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
           vsco_id?: string
         }
         Relationships: []
@@ -6334,6 +6673,36 @@ export type Database = {
         }
         Relationships: []
       }
+      vsco_payment_methods: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
       vsco_products: {
         Row: {
           category: string | null
@@ -6378,6 +6747,138 @@ export type Database = {
           raw_data?: Json | null
           synced_at?: string | null
           tax_rate?: number | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_profit_centers: {
+        Row: {
+          created_at: string | null
+          description: string | null
+          id: string
+          is_default: boolean | null
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          description?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_tax_groups: {
+        Row: {
+          created_at: string | null
+          id: string
+          is_default: boolean | null
+          name: string | null
+          raw_data: Json | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          is_default?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_tax_rates: {
+        Row: {
+          created_at: string | null
+          id: string
+          name: string | null
+          rate: number | null
+          raw_data: Json | null
+          synced_at: string | null
+          tax_group_id: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          rate?: number | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          tax_group_id?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          name?: string | null
+          rate?: number | null
+          raw_data?: Json | null
+          synced_at?: string | null
+          tax_group_id?: string | null
+          vsco_id?: string
+        }
+        Relationships: []
+      }
+      vsco_users: {
+        Row: {
+          created_at: string | null
+          email: string | null
+          id: string
+          is_active: boolean | null
+          name: string | null
+          raw_data: Json | null
+          role: string | null
+          synced_at: string | null
+          vsco_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          role?: string | null
+          synced_at?: string | null
+          vsco_id: string
+        }
+        Update: {
+          created_at?: string | null
+          email?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string | null
+          raw_data?: Json | null
+          role?: string | null
+          synced_at?: string | null
           vsco_id?: string
         }
         Relationships: []

@@ -2570,6 +2570,104 @@ Response includes ecosystem_summary with one-line stats for each component.`,
     }
   },
   // ====================================================================
+  // 📸 VSCO EXTENDED TOOLS: Financials, Settings, Users
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_financials',
+      description: '💵 VSCO: Manage financial operations - orders, payments, taxes, profit centers. Create invoices, track payments, manage tax configurations for Party Favor Photo.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_orders', 'get_order', 'create_order', 'update_order', 'delete_order',
+                   'list_payment_methods', 'get_payment_method',
+                   'list_profit_centers', 'create_profit_center', 'get_profit_center', 'update_profit_center', 'delete_profit_center',
+                   'list_tax_groups', 'create_tax_group',
+                   'list_tax_rates', 'create_tax_rate', 'delete_tax_rate'],
+            description: 'Financial action to perform'
+          },
+          job_id: { type: 'string', description: 'Job ID for order creation' },
+          order_id: { type: 'string', description: 'Order ID for get/update/delete' },
+          items: { type: 'array', items: { type: 'object' }, description: 'Line items for order' },
+          tax_group_id: { type: 'string', description: 'Tax group ID' },
+          payment_method_id: { type: 'string', description: 'Payment method ID' },
+          profit_center_id: { type: 'string', description: 'Profit center ID' },
+          name: { type: 'string', description: 'Name for new entity' },
+          rate: { type: 'number', description: 'Tax rate as decimal (e.g., 0.08)' },
+          amount: { type: 'number', description: 'Amount for payments/orders' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_settings',
+      description: '⚙️ VSCO: Manage studio settings - custom fields, discounts, job types, event types, lead sources. Configure Party Favor Photo studio workflow and configuration.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['get_studio', 'update_studio',
+                   'list_brands', 'update_brand', 'delete_brand',
+                   'list_custom_fields', 'create_custom_field', 'update_custom_field', 'delete_custom_field',
+                   'list_discounts', 'create_discount', 'delete_discount',
+                   'list_discount_types', 'create_discount_type', 'delete_discount_type',
+                   'list_event_types', 'create_event_type', 'update_event_type', 'delete_event_type',
+                   'list_file_types',
+                   'list_job_closed_reasons', 'create_job_closed_reason',
+                   'list_job_roles', 'create_job_role',
+                   'list_job_types', 'create_job_type',
+                   'list_lead_sources', 'create_lead_source',
+                   'list_lead_statuses', 'create_lead_status',
+                   'list_product_types', 'create_product_type'],
+            description: 'Settings action to perform'
+          },
+          brand_id: { type: 'string', description: 'Brand ID for update/delete' },
+          field_id: { type: 'string', description: 'Custom field ID' },
+          discount_id: { type: 'string', description: 'Discount ID' },
+          event_type_id: { type: 'string', description: 'Event type ID' },
+          name: { type: 'string', description: 'Name for new entity' },
+          field_type: { type: 'string', description: 'Custom field type' },
+          entity_type: { type: 'string', description: 'Entity the field applies to (job, contact, event)' },
+          discount_amount: { type: 'number', description: 'Discount amount' },
+          discount_percent: { type: 'number', description: 'Discount percent' },
+          color: { type: 'string', description: 'Color for event types' },
+          outcome: { type: 'string', description: 'Outcome for job closed reasons (won, lost)' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vsco_manage_users',
+      description: '👥 VSCO: Manage studio team members - list, create, update users, manage roles and permissions for Party Favor Photo team.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_users', 'get_user', 'create_user', 'update_user', 'delete_user', 'list_timezones'],
+            description: 'User management action'
+          },
+          user_id: { type: 'string', description: 'User ID for get/update/delete' },
+          name: { type: 'string', description: 'User name' },
+          email: { type: 'string', description: 'User email' },
+          role: { type: 'string', description: 'User role (admin, staff, etc.)' },
+          is_active: { type: 'boolean', description: 'Whether user is active' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  // ====================================================================
   // 🔄 GITHUB CONTRIBUTION SYNC TOOLS
   // ====================================================================
   {
