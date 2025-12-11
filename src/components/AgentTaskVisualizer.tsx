@@ -20,10 +20,12 @@ import {
   Cpu,
   ArrowLeft,
   ArrowRight,
-  GripVertical
+  GripVertical,
+  ExternalLink
 } from 'lucide-react';
 import { TaskProgressRing, TaskProgressBar } from './TaskProgressRing';
 import { AgentTaskSummary } from './AgentTaskSummary';
+import { TaskDetailSheet } from './TaskDetailSheet';
 
 interface Task {
   id: string;
@@ -38,6 +40,8 @@ interface Task {
   stage_started_at: string | null;
   auto_advance_threshold_hours: number | null;
   progress_percentage: number | null;
+  description?: string | null;
+  completed_checklist_items?: string[] | null;
 }
 
 interface Agent {
@@ -152,21 +156,31 @@ interface TaskCardProps {
   onDragStart: (e: DragEvent<HTMLDivElement>, task: Task) => void;
   onDragEnd: () => void;
   isDragging: boolean;
+  onTaskClick: (task: Task) => void;
 }
 
-function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging }: TaskCardProps) {
+function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging, onTaskClick }: TaskCardProps) {
   const statusStyle = STATUS_STYLES[task.status] || STATUS_STYLES.PENDING;
   const categoryColor = task.category ? CATEGORY_COLORS[task.category.toLowerCase()] || 'bg-muted' : 'bg-muted';
   const progressPercentage = task.progress_percentage || 0;
   const isUrgent = progressPercentage >= 75;
+  
+  const handleClick = (e: React.MouseEvent) => {
+    // Only trigger click if not dragging
+    if (!isDragging) {
+      e.stopPropagation();
+      onTaskClick(task);
+    }
+  };
   
   return (
     <div 
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onDragEnd={onDragEnd}
-      className={`p-3 rounded-lg border ${statusStyle.border} ${statusStyle.bg} backdrop-blur-sm transition-all cursor-grab active:cursor-grabbing group ${
-        isDragging ? 'opacity-50 scale-95' : 'hover:scale-[1.02] hover:shadow-lg'
+      onClick={handleClick}
+      className={`p-3 rounded-lg border ${statusStyle.border} ${statusStyle.bg} backdrop-blur-sm transition-all cursor-pointer group ${
+        isDragging ? 'opacity-50 scale-95 cursor-grabbing' : 'hover:scale-[1.02] hover:shadow-lg hover:ring-2 hover:ring-primary/30'
       } ${isUrgent ? 'ring-1 ring-red-500/50' : ''}`}
     >
       {/* Progress bar at top */}
@@ -174,12 +188,15 @@ function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging }: TaskC
       
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-1">
-          <GripVertical className="w-3 h-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0" />
+          <GripVertical className="w-3 h-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0 cursor-grab" />
           <h4 className="text-xs font-medium text-foreground line-clamp-2">
             {task.title}
           </h4>
         </div>
-        <div className={`w-2 h-2 rounded-full ${categoryColor} flex-shrink-0 mt-1`} />
+        <div className="flex items-center gap-1.5">
+          <ExternalLink className="w-3 h-3 text-muted-foreground/50 opacity-0 group-hover:opacity-100 transition-opacity" />
+          <div className={`w-2 h-2 rounded-full ${categoryColor} flex-shrink-0`} />
+        </div>
       </div>
       
       <div className="flex items-center gap-2 flex-wrap">
@@ -240,6 +257,7 @@ interface StageColumnProps {
   onDragEnd: () => void;
   draggedTask: Task | null;
   isUpdating: boolean;
+  onTaskClick: (task: Task) => void;
 }
 
 function StageColumn({ 
@@ -254,7 +272,8 @@ function StageColumn({
   onDragStart,
   onDragEnd,
   draggedTask,
-  isUpdating
+  isUpdating,
+  onTaskClick
 }: StageColumnProps) {
   const Icon = stage.icon;
   const stageTasks = tasks.filter(t => t.stage === stage.key);
@@ -327,6 +346,7 @@ function StageColumn({
                 onDragStart={onDragStart}
                 onDragEnd={onDragEnd}
                 isDragging={draggedTask?.id === task.id}
+                onTaskClick={onTaskClick}
               />
             ))
           )}
@@ -360,6 +380,19 @@ export function AgentTaskVisualizer() {
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
   const [dragOverStage, setDragOverStage] = useState<string | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
+  
+  // Task detail sheet state
+  const [selectedTask, setSelectedTask] = useState<Task | null>(null);
+  const [isDetailSheetOpen, setIsDetailSheetOpen] = useState(false);
+
+  const handleTaskClick = (task: Task) => {
+    setSelectedTask(task);
+    setIsDetailSheetOpen(true);
+  };
+
+  const handleTaskUpdate = (updatedTask: Task) => {
+    setTasks(prev => prev.map(t => t.id === updatedTask.id ? updatedTask : t));
+  };
 
   const handleDragStart = (e: DragEvent<HTMLDivElement>, task: Task) => {
     setDraggedTask(task);
@@ -696,12 +729,22 @@ export function AgentTaskVisualizer() {
                 onDragEnd={handleDragEnd}
                 draggedTask={draggedTask}
                 isUpdating={isUpdating}
+                onTaskClick={handleTaskClick}
               />
             ))}
           </div>
           <ScrollBar orientation="horizontal" />
         </ScrollArea>
       </div>
+
+      {/* Task Detail Sheet */}
+      <TaskDetailSheet
+        task={selectedTask}
+        isOpen={isDetailSheetOpen}
+        onOpenChange={setIsDetailSheetOpen}
+        agentName={selectedTask?.assignee_agent_id ? agentMap.get(selectedTask.assignee_agent_id)?.name || null : null}
+        onTaskUpdate={handleTaskUpdate}
+      />
     </div>
   );
 }
