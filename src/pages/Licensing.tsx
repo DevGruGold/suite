@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import LicenseApplicationForm from "@/components/LicenseApplicationForm";
 import LicenseTierCards from "@/components/LicenseTierCards";
 import SavingsCalculator from "@/components/SavingsCalculator";
+import SEOHead from "@/components/SEOHead";
 
 const Licensing = () => {
   const [showForm, setShowForm] = useState(false);
@@ -21,9 +22,16 @@ const Licensing = () => {
   };
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Hero Section */}
-      <section className="relative overflow-hidden py-20 px-4">
+    <>
+      <SEOHead 
+        title="Replace Your C-Suite, Not Your Workers | Suite"
+        description="AI executives save companies $12.4M in executive costs - redistributed as 41% raises to every employee. Ethical AI that empowers workers."
+        image="/suite-social-card.svg"
+        url="/licensing"
+      />
+      <div className="min-h-screen bg-background">
+        {/* Hero Section */}
+        <section className="relative overflow-hidden py-20 px-4">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
         <div className="relative max-w-6xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-primary mb-6">
@@ -148,7 +156,8 @@ const Licensing = () => {
           </Card>
         </div>
       </section>
-    </div>
+      </div>
+    </>
   );
 };
 
