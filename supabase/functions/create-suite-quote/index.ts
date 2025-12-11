@@ -203,18 +203,24 @@ ${savingsInfo}
     });
     console.log(`✅ Context note added`);
 
-    // Step 6: Log activity
+    // Step 6: Log activity with full workflow details
     await supabase.from('eliza_activity_log').insert({
-      activity_type: 'quote_created',
-      description: `Suite ${tier} quote created for ${company_name}`,
+      activity_type: 'vsco_quote_workflow',
+      title: 'Suite Quote Created',
+      description: `Suite ${tier} quote for ${company_name} → Táve automation triggered`,
+      status: 'completed',
       metadata: {
         company_name,
         contact_email,
+        contact_name: contact_name || null,
         tier,
         vsco_job_id: jobId,
         vsco_contact_id: contactId,
         vsco_order_id: orderId,
+        job_type_id: '01kc61g8nx30ywde7garw5htfm', // SuiteEnterprise
         employee_count,
+        automation_triggered: true,
+        email_from: 'pfpattendants@gmail.com',
         source: 'create-suite-quote'
       }
     });
