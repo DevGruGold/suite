@@ -99,7 +99,8 @@ serve(async (req) => {
         action: 'create_job',
         data: {
           name: `Suite ${tier.charAt(0).toUpperCase() + tier.slice(1)} - ${company_name}`,
-          job_type_id: '01kc61g8nx30ywde7garw5htfm', // SuiteEnterprise job type ID - triggers Táve automation!
+          job_type: 'SuiteEnterprise', // Type NAME for automation condition matching
+          job_type_id: '01kc61g8nx30ywde7garw5htfm', // SuiteEnterprise job type ID
           stage: 'lead',
           lead_source: 'Eliza Chat',
           lead_rating: 5, // Integer 1-5 scale (5 = hot)
