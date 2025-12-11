@@ -444,6 +444,10 @@ verify_jwt = false
 [functions.workflow-template-manager]
 verify_jwt = false
 
+# Diagnose Workflow Failure - Meta-workflow for self-healing
+[functions.diagnose-workflow-failure]
+verify_jwt = false
+
 # ====================================================================
 # AUTONOMOUS & SELF-MANAGEMENT FUNCTIONS
 # ====================================================================
