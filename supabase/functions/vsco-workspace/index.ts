@@ -78,6 +78,13 @@ async function vscoRequest(
     }
 
     const data = await response.json();
+    
+    // 🔍 DIAGNOSTIC: Log raw response structure for debugging
+    console.log(`🔍 [VSCO API] Raw Response Type: ${typeof data}`);
+    console.log(`🔍 [VSCO API] Raw Response IsArray: ${Array.isArray(data)}`);
+    console.log(`🔍 [VSCO API] Raw Response Keys: ${data ? Object.keys(data).join(', ') : 'null'}`);
+    console.log(`🔍 [VSCO API] Raw Response Preview: ${data ? JSON.stringify(data).slice(0, 800) : 'null/undefined'}`);
+    
     return { data, status: response.status };
   } catch (error) {
     const responseTime = Date.now() - startTime;
@@ -175,10 +182,15 @@ Deno.serve(async (req) => {
         if (data.per_page) params.pageSize = String(data.per_page); // Táve uses pageSize
 
         const response = await vscoRequest(supabase, '/job', { params }, executive);
-        const jobs = response.data?.jobs || response.data || [];
+        
+        // VSCO API returns: { meta, type, items } - items is the data array
+        const jobs = response.data?.items || response.data?.jobs || response.data || [];
+        const pagination = response.data?.meta;
+        console.log(`🔍 [list_jobs] Found ${Array.isArray(jobs) ? jobs.length : 0} jobs, pagination: ${JSON.stringify(pagination)}`);
+        
         result = response.error 
           ? { success: false, error: response.error } 
-          : { success: true, jobs: Array.isArray(jobs) ? jobs : [], pagination: response.data?.pagination };
+          : { success: true, jobs: Array.isArray(jobs) ? jobs : [], pagination };
         break;
       }
 
@@ -304,10 +316,15 @@ Deno.serve(async (req) => {
         if (data.per_page) params.pageSize = String(data.per_page);
 
         const response = await vscoRequest(supabase, '/address-book', { params }, executive);
-        const contacts = response.data?.contacts || response.data || [];
+        
+        // VSCO API returns: { meta, type, items } - items is the data array
+        const contacts = response.data?.items || response.data?.contacts || response.data || [];
+        const pagination = response.data?.meta;
+        console.log(`🔍 [list_contacts] Found ${Array.isArray(contacts) ? contacts.length : 0} contacts, pagination: ${JSON.stringify(pagination)}`);
+        
         result = response.error 
           ? { success: false, error: response.error } 
-          : { success: true, contacts: Array.isArray(contacts) ? contacts : [], pagination: response.data?.pagination };
+          : { success: true, contacts: Array.isArray(contacts) ? contacts : [], pagination };
         break;
       }
 
@@ -408,10 +425,15 @@ Deno.serve(async (req) => {
         if (data.page) params.page = String(data.page);
 
         const response = await vscoRequest(supabase, '/event', { params }, executive);
-        const events = response.data?.events || response.data || [];
+        
+        // VSCO API returns: { meta, type, items } - items is the data array
+        const events = response.data?.items || response.data?.events || response.data || [];
+        const pagination = response.data?.meta;
+        console.log(`🔍 [list_events] Found ${Array.isArray(events) ? events.length : 0} events, pagination: ${JSON.stringify(pagination)}`);
+        
         result = response.error 
           ? { success: false, error: response.error } 
-          : { success: true, events: Array.isArray(events) ? events : [], pagination: response.data?.pagination };
+          : { success: true, events: Array.isArray(events) ? events : [], pagination };
         break;
       }
 
@@ -1111,8 +1133,8 @@ Deno.serve(async (req) => {
             'get_analytics', 'get_revenue_report',
             // Sync & Health
             'sync_all', 'sync_jobs', 'sync_contacts', 'get_api_health',
-            // Utility
-            'list_actions', 'health',
+            // Utility & Debug
+            'list_actions', 'health', 'debug_api',
           ],
         };
         break;
@@ -1128,11 +1150,82 @@ Deno.serve(async (req) => {
         break;
       }
 
+      // ====================================================================
+      // 🔍 DEBUG/DIAGNOSTIC ACTION
+      // ====================================================================
+      case 'debug_api': {
+        console.log('🔍 [debug_api] Starting comprehensive API diagnostics...');
+        
+        const endpoints = [
+          { name: 'studio', path: '/studio' },
+          { name: 'brand', path: '/brand' },
+          { name: 'address-book', path: '/address-book' },
+          { name: 'event', path: '/event' },
+          { name: 'job', path: '/job' },
+          { name: 'product', path: '/product' },
+          { name: 'order', path: '/order' },
+        ];
+        
+        const diagnostics: Record<string, any> = {};
+        
+        for (const ep of endpoints) {
+          console.log(`🔍 [debug_api] Testing endpoint: ${ep.path}`);
+          const response = await vscoRequest(supabase, ep.path, {}, executive);
+          
+          diagnostics[ep.name] = {
+            endpoint: ep.path,
+            status: response.status,
+            hasError: !!response.error,
+            error: response.error,
+            dataType: typeof response.data,
+            isArray: Array.isArray(response.data),
+            isNull: response.data === null,
+            isUndefined: response.data === undefined,
+            topLevelKeys: response.data && typeof response.data === 'object' ? Object.keys(response.data) : [],
+            arrayLength: Array.isArray(response.data) ? response.data.length : null,
+            // Check common nested keys
+            nestedDataCheck: {
+              hasDataKey: !!response.data?.data,
+              hasResultsKey: !!response.data?.results,
+              hasRecordsKey: !!response.data?.records,
+              hasPaginationKey: !!response.data?.pagination,
+              hasMetaKey: !!response.data?.meta,
+              hasTotalKey: !!response.data?.total,
+              hasCountKey: !!response.data?.count,
+            },
+            // Preview of data
+            rawPreview: response.data ? JSON.stringify(response.data).slice(0, 500) : 'null/undefined',
+            // If it's an object with a data array, show that count
+            nestedArrayLength: response.data?.data ? (Array.isArray(response.data.data) ? response.data.data.length : 'not array') : null,
+          };
+        }
+        
+        // Also test API key validity with a simple call
+        const keyTest = await fetch(`${BASE_URL}/studio`, {
+          headers: {
+            'X-Api-Key': VSCO_API_KEY || '',
+            'Accept': 'application/json',
+          },
+        });
+        
+        result = {
+          success: true,
+          api_key_configured: !!VSCO_API_KEY,
+          api_key_preview: VSCO_API_KEY ? `${VSCO_API_KEY.slice(0, 4)}...${VSCO_API_KEY.slice(-4)}` : 'NOT SET',
+          base_url: BASE_URL,
+          key_test_status: keyTest.status,
+          diagnostics,
+          timestamp: new Date().toISOString(),
+          recommendation: 'Check the topLevelKeys and nestedDataCheck for each endpoint to understand the API response structure',
+        };
+        break;
+      }
+
       default:
         result = { success: false, error: `Unknown action: ${action}` };
     }
 
-    console.log(`📸 [VSCO Workspace] Result:`, JSON.stringify(result).slice(0, 500));
+    console.log(`📸 [VSCO Workspace] Result:`, result ? JSON.stringify(result).slice(0, 500) : 'undefined');
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
