@@ -70,13 +70,48 @@ Deno.serve(async (req) => {
 
         if (error) throw error;
 
-        // Log activity
+        // Log activity for visibility in ticker
         await supabase.from('activity_feed').insert({
           type: 'license_application',
           title: `License Application: ${appData.company_name}`,
           description: `New ${appData.tier_requested} license application from ${appData.company_name} (${appData.company_size} employees)`,
           data: { application_id: result.id, tier: appData.tier_requested, savings: estimatedSavings }
         });
+
+        // Also log to eliza_activity_log for Eliza awareness
+        await supabase.from('eliza_activity_log').insert({
+          activity_type: 'license_application_received',
+          description: `New license application from ${appData.company_name} for ${appData.tier_requested} tier. Estimated savings: $${estimatedSavings.toLocaleString()}`,
+          metadata: { 
+            application_id: result.id, 
+            company: appData.company_name,
+            tier: appData.tier_requested, 
+            savings: estimatedSavings,
+            employees: appData.company_size,
+            contact_email: appData.contact_email
+          }
+        });
+
+        // Trigger monetization engine for free trial applications
+        if (appData.tier_requested === 'free_trial') {
+          try {
+            const monetizationResult = await supabase.functions.invoke('service-monetization-engine', {
+              body: {
+                action: 'generate_api_key',
+                data: {
+                  company_name: appData.company_name,
+                  contact_email: appData.contact_email,
+                  tier: 'trial',
+                  monthly_quota: 1000,
+                  metadata: { application_id: result.id }
+                }
+              }
+            });
+            console.log('✅ Monetization engine triggered:', monetizationResult);
+          } catch (monError) {
+            console.error('⚠️ Monetization engine call failed (non-blocking):', monError);
+          }
+        }
 
         return new Response(JSON.stringify({
           success: true,
