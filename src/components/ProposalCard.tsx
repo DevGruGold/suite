@@ -23,6 +23,7 @@ import { toast } from '@/hooks/use-toast';
 import { VoteProgress } from './VoteProgress';
 import { VotingPhaseIndicator } from './VotingPhaseIndicator';
 import { ProposalComments } from './ProposalComments';
+import { AIDecisionPanel, DecisionReport, ImplementationAnalysis } from './AIDecisionPanel';
 
 interface Proposal {
   id: string;
@@ -54,6 +55,7 @@ interface ExecutiveVote {
 interface ProposalCardProps {
   proposal: Proposal;
   votes: ExecutiveVote[];
+  decisionReport?: DecisionReport;
   onVoteSuccess: () => void;
 }
 
@@ -88,6 +90,7 @@ const executiveColors: Record<string, string> = {
 export const ProposalCard: React.FC<ProposalCardProps> = ({ 
   proposal, 
   votes,
+  decisionReport,
   onVoteSuccess 
 }) => {
   const [expanded, setExpanded] = useState(false);
@@ -95,14 +98,26 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
   const [voting, setVoting] = useState(false);
   const [userVote, setUserVote] = useState<string | null>(null);
   const [feedback, setFeedback] = useState<any>(null);
+  const [implementationAnalysis, setImplementationAnalysis] = useState<ImplementationAnalysis | null>(null);
 
   useEffect(() => {
-    if (proposal.status === 'rejected_with_feedback' && proposal.implementation_code) {
+    if (proposal.implementation_code) {
       try {
-        const parsedFeedback = JSON.parse(proposal.implementation_code as string);
-        setFeedback(parsedFeedback);
+        const parsed = JSON.parse(proposal.implementation_code as string);
+        // Check if it's feedback (rejected) or implementation analysis (approved)
+        if (parsed.improvement_suggestions || parsed.rejection_reasons) {
+          setFeedback(parsed);
+          setImplementationAnalysis(parsed);
+        } else if (parsed.generated_code || parsed.implementation_plan || parsed.next_steps) {
+          setImplementationAnalysis(parsed);
+        } else {
+          setFeedback(parsed);
+        }
       } catch (e) {
-        // Not JSON feedback
+        // Not JSON - might be raw code
+        if (proposal.status === 'approved' || proposal.status === 'queued_for_deployment') {
+          setImplementationAnalysis({ generated_code: proposal.implementation_code as string });
+        }
       }
     }
   }, [proposal]);
@@ -234,6 +249,17 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
         {/* Description */}
         <p className="text-sm">{proposal.description}</p>
+
+        {/* AI Decision Panel - Show for decided proposals */}
+        {decisionReport && (proposal.status === 'approved' || proposal.status === 'rejected' || 
+          proposal.status === 'rejected_with_feedback' || proposal.status === 'queued_for_deployment' || 
+          proposal.status === 'deployed') && (
+          <AIDecisionPanel 
+            decision={decisionReport}
+            implementationAnalysis={implementationAnalysis}
+            functionName={proposal.function_name}
+          />
+        )}
 
         {/* Executive Vote Progress */}
         <div>
