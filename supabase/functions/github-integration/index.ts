@@ -8,6 +8,17 @@ const GITHUB_CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET');
 const GITHUB_OWNER = Deno.env.get('GITHUB_OWNER') || 'DevGruGold';
 const GITHUB_REPO = Deno.env.get('GITHUB_REPO') || 'XMRT-Ecosystem';
 
+// Helper to normalize repo parameter (handles both "owner/repo" and "repo" formats)
+function normalizeRepo(repoInput: string | undefined, defaultRepo: string): string {
+  if (!repoInput) return defaultRepo;
+  // If the input contains a slash, extract just the repo name
+  if (repoInput.includes('/')) {
+    const parts = repoInput.split('/');
+    return parts[parts.length - 1]; // Return last part (repo name)
+  }
+  return repoInput;
+}
+
 // Validate required environment variables
 function validateGitHubConfig(): void {
   const hasOAuth = GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET;
@@ -1107,30 +1118,34 @@ serve(async (req) => {
         break;
 
       case 'list_repo_events':
+        const eventsRepo = normalizeRepo(data?.repo, GITHUB_REPO);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/events?per_page=${data?.per_page || 30}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${eventsRepo}/events?per_page=${data?.per_page || 30}`,
           { headers }
         );
         break;
 
       case 'list_releases':
+        const releasesRepo = normalizeRepo(data?.repo, GITHUB_REPO);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/releases?per_page=${data?.per_page || 30}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${releasesRepo}/releases?per_page=${data?.per_page || 30}`,
           { headers }
         );
         break;
 
       case 'get_release_details':
+        const releaseDetailsRepo = normalizeRepo(data?.repo, GITHUB_REPO);
         const releaseId = data?.release_id || 'latest';
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/releases/${releaseId}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${releaseDetailsRepo}/releases/${releaseId}`,
           { headers }
         );
         break;
 
       case 'list_contributors':
+        const contribRepo = normalizeRepo(data?.repo, GITHUB_REPO);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/contributors?per_page=${data?.per_page || 30}&anon=${data?.include_anonymous || 'false'}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${contribRepo}/contributors?per_page=${data?.per_page || 30}&anon=${data?.include_anonymous || 'false'}`,
           { headers }
         );
         break;
