@@ -412,6 +412,9 @@ verify_jwt = false
 [functions.process-contributor-reward]
 verify_jwt = false
 
+[functions.sync-github-contributions]
+verify_jwt = false
+
 [functions.fetch-auto-fix-results]
 verify_jwt = false
 
