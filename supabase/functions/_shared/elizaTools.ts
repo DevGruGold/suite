@@ -2833,4 +2833,36 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       }
     }
   },
+  // ====================================================================
+  // 📧 VSCO SUITE QUOTE WORKFLOW
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'create_suite_quote',
+      description: '📧 Create a Suite Enterprise quote in VSCO and automatically send it via email with Stripe payment link. This triggers the full VSCO workflow: creates contact, job (SuiteEnterprise type), links them, generates order/quote, and fires the Táve email automation to send the quote from pfpattendants@gmail.com.',
+      parameters: {
+        type: 'object',
+        properties: {
+          company_name: { type: 'string', description: 'Company name for the quote (required)' },
+          contact_email: { type: 'string', format: 'email', description: 'Email address to send quote to (required)' },
+          contact_name: { type: 'string', description: 'Full name of contact (optional - will parse first/last)' },
+          tier: { type: 'string', enum: ['basic', 'pro', 'enterprise'], description: 'Suite pricing tier (default: enterprise)' },
+          employee_count: { type: 'number', description: 'Number of employees for savings calculation (optional)' },
+          notes: { type: 'string', description: 'Additional notes to include with the quote (optional)' },
+          executive_salaries: {
+            type: 'object',
+            description: 'Current executive salaries for savings calculation (optional)',
+            properties: {
+              ceo: { type: 'number' },
+              cto: { type: 'number' },
+              cfo: { type: 'number' },
+              coo: { type: 'number' }
+            }
+          }
+        },
+        required: ['company_name', 'contact_email']
+      }
+    }
+  },
 ];
