@@ -16,11 +16,13 @@ import {
 interface ExecutiveDirectoryProps {
   onExecutiveSelect?: (executive: ExecutiveName) => void;
   onCouncilConvene?: () => void;
+  selectedExecutive?: ExecutiveName | null;
 }
 
 export const ExecutiveDirectory: React.FC<ExecutiveDirectoryProps> = ({ 
   onExecutiveSelect,
-  onCouncilConvene 
+  onCouncilConvene,
+  selectedExecutive
 }) => {
   const { health, loading } = useAPIKeyHealth();
 
@@ -62,7 +64,12 @@ export const ExecutiveDirectory: React.FC<ExecutiveDirectoryProps> = ({
           const { status, color } = getExecutiveStatus(key);
           
           return (
-            <Card key={key} className="border-border hover:border-primary/50 transition-all hover:shadow-lg">
+            <Card 
+              key={key} 
+              className={`border-border hover:border-primary/50 transition-all hover:shadow-lg ${
+                selectedExecutive === key ? 'ring-2 ring-primary border-primary shadow-lg' : ''
+              }`}
+            >
               <CardHeader className="text-center pb-4">
                 <div className="flex flex-col items-center gap-2">
                   {/* Avatar */}
