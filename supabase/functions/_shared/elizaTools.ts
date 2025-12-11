@@ -2783,4 +2783,54 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       }
     }
   }
+,
+  // ==================== ECOSYSTEM COORDINATION TOOLS ====================
+  {
+    type: "function",
+    function: {
+      name: "trigger_ecosystem_coordination",
+      description: "Trigger the XMRT-Ecosystem multi-agent coordination cycle. Use this when you need to coordinate agents across all ecosystem repositories, perform health checks, or generate comprehensive ecosystem reports.",
+      parameters: {
+        type: "object",
+        properties: {
+          cycle_type: {
+            type: "string",
+            enum: ["standard", "emergency", "analysis"],
+            description: "Type of coordination cycle: 'standard' for normal operations, 'emergency' for urgent issues, 'analysis' for deep ecosystem analysis"
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "get_ecosystem_status",
+      description: "Get comprehensive health status and information about all XMRT Ecosystem agents, services, and deployments. Returns agent list, health checks, system status, and coordination history.",
+      parameters: {
+        type: "object",
+        properties: {},
+        required: []
+      }
+    }
+  },
+  {
+    type: "function",
+    function: {
+      name: "query_ecosystem_agents",
+      description: "Query and discover all agents across the XMRT ecosystem including Suite AI executives, Vercel deployments, and GitHub-based agents. Returns detailed agent information with capabilities, status, and endpoints.",
+      parameters: {
+        type: "object",
+        properties: {
+          filter_by: {
+            type: "string",
+            enum: ["all", "active", "supabase", "vercel", "priority"],
+            description: "Filter agents by type or status"
+          }
+        },
+        required: []
+      }
+    }
+  },
 ];
