@@ -423,13 +423,30 @@ Deno.serve(async (req) => {
         if (data.start_date) params.startDate = data.start_date;
         if (data.end_date) params.endDate = data.end_date;
         if (data.page) params.page = String(data.page);
+        
+        // Try to request sorted by startDate descending (newest first)
+        // Common API patterns: -startDate, sort=-startDate, order=desc
+        if (data.sort) params.sort = data.sort;
+        else params.sort = '-startDate';
 
         const response = await vscoRequest(supabase, '/event', { params }, executive);
         
         // VSCO API returns: { meta, type, items } - items is the data array
-        const events = response.data?.items || response.data?.events || response.data || [];
+        let events = response.data?.items || response.data?.events || response.data || [];
         const pagination = response.data?.meta;
-        console.log(`🔍 [list_events] Found ${Array.isArray(events) ? events.length : 0} events, pagination: ${JSON.stringify(pagination)}`);
+        
+        // Client-side fallback sort: newest first (descending by startDate)
+        // In case the API doesn't support the sort parameter
+        if (Array.isArray(events) && events.length > 1) {
+          const sortOrder = data.sort_order || 'desc'; // default: newest first
+          events = events.sort((a: any, b: any) => {
+            const dateA = new Date(a.startDate || a.start_date || a.created || 0).getTime();
+            const dateB = new Date(b.startDate || b.start_date || b.created || 0).getTime();
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+          });
+        }
+        
+        console.log(`🔍 [list_events] Found ${Array.isArray(events) ? events.length : 0} events (sorted ${data.sort_order || 'desc'}), pagination: ${JSON.stringify(pagination)}`);
         
         result = response.error 
           ? { success: false, error: response.error } 
