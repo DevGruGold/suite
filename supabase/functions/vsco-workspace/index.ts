@@ -210,7 +210,8 @@ Deno.serve(async (req) => {
           stage: data.stage || 'lead',
         };
         if (data.brand_id) jobPayload.brandId = data.brand_id;
-        if (data.job_type) jobPayload.jobType = data.job_type;
+        if (data.job_type_id) jobPayload.jobTypeId = data.job_type_id; // Use ID for automation trigger
+        if (data.job_type) jobPayload.jobType = data.job_type; // Keep for backward compat
         if (data.lead_source) jobPayload.leadSource = data.lead_source;
         if (data.lead_rating) jobPayload.leadRating = data.lead_rating;
         if (data.lead_confidence) jobPayload.leadConfidence = data.lead_confidence;
