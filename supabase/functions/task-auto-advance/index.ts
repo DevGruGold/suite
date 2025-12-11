@@ -81,9 +81,67 @@ serve(async (req) => {
       for (const task of tasks || []) {
         const currentStageIdx = STAGE_ORDER.indexOf(task.stage);
         
-        // Can't advance past INTEGRATE
+        // At INTEGRATE with 100% = COMPLETED
         if (currentStageIdx >= STAGE_ORDER.length - 1) {
-          notAdvanced.push({ id: task.id, reason: 'Already at final stage' });
+          // Mark as COMPLETED instead of just skipping
+          const { error: completeError } = await supabase
+            .from('tasks')
+            .update({
+              status: 'COMPLETED',
+              progress_percentage: 100,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', task.id);
+
+          if (completeError) {
+            notAdvanced.push({ id: task.id, reason: completeError.message });
+            continue;
+          }
+
+          // Free up the agent's workload
+          if (task.assignee_agent_id) {
+            await supabase
+              .from('agents')
+              .update({ 
+                current_workload: Math.max(0, (task.current_workload || 1) - 1)
+              })
+              .eq('id', task.assignee_agent_id);
+
+            // Check if agent has remaining active tasks
+            const { data: remainingTasks } = await supabase
+              .from('tasks')
+              .select('id')
+              .eq('assignee_agent_id', task.assignee_agent_id)
+              .in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED'])
+              .neq('id', task.id)
+              .limit(1);
+
+            if (!remainingTasks?.length) {
+              await supabase
+                .from('agents')
+                .update({ status: 'IDLE', current_workload: 0 })
+                .eq('id', task.assignee_agent_id);
+            }
+          }
+
+          // Log completion to activity feed
+          await supabase.from('activity_feed').insert({
+            type: 'task_completed',
+            title: 'Task Completed',
+            description: `"${task.title}" completed INTEGRATE stage`,
+            data: { task_id: task.id, agent_id: task.assignee_agent_id }
+          });
+
+          // Log to eliza_activity_log for causality tracking
+          await supabase.from('eliza_activity_log').insert({
+            activity_type: 'task_completed',
+            title: `Task Completed: ${task.title}`,
+            description: `Automatically completed after INTEGRATE stage threshold`,
+            status: 'completed',
+            metadata: { task_id: task.id, agent_id: task.assignee_agent_id, from_stage: 'INTEGRATE', auto_completed: true }
+          });
+
+          advanced.push({ id: task.id, from: 'INTEGRATE', to: 'COMPLETED' });
           continue;
         }
 
