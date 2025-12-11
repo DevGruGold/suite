@@ -693,6 +693,9 @@ body = '{"action":"update_template_performance","data":{"time_window_hours":168}
 [functions.vsco-workspace]
 verify_jwt = false
 
+[functions.create-suite-quote]
+verify_jwt = false
+
 # VSCO Data Sync - Every 6 hours at :50
 [[edge_runtime.scheduled_functions]]
 function_name = "vsco-workspace"

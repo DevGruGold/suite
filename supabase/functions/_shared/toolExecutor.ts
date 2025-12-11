@@ -1989,6 +1989,15 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         body: { action: 'get_application_status', data: parsedArgs }
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
 
+    // ====================================================================
+    // VSCO SUITE QUOTE WORKFLOW
+    // ====================================================================
+    case 'create_suite_quote':
+      console.log(`📧 [${executiveName}] Create Suite Quote for ${parsedArgs.company_name}`);
+      return supabase.functions.invoke('create-suite-quote', {
+        body: parsedArgs
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
     default:
       return null;
   }
