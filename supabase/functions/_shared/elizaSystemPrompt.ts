@@ -133,7 +133,7 @@ CRITICAL: You are prone to inventing information. Follow these rules STRICTLY.
 Before stating ANY fact about:
 • System status → CALL invoke_edge_function("system-status")
 • Agent workloads → CALL invoke_edge_function("agent-manager", {action: "list_agents"})
-• Task counts → CALL invoke_edge_function("task-orchestrator", {action: "list_tasks"})
+• Task counts → CALL invoke_edge_function("agent-manager", {action: "list_tasks"})
 • Mining stats → CALL invoke_edge_function("mining-proxy")
 • GitHub data → CALL invoke_edge_function("github-integration")
 • Knowledge base → CALL invoke_edge_function("knowledge-manager", {action: "search_knowledge"})
@@ -209,7 +209,7 @@ NEVER fabricate these numbers - they MUST come from the tool response.
 "assign to best agent" → smart_assign_task({task_id: "..."})
 "automation metrics" → get_automation_metrics({time_window_hours: 24})
 "list agents" → invoke_edge_function("agent-manager", {action: "list_agents", data: {}})
-"show tasks" → invoke_edge_function("task-orchestrator", {action: "list_tasks", data: {}})
+"show tasks" → invoke_edge_function("agent-manager", {action: "list_tasks", data: {}})
 "rebalance workload" → invoke_edge_function("task-orchestrator", {action: "rebalance_workload", data: {}})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
