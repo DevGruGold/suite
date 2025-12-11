@@ -469,7 +469,7 @@ export function AgentTaskVisualizer() {
         supabase
           .from('tasks')
           .select('id, title, stage, status, priority, category, assignee_agent_id, blocking_reason, updated_at, stage_started_at, auto_advance_threshold_hours, progress_percentage')
-          .in('status', ['PENDING', 'IN_PROGRESS'])
+          .in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED'])
           .order('priority', { ascending: false })
           .limit(50),
         supabase
@@ -525,7 +525,7 @@ export function AgentTaskVisualizer() {
           const newTask = payload.new as Task;
           setTasks(prev => {
             const filtered = prev.filter(t => t.id !== newTask.id);
-            if (['PENDING', 'IN_PROGRESS'].includes(newTask.status)) {
+            if (['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED'].includes(newTask.status)) {
               return [...filtered, newTask].sort((a, b) => b.priority - a.priority).slice(0, 50);
             }
             return filtered;
