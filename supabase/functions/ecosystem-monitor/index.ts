@@ -541,8 +541,8 @@ async function generateAutonomousTasks(supabase: any, context: any) {
     // Auto-assign tasks to available agents
     if (tasksCreated > 0) {
       try {
-        await supabase.functions.invoke('agent-manager', {
-          body: { action: 'auto_assign_tasks' }
+        await supabase.functions.invoke('task-orchestrator', {
+          body: { action: 'auto_assign_tasks', data: {} }
         });
       } catch (assignError) {
         console.warn('Could not auto-assign tasks:', assignError);
