@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
-import { Trophy, GitCommit, DollarSign, TrendingUp, Cpu, Battery, Zap, ExternalLink, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { Trophy, GitCommit, DollarSign, TrendingUp, Cpu, Battery, Zap, ExternalLink, CheckCircle, XCircle, Clock, RefreshCw, Coins } from 'lucide-react';
 import { GitHubPATInput } from './GitHubContributorRegistration';
 import { SkeletonCard } from './ui/skeleton-card';
 import MiningLeaderboard from './MiningLeaderboard';
 import XMRTChargerLeaderboard from './XMRTChargerLeaderboard';
 import { Badge } from './ui/badge';
+import { Button } from './ui/button';
+import { toast } from 'sonner';
 
 interface Contributor {
   github_username: string;
@@ -47,6 +49,8 @@ export const ContributorDashboard = () => {
   const [recentContributions, setRecentContributions] = useState<Contribution[]>([]);
   const [showPATInput, setShowPATInput] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [totalXmrtEarned, setTotalXmrtEarned] = useState(0);
   const [stats, setStats] = useState<SummaryStats>({
     githubContributors: 0,
     githubCredits: 0,
@@ -92,8 +96,9 @@ export const ContributorDashboard = () => {
     if (contributorsData) {
       setContributors(contributorsData);
       
-      // Calculate GitHub stats
+      // Calculate GitHub stats and total XMRT
       const totalCredits = contributorsData.reduce((sum, c) => sum + Number(c.total_xmrt_earned || 0), 0);
+      setTotalXmrtEarned(totalCredits);
       setStats(prev => ({
         ...prev,
         githubContributors: contributorsData.length,
@@ -155,6 +160,29 @@ export const ContributorDashboard = () => {
     }
 
     setLoading(false);
+  };
+
+  const handleSyncContributions = async () => {
+    setSyncing(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('sync-github-contributions', {
+        body: { repo: 'XMRT-Ecosystem', owner: 'DevGruGold', max_commits: 100 }
+      });
+      
+      if (error) {
+        toast.error('Sync failed: ' + error.message);
+      } else if (data?.success) {
+        toast.success(`Synced ${data.synced} contributions, awarded ${data.total_xmrt_awarded?.toFixed(2) || 0} XMRT`);
+        fetchData(); // Refresh the data
+      } else {
+        toast.info(data?.message || 'No new contributions to sync');
+      }
+    } catch (err) {
+      toast.error('Failed to sync contributions');
+      console.error('Sync error:', err);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const formatHashrate = (h: number) => {
@@ -259,6 +287,34 @@ export const ContributorDashboard = () => {
 
         {/* GitHub Tab */}
         <TabsContent value="github" className="space-y-6">
+          {/* Sync & XMRT Summary Card */}
+          <Card className="border-suite-warning/30 bg-gradient-to-br from-suite-warning/5 to-suite-warning/10">
+            <CardContent className="pt-6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-4">
+                  <div className="p-3 rounded-full bg-suite-warning/20">
+                    <Coins className="w-6 h-6 text-suite-warning" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Total XMRT Earned</p>
+                    <p className="text-3xl font-bold text-suite-warning">
+                      {totalXmrtEarned.toLocaleString()}
+                    </p>
+                    <p className="text-xs text-muted-foreground">From {contributors.length} contributors</p>
+                  </div>
+                </div>
+                <Button 
+                  onClick={handleSyncContributions}
+                  disabled={syncing}
+                  className="bg-primary hover:bg-primary/90"
+                >
+                  <RefreshCw className={`w-4 h-4 mr-2 ${syncing ? 'animate-spin' : ''}`} />
+                  {syncing ? 'Syncing...' : 'Sync Contributions'}
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
+
           {/* Setup Card */}
           {!showPATInput ? (
             <Card className="border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">

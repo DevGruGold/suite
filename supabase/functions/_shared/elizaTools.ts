@@ -2568,5 +2568,24 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: ['action']
       }
     }
+  },
+  // ====================================================================
+  // 🔄 GITHUB CONTRIBUTION SYNC TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'sync_github_contributions',
+      description: '🔄 Sync GitHub commits to the contribution system and award XMRT credits. Fetches recent commits from the repository, validates them, and awards XMRT based on contribution type and quality.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (e.g., "XMRT-Ecosystem"). Default: XMRT-Ecosystem' },
+          owner: { type: 'string', description: 'Repository owner (e.g., "DevGruGold"). Default: DevGruGold' },
+          max_commits: { type: 'number', description: 'Maximum commits to sync (1-100). Default: 100' }
+        },
+        required: []
+      }
+    }
   }
 ];

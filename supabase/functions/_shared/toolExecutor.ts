@@ -1612,11 +1612,28 @@ export async function executeToolCall(
           : { success: true, result: vscoNotesResult.data };
         break;
 
+      // ====================================================================
+      // GITHUB CONTRIBUTION SYNC TOOLS
+      // ====================================================================
+      case 'sync_github_contributions':
+        console.log(`🔄 [${executiveName}] Sync GitHub Contributions`);
+        const syncContribResult = await supabase.functions.invoke('sync-github-contributions', {
+          body: { 
+            repo: parsedArgs.repo || 'XMRT-Ecosystem',
+            owner: parsedArgs.owner || 'DevGruGold',
+            max_commits: parsedArgs.max_commits || 100
+          }
+        });
+        result = syncContribResult.error
+          ? { success: false, error: syncContribResult.error.message }
+          : { success: true, result: syncContribResult.data };
+        break;
+
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, vsco_manage_jobs, vsco_manage_contacts, vsco_manage_events, vsco_analytics, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, and more.`
         };
     }
     
