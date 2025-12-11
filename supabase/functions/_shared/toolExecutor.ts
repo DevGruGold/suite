@@ -836,6 +836,112 @@ export async function executeToolCall(
           : { success: true, result: contributorsResult.data };
         break;
 
+      case 'get_release_details':
+        console.log(`🏷️ [${executiveName}] Get Release Details: ${parsedArgs.release_id || 'latest'}`);
+        const releaseDetailsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'get_release_details',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              release_id: parsedArgs.release_id || 'latest'
+            },
+            session_credentials
+          }
+        });
+        result = releaseDetailsResult.error
+          ? { success: false, error: releaseDetailsResult.error.message }
+          : { success: true, result: releaseDetailsResult.data };
+        break;
+
+      case 'getGitHubIssueComments':
+        console.log(`💬 [${executiveName}] Get Issue Comments: #${parsedArgs.issue_number}`);
+        const issueCommentsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'get_issue_comments',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              issue_number: parsedArgs.issue_number,
+              per_page: parsedArgs.per_page || 30
+            },
+            session_credentials
+          }
+        });
+        result = issueCommentsResult.error
+          ? { success: false, error: issueCommentsResult.error.message }
+          : { success: true, result: issueCommentsResult.data };
+        break;
+
+      case 'getGitHubDiscussionComments':
+        console.log(`💬 [${executiveName}] Get Discussion Comments: #${parsedArgs.discussion_number}`);
+        const discussionCommentsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'get_discussion_comments',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              discussion_number: parsedArgs.discussion_number,
+              first: parsedArgs.first || 30
+            },
+            session_credentials
+          }
+        });
+        result = discussionCommentsResult.error
+          ? { success: false, error: discussionCommentsResult.error.message }
+          : { success: true, result: discussionCommentsResult.data };
+        break;
+
+      case 'updateGitHubIssue':
+        console.log(`✏️ [${executiveName}] Update Issue: #${parsedArgs.issue_number}`);
+        const updateIssueResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'update_issue',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              issue_number: parsedArgs.issue_number,
+              title: parsedArgs.title,
+              body: parsedArgs.body,
+              state: parsedArgs.state,
+              labels: parsedArgs.labels,
+              assignees: parsedArgs.assignees
+            },
+            session_credentials
+          }
+        });
+        result = updateIssueResult.error
+          ? { success: false, error: updateIssueResult.error.message }
+          : { success: true, result: updateIssueResult.data };
+        break;
+
+      case 'closeGitHubIssue':
+        console.log(`❌ [${executiveName}] Close Issue: #${parsedArgs.issue_number}`);
+        // If comment provided, add it first
+        if (parsedArgs.comment) {
+          await supabase.functions.invoke('github-integration', {
+            body: {
+              action: 'comment_on_issue',
+              data: {
+                repo: parsedArgs.repo || 'XMRT-Ecosystem',
+                issue_number: parsedArgs.issue_number,
+                comment: parsedArgs.comment
+              },
+              session_credentials
+            }
+          });
+        }
+        const closeIssueResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'close_issue',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              issue_number: parsedArgs.issue_number
+            },
+            session_credentials
+          }
+        });
+        result = closeIssueResult.error
+          ? { success: false, error: closeIssueResult.error.message }
+          : { success: true, result: closeIssueResult.data };
+        break;
+
       // ====================================================================
       // GITHUB WORKFLOW TOOLS
       // ====================================================================

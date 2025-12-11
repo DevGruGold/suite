@@ -957,14 +957,96 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'list_github_contributors',
-      description: '👥 Get contributor statistics for a repository including contribution counts, avatars, and profile links.',
+      description: '👥 Get contributor statistics for a repository including contribution counts, avatars, and profile links. REPO PARAM: Use repo name only (e.g., "XMRT-Ecosystem"), NOT full path.',
       parameters: {
         type: 'object',
         properties: {
-          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          repo: { type: 'string', description: 'Repository name ONLY (e.g., "XMRT-Ecosystem", NOT "DevGruGold/XMRT-Ecosystem")' },
           include_anonymous: { type: 'boolean', description: 'Include anonymous contributors (default: false)' },
           per_page: { type: 'number', description: 'Results per page (max 100, default 30)' }
         }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_release_details',
+      description: '🏷️ Get detailed information about a specific release including release notes, assets, and download URLs.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name ONLY (e.g., "XMRT-Ecosystem")' },
+          release_id: { type: 'string', description: 'Release ID or "latest" for most recent release (default: "latest")' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getGitHubIssueComments',
+      description: '💬 List all comments on a specific GitHub issue. Returns comment bodies, authors, and timestamps.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name ONLY (e.g., "XMRT-Ecosystem")' },
+          issue_number: { type: 'number', description: 'Issue number to get comments for' },
+          per_page: { type: 'number', description: 'Comments per page (max 100, default 30)' }
+        },
+        required: ['issue_number']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'getGitHubDiscussionComments',
+      description: '💬 Get comments from a GitHub discussion thread.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name ONLY (e.g., "XMRT-Ecosystem")' },
+          discussion_number: { type: 'number', description: 'Discussion number to get comments for' },
+          first: { type: 'number', description: 'Number of comments to return (default 30)' }
+        },
+        required: ['discussion_number']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'updateGitHubIssue',
+      description: '✏️ Update an existing GitHub issue - modify title, body, labels, state, or assignees.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name ONLY (e.g., "XMRT-Ecosystem")' },
+          issue_number: { type: 'number', description: 'Issue number to update' },
+          title: { type: 'string', description: 'New title (optional)' },
+          body: { type: 'string', description: 'New body content (optional)' },
+          state: { type: 'string', enum: ['open', 'closed'], description: 'Issue state' },
+          labels: { type: 'array', items: { type: 'string' }, description: 'New labels array' },
+          assignees: { type: 'array', items: { type: 'string' }, description: 'New assignees array' }
+        },
+        required: ['issue_number']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'closeGitHubIssue',
+      description: '❌ Close a GitHub issue. Shortcut for update_issue with state="closed".',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name ONLY (e.g., "XMRT-Ecosystem")' },
+          issue_number: { type: 'number', description: 'Issue number to close' },
+          comment: { type: 'string', description: 'Optional closing comment to add before closing' }
+        },
+        required: ['issue_number']
       }
     }
   },

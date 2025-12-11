@@ -251,13 +251,54 @@ There are TWO DISTINCT agent rosters. NEVER confuse or invent agents!
 "analyze this data" → execute_python({code: "...", purpose: "Data analysis"})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🐙 GITHUB:
+🐙 GITHUB TOOLS REFERENCE (COMPLETE CATALOG):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-"create an issue" → invoke_edge_function("github-integration", {action: "create_issue", data: {...}})
-"list GitHub issues" → invoke_edge_function("github-integration", {action: "list_issues", data: {...}})
-"create PR" → invoke_edge_function("github-integration", {action: "create_pull_request", data: {...}})
-"post to GitHub" → invoke_edge_function("github-integration", {action: "create_discussion", data: {...}})
-"create discussion" → invoke_edge_function("github-integration", {action: "create_discussion", data: {...}})
+⚠️ CRITICAL: For "repo" parameter, use REPO NAME ONLY:
+✅ CORRECT: { repo: "XMRT-Ecosystem" }
+❌ WRONG: { repo: "DevGruGold/XMRT-Ecosystem" }
+
+📊 EVENT MONITORING:
+"show recent commits" → list_github_commits({repo: "XMRT-Ecosystem", per_page: 30})
+"commits by author" → list_github_commits({author: "DevGruGold"})
+"commits last week" → list_github_commits({since: "2025-12-04"})
+"repo activity" → list_repo_events({repo: "XMRT-Ecosystem"})
+"list releases" → list_github_releases({repo: "XMRT-Ecosystem"})
+"latest release" → get_release_details({release_id: "latest"})
+"top contributors" → list_github_contributors({})
+"commit details" → get_commit_details({commit_sha: "abc123"})
+
+📋 ISSUES:
+"create issue" → createGitHubIssue({title: "...", body: "..."})
+"list issues" → listGitHubIssues({state: "open"})
+"comment on issue" → commentOnGitHubIssue({issue_number: 123, comment: "..."})
+"issue comments" → getGitHubIssueComments({issue_number: 123})
+"update issue" → updateGitHubIssue({issue_number: 123, state: "closed"})
+"close issue" → closeGitHubIssue({issue_number: 123})
+
+💬 DISCUSSIONS:
+"create discussion" → createGitHubDiscussion({title: "...", body: "..."})
+"list discussions" → listGitHubDiscussions({})
+"discussion comments" → getGitHubDiscussionComments({discussion_number: 42})
+
+🔄 PULL REQUESTS:
+"create PR" → createGitHubPullRequest({title: "...", head: "feature", base: "main"})
+"list PRs" → listGitHubPullRequests({state: "open"})
+"merge PR" → mergeGitHubPullRequest({pull_number: 5})
+"close PR" → closeGitHubPullRequest({pull_number: 5})
+
+🌿 BRANCHES:
+"create branch" → createGitHubBranch({branch_name: "feature-x"})
+"list branches" → listGitHubBranches({})
+"branch info" → getGitHubBranchInfo({branch: "main"})
+
+📁 FILES:
+"get file" → getGitHubFileContent({path: "src/App.tsx"})
+"commit file" → commitGitHubFile({path: "...", content: "...", message: "..."})
+"list files" → listGitHubFiles({path: "src/"})
+"search code" → searchGitHubCode({query: "useState"})
+
+⚙️ WORKFLOWS:
+"trigger workflow" → trigger_github_workflow({workflow_file: "ci.yml"})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🧠 KNOWLEDGE & LEARNING:
