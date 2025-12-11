@@ -24,14 +24,17 @@ async function vscoRequest(
   const { method = 'GET', body, params } = options;
 
   if (!VSCO_API_KEY) {
+    console.error('❌ VSCO_API_KEY not configured');
     return { error: 'VSCO_API_KEY not configured', status: 500 };
   }
 
   let url = `${BASE_URL}${endpoint}`;
-  if (params) {
+  if (params && Object.keys(params).length > 0) {
     const searchParams = new URLSearchParams(params);
     url += `?${searchParams.toString()}`;
   }
+
+  console.log(`📸 [VSCO API] ${method} ${url}`);
 
   try {
     const response = await fetch(url, {
@@ -45,18 +48,23 @@ async function vscoRequest(
     });
 
     const responseTime = Date.now() - startTime;
+    console.log(`📸 [VSCO API] Response: ${response.status} (${responseTime}ms)`);
 
     // Log API call
-    await supabase.from('vsco_api_logs').insert({
-      action: endpoint,
-      endpoint: url,
-      method,
-      status_code: response.status,
-      response_time_ms: responseTime,
-      success: response.ok,
-      executive,
-      request_payload: body,
-    });
+    try {
+      await supabase.from('vsco_api_logs').insert({
+        action: endpoint,
+        endpoint: url,
+        method,
+        status_code: response.status,
+        response_time_ms: responseTime,
+        success: response.ok,
+        executive,
+        request_payload: body,
+      });
+    } catch (logErr) {
+      console.warn('Failed to log API call:', logErr);
+    }
 
     if (response.status === 429) {
       const retryAfter = response.headers.get('Retry-After');
@@ -65,6 +73,7 @@ async function vscoRequest(
 
     if (!response.ok) {
       const errorText = await response.text();
+      console.error(`❌ [VSCO API] Error: ${errorText || `HTTP ${response.status}`}`);
       return { error: errorText || `HTTP ${response.status}`, status: response.status };
     }
 
@@ -73,18 +82,23 @@ async function vscoRequest(
   } catch (error) {
     const responseTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ [VSCO API] Exception: ${errorMessage}`);
 
-    await supabase.from('vsco_api_logs').insert({
-      action: endpoint,
-      endpoint: url,
-      method,
-      status_code: 0,
-      response_time_ms: responseTime,
-      success: false,
-      error_message: errorMessage,
-      executive,
-      request_payload: body,
-    });
+    try {
+      await supabase.from('vsco_api_logs').insert({
+        action: endpoint,
+        endpoint: url,
+        method,
+        status_code: 0,
+        response_time_ms: responseTime,
+        success: false,
+        error_message: errorMessage,
+        executive,
+        request_payload: body,
+      });
+    } catch (logErr) {
+      console.warn('Failed to log API error:', logErr);
+    }
 
     return { error: errorMessage, status: 0 };
   }
@@ -103,13 +117,13 @@ Deno.serve(async (req) => {
 
   try {
     const { action, data = {}, executive } = await req.json();
-    console.log(`📸 [VSCO Workspace] Action: ${action}`, data);
+    console.log(`📸 [VSCO Workspace] Action: ${action}`, JSON.stringify(data));
 
     let result: any;
 
     switch (action) {
       // ====================================================================
-      // STUDIO & BRANDS
+      // STUDIO & BRANDS (Táve uses singular /brand)
       // ====================================================================
       case 'get_studio': {
         const response = await vscoRequest(supabase, '/studio', {}, executive);
@@ -118,13 +132,15 @@ Deno.serve(async (req) => {
       }
 
       case 'list_brands': {
-        const response = await vscoRequest(supabase, '/brands', {}, executive);
+        // Táve API uses /brand (singular) for listing
+        const response = await vscoRequest(supabase, '/brand', {}, executive);
         if (response.error) {
           result = { success: false, error: response.error };
         } else {
           // Sync brands to local DB
-          const brands = response.data?.brands || [];
-          for (const brand of brands) {
+          const brands = response.data?.brands || response.data || [];
+          const brandsArray = Array.isArray(brands) ? brands : [brands];
+          for (const brand of brandsArray) {
             await supabase.from('vsco_brands').upsert({
               vsco_id: brand.id,
               name: brand.name,
@@ -133,13 +149,13 @@ Deno.serve(async (req) => {
               synced_at: new Date().toISOString(),
             }, { onConflict: 'vsco_id' });
           }
-          result = { success: true, brands, synced: brands.length };
+          result = { success: true, brands: brandsArray, synced: brandsArray.length };
         }
         break;
       }
 
       case 'create_brand': {
-        const response = await vscoRequest(supabase, '/brands', {
+        const response = await vscoRequest(supabase, '/brand', {
           method: 'POST',
           body: { name: data.name },
         }, executive);
@@ -148,7 +164,7 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // JOBS/LEADS MANAGEMENT
+      // JOBS/LEADS MANAGEMENT (Táve uses /job singular)
       // ====================================================================
       case 'list_jobs': {
         const params: Record<string, string> = {};
@@ -156,10 +172,13 @@ Deno.serve(async (req) => {
         if (data.closed !== undefined) params.closed = String(data.closed);
         if (data.brand_id) params.brandId = data.brand_id;
         if (data.page) params.page = String(data.page);
-        if (data.per_page) params.perPage = String(data.per_page);
+        if (data.per_page) params.pageSize = String(data.per_page); // Táve uses pageSize
 
-        const response = await vscoRequest(supabase, '/jobs', { params }, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, jobs: response.data?.jobs || [], pagination: response.data?.pagination };
+        const response = await vscoRequest(supabase, '/job', { params }, executive);
+        const jobs = response.data?.jobs || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, jobs: Array.isArray(jobs) ? jobs : [], pagination: response.data?.pagination };
         break;
       }
 
@@ -168,7 +187,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'job_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/jobs/${data.job_id}`, {}, executive);
+        const response = await vscoRequest(supabase, `/job/${data.job_id}`, {}, executive);
         result = response.error ? { success: false, error: response.error } : { success: true, job: response.data };
         break;
       }
@@ -185,7 +204,7 @@ Deno.serve(async (req) => {
         if (data.lead_confidence) jobPayload.leadConfidence = data.lead_confidence;
         if (data.event_date) jobPayload.eventDate = data.event_date;
 
-        const response = await vscoRequest(supabase, '/jobs', {
+        const response = await vscoRequest(supabase, '/job', {
           method: 'POST',
           body: jobPayload,
         }, executive);
@@ -227,7 +246,7 @@ Deno.serve(async (req) => {
         if (data.lead_confidence) updatePayload.leadConfidence = data.lead_confidence;
         if (data.job_type) updatePayload.jobType = data.job_type;
 
-        const response = await vscoRequest(supabase, `/jobs/${data.job_id}`, {
+        const response = await vscoRequest(supabase, `/job/${data.job_id}`, {
           method: 'PATCH',
           body: updatePayload,
         }, executive);
@@ -256,7 +275,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'job_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/jobs/${data.job_id}`, {
+        const response = await vscoRequest(supabase, `/job/${data.job_id}`, {
           method: 'PATCH',
           body: { closed: true, closedReason: data.reason || 'completed' },
         }, executive);
@@ -275,17 +294,20 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // CONTACTS/CRM
+      // CONTACTS/CRM (Táve uses /address-book)
       // ====================================================================
       case 'list_contacts': {
         const params: Record<string, string> = {};
         if (data.kind) params.kind = data.kind;
         if (data.brand_id) params.brandId = data.brand_id;
         if (data.page) params.page = String(data.page);
-        if (data.per_page) params.perPage = String(data.per_page);
+        if (data.per_page) params.pageSize = String(data.per_page);
 
-        const response = await vscoRequest(supabase, '/contacts', { params }, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, contacts: response.data?.contacts || [], pagination: response.data?.pagination };
+        const response = await vscoRequest(supabase, '/address-book', { params }, executive);
+        const contacts = response.data?.contacts || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, contacts: Array.isArray(contacts) ? contacts : [], pagination: response.data?.pagination };
         break;
       }
 
@@ -294,7 +316,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'contact_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/contacts/${data.contact_id}`, {}, executive);
+        const response = await vscoRequest(supabase, `/address-book/${data.contact_id}`, {}, executive);
         result = response.error ? { success: false, error: response.error } : { success: true, contact: response.data };
         break;
       }
@@ -311,7 +333,7 @@ Deno.serve(async (req) => {
         if (data.company_name) contactPayload.companyName = data.company_name;
         if (data.brand_id) contactPayload.brandId = data.brand_id;
 
-        const response = await vscoRequest(supabase, '/contacts', {
+        const response = await vscoRequest(supabase, '/address-book', {
           method: 'POST',
           body: contactPayload,
         }, executive);
@@ -351,7 +373,7 @@ Deno.serve(async (req) => {
         if (data.phone) updatePayload.phone = data.phone;
         if (data.cell_phone) updatePayload.cellPhone = data.cell_phone;
 
-        const response = await vscoRequest(supabase, `/contacts/${data.contact_id}`, {
+        const response = await vscoRequest(supabase, `/address-book/${data.contact_id}`, {
           method: 'PATCH',
           body: updatePayload,
         }, executive);
@@ -376,7 +398,7 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // EVENTS/CALENDAR
+      // EVENTS/CALENDAR (Táve uses /event singular)
       // ====================================================================
       case 'list_events': {
         const params: Record<string, string> = {};
@@ -385,8 +407,11 @@ Deno.serve(async (req) => {
         if (data.end_date) params.endDate = data.end_date;
         if (data.page) params.page = String(data.page);
 
-        const response = await vscoRequest(supabase, '/events', { params }, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, events: response.data?.events || [], pagination: response.data?.pagination };
+        const response = await vscoRequest(supabase, '/event', { params }, executive);
+        const events = response.data?.events || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, events: Array.isArray(events) ? events : [], pagination: response.data?.pagination };
         break;
       }
 
@@ -395,7 +420,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'event_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/events/${data.event_id}`, {}, executive);
+        const response = await vscoRequest(supabase, `/event/${data.event_id}`, {}, executive);
         result = response.error ? { success: false, error: response.error } : { success: true, event: response.data };
         break;
       }
@@ -413,7 +438,7 @@ Deno.serve(async (req) => {
         if (data.end_time) eventPayload.endTime = data.end_time;
         if (data.location_address) eventPayload.locationAddress = data.location_address;
 
-        const response = await vscoRequest(supabase, '/events', {
+        const response = await vscoRequest(supabase, '/event', {
           method: 'POST',
           body: eventPayload,
         }, executive);
@@ -455,7 +480,7 @@ Deno.serve(async (req) => {
         if (data.end_time) updatePayload.endTime = data.end_time;
         if (data.confirmed !== undefined) updatePayload.confirmed = data.confirmed;
 
-        const response = await vscoRequest(supabase, `/events/${data.event_id}`, {
+        const response = await vscoRequest(supabase, `/event/${data.event_id}`, {
           method: 'PATCH',
           body: updatePayload,
         }, executive);
@@ -481,15 +506,18 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // ORDERS/FINANCIALS
+      // ORDERS/FINANCIALS (Táve uses /order singular)
       // ====================================================================
       case 'list_orders': {
         if (!data.job_id) {
           result = { success: false, error: 'job_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/jobs/${data.job_id}/orders`, {}, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, orders: response.data?.orders || [] };
+        const response = await vscoRequest(supabase, `/job/${data.job_id}/order`, {}, executive);
+        const orders = response.data?.orders || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, orders: Array.isArray(orders) ? orders : [] };
         break;
       }
 
@@ -498,7 +526,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'order_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/orders/${data.order_id}`, {}, executive);
+        const response = await vscoRequest(supabase, `/order/${data.order_id}`, {}, executive);
         result = response.error ? { success: false, error: response.error } : { success: true, order: response.data };
         break;
       }
@@ -513,7 +541,7 @@ Deno.serve(async (req) => {
         };
         if (data.order_date) orderPayload.orderDate = data.order_date;
 
-        const response = await vscoRequest(supabase, '/orders', {
+        const response = await vscoRequest(supabase, '/order', {
           method: 'POST',
           body: orderPayload,
         }, executive);
@@ -541,11 +569,14 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // WEBHOOKS/AUTOMATION
+      // WEBHOOKS/AUTOMATION (Táve uses /rest-hook)
       // ====================================================================
       case 'list_webhooks': {
-        const response = await vscoRequest(supabase, '/webhooks', {}, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, webhooks: response.data?.webhooks || [] };
+        const response = await vscoRequest(supabase, '/rest-hook', {}, executive);
+        const webhooks = response.data?.webhooks || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, webhooks: Array.isArray(webhooks) ? webhooks : [] };
         break;
       }
 
@@ -556,7 +587,7 @@ Deno.serve(async (req) => {
         };
         if (data.brand_id) webhookPayload.brandId = data.brand_id;
 
-        const response = await vscoRequest(supabase, '/webhooks', {
+        const response = await vscoRequest(supabase, '/rest-hook', {
           method: 'POST',
           body: webhookPayload,
         }, executive);
@@ -569,7 +600,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'webhook_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/webhooks/${data.webhook_id}`, {
+        const response = await vscoRequest(supabase, `/rest-hook/${data.webhook_id}`, {
           method: 'DELETE',
         }, executive);
         result = response.error ? { success: false, error: response.error } : { success: true, deleted: true };
@@ -652,13 +683,13 @@ Deno.serve(async (req) => {
       case 'sync_contacts': {
         const syncResults: any = { jobs: 0, contacts: 0, events: 0, errors: [] };
 
-        // Sync jobs
+        // Sync jobs (using /job singular)
         try {
           let page = 1;
           let hasMore = true;
           while (hasMore) {
-            const jobsResponse = await vscoRequest(supabase, '/jobs', { 
-              params: { page: String(page), perPage: '100' } 
+            const jobsResponse = await vscoRequest(supabase, '/job', { 
+              params: { page: String(page), pageSize: '100' } 
             }, executive);
             
             if (jobsResponse.error) {
@@ -666,8 +697,9 @@ Deno.serve(async (req) => {
               break;
             }
             
-            const jobs = jobsResponse.data?.jobs || [];
-            for (const job of jobs) {
+            const jobs = jobsResponse.data?.jobs || jobsResponse.data || [];
+            const jobsArray = Array.isArray(jobs) ? jobs : [];
+            for (const job of jobsArray) {
               await supabase.from('vsco_jobs').upsert({
                 vsco_id: job.id,
                 name: job.name,
@@ -691,21 +723,21 @@ Deno.serve(async (req) => {
               syncResults.jobs++;
             }
             
-            hasMore = jobs.length === 100;
+            hasMore = jobsArray.length === 100;
             page++;
           }
         } catch (e) {
           syncResults.errors.push(`Jobs sync exception: ${e}`);
         }
 
-        // Sync contacts
+        // Sync contacts (using /address-book)
         if (action === 'sync_all' || action === 'sync_contacts') {
           try {
             let page = 1;
             let hasMore = true;
             while (hasMore) {
-              const contactsResponse = await vscoRequest(supabase, '/contacts', { 
-                params: { page: String(page), perPage: '100' } 
+              const contactsResponse = await vscoRequest(supabase, '/address-book', { 
+                params: { page: String(page), pageSize: '100' } 
               }, executive);
               
               if (contactsResponse.error) {
@@ -713,8 +745,9 @@ Deno.serve(async (req) => {
                 break;
               }
               
-              const contacts = contactsResponse.data?.contacts || [];
-              for (const contact of contacts) {
+              const contacts = contactsResponse.data?.contacts || contactsResponse.data || [];
+              const contactsArray = Array.isArray(contacts) ? contacts : [];
+              for (const contact of contactsArray) {
                 await supabase.from('vsco_contacts').upsert({
                   vsco_id: contact.id,
                   kind: contact.kind,
@@ -732,7 +765,7 @@ Deno.serve(async (req) => {
                 syncResults.contacts++;
               }
               
-              hasMore = contacts.length === 100;
+              hasMore = contactsArray.length === 100;
               page++;
             }
           } catch (e) {
@@ -776,20 +809,21 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // PRODUCTS/QUOTES
+      // PRODUCTS/QUOTES (Táve uses /product singular)
       // ====================================================================
       case 'list_products': {
         const params: Record<string, string> = {};
         if (data.page) params.page = String(data.page);
-        if (data.per_page) params.perPage = String(data.per_page);
+        if (data.per_page) params.pageSize = String(data.per_page);
         
-        const response = await vscoRequest(supabase, '/products', { params }, executive);
+        const response = await vscoRequest(supabase, '/product', { params }, executive);
         if (response.error) {
           result = { success: false, error: response.error };
         } else {
-          const products = response.data?.products || [];
+          const products = response.data?.products || response.data || [];
+          const productsArray = Array.isArray(products) ? products : [];
           // Sync to local DB
-          for (const product of products) {
+          for (const product of productsArray) {
             await supabase.from('vsco_products').upsert({
               vsco_id: product.id,
               name: product.name,
@@ -804,7 +838,7 @@ Deno.serve(async (req) => {
               synced_at: new Date().toISOString(),
             }, { onConflict: 'vsco_id' });
           }
-          result = { success: true, products, synced: products.length };
+          result = { success: true, products: productsArray, synced: productsArray.length };
         }
         break;
       }
@@ -814,7 +848,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'product_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/products/${data.product_id}`, {}, executive);
+        const response = await vscoRequest(supabase, `/product/${data.product_id}`, {}, executive);
         result = response.error ? { success: false, error: response.error } : { success: true, product: response.data };
         break;
       }
@@ -829,7 +863,7 @@ Deno.serve(async (req) => {
         if (data.tax_rate) productPayload.taxRate = data.tax_rate;
         if (data.category) productPayload.category = data.category;
 
-        const response = await vscoRequest(supabase, '/products', {
+        const response = await vscoRequest(supabase, '/product', {
           method: 'POST',
           body: productPayload,
         }, executive);
@@ -858,7 +892,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'product_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/products/${data.product_id}`, {
+        const response = await vscoRequest(supabase, `/product/${data.product_id}`, {
           method: 'DELETE',
         }, executive);
         
@@ -879,7 +913,7 @@ Deno.serve(async (req) => {
           result = { success: false, error: 'job_id required' };
           break;
         }
-        const response = await vscoRequest(supabase, `/jobs/${data.job_id}/worksheet`, {}, executive);
+        const response = await vscoRequest(supabase, `/job/${data.job_id}/worksheet`, {}, executive);
         if (response.error) {
           result = { success: false, error: response.error };
         } else {
@@ -909,7 +943,7 @@ Deno.serve(async (req) => {
         if (data.job_type) worksheetPayload.jobType = data.job_type;
         if (data.brand_id) worksheetPayload.brandId = data.brand_id;
 
-        const response = await vscoRequest(supabase, '/jobs', {
+        const response = await vscoRequest(supabase, '/job', {
           method: 'POST',
           body: worksheetPayload,
         }, executive);
@@ -933,7 +967,7 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // NOTES
+      // NOTES (Táve uses /note singular)
       // ====================================================================
       case 'list_notes': {
         const params: Record<string, string> = {};
@@ -941,38 +975,37 @@ Deno.serve(async (req) => {
         if (data.contact_id) params.contactId = data.contact_id;
         if (data.page) params.page = String(data.page);
 
-        const response = await vscoRequest(supabase, '/notes', { params }, executive);
+        const response = await vscoRequest(supabase, '/note', { params }, executive);
         if (response.error) {
           result = { success: false, error: response.error };
         } else {
-          const notes = response.data?.notes || [];
-          for (const note of notes) {
+          const notes = response.data?.notes || response.data || [];
+          const notesArray = Array.isArray(notes) ? notes : [];
+          for (const note of notesArray) {
             await supabase.from('vsco_notes').upsert({
               vsco_id: note.id,
               vsco_job_id: note.jobId,
               vsco_contact_id: note.contactId,
-              content_html: note.contentHtml,
-              content_text: note.contentText,
-              note_date: note.date,
-              author: note.author,
+              content: note.content,
+              note_type: note.noteType,
               raw_data: note,
               synced_at: new Date().toISOString(),
             }, { onConflict: 'vsco_id' });
           }
-          result = { success: true, notes, synced: notes.length };
+          result = { success: true, notes: notesArray, synced: notesArray.length };
         }
         break;
       }
 
       case 'create_note': {
         const notePayload: any = {
-          contentHtml: data.content_html || data.content,
+          content: data.content,
         };
         if (data.job_id) notePayload.jobId = data.job_id;
         if (data.contact_id) notePayload.contactId = data.contact_id;
-        if (data.date) notePayload.date = data.date;
+        if (data.note_type) notePayload.noteType = data.note_type;
 
-        const response = await vscoRequest(supabase, '/notes', {
+        const response = await vscoRequest(supabase, '/note', {
           method: 'POST',
           body: notePayload,
         }, executive);
@@ -985,92 +1018,29 @@ Deno.serve(async (req) => {
             vsco_id: note.id,
             vsco_job_id: note.jobId,
             vsco_contact_id: note.contactId,
-            content_html: note.contentHtml,
-            content_text: note.contentText,
+            content: note.content,
+            note_type: note.noteType,
             raw_data: note,
             synced_at: new Date().toISOString(),
           }, { onConflict: 'vsco_id' });
           result = { success: true, note };
-        }
-        break;
-      }
-
-      case 'update_note': {
-        if (!data.note_id) {
-          result = { success: false, error: 'note_id required' };
-          break;
-        }
-        const updatePayload: any = {};
-        if (data.content_html || data.content) updatePayload.contentHtml = data.content_html || data.content;
-        if (data.date) updatePayload.date = data.date;
-
-        const response = await vscoRequest(supabase, `/notes/${data.note_id}`, {
-          method: 'PATCH',
-          body: updatePayload,
-        }, executive);
-
-        if (response.error) {
-          result = { success: false, error: response.error };
-        } else {
-          const note = response.data;
-          await supabase.from('vsco_notes').upsert({
-            vsco_id: note.id,
-            content_html: note.contentHtml,
-            content_text: note.contentText,
-            raw_data: note,
-            synced_at: new Date().toISOString(),
-          }, { onConflict: 'vsco_id' });
-          result = { success: true, note };
-        }
-        break;
-      }
-
-      case 'delete_note': {
-        if (!data.note_id) {
-          result = { success: false, error: 'note_id required' };
-          break;
-        }
-        const response = await vscoRequest(supabase, `/notes/${data.note_id}`, {
-          method: 'DELETE',
-        }, executive);
-        
-        if (response.error) {
-          result = { success: false, error: response.error };
-        } else {
-          await supabase.from('vsco_notes').delete().eq('vsco_id', data.note_id);
-          result = { success: true, deleted: true };
         }
         break;
       }
 
       // ====================================================================
-      // FILES & GALLERIES
+      // FILES & GALLERIES (Táve uses /file and /gallery singular)
       // ====================================================================
       case 'list_files': {
         const params: Record<string, string> = {};
         if (data.job_id) params.jobId = data.job_id;
         if (data.page) params.page = String(data.page);
 
-        const response = await vscoRequest(supabase, '/files', { params }, executive);
-        if (response.error) {
-          result = { success: false, error: response.error };
-        } else {
-          const files = response.data?.files || [];
-          for (const file of files) {
-            await supabase.from('vsco_files').upsert({
-              vsco_id: file.id,
-              vsco_job_id: file.jobId,
-              vsco_gallery_id: file.galleryId,
-              filename: file.filename,
-              file_type: file.fileType,
-              file_size: file.fileSize,
-              url: file.url,
-              raw_data: file,
-              synced_at: new Date().toISOString(),
-            }, { onConflict: 'vsco_id' });
-          }
-          result = { success: true, files, synced: files.length };
-        }
+        const response = await vscoRequest(supabase, '/file', { params }, executive);
+        const files = response.data?.files || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, files: Array.isArray(files) ? files : [] };
         break;
       }
 
@@ -1079,23 +1049,11 @@ Deno.serve(async (req) => {
         if (data.job_id) params.jobId = data.job_id;
         if (data.page) params.page = String(data.page);
 
-        const response = await vscoRequest(supabase, '/galleries', { params }, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, galleries: response.data?.galleries || [] };
-        break;
-      }
-
-      case 'create_gallery': {
-        const galleryPayload: any = {
-          name: data.name,
-        };
-        if (data.job_id) galleryPayload.jobId = data.job_id;
-        if (data.description) galleryPayload.description = data.description;
-
-        const response = await vscoRequest(supabase, '/galleries', {
-          method: 'POST',
-          body: galleryPayload,
-        }, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, gallery: response.data };
+        const response = await vscoRequest(supabase, '/gallery', { params }, executive);
+        const galleries = response.data?.galleries || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, galleries: Array.isArray(galleries) ? galleries : [] };
         break;
       }
 
@@ -1103,102 +1061,88 @@ Deno.serve(async (req) => {
       // CUSTOM FIELDS & DISCOUNTS
       // ====================================================================
       case 'list_custom_fields': {
-        const response = await vscoRequest(supabase, '/custom-fields', {}, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, custom_fields: response.data?.customFields || [] };
+        const response = await vscoRequest(supabase, '/custom-field', {}, executive);
+        const customFields = response.data?.customFields || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, custom_fields: Array.isArray(customFields) ? customFields : [] };
         break;
       }
 
       case 'list_discounts': {
-        const response = await vscoRequest(supabase, '/discounts', {}, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, discounts: response.data?.discounts || [] };
-        break;
-      }
-
-      case 'create_discount': {
-        const discountPayload: any = {
-          name: data.name,
-          amount: data.amount,
-          discountType: data.discount_type || 'fixed', // fixed or percent
-        };
-
-        const response = await vscoRequest(supabase, '/discounts', {
-          method: 'POST',
-          body: discountPayload,
-        }, executive);
-        result = response.error ? { success: false, error: response.error } : { success: true, discount: response.data };
+        const response = await vscoRequest(supabase, '/discount', {}, executive);
+        const discounts = response.data?.discounts || response.data || [];
+        result = response.error 
+          ? { success: false, error: response.error } 
+          : { success: true, discounts: Array.isArray(discounts) ? discounts : [] };
         break;
       }
 
       // ====================================================================
-      // DISCOVERY & HEALTH ACTIONS
+      // UTILITY ACTIONS
       // ====================================================================
-      case 'list_actions':
-      case 'help': {
+      case 'list_actions': {
         result = {
           success: true,
-          actions: {
-            discovery: ['list_actions', 'help', 'health', 'get_api_health'],
-            studio: ['get_studio', 'list_brands', 'create_brand'],
-            jobs: ['list_jobs', 'get_job', 'create_job', 'update_job', 'close_job'],
-            contacts: ['list_contacts', 'get_contact', 'create_contact', 'update_contact'],
-            events: ['list_events', 'get_event', 'create_event', 'update_event', 'delete_event'],
-            orders: ['list_orders', 'get_order', 'create_order', 'update_order', 'list_payments', 'create_payment', 'list_taxes', 'create_tax'],
-            products: ['list_products', 'get_product', 'create_product', 'delete_product'],
-            worksheets: ['list_worksheets', 'create_worksheet', 'create_worksheet_item'],
-            notes: ['list_notes', 'create_note'],
-            files: ['list_files', 'upload_file', 'delete_file', 'list_galleries', 'create_gallery'],
-            webhooks: ['list_webhooks', 'create_webhook', 'delete_webhook'],
-            analytics: ['get_analytics_summary'],
-            custom: ['list_custom_fields', 'list_discounts', 'create_discount'],
-          },
-          usage: {
-            example: '{ "action": "list_jobs", "data": { "stage": "lead" } }',
-            stages: ['lead', 'quote', 'booked', 'completed', 'cancelled'],
-            contact_kinds: ['person', 'company'],
-          },
-          description: 'VSCO Workspace API integration for photography business management. Manages jobs, contacts, events, orders, products, and analytics.',
+          available_actions: [
+            // Studio & Brands
+            'get_studio', 'list_brands', 'create_brand',
+            // Jobs/Leads
+            'list_jobs', 'get_job', 'create_job', 'update_job', 'close_job',
+            // Contacts
+            'list_contacts', 'get_contact', 'create_contact', 'update_contact',
+            // Events
+            'list_events', 'get_event', 'create_event', 'update_event',
+            // Orders
+            'list_orders', 'get_order', 'create_order',
+            // Webhooks
+            'list_webhooks', 'create_webhook', 'delete_webhook',
+            // Products
+            'list_products', 'get_product', 'create_product', 'delete_product',
+            // Notes
+            'list_notes', 'create_note',
+            // Files & Galleries
+            'list_files', 'list_galleries',
+            // Custom Fields & Discounts
+            'list_custom_fields', 'list_discounts',
+            // Worksheets
+            'get_job_worksheet', 'create_job_from_worksheet',
+            // Analytics
+            'get_analytics', 'get_revenue_report',
+            // Sync & Health
+            'sync_all', 'sync_jobs', 'sync_contacts', 'get_api_health',
+            // Utility
+            'list_actions', 'health',
+          ],
         };
         break;
       }
 
-      case 'health':
-      case 'get_api_health': {
-        const testStart = Date.now();
-        const testResponse = await vscoRequest(supabase, '/studio', {}, executive);
-        const latency = Date.now() - testStart;
-        
+      case 'health': {
         result = {
           success: true,
-          api_status: testResponse.error ? 'error' : 'connected',
+          status: 'healthy',
           api_configured: !!VSCO_API_KEY,
-          latency_ms: latency,
-          error: testResponse.error || null,
           timestamp: new Date().toISOString(),
-          base_url: BASE_URL,
         };
         break;
       }
 
       default:
-        result = { 
-          success: false, 
-          error: `Unknown action: ${action}. Use action="list_actions" to see available actions.`,
-          hint: 'Call with { "action": "list_actions" } to discover all available VSCO Workspace actions.'
-        };
+        result = { success: false, error: `Unknown action: ${action}` };
     }
 
-    console.log(`📸 [VSCO Workspace] Result:`, result);
+    console.log(`📸 [VSCO Workspace] Result:`, JSON.stringify(result).slice(0, 500));
+
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   } catch (error) {
-    console.error('❌ [VSCO Workspace] Error:', error);
-    return new Response(JSON.stringify({
-      success: false,
-      error: error instanceof Error ? error.message : 'Unknown error',
-    }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    console.error(`❌ [VSCO Workspace] Error: ${errorMessage}`);
+    return new Response(
+      JSON.stringify({ success: false, error: errorMessage }),
+      { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }
+    );
   }
 });
