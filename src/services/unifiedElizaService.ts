@@ -45,6 +45,7 @@ export interface ElizaContext {
   emotionalContext?: EmotionalContext; // Real-time emotional state from voice and video
   images?: string[]; // Base64 encoded images for vision/multimodal analysis
   isLiveCameraFeed?: boolean; // Flag indicating images are from live webcam, not uploaded files
+  targetExecutive?: string; // Force routing to specific executive (bypass intelligent routing)
 }
 
 // Unified Eliza response service that both text and voice modes can use
@@ -370,11 +371,18 @@ export class UnifiedElizaService {
 
   /**
    * Intelligently select which AI Executive to call based on:
-   * 1. Task characteristics (code, vision, strategy, etc.)
-   * 2. Executive health/availability
+   * 1. Targeted executive (if explicitly set - bypasses intelligent routing)
+   * 2. Task characteristics (code, vision, strategy, etc.)
+   * 3. Executive health/availability
    * Returns the edge function name to invoke
    */
   private static async selectAIExecutive(userInput: string, context: ElizaContext): Promise<string> {
+    // If a specific executive is targeted, use it directly (skip intelligent routing)
+    if (context.targetExecutive) {
+      console.log(`🎯 Using targeted executive: ${context.targetExecutive} (bypassing intelligent routing)`);
+      return context.targetExecutive;
+    }
+    
     const input = userInput.toLowerCase();
     
     // Get currently healthy executives

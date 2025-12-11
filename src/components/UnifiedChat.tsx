@@ -78,11 +78,15 @@ interface UnifiedMessage {
 }
 
 // MiningStats imported from unifiedDataService
+import { ExecutiveName, EXECUTIVE_PROFILES } from './ExecutiveBio';
 
 interface UnifiedChatProps {
   apiKey?: string;
   className?: string;
   miningStats?: MiningStats;
+  selectedExecutive?: ExecutiveName; // Target specific executive (bypasses intelligent routing)
+  defaultCouncilMode?: boolean; // Start in council mode
+  onBack?: () => void; // Callback to return to directory view
 }
 
 // Internal component using ElevenLabs and Gemini
@@ -90,7 +94,10 @@ interface UnifiedChatProps {
 const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   apiKey = import.meta.env.VITE_GEMINI_API_KEY || "",
   className = '',
-  miningStats: externalMiningStats
+  miningStats: externalMiningStats,
+  selectedExecutive,
+  defaultCouncilMode = false,
+  onBack
 }) => {
   // Core state
   const { language } = useLanguage();
@@ -149,8 +156,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [userContext, setUserContext] = useState<UserContext | null>(null);
   const [lastElizaMessage, setLastElizaMessage] = useState<string>("");
   
-  // Council mode state
-  const [councilMode, setCouncilMode] = useState<boolean>(false);
+  // Council mode state - initialize from prop
+  const [councilMode, setCouncilMode] = useState<boolean>(defaultCouncilMode);
 
   // Hume controls state
   const [humeState, setHumeState] = useState<HumeState>({
@@ -1228,7 +1235,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         conversationContext: fullContext,
         emotionalContext: emotionalContext || undefined, // Pass real-time emotional context
         councilMode,
-        images: imageBase64Array.length > 0 ? imageBase64Array : undefined
+        images: imageBase64Array.length > 0 ? imageBase64Array : undefined,
+        targetExecutive: selectedExecutive // Route to specific executive if selected
       }, language);
       
       // Handle council deliberation response
@@ -1529,6 +1537,17 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       <div className="px-4 py-3 border-b border-border/60">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
           <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0">
+            {/* Back button when in executive/council mode */}
+            {onBack && (
+              <Button
+                onClick={onBack}
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0 mr-1"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            )}
             <AdaptiveAvatar
               apiKey={apiKey}
               className="h-8 w-8 sm:h-10 sm:w-10 flex-shrink-0"
@@ -1536,8 +1555,29 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               enableVoice={voiceEnabled}
             />
             <div className="min-w-0">
-              <h3 className="font-medium text-foreground text-sm sm:text-base truncate">Suite Assistant</h3>
-              <p className="text-[11px] text-muted-foreground truncate">Enterprise AI</p>
+              {/* Show selected executive or default title */}
+              {selectedExecutive && EXECUTIVE_PROFILES[selectedExecutive] ? (
+                <>
+                  <h3 className="font-medium text-foreground text-sm sm:text-base truncate flex items-center gap-2">
+                    <span>{EXECUTIVE_PROFILES[selectedExecutive].icon}</span>
+                    {EXECUTIVE_PROFILES[selectedExecutive].fullTitle}
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground truncate">{EXECUTIVE_PROFILES[selectedExecutive].model}</p>
+                </>
+              ) : councilMode ? (
+                <>
+                  <h3 className="font-medium text-foreground text-sm sm:text-base truncate flex items-center gap-2">
+                    <Users className="h-4 w-4 text-primary" />
+                    Executive Council
+                  </h3>
+                  <p className="text-[11px] text-muted-foreground truncate">All 4 executives deliberating</p>
+                </>
+              ) : (
+                <>
+                  <h3 className="font-medium text-foreground text-sm sm:text-base truncate">Suite Assistant</h3>
+                  <p className="text-[11px] text-muted-foreground truncate">Enterprise AI</p>
+                </>
+              )}
             </div>
           </div>
 
