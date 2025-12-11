@@ -495,13 +495,30 @@ serve(async (req) => {
     // 9A. GOVERNANCE & COUNCIL HEALTH
     console.log('🏛️ Checking governance status...');
     try {
+      // Query proposals without non-existent council_votes column
       const { data: proposals, error: govError } = await supabase
         .from('edge_function_proposals')
-        .select('id, status, created_at, council_votes, voting_phase, executive_deadline, community_deadline')
+        .select('id, status, created_at, voting_phase, executive_deadline, community_deadline')
         .order('created_at', { ascending: false })
         .limit(50);
 
       if (govError) throw govError;
+
+      // Separately query executive votes to get vote counts
+      const { data: votes } = await supabase
+        .from('executive_votes')
+        .select('proposal_id, vote');
+
+      // Group votes by proposal_id
+      const votesByProposal: Record<string, { approve: number; reject: number; abstain: number }> = {};
+      (votes || []).forEach((v: any) => {
+        if (!votesByProposal[v.proposal_id]) {
+          votesByProposal[v.proposal_id] = { approve: 0, reject: 0, abstain: 0 };
+        }
+        if (v.vote === 'approve') votesByProposal[v.proposal_id].approve++;
+        else if (v.vote === 'reject') votesByProposal[v.proposal_id].reject++;
+        else votesByProposal[v.proposal_id].abstain++;
+      });
 
       const pendingProposals = proposals?.filter((p: any) => p.status === 'pending' || p.status === 'voting').length || 0;
       const approvedLast7d = proposals?.filter((p: any) => p.status === 'approved' && new Date(p.created_at) > new Date(last7d)).length || 0;
@@ -516,10 +533,12 @@ serve(async (req) => {
         rejected_last_7d: rejectedLast7d,
         total_proposals: proposals?.length || 0,
         council_active: inVotingPhase > 0,
+        total_executive_votes: votes?.length || 0,
         recent_proposals: proposals?.slice(0, 5).map((p: any) => ({
           id: p.id,
           status: p.status,
           voting_phase: p.voting_phase,
+          votes: votesByProposal[p.id] || { approve: 0, reject: 0, abstain: 0 },
           created_at: p.created_at
         }))
       };
