@@ -1747,15 +1747,16 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
       } else {
         // Find by session key and update
-        const draftResult = await supabase.functions.invoke('process-license-application', {
+        return supabase.functions.invoke('process-license-application', {
           body: { action: 'get_draft_by_session', data: { session_key: parsedArgs.session_key } }
+        }).then((draftResult: any) => {
+          if (draftResult.data?.draft?.id) {
+            return supabase.functions.invoke('process-license-application', {
+              body: { action: 'update_application', data: { application_id: draftResult.data.draft.id, updates: parsedArgs } }
+            }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+          }
+          return { success: false, error: 'No draft application found for this session' };
         });
-        if (draftResult.data?.draft?.id) {
-          return supabase.functions.invoke('process-license-application', {
-            body: { action: 'update_application', data: { application_id: draftResult.data.draft.id, updates: parsedArgs } }
-          }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
-        }
-        return { success: false, error: 'No draft application found for this session' };
       }
 
     case 'calculate_license_savings':
@@ -1774,15 +1775,16 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
           body: { action: 'update_application', data: { application_id: parsedArgs.application_id, updates: { application_status: 'submitted', compliance_commitment: true } } }
         }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
       } else {
-        const draftResult = await supabase.functions.invoke('process-license-application', {
+        return supabase.functions.invoke('process-license-application', {
           body: { action: 'get_draft_by_session', data: { session_key: parsedArgs.session_key } }
+        }).then((draftResult: any) => {
+          if (draftResult.data?.draft?.id) {
+            return supabase.functions.invoke('process-license-application', {
+              body: { action: 'update_application', data: { application_id: draftResult.data.draft.id, updates: { application_status: 'submitted', compliance_commitment: true } } }
+            }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+          }
+          return { success: false, error: 'No draft application found to submit' };
         });
-        if (draftResult.data?.draft?.id) {
-          return supabase.functions.invoke('process-license-application', {
-            body: { action: 'update_application', data: { application_id: draftResult.data.draft.id, updates: { application_status: 'submitted', compliance_commitment: true } } }
-          }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
-        }
-        return { success: false, error: 'No draft application found to submit' };
       }
 
     case 'get_license_application_status':
