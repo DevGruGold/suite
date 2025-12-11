@@ -1793,6 +1793,7 @@ export type Database = {
       device_connection_sessions: {
         Row: {
           app_version: string | null
+          battery_level_current: number | null
           battery_level_end: number | null
           battery_level_start: number | null
           charging_sessions_count: number | null
@@ -1814,6 +1815,7 @@ export type Database = {
         }
         Insert: {
           app_version?: string | null
+          battery_level_current?: number | null
           battery_level_end?: number | null
           battery_level_start?: number | null
           charging_sessions_count?: number | null
@@ -1835,6 +1837,7 @@ export type Database = {
         }
         Update: {
           app_version?: string | null
+          battery_level_current?: number | null
           battery_level_end?: number | null
           battery_level_start?: number | null
           charging_sessions_count?: number | null
