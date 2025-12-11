@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { toast } from '@/hooks/use-toast';
+import { SEOHead } from '@/components/SEOHead';
 
 interface Proposal {
   id: string;
@@ -244,7 +245,19 @@ export default function Governance() {
   );
 
   return (
-    <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-7xl">
+    <>
+      <SEOHead
+        title="Democratic AI Governance - Your Vote Matters | Suite"
+        description="The first AI where YOU vote on what gets built. Community + Executive votes, transparent decisions, real impact on the platform's evolution."
+        image="/og-image-governance.svg"
+        url="/governance"
+        keywords="AI governance, democratic voting, community proposals, decentralized AI, DAO governance"
+        twitterLabel1="🗳️ Your Vote"
+        twitterData1="Counts"
+        twitterLabel2="⏱️ Decisions"
+        twitterData2="24hr"
+      />
+      <div className="container mx-auto px-3 sm:px-4 py-4 sm:py-8 max-w-7xl">
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
         <div className="flex items-center gap-2">
@@ -490,5 +503,6 @@ export default function Governance() {
         )}
       </Tabs>
     </div>
+    </>
   );
 }

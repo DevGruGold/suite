@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { RefreshCw, ExternalLink, AlertCircle, CheckCircle, Clock } from 'lucide-react';
 import { useAPIKeyHealth } from '@/services/credentialManager';
 import { UnifiedAPIKeyInput } from '@/components/UnifiedAPIKeyInput';
+import { SEOHead } from '@/components/SEOHead';
 
 export default function Credentials() {
   const { health, loading, refresh } = useAPIKeyHealth();
@@ -54,7 +55,19 @@ export default function Credentials() {
   };
 
   return (
-    <div className="max-w-5xl mx-auto p-6 space-y-6">
+    <>
+      <SEOHead
+        title="Unified AI Key Management | Suite Credentials"
+        description="One dashboard for all AI providers with automatic failover. Manage OpenAI, DeepSeek, Gemini, and more with 99.9% uptime guarantee."
+        image="/og-image-credentials.svg"
+        url="/credentials"
+        keywords="API key management, AI credentials, multi-provider AI, failover system, API dashboard"
+        twitterLabel1="🔑 Providers"
+        twitterData1="6+"
+        twitterLabel2="🛡️ Uptime"
+        twitterData2="99.9%"
+      />
+      <div className="max-w-5xl mx-auto p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">API Credentials</h1>
@@ -213,6 +226,7 @@ export default function Credentials() {
           </div>
         </div>
       </Card>
-    </div>
+      </div>
+    </>
   );
 }
