@@ -45,11 +45,12 @@ serve(async (req) => {
       deviceStats,
       chargingStats,
       popStats,
-      commandStats
+      commandStats,
+      edgeFunctionStats
     ] = await Promise.all([
       // Agent stats
       supabase.from('agents').select('status').then(({ data }) => {
-        const stats = { IDLE: 0, BUSY: 0, LEARNING: 0, BLOCKED: 0, total: 0 };
+        const stats = { IDLE: 0, BUSY: 0, LEARNING: 0, BLOCKED: 0, ERROR: 0, OFFLINE: 0, total: 0 };
         data?.forEach(a => {
           stats[a.status] = (stats[a.status] || 0) + 1;
           stats.total++;
@@ -241,6 +242,20 @@ serve(async (req) => {
             stats[c.status] = (stats[c.status] || 0) + 1;
           });
           return stats;
+        }),
+
+      // Edge function error rate (last 24h)
+      supabase.from('eliza_function_usage')
+        .select('success')
+        .gte('executed_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+        .then(({ data }) => {
+          const total = data?.length || 0;
+          const failed = data?.filter(f => !f.success).length || 0;
+          return {
+            total,
+            failed,
+            error_rate: total > 0 ? (failed / total) * 100 : 0
+          };
         })
     ]);
 
@@ -259,8 +274,8 @@ serve(async (req) => {
       pythonExecStats: { failed: pythonExecStats.failed },
       taskStats: { BLOCKED: taskStats.BLOCKED },
       cronStats,
-      agentStats: { ERROR: 0 }, // Agents don't track ERROR status here
-      edgeFunctionStats: { overall_error_rate: 0 },
+      agentStats: { ERROR: agentStats.ERROR || 0 }, // Real agent error count
+      edgeFunctionStats: { overall_error_rate: edgeFunctionStats.error_rate || 0 }, // Real error rate
       deviceStats: { total: deviceStats.total, active: deviceStats.active },
       chargingStats: { avg_efficiency: chargingStats.avg_efficiency, total: chargingStats.total },
       commandStats: { failed: commandStats.failed }
