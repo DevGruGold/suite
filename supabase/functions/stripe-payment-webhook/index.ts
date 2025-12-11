@@ -28,6 +28,31 @@ serve(async (req) => {
 
     // Handle successful payment
     if (success) {
+      // DEDUPLICATION CHECK: See if payment was already processed via VSCO Workspace
+      const { data: vscoPayment } = await supabase
+        .from('vsco_orders')
+        .select('vsco_id')
+        .eq('external_reference', sessionId)
+        .maybeSingle();
+
+      if (vscoPayment) {
+        console.log(`⏭️ Payment ${sessionId} already processed via VSCO Workspace, skipping Stripe fallback`);
+        return new Response(
+          `<!DOCTYPE html>
+          <html><head><title>Payment Already Processed</title>
+          <style>body { font-family: system-ui; max-width: 600px; margin: 100px auto; text-align: center; }
+          .success { color: #10b981; font-size: 48px; } .message { color: #374151; margin: 20px 0; }
+          .button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin-top: 20px; }</style>
+          </head><body>
+            <div class="success">✓</div>
+            <h1>Payment Confirmed</h1>
+            <p class="message">Your payment was processed through Party Favor Photo.</p>
+            <a href="${supabaseUrl}" class="button">Return to Dashboard</a>
+          </body></html>`,
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'text/html' } }
+        );
+      }
+
       const stripeSecretKey = Deno.env.get('STRIPE_SECRET_KEY');
       
       if (!stripeSecretKey) {
@@ -51,76 +76,102 @@ serve(async (req) => {
       const sessionData = await sessionResponse.json();
       const { metadata, customer_email, amount_total } = sessionData;
 
-      // Upgrade API key tier
-      if (metadata.api_key) {
-        await supabase
-          .from('service_api_keys')
-          .update({
-            tier: metadata.tier,
-            status: 'active',
-            updated_at: new Date().toISOString(),
-          })
-          .eq('api_key', metadata.api_key);
+      // Determine if this is a Suite platform payment vs Party Favor Photo
+      const isSuitePayment = metadata?.service_name !== 'party_favor_photo' && 
+                            !metadata?.vsco_job_id;
 
-        console.log(`✅ Upgraded API key ${metadata.api_key} to ${metadata.tier} tier`);
-      }
+      if (!isSuitePayment) {
+        console.log('📸 Party Favor Photo payment detected - deferring to VSCO Workspace as primary processor');
+        // Log but don't process Suite-specific workflows for VSCO payments
+        await supabase.from('eliza_activity_log').insert({
+          activity_type: 'payment_deferred',
+          title: 'Payment Deferred to VSCO',
+          description: `Payment for ${customer_email} deferred to VSCO Workspace processor`,
+          status: 'completed',
+          metadata: {
+            payment_source: 'stripe_to_vsco',
+            customer_email,
+            stripe_session_id: sessionId,
+            vsco_job_id: metadata?.vsco_job_id,
+          },
+        });
+      } else {
+        // SUITE PLATFORM PAYMENT - Process fully via Stripe fallback
 
-      // Update session acquisition stage
-      if (metadata.session_key) {
-        await supabase
-          .from('conversation_sessions')
-          .update({
-            acquisition_stage: 'paying',
-            conversion_event: 'payment_completed',
-            lifetime_value: amount_total / 100,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('session_key', metadata.session_key);
+        // Upgrade API key tier
+        if (metadata?.api_key) {
+          await supabase
+            .from('service_api_keys')
+            .update({
+              tier: metadata.tier,
+              status: 'active',
+              updated_at: new Date().toISOString(),
+            })
+            .eq('api_key', metadata.api_key);
 
-        console.log(`✅ Updated session ${metadata.session_key} to paying customer`);
-      }
+          console.log(`✅ Upgraded API key ${metadata.api_key} to ${metadata.tier} tier`);
+        }
 
-      // Record onboarding checkpoint
-      if (metadata.api_key) {
-        await supabase.rpc('track_onboarding_checkpoint', {
-          p_api_key: metadata.api_key,
-          p_checkpoint: 'payment_completed',
-          p_metadata: {
-            tier: metadata.tier,
+        // Update session acquisition stage
+        if (metadata?.session_key) {
+          await supabase
+            .from('conversation_sessions')
+            .update({
+              acquisition_stage: 'paying',
+              conversion_event: 'payment_completed',
+              lifetime_value: amount_total / 100,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('session_key', metadata.session_key);
+
+          console.log(`✅ Updated session ${metadata.session_key} to paying customer`);
+        }
+
+        // Record onboarding checkpoint
+        if (metadata?.api_key) {
+          await supabase.rpc('track_onboarding_checkpoint', {
+            p_api_key: metadata.api_key,
+            p_checkpoint: 'payment_completed',
+            p_metadata: {
+              tier: metadata.tier,
+              amount: amount_total / 100,
+              stripe_session_id: sessionId,
+            },
+          });
+        }
+
+        // Log activity with payment source distinction
+        await supabase.from('eliza_activity_log').insert({
+          activity_type: 'payment_completed',
+          title: 'Customer Payment Successful',
+          description: `Customer ${customer_email} completed payment for ${metadata?.tier || 'unknown'} tier`,
+          status: 'completed',
+          metadata: {
+            payment_source: 'stripe_fallback', // Distinguish from vsco_primary
+            customer_email,
+            tier: metadata?.tier,
             amount: amount_total / 100,
+            service_name: metadata?.service_name,
             stripe_session_id: sessionId,
           },
         });
-      }
 
-      // Log activity
-      await supabase.from('eliza_activity_log').insert({
-        activity_type: 'payment_completed',
-        title: 'Customer Payment Successful',
-        description: `Customer ${customer_email} completed payment for ${metadata.tier} tier`,
-        status: 'completed',
-        metadata: {
-          customer_email,
-          tier: metadata.tier,
-          amount: amount_total / 100,
-          service_name: metadata.service_name,
-          stripe_session_id: sessionId,
-        },
-      });
-
-      // Trigger welcome workflow
-      await supabase.functions.invoke('workflow-template-manager', {
-        body: {
-          action: 'execute_template',
-          template_name: 'acquire_new_customer',
-          context: {
-            customer_email,
-            api_key: metadata.api_key,
-            tier: metadata.tier,
-            service_name: metadata.service_name,
+        // Trigger welcome workflow with CORRECT payload structure
+        await supabase.functions.invoke('workflow-template-manager', {
+          body: {
+            action: 'execute_template',
+            data: {
+              template_name: 'acquire_new_customer',
+              params: {
+                customer_email,
+                api_key: metadata?.api_key,
+                tier: metadata?.tier,
+                service_name: metadata?.service_name,
+              },
+            },
           },
-        },
-      });
+        });
+      }
 
       // Return success page
       return new Response(
