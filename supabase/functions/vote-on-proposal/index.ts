@@ -128,24 +128,49 @@ serve(async (req) => {
         console.log('✅ Inserted new community vote');
       }
     } else {
-      // Executive vote - upsert (they can only have one vote per proposal)
-      const { error: voteError } = await supabase
+      // Executive vote - check existing then insert/update
+      const { data: existingExecVote } = await supabase
         .from('executive_votes')
-        .upsert({
-          proposal_id,
-          executive_name,
-          vote,
-          reasoning,
-          session_key: null // Executives don't need session_key
-        }, {
-          onConflict: 'proposal_id,executive_name,session_key'
-        });
+        .select('id, vote')
+        .eq('proposal_id', proposal_id)
+        .eq('executive_name', executive_name)
+        .is('session_key', null)
+        .single();
 
-      if (voteError) {
-        console.error('❌ Failed to record executive vote:', voteError);
-        throw voteError;
+      if (existingExecVote) {
+        // Update existing executive vote
+        const { error: updateExecError } = await supabase
+          .from('executive_votes')
+          .update({
+            vote,
+            reasoning,
+            created_at: new Date().toISOString()
+          })
+          .eq('id', existingExecVote.id);
+
+        if (updateExecError) {
+          console.error('❌ Failed to update executive vote:', updateExecError);
+          throw updateExecError;
+        }
+        console.log(`✅ Updated executive vote: ${executive_name} changed from ${existingExecVote.vote} to ${vote}`);
+      } else {
+        // Insert new executive vote
+        const { error: insertExecError } = await supabase
+          .from('executive_votes')
+          .insert({
+            proposal_id,
+            executive_name,
+            vote,
+            reasoning,
+            session_key: null
+          });
+
+        if (insertExecError) {
+          console.error('❌ Failed to insert executive vote:', insertExecError);
+          throw insertExecError;
+        }
+        console.log(`✅ Recorded new executive vote: ${executive_name} voted ${vote}`);
       }
-      console.log(`✅ Recorded executive vote: ${executive_name} voted ${vote}`);
     }
 
     // Count votes (only count executive votes for consensus)

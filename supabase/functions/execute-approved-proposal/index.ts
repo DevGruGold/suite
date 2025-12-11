@@ -339,14 +339,18 @@ The AI-generated code is stored in the proposal's implementation_code field.
 Category-specific patterns applied: ${category}
 `;
 
+    const taskId = `task-proposal-${proposal_id.substring(0, 8)}`;
     const { data: task, error: taskError } = await supabase
       .from('tasks')
       .insert({
+        id: taskId,
         title: `Implement: ${proposal.function_name}`,
         description: taskDescription,
         status: 'PENDING',
-        priority: 'HIGH',
-        category: 'development',
+        stage: 'PLAN',
+        priority: 8,
+        category: 'CODE',
+        repo: 'XMRT-Ecosystem',
         metadata: {
           proposal_id,
           function_name: proposal.function_name,

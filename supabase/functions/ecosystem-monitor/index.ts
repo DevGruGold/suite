@@ -519,22 +519,52 @@ async function generateAutonomousTasks(supabase: any, context: any) {
       }).then(() => tasksCreated++);
     }
 
-    // Check for high-priority GitHub issues
+    // Fetch actual GitHub issues and create tasks for each
     if (context.tokenHealth === 'healthy') {
-      for (const repoScore of context.repoActivityScores.slice(0, 3)) {
-        if (repoScore.metrics?.open_issues > 5) {
-          const taskId = `task-issues-${repoScore.repo_name.substring(0, 8)}`;
-          await supabase.from('tasks').insert({
-            id: taskId,
-            title: `Review issues in ${repoScore.repo_name}`,
-            description: `${repoScore.metrics.open_issues} open issues need review. Activity score: ${repoScore.activity_score}`,
-            category: 'CODE',
-            stage: 'DISCUSS',
-            status: 'PENDING',
-            priority: 6,
-            repo: repoScore.repo_name
-          }).then(() => tasksCreated++);
+      try {
+        const { data: ghIssues } = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_issues',
+            repo: 'XMRT-Ecosystem',
+            state: 'open',
+            per_page: 10
+          }
+        });
+
+        const issues = ghIssues?.issues || ghIssues?.data || [];
+        for (const issue of issues) {
+          // Check if task already exists for this issue
+          const { data: existingTask } = await supabase
+            .from('tasks')
+            .select('id')
+            .eq('metadata->>github_issue_number', String(issue.number))
+            .single();
+
+          if (!existingTask) {
+            const taskId = `task-gh-issue-${issue.number}`;
+            const priority = issue.labels?.some((l: any) => l.name === 'critical' || l.name === 'bug') ? 9 : 6;
+            const category = issue.labels?.some((l: any) => l.name === 'enhancement' || l.name === 'feature') ? 'FEATURE' : 'CODE';
+            
+            await supabase.from('tasks').insert({
+              id: taskId,
+              title: `GH#${issue.number}: ${issue.title?.substring(0, 80)}`,
+              description: `**GitHub Issue:** ${issue.html_url}\n\n${issue.body?.substring(0, 500) || 'No description'}`,
+              category,
+              stage: 'DISCUSS',
+              status: 'PENDING',
+              priority,
+              repo: 'XMRT-Ecosystem',
+              metadata: {
+                github_issue_number: issue.number,
+                github_issue_url: issue.html_url,
+                labels: issue.labels?.map((l: any) => l.name),
+                source: 'ecosystem_monitor'
+              }
+            }).then(() => tasksCreated++).catch(() => {});
+          }
         }
+      } catch (ghErr) {
+        console.warn('Could not fetch GitHub issues:', ghErr);
       }
     }
 
