@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Menu, X, Home, Users, DollarSign, Award, Scale } from "lucide-react";
+import { Menu, X, Home, Users, DollarSign, Award, Scale, Building2 } from "lucide-react";
 import { Button } from "./ui/button";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -16,6 +16,7 @@ export function MobileNav() {
     { to: "/treasury", label: "Finance", icon: DollarSign },
     { to: "/contributors", label: "Team", icon: Award },
     { to: "/governance", label: "Governance", icon: Scale },
+    { to: "/licensing", label: "Enterprise", icon: Building2 },
   ];
 
   return (
