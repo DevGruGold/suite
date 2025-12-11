@@ -39,7 +39,8 @@ serve(async (req) => {
       throw new Error(`Failed to fetch commits: ${commitsError.message}`);
     }
 
-    const commits = commitsData?.commits || commitsData || [];
+    // github-integration returns { success: true, data: [...commits...] }
+    const commits = commitsData?.data || commitsData?.commits || [];
     console.log(`[sync-github-contributions] Fetched ${commits.length} commits`);
 
     if (!Array.isArray(commits) || commits.length === 0) {
@@ -83,8 +84,9 @@ serve(async (req) => {
       else if (commitMessage.toLowerCase().includes('doc')) contributionType = 'documentation';
       else if (commitMessage.toLowerCase().includes('test')) contributionType = 'test';
 
-      // Build payload for ingest
+      // Build payload for ingest - use single_commit format that ingest understands
       const payload = {
+        single_commit: true,
         sha: commit.sha,
         message: commitMessage,
         author: {
@@ -92,7 +94,9 @@ serve(async (req) => {
           avatar_url: commit.author?.avatar_url
         },
         html_url: commit.html_url,
-        stats: commit.stats || { additions: 0, deletions: 0, total: 0 }
+        stats: commit.stats || { additions: 0, deletions: 0, total: 0 },
+        repo_owner: owner,
+        repo_name: repo
       };
 
       try {
@@ -100,7 +104,7 @@ serve(async (req) => {
           body: {
             payload,
             contribution_type: contributionType,
-            event_type: 'push'
+            event_type: 'api_sync'
           }
         });
 

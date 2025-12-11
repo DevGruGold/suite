@@ -29,79 +29,97 @@ serve(async (req) => {
     let contributionData: any = {};
     let detectedType = contribution_type || 'unknown';
 
-    // Handle different GitHub event types
-    if (payload?.sender?.login) {
+    // Handle single commit from API sync (not webhook)
+    if (payload?.single_commit && payload?.sha && payload?.author?.login) {
+      detectedType = contribution_type || 'commit';
+      githubUsername = payload.author.login;
+      githubUrl = payload.html_url;
+      repoOwner = payload.repo_owner || 'DevGruGold';
+      repoName = payload.repo_name || 'XMRT-Ecosystem';
+      contributionData = {
+        sha: payload.sha,
+        message: payload.message,
+        stats: payload.stats || { additions: 0, deletions: 0, total: 0 },
+        files_changed: payload.stats?.total || 0,
+        source: 'api_sync'
+      };
+      console.log(`[ingest-github-contribution] Processing single commit ${payload.sha?.substring(0,7)} by ${githubUsername}`);
+    }
+    // Handle different GitHub webhook event types
+    else if (payload?.sender?.login) {
       githubUsername = payload.sender.login;
     }
 
-    if (payload?.repository) {
+    if (!githubUsername && payload?.repository) {
       repoOwner = payload.repository.owner?.login || payload.repository.owner?.name;
       repoName = payload.repository.name;
     }
 
-    // Detect contribution type from event structure
-    if (payload?.commits) {
-      // Push event with commits
-      detectedType = 'commit';
-      const commits = payload.commits || [];
-      githubUrl = commits[0]?.url || payload.compare;
-      contributionData = {
-        commit_count: commits.length,
-        commits: commits.map((c: any) => ({
-          id: c.id,
-          message: c.message,
-          author: c.author?.name || c.author?.username,
-          added: c.added?.length || 0,
-          removed: c.removed?.length || 0,
-          modified: c.modified?.length || 0
-        }))
-      };
-      // Use pusher as username for push events
-      githubUsername = payload.pusher?.name || payload.sender?.login;
-    } else if (payload?.pull_request) {
-      // Pull request event
-      detectedType = 'pr';
-      githubUrl = payload.pull_request.html_url;
-      contributionData = {
-        pr_number: payload.pull_request.number,
-        title: payload.pull_request.title,
-        state: payload.pull_request.state,
-        merged: payload.pull_request.merged,
-        additions: payload.pull_request.additions,
-        deletions: payload.pull_request.deletions,
-        changed_files: payload.pull_request.changed_files
-      };
-      githubUsername = payload.pull_request.user?.login;
-    } else if (payload?.issue) {
-      // Issue event
-      detectedType = 'issue';
-      githubUrl = payload.issue.html_url;
-      contributionData = {
-        issue_number: payload.issue.number,
-        title: payload.issue.title,
-        state: payload.issue.state,
-        labels: payload.issue.labels?.map((l: any) => l.name)
-      };
-      githubUsername = payload.issue.user?.login;
-    } else if (payload?.discussion) {
-      // Discussion event
-      detectedType = 'discussion';
-      githubUrl = payload.discussion.html_url;
-      contributionData = {
-        discussion_number: payload.discussion.number,
-        title: payload.discussion.title,
-        category: payload.discussion.category?.name
-      };
-      githubUsername = payload.discussion.user?.login;
-    } else if (payload?.comment) {
-      // Comment event (on issue, PR, or discussion)
-      detectedType = 'comment';
-      githubUrl = payload.comment.html_url;
-      contributionData = {
-        comment_id: payload.comment.id,
-        body_preview: payload.comment.body?.substring(0, 200)
-      };
-      githubUsername = payload.comment.user?.login;
+    // Detect contribution type from webhook event structure
+    if (!payload?.single_commit) {
+      if (payload?.commits) {
+        // Push event with commits
+        detectedType = 'commit';
+        const commits = payload.commits || [];
+        githubUrl = commits[0]?.url || payload.compare;
+        contributionData = {
+          commit_count: commits.length,
+          commits: commits.map((c: any) => ({
+            id: c.id,
+            message: c.message,
+            author: c.author?.name || c.author?.username,
+            added: c.added?.length || 0,
+            removed: c.removed?.length || 0,
+            modified: c.modified?.length || 0
+          }))
+        };
+        // Use pusher as username for push events
+        githubUsername = payload.pusher?.name || payload.sender?.login;
+      } else if (payload?.pull_request) {
+        // Pull request event
+        detectedType = 'pr';
+        githubUrl = payload.pull_request.html_url;
+        contributionData = {
+          pr_number: payload.pull_request.number,
+          title: payload.pull_request.title,
+          state: payload.pull_request.state,
+          merged: payload.pull_request.merged,
+          additions: payload.pull_request.additions,
+          deletions: payload.pull_request.deletions,
+          changed_files: payload.pull_request.changed_files
+        };
+        githubUsername = payload.pull_request.user?.login;
+      } else if (payload?.issue) {
+        // Issue event
+        detectedType = 'issue';
+        githubUrl = payload.issue.html_url;
+        contributionData = {
+          issue_number: payload.issue.number,
+          title: payload.issue.title,
+          state: payload.issue.state,
+          labels: payload.issue.labels?.map((l: any) => l.name)
+        };
+        githubUsername = payload.issue.user?.login;
+      } else if (payload?.discussion) {
+        // Discussion event
+        detectedType = 'discussion';
+        githubUrl = payload.discussion.html_url;
+        contributionData = {
+          discussion_number: payload.discussion.number,
+          title: payload.discussion.title,
+          category: payload.discussion.category?.name
+        };
+        githubUsername = payload.discussion.user?.login;
+      } else if (payload?.comment) {
+        // Comment event (on issue, PR, or discussion)
+        detectedType = 'comment';
+        githubUrl = payload.comment.html_url;
+        contributionData = {
+          comment_id: payload.comment.id,
+          body_preview: payload.comment.body?.substring(0, 200)
+        };
+        githubUsername = payload.comment.user?.login;
+      }
     }
 
     if (!githubUsername) {
