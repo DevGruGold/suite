@@ -27,6 +27,9 @@ verify_jwt = false
 [functions.usage-monitor]
 verify_jwt = false
 
+[functions.process-license-application]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 54321

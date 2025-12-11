@@ -2587,5 +2587,102 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: []
       }
     }
+  },
+  // ====================================================================
+  // 📋 CORPORATE LICENSING TOOLS (Bidirectional Onboarding)
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'start_license_application',
+      description: '📋 Start a new corporate license application through conversation. Creates a draft that can be completed incrementally as user provides information.',
+      parameters: {
+        type: 'object',
+        properties: {
+          session_key: { type: 'string', description: 'Current conversation session key for linking' },
+          company_name: { type: 'string', description: 'Company name (required to start)' },
+          company_size: { type: 'number', description: 'Number of employees' },
+          contact_name: { type: 'string', description: 'Contact person name' },
+          contact_email: { type: 'string', description: 'Contact email address' }
+        },
+        required: ['session_key', 'company_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_license_application',
+      description: '📝 Update an existing draft license application with new information gathered from conversation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          application_id: { type: 'string', description: 'Application ID to update' },
+          session_key: { type: 'string', description: 'Session key to find draft if no ID provided' },
+          company_size: { type: 'number', description: 'Number of employees' },
+          industry: { type: 'string', description: 'Industry sector' },
+          current_ceo_salary: { type: 'number', description: 'CEO annual salary' },
+          current_cto_salary: { type: 'number', description: 'CTO annual salary' },
+          current_cfo_salary: { type: 'number', description: 'CFO annual salary' },
+          current_coo_salary: { type: 'number', description: 'COO annual salary' },
+          contact_name: { type: 'string', description: 'Contact person name' },
+          contact_email: { type: 'string', description: 'Contact email' },
+          contact_phone: { type: 'string', description: 'Contact phone' },
+          contact_title: { type: 'string', description: 'Contact job title' },
+          tier_requested: { type: 'string', enum: ['free_trial', 'basic', 'pro', 'enterprise'], description: 'License tier' },
+          notes: { type: 'string', description: 'Additional notes' }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_license_savings',
+      description: '💰 Calculate potential savings from AI executive replacement. Use this to show users their estimated savings and per-employee redistribution.',
+      parameters: {
+        type: 'object',
+        properties: {
+          ceo_salary: { type: 'number', description: 'CEO annual compensation' },
+          cto_salary: { type: 'number', description: 'CTO annual compensation' },
+          cfo_salary: { type: 'number', description: 'CFO annual compensation' },
+          coo_salary: { type: 'number', description: 'COO annual compensation' },
+          employee_count: { type: 'number', description: 'Total number of employees' }
+        },
+        required: ['employee_count']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'submit_license_application',
+      description: '✅ Submit a completed license application. Calculates final savings and marks application as submitted.',
+      parameters: {
+        type: 'object',
+        properties: {
+          application_id: { type: 'string', description: 'Application ID to submit' },
+          session_key: { type: 'string', description: 'Session key to find draft if no ID' },
+          compliance_commitment: { type: 'boolean', description: 'User confirms ethical commitment (required)' }
+        },
+        required: ['compliance_commitment']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_license_application_status',
+      description: '📊 Check the status of a license application by ID or email.',
+      parameters: {
+        type: 'object',
+        properties: {
+          application_id: { type: 'string', description: 'Application ID' },
+          email: { type: 'string', description: 'Contact email to find applications' }
+        },
+        required: []
+      }
+    }
   }
 ];

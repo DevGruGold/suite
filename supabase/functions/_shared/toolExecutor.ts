@@ -1730,6 +1730,67 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
 
+    // ====================================================================
+    // CORPORATE LICENSING TOOLS
+    // ====================================================================
+    case 'start_license_application':
+      console.log(`📋 [${executiveName}] Start License Application`);
+      return supabase.functions.invoke('process-license-application', {
+        body: { action: 'create_draft', data: { session_key: parsedArgs.session_key, partial_data: parsedArgs } }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'update_license_application':
+      console.log(`📝 [${executiveName}] Update License Application`);
+      if (parsedArgs.application_id) {
+        return supabase.functions.invoke('process-license-application', {
+          body: { action: 'update_application', data: { application_id: parsedArgs.application_id, updates: parsedArgs } }
+        }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+      } else {
+        // Find by session key and update
+        const draftResult = await supabase.functions.invoke('process-license-application', {
+          body: { action: 'get_draft_by_session', data: { session_key: parsedArgs.session_key } }
+        });
+        if (draftResult.data?.draft?.id) {
+          return supabase.functions.invoke('process-license-application', {
+            body: { action: 'update_application', data: { application_id: draftResult.data.draft.id, updates: parsedArgs } }
+          }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+        }
+        return { success: false, error: 'No draft application found for this session' };
+      }
+
+    case 'calculate_license_savings':
+      console.log(`💰 [${executiveName}] Calculate License Savings`);
+      return supabase.functions.invoke('process-license-application', {
+        body: { action: 'calculate_savings', data: parsedArgs }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'submit_license_application':
+      console.log(`✅ [${executiveName}] Submit License Application`);
+      if (!parsedArgs.compliance_commitment) {
+        return { success: false, error: 'User must accept the ethical commitment before submitting' };
+      }
+      if (parsedArgs.application_id) {
+        return supabase.functions.invoke('process-license-application', {
+          body: { action: 'update_application', data: { application_id: parsedArgs.application_id, updates: { application_status: 'submitted', compliance_commitment: true } } }
+        }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+      } else {
+        const draftResult = await supabase.functions.invoke('process-license-application', {
+          body: { action: 'get_draft_by_session', data: { session_key: parsedArgs.session_key } }
+        });
+        if (draftResult.data?.draft?.id) {
+          return supabase.functions.invoke('process-license-application', {
+            body: { action: 'update_application', data: { application_id: draftResult.data.draft.id, updates: { application_status: 'submitted', compliance_commitment: true } } }
+          }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+        }
+        return { success: false, error: 'No draft application found to submit' };
+      }
+
+    case 'get_license_application_status':
+      console.log(`📊 [${executiveName}] Get License Application Status`);
+      return supabase.functions.invoke('process-license-application', {
+        body: { action: 'get_application_status', data: parsedArgs }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
     default:
       return null;
   }
