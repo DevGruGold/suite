@@ -206,8 +206,9 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
     });
   };
 
-  const canVote = proposal.status === 'voting' && 
-    (proposal.voting_phase === 'community' || !proposal.voting_phase);
+  // Allow community voting during all voting phases
+  const canVote = proposal.status === 'voting';
+  const hasNotVoted = !userVote;
 
   return (
     <Card className="border border-border hover:border-primary/30 transition-colors">
@@ -285,57 +286,107 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           </div>
         )}
 
-        {/* Voting Buttons - Stack on mobile */}
+        {/* Prominent Voting CTA */}
         {canVote && (
-          <div className="space-y-2">
-            {executiveVotes.length < 4 && executiveVotes.length > 0 && proposal.voting_phase === 'executive' && (
-              <div className="flex items-center gap-2 text-xs text-amber-600 bg-amber-500/10 p-2 rounded-md">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Executives deliberating... ({executiveVotes.length}/4 have voted)</span>
+          <div className={`p-4 rounded-lg border-2 ${hasNotVoted ? 'bg-primary/5 border-primary/30 animate-pulse' : 'bg-muted/30 border-border'}`}>
+            {/* Voting Header */}
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-2">
+                <Users className="h-5 w-5 text-primary" />
+                <span className="font-semibold text-sm">
+                  {hasNotVoted ? '🗳️ Cast Your Vote' : '✓ You Voted'}
+                </span>
               </div>
-            )}
+              {proposal.voting_phase === 'executive' && executiveVotes.length < 4 && (
+                <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500/30">
+                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  Executives: {executiveVotes.length}/4
+                </Badge>
+              )}
+              {proposal.voting_phase === 'community' && (
+                <Badge variant="outline" className="text-xs bg-primary/10 text-primary border-primary/30">
+                  Community Phase Active
+                </Badge>
+              )}
+            </div>
             
-            {userVote && (
-              <p className="text-xs text-muted-foreground">
-                You voted: <span className={
-                  userVote === 'approve' ? 'text-green-600 font-medium' :
-                  userVote === 'reject' ? 'text-red-600 font-medium' :
-                  'text-muted-foreground font-medium'
-                }>{userVote.toUpperCase()}</span>
-                <span className="ml-1">(click to change)</span>
+            {/* Not voted prompt */}
+            {hasNotVoted && (
+              <p className="text-xs text-muted-foreground mb-3">
+                Your vote helps shape the ecosystem. Every vote counts!
               </p>
             )}
             
-            <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+            {/* Already voted indicator */}
+            {userVote && (
+              <p className="text-xs text-muted-foreground mb-3">
+                You voted: <span className={
+                  userVote === 'approve' ? 'text-green-600 font-semibold' :
+                  userVote === 'reject' ? 'text-red-600 font-semibold' :
+                  'text-muted-foreground font-semibold'
+                }>{userVote.toUpperCase()}</span>
+                <span className="ml-1 opacity-70">(click to change)</span>
+              </p>
+            )}
+            
+            {/* Voting Buttons - Large and prominent */}
+            <div className="grid grid-cols-3 gap-2">
               <Button
-                size="sm"
+                size="lg"
                 variant={userVote === 'approve' ? 'default' : 'outline'}
-                className={`${userVote === 'approve' ? 'bg-green-600 hover:bg-green-700' : 'hover:bg-green-500/10 hover:text-green-600 hover:border-green-500/30'} text-xs sm:text-sm`}
+                className={`${userVote === 'approve' 
+                  ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-600/20' 
+                  : 'hover:bg-green-500/10 hover:text-green-600 hover:border-green-500/50 border-2'} 
+                  font-medium transition-all`}
                 onClick={() => handleVote('approve')}
                 disabled={voting}
               >
-                {voting ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle className="h-4 w-4 sm:mr-1" />}
-                <span className="hidden sm:inline">Approve</span>
+                {voting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <CheckCircle className="h-5 w-5 mr-2" />
+                    Approve
+                  </>
+                )}
               </Button>
               <Button
-                size="sm"
+                size="lg"
                 variant={userVote === 'reject' ? 'default' : 'outline'}
-                className={`${userVote === 'reject' ? 'bg-red-600 hover:bg-red-700' : 'hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/30'} text-xs sm:text-sm`}
+                className={`${userVote === 'reject' 
+                  ? 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-600/20' 
+                  : 'hover:bg-red-500/10 hover:text-red-600 hover:border-red-500/50 border-2'} 
+                  font-medium transition-all`}
                 onClick={() => handleVote('reject')}
                 disabled={voting}
               >
-                {voting ? <Loader2 className="h-4 w-4 animate-spin" /> : <XCircle className="h-4 w-4 sm:mr-1" />}
-                <span className="hidden sm:inline">Reject</span>
+                {voting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <XCircle className="h-5 w-5 mr-2" />
+                    Reject
+                  </>
+                )}
               </Button>
               <Button
-                size="sm"
+                size="lg"
                 variant={userVote === 'abstain' ? 'default' : 'outline'}
-                className={`${userVote === 'abstain' ? 'bg-muted' : ''} text-xs sm:text-sm`}
+                className={`${userVote === 'abstain' 
+                  ? 'bg-muted text-foreground' 
+                  : 'border-2'} 
+                  font-medium transition-all`}
                 onClick={() => handleVote('abstain')}
                 disabled={voting}
               >
-                {voting ? <Loader2 className="h-4 w-4 animate-spin" /> : <MinusCircle className="h-4 w-4 sm:mr-1" />}
-                <span className="hidden sm:inline">Abstain</span>
+                {voting ? (
+                  <Loader2 className="h-5 w-5 animate-spin" />
+                ) : (
+                  <>
+                    <MinusCircle className="h-5 w-5 mr-2" />
+                    Abstain
+                  </>
+                )}
               </Button>
             </div>
           </div>
