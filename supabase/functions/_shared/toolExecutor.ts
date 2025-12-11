@@ -1612,6 +1612,36 @@ export async function executeToolCall(
           : { success: true, result: vscoNotesResult.data };
         break;
 
+      case 'vsco_manage_financials':
+        console.log(`💵 [${executiveName}] VSCO Manage Financials: ${parsedArgs.action}`);
+        const vscoFinancialsResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoFinancialsResult.error
+          ? { success: false, error: vscoFinancialsResult.error.message }
+          : { success: true, result: vscoFinancialsResult.data };
+        break;
+
+      case 'vsco_manage_settings':
+        console.log(`⚙️ [${executiveName}] VSCO Manage Settings: ${parsedArgs.action}`);
+        const vscoSettingsResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoSettingsResult.error
+          ? { success: false, error: vscoSettingsResult.error.message }
+          : { success: true, result: vscoSettingsResult.data };
+        break;
+
+      case 'vsco_manage_users':
+        console.log(`👥 [${executiveName}] VSCO Manage Users: ${parsedArgs.action}`);
+        const vscoUsersResult = await supabase.functions.invoke('vsco-workspace', {
+          body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+        });
+        result = vscoUsersResult.error
+          ? { success: false, error: vscoUsersResult.error.message }
+          : { success: true, result: vscoUsersResult.data };
+        break;
+
       // ====================================================================
       // GITHUB CONTRIBUTION SYNC TOOLS
       // ====================================================================
@@ -1726,6 +1756,24 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
 
     case 'vsco_manage_notes':
       console.log(`📝 [${executiveName}] VSCO Manage Notes: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'vsco_manage_financials':
+      console.log(`💵 [${executiveName}] VSCO Manage Financials: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'vsco_manage_settings':
+      console.log(`⚙️ [${executiveName}] VSCO Manage Settings: ${parsedArgs.action}`);
+      return supabase.functions.invoke('vsco-workspace', {
+        body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
+
+    case 'vsco_manage_users':
+      console.log(`👥 [${executiveName}] VSCO Manage Users: ${parsedArgs.action}`);
       return supabase.functions.invoke('vsco-workspace', {
         body: { action: parsedArgs.action, data: parsedArgs, executive: executiveName }
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
