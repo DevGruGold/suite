@@ -102,7 +102,7 @@ serve(async (req) => {
           job_type: 'SuiteEnterprise', // This triggers the Táve automation!
           stage: 'lead',
           lead_source: 'Eliza Chat',
-          lead_rating: 'hot',
+          lead_rating: 5, // Integer 1-5 scale (5 = hot)
           notes: `Auto-generated Suite quote request.\nTier: ${tier}\nCompany: ${company_name}\nContact: ${contact_email}`
         }
       }

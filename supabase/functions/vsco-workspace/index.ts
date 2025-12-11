@@ -1038,7 +1038,7 @@ Deno.serve(async (req) => {
 
       case 'create_note': {
         const notePayload: any = {
-          content: data.content,
+          contentHtml: data.content || data.contentHtml, // VSCO API requires contentHtml
         };
         if (data.job_id) notePayload.jobId = data.job_id;
         if (data.contact_id) notePayload.contactId = data.contact_id;
