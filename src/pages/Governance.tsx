@@ -38,9 +38,25 @@ interface ExecutiveVote {
   session_key?: string;
 }
 
+interface DecisionReport {
+  id: string;
+  proposal_id: string;
+  decision: string;
+  reasoning: string;
+  decision_method: string;
+  weighted_score_approve: number;
+  weighted_score_reject: number;
+  executive_votes: Record<string, any>;
+  community_votes: Record<string, number>;
+  total_executive_votes: number;
+  total_community_votes: number;
+  created_at: string;
+}
+
 export default function Governance() {
   const [proposals, setProposals] = useState<Proposal[]>([]);
   const [votes, setVotes] = useState<Record<string, ExecutiveVote[]>>({});
+  const [decisions, setDecisions] = useState<Record<string, DecisionReport>>({});
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('all');
   const [proposalDialogOpen, setProposalDialogOpen] = useState(false);
@@ -79,6 +95,19 @@ export default function Governance() {
         votesMap[vote.proposal_id].push(vote);
       });
       setVotes(votesMap);
+
+      // Fetch AI decision reports
+      const { data: decisionsData, error: decisionsError } = await supabase
+        .from('eliza_decision_reports')
+        .select('*');
+
+      if (!decisionsError && decisionsData) {
+        const decisionsMap: Record<string, DecisionReport> = {};
+        decisionsData.forEach(d => {
+          decisionsMap[d.proposal_id] = d as DecisionReport;
+        });
+        setDecisions(decisionsMap);
+      }
     } catch (error) {
       console.error('Failed to fetch proposals:', error);
     } finally {
@@ -387,6 +416,7 @@ export default function Governance() {
                     key={proposal.id} 
                     proposal={proposal} 
                     votes={votes[proposal.id] || []}
+                    decisionReport={decisions[proposal.id]}
                     onVoteSuccess={fetchProposals}
                   />
                 ))
@@ -402,6 +432,7 @@ export default function Governance() {
                     key={proposal.id} 
                     proposal={proposal} 
                     votes={votes[proposal.id] || []}
+                    decisionReport={decisions[proposal.id]}
                     onVoteSuccess={fetchProposals}
                   />
                 ))
@@ -417,6 +448,7 @@ export default function Governance() {
                     key={proposal.id} 
                     proposal={proposal} 
                     votes={votes[proposal.id] || []}
+                    decisionReport={decisions[proposal.id]}
                     onVoteSuccess={fetchProposals}
                   />
                 ))
@@ -432,6 +464,7 @@ export default function Governance() {
                     key={proposal.id} 
                     proposal={proposal} 
                     votes={votes[proposal.id] || []}
+                    decisionReport={decisions[proposal.id]}
                     onVoteSuccess={fetchProposals}
                   />
                 ))
@@ -447,6 +480,7 @@ export default function Governance() {
                     key={proposal.id} 
                     proposal={proposal} 
                     votes={votes[proposal.id] || []}
+                    decisionReport={decisions[proposal.id]}
                     onVoteSuccess={fetchProposals}
                   />
                 ))
