@@ -31,7 +31,7 @@ const Licensing = () => {
       />
       <div className="min-h-screen bg-background">
         {/* Hero Section */}
-        <section className="relative overflow-hidden py-20 px-4">
+        <section className="relative overflow-hidden py-10 px-4">
         <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-background to-secondary/5" />
         <div className="relative max-w-6xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 px-4 py-2 bg-primary/10 rounded-full text-primary mb-6">
