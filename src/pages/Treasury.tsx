@@ -4,12 +4,25 @@ import { IdeaSubmissionForm } from "@/components/IdeaSubmissionForm";
 import { IdeaDashboard } from "@/components/IdeaDashboard";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { DollarSign, Lightbulb, Users } from "lucide-react";
+import { SEOHead } from "@/components/SEOHead";
 
 const Treasury = () => {
   const { t } = useLanguage();
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <>
+      <SEOHead
+        title="Community Treasury & Idea Funding | Suite"
+        description="Submit ideas, get funding, watch them become reality. Community-driven funding with AI-evaluated proposals and transparent allocation."
+        image="/og-image-treasury.svg"
+        url="/treasury"
+        keywords="community treasury, idea funding, DAO funding, crypto treasury, community proposals"
+        twitterLabel1="💎 TVL"
+        twitterData1="Growing"
+        twitterLabel2="💡 Ideas"
+        twitterData2="Funded"
+      />
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Page Title */}
       <div className="text-center space-y-4 mb-8">
         <h1 className="text-3xl md:text-4xl font-semibold text-foreground">
@@ -88,7 +101,8 @@ const Treasury = () => {
           <IdeaDashboard />
         </TabsContent>
       </Tabs>
-    </div>
+      </div>
+    </>
   );
 };
 

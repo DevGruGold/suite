@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Users, Zap, ArrowLeft } from 'lucide-react';
 import { ExecutiveName, EXECUTIVE_PROFILES } from '@/components/ExecutiveBio';
+import { SEOHead } from '@/components/SEOHead';
 
 const EXECUTIVES: ExecutiveName[] = ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat'];
 
@@ -14,7 +15,19 @@ const Council = () => {
   const [isCouncilMode, setIsCouncilMode] = useState(false);
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
+    <>
+      <SEOHead
+        title="Convene Your AI Executive Board | Suite Council"
+        description="CSO, CTO, CIO, CAO - multi-angle analysis on any decision. Chat individually or convene the full council for consensus-driven insights."
+        image="/og-image-council.svg"
+        url="/council"
+        keywords="AI executives, executive board, CSO, CTO, CIO, CAO, multi-agent AI, consensus"
+        twitterLabel1="👔 Executives"
+        twitterData1="4"
+        twitterLabel2="🧠 Perspectives"
+        twitterData2="Unlimited"
+      />
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
       {/* Status indicator at top */}
       <div className="flex justify-end mb-4">
         <ExecutiveStatusIndicator />
@@ -148,7 +161,8 @@ const Council = () => {
           </Card>
         </>
       )}
-    </div>
+      </div>
+    </>
   );
 };
 

@@ -5,10 +5,22 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Activity, Bot } from "lucide-react";
 import { HeroSection } from "@/components/HeroSection";
+import { SEOHead } from "@/components/SEOHead";
 
 const Index = () => {
   return (
     <>
+      <SEOHead
+        title="AI Council of Executives at Your Fingertips | Suite"
+        description="120+ functions, 4 AI executives, real-time orchestration. Chat with CSO, CTO, CIO, CAO - get multi-angle analysis on any decision instantly."
+        image="/og-image-home.svg"
+        url="/"
+        keywords="AI executives, AI council, autonomous AI, real-time orchestration, multi-agent system"
+        twitterLabel1="🤖 AI Executives"
+        twitterData1="4"
+        twitterLabel2="⚡ Functions"
+        twitterData2="120+"
+      />
       {/* Hero Section with Marketing Banners */}
       <HeroSection />
 
