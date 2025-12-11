@@ -320,9 +320,22 @@ export async function executeToolCall(
       // ====================================================================
       case 'invoke_edge_function':
       case 'call_edge_function':
-        const { function_name, payload, body } = parsedArgs;
-        const targetFunction = function_name || parsedArgs.function_name;
-        const targetPayload = payload || body || {};
+        let { function_name, payload, body } = parsedArgs;
+        let targetFunction = function_name || parsedArgs.function_name;
+        let targetPayload = payload || body || {};
+        
+        // Auto-correct common VSCO function name hallucinations
+        // AI sometimes hallucinates "vsco-manage-events" instead of using vsco_manage_events tool
+        if (targetFunction && (targetFunction.startsWith('vsco-manage-') || targetFunction.startsWith('vsco_manage_'))) {
+          const entityType = targetFunction.replace(/^vsco[-_]manage[-_]/, '');
+          console.warn(`⚠️ Auto-correcting hallucinated function "${targetFunction}" → vsco-workspace`);
+          console.warn(`💡 Next time, use the dedicated tool: vsco_manage_${entityType}`);
+          targetFunction = 'vsco-workspace';
+          // Infer action from payload or default to list
+          if (!targetPayload?.action) {
+            targetPayload = { ...targetPayload, action: `list_${entityType}` };
+          }
+        }
         
         console.log(`📡 [${executiveName}] Invoking edge function: ${targetFunction}`);
         const funcResult = await supabase.functions.invoke(targetFunction, { body: targetPayload });
