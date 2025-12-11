@@ -701,3 +701,46 @@ verify_jwt = false
 function_name = "vsco-workspace"
 schedule = "50 */6 * * *"
 body = '{"action":"sync_all","data":{}}'
+
+# ====================================================================
+# AUTONOMOUS WORKFLOW GENERATION SYSTEM
+# ====================================================================
+
+[functions.n8n-workflow-generator]
+verify_jwt = false
+
+[functions.gemini-agent-creator]
+verify_jwt = false
+
+[functions.workflow-optimizer]
+verify_jwt = false
+
+[functions.template-library-manager]
+verify_jwt = false
+
+[functions.agent-deployment-coordinator]
+verify_jwt = false
+
+# Autonomous N8N Workflow Generation - Every 8 hours at :15
+[[edge_runtime.scheduled_functions]]
+function_name = "n8n-workflow-generator"
+schedule = "15 */8 * * *"
+body = '{"action":"generate_workflows"}'
+
+# Gemini Agent Creation - Every 12 hours at :30
+[[edge_runtime.scheduled_functions]]
+function_name = "gemini-agent-creator"
+schedule = "30 */12 * * *"
+body = '{"action":"create_agents"}'
+
+# Workflow Optimization - Every 6 hours at :45
+[[edge_runtime.scheduled_functions]]
+function_name = "workflow-optimizer"
+schedule = "45 */6 * * *"
+body = '{"action":"optimize"}'
+
+# Agent Deployment Coordination - Every 4 hours at :55
+[[edge_runtime.scheduled_functions]]
+function_name = "agent-deployment-coordinator"
+schedule = "55 */4 * * *"
+body = '{"action":"coordinate"}'
