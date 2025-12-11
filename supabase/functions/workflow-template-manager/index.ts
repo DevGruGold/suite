@@ -153,8 +153,29 @@ serve(async (req) => {
       }
 
       case 'execute_template': {
-        const executeParams = data as ExecuteTemplateParams;
-        const { template_name, params = {} } = executeParams;
+        // ROBUST PAYLOAD HANDLING: Support both wrapped and flat structures
+        // Wrapped: { action, data: { template_name, params } }
+        // Flat:    { action, template_name, params/context }
+        const rawBody = await req.clone().json();
+        
+        // Extract template_name from data if present, otherwise from top-level
+        const template_name = data?.template_name || rawBody.template_name;
+        const params = data?.params || data?.context || rawBody.params || rawBody.context || {};
+        
+        if (!template_name) {
+          console.error('[Workflow Template Manager] Missing template_name. Received:', JSON.stringify(rawBody));
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Missing required parameter: template_name',
+              hint: 'Provide template_name in body.data.template_name or body.template_name',
+              received: { action: rawBody.action, hasData: !!rawBody.data, keys: Object.keys(rawBody) }
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+          );
+        }
+        
+        console.log(`[Workflow Template Manager] Executing template: ${template_name} with params:`, JSON.stringify(params));
 
         // Get template
         const { data: template, error: templateError } = await supabase
