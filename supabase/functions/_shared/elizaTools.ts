@@ -889,6 +889,86 @@ export const ELIZA_TOOLS = [
     }
   },
   // ====================================================================
+  // 📊 GITHUB EVENT MONITORING TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'list_github_commits',
+      description: '📝 List recent commits from a repository with optional filtering by author, date range, branch, or file path. Use to monitor development activity.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          author: { type: 'string', description: 'Filter by commit author username' },
+          since: { type: 'string', description: 'Only commits after this date (ISO 8601 format, e.g., 2025-12-01)' },
+          until: { type: 'string', description: 'Only commits before this date (ISO 8601 format)' },
+          sha: { type: 'string', description: 'Branch name or commit SHA to start listing from' },
+          path: { type: 'string', description: 'Filter by file path (e.g., "src/components")' },
+          per_page: { type: 'number', description: 'Results per page (max 100, default 30)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_commit_details',
+      description: '📦 Get detailed information about a specific commit including diff, files changed, additions, deletions, and commit message.',
+      parameters: {
+        type: 'object',
+        properties: {
+          commit_sha: { type: 'string', description: 'Full or short SHA of the commit to retrieve' },
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' }
+        },
+        required: ['commit_sha']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_repo_events',
+      description: '📊 Get the activity feed for a repository including pushes, PRs, issues, releases, comments, and more. Great for monitoring recent activity.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          per_page: { type: 'number', description: 'Events per page (max 100, default 30)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_github_releases',
+      description: '🏷️ List all releases and tags for a repository. Returns release names, tag versions, publish dates, and release notes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          per_page: { type: 'number', description: 'Results per page (max 100, default 30)' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_github_contributors',
+      description: '👥 Get contributor statistics for a repository including contribution counts, avatars, and profile links.',
+      parameters: {
+        type: 'object',
+        properties: {
+          repo: { type: 'string', description: 'Repository name (default: XMRT-Ecosystem)' },
+          include_anonymous: { type: 'boolean', description: 'Include anonymous contributors (default: false)' },
+          per_page: { type: 'number', description: 'Results per page (max 100, default 30)' }
+        }
+      }
+    }
+  },
+  // ====================================================================
   // 🔄 GITHUB PULL REQUEST TOOLS
   // ====================================================================
   {

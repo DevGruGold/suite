@@ -743,6 +743,100 @@ export async function executeToolCall(
         break;
 
       // ====================================================================
+      // GITHUB EVENT MONITORING TOOLS
+      // ====================================================================
+      case 'list_github_commits':
+        console.log(`📝 [${executiveName}] List GitHub Commits`);
+        const listCommitsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_commits',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              author: parsedArgs.author,
+              since: parsedArgs.since,
+              until: parsedArgs.until,
+              sha: parsedArgs.sha,
+              path: parsedArgs.path,
+              per_page: parsedArgs.per_page || 30
+            },
+            session_credentials
+          }
+        });
+        result = listCommitsResult.error
+          ? { success: false, error: listCommitsResult.error.message }
+          : { success: true, result: listCommitsResult.data };
+        break;
+
+      case 'get_commit_details':
+        console.log(`📦 [${executiveName}] Get Commit Details: ${parsedArgs.commit_sha}`);
+        const commitDetailsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'get_commit_details',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              commit_sha: parsedArgs.commit_sha
+            },
+            session_credentials
+          }
+        });
+        result = commitDetailsResult.error
+          ? { success: false, error: commitDetailsResult.error.message }
+          : { success: true, result: commitDetailsResult.data };
+        break;
+
+      case 'list_repo_events':
+        console.log(`📊 [${executiveName}] List Repo Events`);
+        const repoEventsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_repo_events',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              per_page: parsedArgs.per_page || 30
+            },
+            session_credentials
+          }
+        });
+        result = repoEventsResult.error
+          ? { success: false, error: repoEventsResult.error.message }
+          : { success: true, result: repoEventsResult.data };
+        break;
+
+      case 'list_github_releases':
+        console.log(`🏷️ [${executiveName}] List GitHub Releases`);
+        const releasesResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_releases',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              per_page: parsedArgs.per_page || 30
+            },
+            session_credentials
+          }
+        });
+        result = releasesResult.error
+          ? { success: false, error: releasesResult.error.message }
+          : { success: true, result: releasesResult.data };
+        break;
+
+      case 'list_github_contributors':
+        console.log(`👥 [${executiveName}] List GitHub Contributors`);
+        const contributorsResult = await supabase.functions.invoke('github-integration', {
+          body: {
+            action: 'list_contributors',
+            data: {
+              repo: parsedArgs.repo || 'XMRT-Ecosystem',
+              include_anonymous: parsedArgs.include_anonymous || false,
+              per_page: parsedArgs.per_page || 30
+            },
+            session_credentials
+          }
+        });
+        result = contributorsResult.error
+          ? { success: false, error: contributorsResult.error.message }
+          : { success: true, result: contributorsResult.data };
+        break;
+
+      // ====================================================================
       // GITHUB WORKFLOW TOOLS
       // ====================================================================
       case 'trigger_github_workflow':

@@ -1078,6 +1078,63 @@ serve(async (req) => {
         });
         break;
 
+      // ====================================================================
+      // 📊 EVENT MONITORING ACTIONS
+      // ====================================================================
+      case 'list_commits':
+        const commitsUrl = new URL(`https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/commits`);
+        if (data?.sha) commitsUrl.searchParams.set('sha', data.sha);
+        if (data?.author) commitsUrl.searchParams.set('author', data.author);
+        if (data?.since) commitsUrl.searchParams.set('since', data.since);
+        if (data?.until) commitsUrl.searchParams.set('until', data.until);
+        if (data?.path) commitsUrl.searchParams.set('path', data.path);
+        commitsUrl.searchParams.set('per_page', String(data?.per_page || 30));
+        
+        result = await fetch(commitsUrl.toString(), { headers });
+        break;
+
+      case 'get_commit_details':
+        if (!data?.commit_sha) {
+          return new Response(
+            JSON.stringify({ success: false, error: 'Missing required field: commit_sha' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/commits/${data.commit_sha}`,
+          { headers }
+        );
+        break;
+
+      case 'list_repo_events':
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/events?per_page=${data?.per_page || 30}`,
+          { headers }
+        );
+        break;
+
+      case 'list_releases':
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/releases?per_page=${data?.per_page || 30}`,
+          { headers }
+        );
+        break;
+
+      case 'get_release_details':
+        const releaseId = data?.release_id || 'latest';
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/releases/${releaseId}`,
+          { headers }
+        );
+        break;
+
+      case 'list_contributors':
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/contributors?per_page=${data?.per_page || 30}&anon=${data?.include_anonymous || 'false'}`,
+          { headers }
+        );
+        break;
+
       default:
         throw new Error(`Unknown action: ${action}`);
     }
@@ -1178,6 +1235,24 @@ serve(async (req) => {
         break;
       case 'reply_to_discussion_comment':
         userFriendlyMessage = `✅ Posted reply to comment`;
+        break;
+      case 'list_commits':
+        userFriendlyMessage = `📝 Found ${responseData.length} commit(s)${data?.author ? ` by ${data.author}` : ''}${data?.since ? ` since ${data.since}` : ''}`;
+        break;
+      case 'get_commit_details':
+        userFriendlyMessage = `📦 Commit: ${responseData.sha?.slice(0,7)} by ${responseData.commit?.author?.name}\n📁 ${responseData.stats?.total || 0} changes (+${responseData.stats?.additions || 0}/-${responseData.stats?.deletions || 0})`;
+        break;
+      case 'list_repo_events':
+        userFriendlyMessage = `📊 Found ${responseData.length} recent event(s) in repository activity`;
+        break;
+      case 'list_releases':
+        userFriendlyMessage = `🏷️ Found ${responseData.length} release(s)`;
+        break;
+      case 'get_release_details':
+        userFriendlyMessage = `🏷️ Release: ${responseData.tag_name} - ${responseData.name || 'No name'}`;
+        break;
+      case 'list_contributors':
+        userFriendlyMessage = `👥 Found ${responseData.length} contributor(s)`;
         break;
       default:
         userFriendlyMessage = `✅ Successfully completed: ${action}`;
