@@ -77,18 +77,23 @@ serve(async (req) => {
       const authorName = commit.author?.login || commit.commit?.author?.name || 'unknown';
       const commitMessage = commit.commit?.message || '';
       
-      // Determine contribution type from commit message
-      let contributionType = 'commit';
-      if (commitMessage.toLowerCase().includes('fix')) contributionType = 'bug_fix';
-      else if (commitMessage.toLowerCase().includes('feat')) contributionType = 'feature';
-      else if (commitMessage.toLowerCase().includes('doc')) contributionType = 'documentation';
-      else if (commitMessage.toLowerCase().includes('test')) contributionType = 'test';
+      // Contribution type MUST be valid enum: commit, comment, discussion, issue, pr
+      // Store semantic type (fix, feat, etc) in metadata instead
+      const contributionType = 'commit';
+      
+      // Detect semantic type for metadata
+      let semanticType = 'general';
+      if (commitMessage.toLowerCase().includes('fix')) semanticType = 'bug_fix';
+      else if (commitMessage.toLowerCase().includes('feat')) semanticType = 'feature';
+      else if (commitMessage.toLowerCase().includes('doc')) semanticType = 'documentation';
+      else if (commitMessage.toLowerCase().includes('test')) semanticType = 'test';
 
       // Build payload for ingest - use single_commit format that ingest understands
       const payload = {
         single_commit: true,
         sha: commit.sha,
         message: commitMessage,
+        semantic_type: semanticType, // Store semantic type here for reward calculation
         author: {
           login: authorName,
           avatar_url: commit.author?.avatar_url

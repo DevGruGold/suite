@@ -31,7 +31,7 @@ serve(async (req) => {
 
     // Handle single commit from API sync (not webhook)
     if (payload?.single_commit && payload?.sha && payload?.author?.login) {
-      detectedType = contribution_type || 'commit';
+      detectedType = 'commit'; // Always use valid enum value
       githubUsername = payload.author.login;
       githubUrl = payload.html_url;
       repoOwner = payload.repo_owner || 'DevGruGold';
@@ -39,6 +39,7 @@ serve(async (req) => {
       contributionData = {
         sha: payload.sha,
         message: payload.message,
+        semantic_type: payload.semantic_type || 'general', // Store semantic type for reward calc
         stats: payload.stats || { additions: 0, deletions: 0, total: 0 },
         files_changed: payload.stats?.total || 0,
         source: 'api_sync'
