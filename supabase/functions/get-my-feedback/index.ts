@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'get-my-feedback';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -44,6 +47,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const startTime = Date.now();
 
   try {
@@ -307,6 +311,8 @@ serve(async (req) => {
       acknowledged_count: acknowledgedCount,
     });
 
+    await usageTracker.success({ total_items: response.statistics.total_feedback_items });
+
     return new Response(JSON.stringify(response), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       status: 200,
@@ -314,6 +320,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('get-my-feedback error:', error);
+    await usageTracker.failure(error instanceof Error ? error.message : 'Unknown error', 500);
     
     return new Response(JSON.stringify({
       success: false,

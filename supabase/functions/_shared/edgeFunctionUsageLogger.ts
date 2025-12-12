@@ -91,12 +91,18 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
  */
 function categorizeFunction(functionName: string): string {
   const categories: Record<string, string[]> = {
-    'ai_executive': ['gemini-chat', 'deepseek-chat', 'openai-chat', 'lovable-chat', 'kimi-chat', 'vercel-ai-chat'],
-    'system': ['system-status', 'system-health', 'system-diagnostics', 'ecosystem-monitor'],
-    'agent': ['agent-manager', 'task-orchestrator', 'task-auto-advance'],
-    'workflow': ['workflow-template-manager', 'multi-step-orchestrator', 'workflow-optimizer'],
-    'github': ['github-integration', 'sync-github-contributions'],
-    'governance': ['vote-on-proposal', 'governance-phase-manager', 'list-function-proposals']
+    'ai_executive': ['gemini-chat', 'deepseek-chat', 'openai-chat', 'lovable-chat', 'kimi-chat', 'vercel-ai-chat', 'vercel-ai-chat-stream'],
+    'system': ['system-status', 'system-health', 'system-diagnostics', 'ecosystem-monitor', 'list-available-functions', 'get-edge-function-logs', 'prometheus-metrics'],
+    'agent': ['agent-manager', 'task-orchestrator', 'task-auto-advance', 'suite-task-automation-engine'],
+    'workflow': ['workflow-template-manager', 'multi-step-orchestrator', 'workflow-optimizer', 'diagnose-workflow-failure'],
+    'github': ['github-integration', 'sync-github-contributions', 'ingest-github-contribution', 'validate-github-contribution'],
+    'governance': ['vote-on-proposal', 'governance-phase-manager', 'list-function-proposals', 'propose-new-edge-function', 'execute-approved-proposal', 'handle-rejected-proposal', 'request-executive-votes'],
+    'analytics': ['function-usage-analytics', 'get-my-feedback', 'get-function-version-analytics', 'tool-usage-analytics', 'query-edge-analytics'],
+    'integration': ['vsco-workspace', 'create-suite-quote', 'stripe-payment-webhook'],
+    'mining': ['mining-proxy', 'mobile-miner-config', 'mobile-miner-register'],
+    'business': ['identify-service-interest', 'qualify-lead', 'process-license-application', 'generate-stripe-link'],
+    'knowledge': ['knowledge-manager', 'extract-knowledge', 'vectorize-memory', 'get-embedding'],
+    'communication': ['community-spotlight-post', 'daily-discussion-post', 'morning-discussion-post', 'evening-summary-post', 'progress-update-post', 'weekly-retrospective-post']
   };
 
   for (const [category, functions] of Object.entries(categories)) {

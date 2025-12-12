@@ -12,6 +12,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "npm:@supabase/supabase-js@2.45.4";
 import { corsHeaders } from "../_shared/cors.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'agent-manager';
 
 // ---------- Config / Env ----------
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -156,6 +159,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   // create a fresh supabase client per request (server-side)
   const supabase = createSupabase();
