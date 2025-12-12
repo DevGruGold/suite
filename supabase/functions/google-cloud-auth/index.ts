@@ -469,6 +469,7 @@ serve(async (req) => {
         authUrl.searchParams.set('scope', SCOPES);
         authUrl.searchParams.set('access_type', 'offline');
         authUrl.searchParams.set('prompt', 'consent');
+        authUrl.searchParams.set('login_hint', 'xmrtsolutions@gmail.com');
 
         return new Response(JSON.stringify({
           success: true,
