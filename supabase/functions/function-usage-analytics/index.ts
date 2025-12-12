@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'function-usage-analytics';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +13,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     const supabase = createClient(
@@ -125,6 +130,8 @@ serve(async (req) => {
       .select('*')
       .limit(10);
 
+    await usageTracker.success({ functions_analyzed: analytics.length, total_calls: analytics.reduce((sum, a) => sum + a.total_calls, 0) });
+
     return new Response(
       JSON.stringify({
         time_period_hours,
@@ -146,6 +153,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Analytics error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
 import { getGitHubCredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
 import { applyExecutiveAttribution, isValidExecutive } from "../_shared/executiveAttribution.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'github-integration';
 
 const GITHUB_CLIENT_ID = Deno.env.get('GITHUB_CLIENT_ID');
 const GITHUB_CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET');
@@ -68,6 +71,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     // Validate GitHub configuration

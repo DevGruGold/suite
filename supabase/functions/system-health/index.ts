@@ -4,8 +4,10 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { formatSystemReport, SystemReport } from "../_shared/reportFormatter.ts";
 import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics, ESSENTIAL_API_SERVICES } from '../_shared/healthScoring.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
-const logger = EdgeFunctionLogger('system-health');
+const FUNCTION_NAME = 'system-health';
+const logger = EdgeFunctionLogger(FUNCTION_NAME);
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -16,6 +18,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     const supabase = createClient(

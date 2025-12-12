@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3'
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'mining-proxy';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +21,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
@@ -198,6 +203,8 @@ serve(async (req) => {
       workers: workers.length > 0 ? workers : undefined
     };
 
+    await usageTracker.success({ workers_count: workers.length, has_data: !!data });
+
     return new Response(
       JSON.stringify(responseData),
       { 
@@ -210,6 +217,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Mining proxy error:', error);
+    await usageTracker.failure(error?.message || 'Unknown error', 500);
     
     return new Response(
       JSON.stringify({ 
