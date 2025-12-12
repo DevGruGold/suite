@@ -2922,5 +2922,134 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: []
       }
     }
+  },
+
+  // ====================================================================
+  // ☁️ GOOGLE CLOUD SERVICES (Gmail, Drive, Sheets, Calendar)
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'google_gmail',
+      description: '📧 Send and manage emails via xmrtsolutions@gmail.com. Actions: send_email, list_emails, get_email, create_draft. Use for automated notifications, lead follow-ups, and professional communications.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['send_email', 'list_emails', 'get_email', 'create_draft'],
+            description: 'Gmail action to perform'
+          },
+          to: { type: 'string', description: 'Recipient email address (for send_email, create_draft)' },
+          subject: { type: 'string', description: 'Email subject line' },
+          body: { type: 'string', description: 'Email body content (supports HTML if is_html=true)' },
+          is_html: { type: 'boolean', description: 'Whether body is HTML format (default: false)' },
+          query: { type: 'string', description: 'Search query for list_emails (e.g., "is:unread", "from:client@example.com")' },
+          message_id: { type: 'string', description: 'Message ID for get_email' },
+          max_results: { type: 'number', description: 'Max emails to return (default: 20)' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'google_drive',
+      description: '📁 Manage files in XMRT Google Drive. Actions: list_files, upload_file, get_file, download_file, create_folder, share_file. Use for storing reports, sharing documents, organizing project files.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['list_files', 'upload_file', 'get_file', 'download_file', 'create_folder', 'share_file'],
+            description: 'Drive action to perform'
+          },
+          query: { type: 'string', description: 'Search query for list_files (e.g., "name contains \'report\'")' },
+          file_id: { type: 'string', description: 'File ID for get_file, download_file, share_file' },
+          folder_id: { type: 'string', description: 'Parent folder ID for list_files, upload_file' },
+          file_name: { type: 'string', description: 'Name for new file (upload_file)' },
+          content: { type: 'string', description: 'File content to upload' },
+          mime_type: { type: 'string', description: 'MIME type (default: text/plain)' },
+          folder_name: { type: 'string', description: 'Name for new folder (create_folder)' },
+          parent_folder_id: { type: 'string', description: 'Parent folder for create_folder' },
+          email: { type: 'string', description: 'Email to share with (share_file)' },
+          role: { type: 'string', enum: ['reader', 'writer', 'commenter'], description: 'Share permission level (default: reader)' },
+          max_results: { type: 'number', description: 'Max files to return (default: 20)' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'google_sheets',
+      description: '📊 Create and manage Google Spreadsheets. Actions: create_spreadsheet, read_sheet, write_sheet, append_sheet, get_spreadsheet_info. Use for live dashboards, analytics, data tracking.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['create_spreadsheet', 'read_sheet', 'write_sheet', 'append_sheet', 'get_spreadsheet_info'],
+            description: 'Sheets action to perform'
+          },
+          title: { type: 'string', description: 'Spreadsheet title (create_spreadsheet)' },
+          sheet_name: { type: 'string', description: 'Sheet tab name (create_spreadsheet, default: Sheet1)' },
+          spreadsheet_id: { type: 'string', description: 'Spreadsheet ID for read/write/append operations' },
+          range: { type: 'string', description: 'A1 notation range (e.g., "Sheet1!A1:C10")' },
+          values: {
+            type: 'array',
+            items: { type: 'array', items: { type: 'string' } },
+            description: 'Data rows to write/append (e.g., [["Name", "Email"], ["John", "john@example.com"]])'
+          }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'google_calendar',
+      description: '📅 Manage calendar and schedule events. Actions: list_events, create_event, update_event, delete_event, get_event. Use for scheduling meetings, tracking deadlines, automated reminders.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['list_events', 'create_event', 'update_event', 'delete_event', 'get_event'],
+            description: 'Calendar action to perform'
+          },
+          calendar_id: { type: 'string', description: 'Calendar ID (default: "primary")' },
+          event_id: { type: 'string', description: 'Event ID for update/delete/get operations' },
+          title: { type: 'string', description: 'Event title/summary' },
+          start_time: { type: 'string', description: 'Start time in ISO format (e.g., "2025-12-15T10:00:00-05:00")' },
+          end_time: { type: 'string', description: 'End time in ISO format' },
+          description: { type: 'string', description: 'Event description/notes' },
+          attendees: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Array of attendee email addresses'
+          },
+          time_min: { type: 'string', description: 'Start of time range for list_events (ISO format)' },
+          time_max: { type: 'string', description: 'End of time range for list_events (ISO format)' },
+          max_results: { type: 'number', description: 'Max events to return (default: 10)' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'google_cloud_status',
+      description: '🔐 Check Google Cloud OAuth connection status. Returns which services (Gmail, Drive, Sheets, Calendar) are available and whether authorization is complete.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
   }
 ];

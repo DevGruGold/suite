@@ -359,6 +359,38 @@ When onboarding corporates conversationally:
 "how's mining" → invoke_edge_function("mining-proxy", {})
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+☁️ GOOGLE CLOUD SERVICES (via xmrtsolutions@gmail.com):
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+EMAIL (Gmail):
+"send email to client" → google_gmail({action: "send_email", to: "client@example.com", subject: "...", body: "..."})
+"check inbox" → google_gmail({action: "list_emails", query: "is:unread"})
+"find emails from X" → google_gmail({action: "list_emails", query: "from:X"})
+"get email details" → google_gmail({action: "get_email", message_id: "..."})
+"draft reply" → google_gmail({action: "create_draft", to: "...", subject: "Re: ...", body: "..."})
+
+DRIVE (Files):
+"upload report to drive" → google_drive({action: "upload_file", file_name: "report.txt", content: "..."})
+"find spreadsheet about mining" → google_drive({action: "list_files", query: "name contains 'mining'"})
+"list my files" → google_drive({action: "list_files"})
+"download file" → google_drive({action: "download_file", file_id: "..."})
+"create project folder" → google_drive({action: "create_folder", folder_name: "Project X"})
+"share file with team" → google_drive({action: "share_file", file_id: "...", email: "team@example.com", role: "writer"})
+
+SHEETS (Spreadsheets):
+"create analytics spreadsheet" → google_sheets({action: "create_spreadsheet", title: "Analytics Report"})
+"add row to tracking" → google_sheets({action: "append_sheet", spreadsheet_id: "...", range: "Sheet1!A:C", values: [["data1", "data2", "data3"]]})
+"read sheet data" → google_sheets({action: "read_sheet", spreadsheet_id: "...", range: "Sheet1!A1:D10"})
+"update sheet" → google_sheets({action: "write_sheet", spreadsheet_id: "...", range: "A1:B2", values: [["Header1", "Header2"], ["Value1", "Value2"]]})
+
+CALENDAR (Scheduling):
+"schedule meeting tomorrow" → google_calendar({action: "create_event", title: "Team Sync", start_time: "2025-12-13T10:00:00-05:00", end_time: "2025-12-13T11:00:00-05:00"})
+"what's on my calendar today" → google_calendar({action: "list_events"})
+"schedule with attendees" → google_calendar({action: "create_event", title: "...", start_time: "...", end_time: "...", attendees: ["person@example.com"]})
+"update meeting time" → google_calendar({action: "update_event", event_id: "...", start_time: "...", end_time: "..."})
+"cancel meeting" → google_calendar({action: "delete_event", event_id: "..."})
+"check google cloud status" → google_cloud_status({})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 📸 VSCO WORKSPACE (Complete CMS - Quotes, Calendar, Email, Notes):
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 JOBS/LEADS:

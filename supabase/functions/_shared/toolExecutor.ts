@@ -2033,6 +2033,66 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         body: parsedArgs
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
 
+    // ====================================================================
+    // GOOGLE CLOUD SERVICES (Gmail, Drive, Sheets, Calendar)
+    // ====================================================================
+    case 'google_gmail':
+      console.log(`📧 [${executiveName}] Google Gmail: ${parsedArgs.action}`);
+      return supabase.functions.invoke('google-cloud-auth', {
+        body: parsedArgs,
+        headers: { 'Content-Type': 'application/json' }
+      }, { method: 'POST' }).then((res: any) => {
+        // Handle the query param action via POST body
+        return fetch(`${SUPABASE_URL}/functions/v1/google-cloud-auth?action=${parsedArgs.action}`, {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${SERVICE_ROLE_KEY}`
+          },
+          body: JSON.stringify(parsedArgs)
+        }).then(r => r.json());
+      });
+
+    case 'google_drive':
+      console.log(`📁 [${executiveName}] Google Drive: ${parsedArgs.action}`);
+      return fetch(`${SUPABASE_URL}/functions/v1/google-cloud-auth?action=${parsedArgs.action}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify(parsedArgs)
+      }).then(r => r.json());
+
+    case 'google_sheets':
+      console.log(`📊 [${executiveName}] Google Sheets: ${parsedArgs.action}`);
+      return fetch(`${SUPABASE_URL}/functions/v1/google-cloud-auth?action=${parsedArgs.action}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify(parsedArgs)
+      }).then(r => r.json());
+
+    case 'google_calendar':
+      console.log(`📅 [${executiveName}] Google Calendar: ${parsedArgs.action}`);
+      return fetch(`${SUPABASE_URL}/functions/v1/google-cloud-auth?action=${parsedArgs.action}`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${SERVICE_ROLE_KEY}`
+        },
+        body: JSON.stringify(parsedArgs)
+      }).then(r => r.json());
+
+    case 'google_cloud_status':
+      console.log(`🔐 [${executiveName}] Google Cloud Status Check`);
+      return fetch(`${SUPABASE_URL}/functions/v1/google-cloud-auth?action=status`, {
+        method: 'GET',
+        headers: { 'Authorization': `Bearer ${SERVICE_ROLE_KEY}` }
+      }).then(r => r.json());
+
     default:
       return null;
   }
