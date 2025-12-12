@@ -20,8 +20,11 @@ import {
   synthesizeToolResults
 } from '../_shared/executiveHelpers.ts';
 import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const logger = EdgeFunctionLogger('cao-executive');
+const FUNCTION_NAME = 'openai-chat';
+const EXECUTIVE_NAME = 'CAO';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -35,6 +38,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
+
   try {
     const { 
       messages, 
@@ -45,12 +51,14 @@ serve(async (req) => {
       councilMode = false,
       images = []
     } = await req.json();
+
+    usageTracker['parameters'] = { messagesCount: messages?.length, councilMode, hasImages: images?.length > 0 };
     
     await logger.info('Request received', 'ai_interaction', { 
       messagesCount: messages?.length,
       hasHistory: conversationHistory?.length > 0,
       userContext,
-      executive: 'CAO',
+      executive: EXECUTIVE_NAME,
       councilMode,
       hasImages: images?.length > 0
     });
@@ -58,6 +66,7 @@ serve(async (req) => {
     if (!messages || !Array.isArray(messages)) {
       console.error('❌ Invalid messages parameter');
       await logger.error('Invalid request format', new Error('Messages must be an array'), 'validation');
+      await usageTracker.failure('Invalid request: messages must be an array', 400);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -258,8 +267,15 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
     
     console.log(`✅ CAO Executive responded in ${apiDuration}ms (${totalToolsExecuted} tools executed)`);
     await logger.apiCall('lovable_gateway', 200, apiDuration, { 
-      executive: 'CAO',
+      executive: EXECUTIVE_NAME,
       toolsExecuted: totalToolsExecuted
+    });
+
+    // Log successful completion
+    await usageTracker.success({
+      provider: 'lovable_gateway',
+      model: 'google/gemini-2.5-flash',
+      tool_calls: totalToolsExecuted
     });
 
     return new Response(
@@ -280,6 +296,10 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
   } catch (error) {
     console.error('❌ CAO Executive error:', error);
     await logger.error('Function execution failed', error, 'error');
+    
+    // Log failure
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await usageTracker.failure(errorMessage, 500);
     
     // ========== FALLBACK CASCADE WITH TOOL EXECUTION ==========
     console.log('⚠️ Primary AI failed, trying fallback cascade with tool execution...');

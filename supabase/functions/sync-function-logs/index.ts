@@ -70,21 +70,51 @@ serve(async (req) => {
     if (!systemLogsError && systemLogs && systemLogs.length > 0) {
       console.log(`✅ Found ${systemLogs.length} system_logs entries`);
       
-      // Convert system_logs to eliza_function_usage format
-      const systemLogRecords = systemLogs.map(log => ({
-        function_name: log.function_name || 'unknown',
-        success: log.log_level !== 'error',
-        execution_time_ms: log.metadata?.execution_time_ms || null,
-        error_message: log.log_level === 'error' ? log.message : null,
-        context: JSON.stringify({
-          source: 'system_logs_sync',
-          log_level: log.log_level,
-          log_category: log.log_category,
-          original_id: log.id
-        }),
-        invoked_at: log.created_at,
-        deployment_version: log.metadata?.stage || 'system_log_sync'
-      }));
+    // Convert system_logs to eliza_function_usage format
+      // Map logger names to actual function names
+      const loggerToFunctionMap: Record<string, string> = {
+        'cio-executive': 'gemini-chat',
+        'cto-executive': 'deepseek-chat', 
+        'cao-executive': 'openai-chat',
+        'cso-executive': 'vercel-ai-chat',
+        'eliza': 'lovable-chat',
+        'kimi-chat': 'kimi-chat'
+      };
+
+      const systemLogRecords = systemLogs.map(log => {
+        // Extract function name from message format: [function-name] message
+        let functionName = log.function_name || 'unknown';
+        
+        // Check if message has logger prefix format [logger-name]
+        const messageMatch = log.message?.match(/^\[([^\]]+)\]/);
+        if (messageMatch && functionName === 'unknown') {
+          const loggerName = messageMatch[1];
+          functionName = loggerToFunctionMap[loggerName] || loggerName;
+        }
+        
+        // Also check log_source for edge function names
+        if (functionName === 'unknown' && log.log_source?.startsWith('edge_function')) {
+          const sourceMatch = log.details?.function_name || log.metadata?.function_name;
+          if (sourceMatch) {
+            functionName = loggerToFunctionMap[sourceMatch] || sourceMatch;
+          }
+        }
+
+        return {
+          function_name: functionName,
+          success: log.log_level !== 'error',
+          execution_time_ms: log.metadata?.execution_time_ms || null,
+          error_message: log.log_level === 'error' ? log.message : null,
+          context: JSON.stringify({
+            source: 'system_logs_sync',
+            log_level: log.log_level,
+            log_category: log.log_category,
+            original_id: log.id
+          }),
+          invoked_at: log.created_at,
+          deployment_version: log.metadata?.stage || 'system_log_sync'
+        };
+      }).filter(r => r.function_name !== 'unknown');
 
       // Upsert system log records
       if (systemLogRecords.length > 0) {

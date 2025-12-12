@@ -17,8 +17,11 @@ import {
   callKimiFallback
 } from '../_shared/executiveHelpers.ts';
 import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const logger = EdgeFunctionLogger('cio-executive');
+const FUNCTION_NAME = 'gemini-chat';
+const EXECUTIVE_NAME = 'CIO';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -30,6 +33,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
+
   try {
     const { 
       messages, 
@@ -40,12 +46,15 @@ serve(async (req) => {
       councilMode = false,
       images = []
     } = await req.json();
+
+    // Update tracker with parameters
+    usageTracker['parameters'] = { messagesCount: messages?.length, councilMode, hasImages: images?.length > 0 };
     
     await logger.info('Request received', 'ai_interaction', { 
       messagesCount: messages?.length,
       hasHistory: conversationHistory?.length > 0,
       userContext,
-      executive: 'CIO',
+      executive: EXECUTIVE_NAME,
       councilMode,
       hasImages: images?.length > 0
     });
@@ -53,6 +62,8 @@ serve(async (req) => {
     if (!messages || !Array.isArray(messages)) {
       console.error('❌ Invalid messages parameter');
       await logger.error('Invalid request format', new Error('Messages must be an array'), 'validation');
+      // Log validation failure
+      await usageTracker.failure('Invalid request: messages must be an array', 400);
       return new Response(
         JSON.stringify({ 
           success: false, 

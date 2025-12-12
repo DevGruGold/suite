@@ -4,8 +4,11 @@ import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
 import { generateExecutiveSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const logger = EdgeFunctionLogger('cso-executive');
+const FUNCTION_NAME = 'vercel-ai-chat-stream';
+const EXECUTIVE_NAME = 'CSO';
 
 
 const corsHeaders = {
@@ -18,6 +21,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
+
   try {
     const { 
       messages, 
@@ -27,19 +33,21 @@ serve(async (req) => {
       systemVersion = null,
       councilMode = false
     } = await req.json();
-    
+
+    usageTracker['parameters'] = { messagesCount: messages?.length, councilMode };
     
     await logger.info('Streaming request received', 'ai_interaction', { 
       messagesCount: messages?.length,
       hasHistory: conversationHistory?.length > 0,
       userContext,
-      executive: 'CSO',
+      executive: EXECUTIVE_NAME,
       councilMode
     });
 
     if (!messages || !Array.isArray(messages)) {
       console.error('❌ Invalid messages parameter');
       await logger.error('Invalid request format', new Error('Messages must be an array'), 'validation');
+      await usageTracker.failure('Invalid request: messages must be an array', 400);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -83,9 +91,15 @@ serve(async (req) => {
     
     console.log(`✅ CSO Executive responded in ${apiDuration}ms`);
     await logger.apiCall('lovable_gateway', 200, apiDuration, { 
-      executive: 'CSO',
+      executive: EXECUTIVE_NAME,
       responseLength: response.length,
       streaming: true
+    });
+
+    // Log successful completion
+    await usageTracker.success({
+      provider: 'lovable_gateway',
+      model: 'google/gemini-2.5-flash'
     });
 
     // Simulate streaming for consistency with previous implementation
@@ -141,6 +155,9 @@ serve(async (req) => {
   } catch (error: any) {
     console.error('❌ CSO Executive streaming error:', error);
     await logger.error('Function execution failed', error, 'error');
+    
+    // Log failure
+    await usageTracker.failure(error instanceof Error ? error.message : 'Unknown error', 500);
     
     return new Response(
       JSON.stringify({ 
