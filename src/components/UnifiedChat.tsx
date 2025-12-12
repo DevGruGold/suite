@@ -1930,9 +1930,15 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   );
 };
 
-// External wrapper
+// External wrapper with credential awareness
+import { CredentialAwareChat } from './CredentialAwareChat';
+
 export const UnifiedChat: React.FC<UnifiedChatProps> = (props) => {
-  return <UnifiedChatInner {...props} />;
+  return (
+    <CredentialAwareChat>
+      <UnifiedChatInner {...props} />
+    </CredentialAwareChat>
+  );
 };
 
 export default UnifiedChat;

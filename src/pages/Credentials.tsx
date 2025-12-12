@@ -6,7 +6,7 @@ import { RefreshCw, ExternalLink, AlertCircle, CheckCircle, Clock } from 'lucide
 import { useAPIKeyHealth } from '@/services/credentialManager';
 import { UnifiedAPIKeyInput } from '@/components/UnifiedAPIKeyInput';
 import { SEOHead } from '@/components/SEOHead';
-
+import { GoogleCloudConnect } from '@/components/GoogleCloudConnect';
 export default function Credentials() {
   const { health, loading, refresh } = useAPIKeyHealth();
 
@@ -203,6 +203,16 @@ export default function Credentials() {
             description="High-quality text-to-speech"
             secretName="ELEVENLABS_API_KEY"
           />
+        </div>
+
+        {/* Google Cloud OAuth */}
+        <div className="space-y-4">
+          <h3 className="text-xl font-semibold">Google Cloud Services</h3>
+          <p className="text-muted-foreground text-sm">
+            Connect Google Cloud to enable Eliza to send emails, manage files, update spreadsheets, and schedule calendar events.
+          </p>
+          
+          <GoogleCloudConnect />
         </div>
       </div>
 

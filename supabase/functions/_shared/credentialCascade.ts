@@ -208,6 +208,7 @@ export async function getGoogleCloudCredential(): Promise<{
   token: string | null;
   type: 'oauth_access_token' | 'api_key';
   error?: string;
+  credentialRequest?: ReturnType<typeof createCredentialRequiredResponse>;
 }> {
   const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
@@ -233,12 +234,19 @@ export async function getGoogleCloudCredential(): Promise<{
     return { token: apiKey, type: 'api_key' };
   }
 
-  // 3. No credentials available
+  // 3. No credentials available - return structured error for frontend
   console.error('⚠️ No Google Cloud credentials available (no OAuth, no API key)');
   return { 
     token: null, 
     type: 'api_key',
-    error: 'No Google Cloud credentials configured'
+    error: 'No Google Cloud credentials configured',
+    credentialRequest: createCredentialRequiredResponse(
+      'google_cloud',
+      'OAuth Connection',
+      'Connect your Google account to use Gmail, Drive, Sheets, and Calendar features.',
+      'https://console.cloud.google.com/',
+      ['gmail.send', 'gmail.readonly', 'drive', 'spreadsheets', 'calendar']
+    )
   };
 }
 
