@@ -432,15 +432,8 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    const action = url.searchParams.get('action') || 'get_access_token';
-
-    const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-    const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
-
-    console.log(`🔐 google-cloud-auth: action=${action}`);
-
-    // Parse request body for POST requests
+    
+    // Parse request body for POST requests first to check for action
     let body: any = {};
     if (req.method === 'POST') {
       try {
@@ -449,6 +442,15 @@ serve(async (req) => {
         body = {};
       }
     }
+    
+    // Check action from query params OR body (body takes precedence for POST)
+    const action = body.action || url.searchParams.get('action') || 'status';
+
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
+    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+    const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
+
+    console.log(`🔐 google-cloud-auth: action=${action}`);
 
     switch (action) {
       // ============= OAUTH FLOW =============
