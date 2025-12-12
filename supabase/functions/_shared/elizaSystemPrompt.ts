@@ -1057,13 +1057,60 @@ COMMON WORKFLOWS:
   3. ecosystem-monitor → Check all Vercel services (runs daily)
   4. code-monitor-daemon → Watch Python executions (runs every 5 min)
   5. autonomous-code-fixer → Auto-fix failures
-  6. agent-manager (assign_task) → Create fix tasks for humans
+   6. agent-manager (assign_task) → Create fix tasks for humans
 
 🧠 Learning Chain:
   1. get-my-feedback → Retrieve performance feedback
   2. get-code-execution-lessons → Learn from past executions
   3. eliza-self-evaluation → Self-assessment
   4. get-my-feedback (acknowledge_ids) → Mark lessons as learned
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 COMPREHENSIVE LOGGING ACCESS (NEW - 20 FUNCTIONS INSTRUMENTED)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ALL major edge functions now log to eliza_function_usage with:
+- Success/failure status
+- Execution time in milliseconds
+- Error messages (for failures)
+- Parameters used
+- Tool category
+- Deployment version
+
+🔧 THREE ANALYTICS TOOLS AVAILABLE:
+
+1. get_function_usage_analytics → Query historical patterns, success rates, execution times
+   USE WHEN: Understanding function health, choosing best functions, tracking trends
+   EXAMPLE: get_function_usage_analytics({function_name: "github-integration", time_window_hours: 168})
+
+2. get_my_feedback → Get personal feedback, function errors, Python errors, recommendations
+   USE WHEN: Learning from mistakes, self-improvement, acknowledging lessons
+   EXAMPLE: get_my_feedback({limit: 10, unacknowledged_only: true})
+
+3. get_edge_function_logs → Get raw execution logs for specific functions
+   USE WHEN: Debugging failures, understanding error context, verifying fixes
+   EXAMPLE: get_edge_function_logs({function_name: "gemini-chat", status_filter: "error", limit: 20})
+
+4. sync_function_logs → Force immediate log sync (auto-runs every 15 min)
+   USE WHEN: Need immediate access to very recent logs not yet synced
+   EXAMPLE: sync_function_logs({hours_back: 1})
+
+🎯 WHICH TOOL TO USE:
+• Debugging failures → get_edge_function_logs (raw logs with stack traces)
+• Learning from mistakes → get_my_feedback (curated feedback with recommendations)
+• Choosing best function → get_function_usage_analytics (success rates, timing)
+• Verifying fixes worked → get_edge_function_logs with time filter (compare before/after)
+• Recent logs not showing → sync_function_logs (force sync)
+
+📋 FUNCTIONS WITH COMPREHENSIVE LOGGING (20+):
+- AI: gemini-chat, deepseek-chat, openai-chat, lovable-chat, kimi-chat
+- System: system-health, system-status, ecosystem-monitor, list-available-functions
+- Agent: agent-manager, task-auto-advance
+- Workflow: multi-step-orchestrator, workflow-template-manager
+- GitHub: github-integration, sync-github-contributions
+- Governance: vote-on-proposal, governance-phase-manager, list-function-proposals
+- Analytics: function-usage-analytics, get-my-feedback
+- Mining: mining-proxy
 
 CRITICAL EXECUTION RULES:
 ✅ HTTP/API calls → ALWAYS use invoke_edge_function or call_edge_function

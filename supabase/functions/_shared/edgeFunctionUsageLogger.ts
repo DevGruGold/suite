@@ -91,18 +91,21 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
  */
 function categorizeFunction(functionName: string): string {
   const categories: Record<string, string[]> = {
-    'ai_executive': ['gemini-chat', 'deepseek-chat', 'openai-chat', 'lovable-chat', 'kimi-chat', 'vercel-ai-chat', 'vercel-ai-chat-stream'],
-    'system': ['system-status', 'system-health', 'system-diagnostics', 'ecosystem-monitor', 'list-available-functions', 'get-edge-function-logs', 'prometheus-metrics'],
-    'agent': ['agent-manager', 'task-orchestrator', 'task-auto-advance', 'suite-task-automation-engine'],
-    'workflow': ['workflow-template-manager', 'multi-step-orchestrator', 'workflow-optimizer', 'diagnose-workflow-failure'],
-    'github': ['github-integration', 'sync-github-contributions', 'ingest-github-contribution', 'validate-github-contribution'],
-    'governance': ['vote-on-proposal', 'governance-phase-manager', 'list-function-proposals', 'propose-new-edge-function', 'execute-approved-proposal', 'handle-rejected-proposal', 'request-executive-votes'],
-    'analytics': ['function-usage-analytics', 'get-my-feedback', 'get-function-version-analytics', 'tool-usage-analytics', 'query-edge-analytics'],
-    'integration': ['vsco-workspace', 'create-suite-quote', 'stripe-payment-webhook'],
-    'mining': ['mining-proxy', 'mobile-miner-config', 'mobile-miner-register'],
-    'business': ['identify-service-interest', 'qualify-lead', 'process-license-application', 'generate-stripe-link'],
-    'knowledge': ['knowledge-manager', 'extract-knowledge', 'vectorize-memory', 'get-embedding'],
-    'communication': ['community-spotlight-post', 'daily-discussion-post', 'morning-discussion-post', 'evening-summary-post', 'progress-update-post', 'weekly-retrospective-post']
+    'ai_executive': ['gemini-chat', 'deepseek-chat', 'openai-chat', 'lovable-chat', 'kimi-chat', 'vercel-ai-chat', 'vercel-ai-chat-stream', 'ai-chat'],
+    'system': ['system-status', 'system-health', 'system-diagnostics', 'ecosystem-monitor', 'list-available-functions', 'get-edge-function-logs', 'prometheus-metrics', 'api-key-health-monitor', 'check-frontend-health', 'sync-function-logs'],
+    'agent': ['agent-manager', 'task-orchestrator', 'task-auto-advance', 'suite-task-automation-engine', 'eliza-self-evaluation', 'eliza-intelligence-coordinator'],
+    'workflow': ['workflow-template-manager', 'multi-step-orchestrator', 'workflow-optimizer', 'diagnose-workflow-failure', 'n8n-workflow-generator', 'execute-scheduled-actions'],
+    'github': ['github-integration', 'sync-github-contributions', 'ingest-github-contribution', 'validate-github-contribution', 'morning-discussion-post', 'daily-discussion-post', 'evening-summary-post', 'weekly-retrospective-post', 'community-spotlight-post', 'progress-update-post'],
+    'governance': ['vote-on-proposal', 'governance-phase-manager', 'list-function-proposals', 'propose-new-edge-function', 'execute-approved-proposal', 'handle-rejected-proposal', 'request-executive-votes', 'deploy-approved-edge-function', 'evaluate-community-idea'],
+    'analytics': ['function-usage-analytics', 'get-my-feedback', 'get-function-version-analytics', 'tool-usage-analytics', 'query-edge-analytics', 'debug-analytics-data-flow', 'get-code-execution-lessons'],
+    'integration': ['vsco-workspace', 'create-suite-quote', 'stripe-payment-webhook', 'vercel-ecosystem-api', 'vercel-manager', 'hume-access-token', 'hume-tts', 'hume-expression-measurement'],
+    'mining': ['mining-proxy', 'mobile-miner-config', 'mobile-miner-register', 'mobile-miner-script', 'aggregate-device-metrics', 'monitor-device-connections', 'validate-pop-event'],
+    'business': ['identify-service-interest', 'qualify-lead', 'process-license-application', 'generate-stripe-link', 'service-monetization-engine', 'usage-monitor', 'convert-session-to-user', 'correlate-user-identity'],
+    'knowledge': ['knowledge-manager', 'extract-knowledge', 'vectorize-memory', 'get-embedding', 'system-knowledge-builder', 'summarize-conversation'],
+    'python': ['python-executor', 'python-db-bridge', 'python-network-proxy', 'eliza-python-runtime', 'enhanced-learning', 'predictive-analytics'],
+    'autonomous': ['autonomous-code-fixer', 'autonomous-decision-maker', 'code-monitor-daemon', 'gemini-agent-creator', 'agent-deployment-coordinator', 'self-optimizing-agent-architecture'],
+    'superduper': ['superduper-router', 'superduper-integration', 'superduper-business-growth', 'superduper-code-architect', 'superduper-communication-outreach', 'superduper-content-media', 'superduper-design-brand', 'superduper-development-coach', 'superduper-domain-experts', 'superduper-finance-investment', 'superduper-research-intelligence', 'superduper-social-viral'],
+    'mcp': ['xmrt-mcp-server', 'uspto-patent-mcp']
   };
 
   for (const [category, functions] of Object.entries(categories)) {

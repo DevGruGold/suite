@@ -2865,4 +2865,62 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       }
     }
   },
+  // ====================================================================
+  // 📊 ANALYTICS & LOG MANAGEMENT TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'sync_function_logs',
+      description: '🔄 Manually trigger synchronization of edge function logs to eliza_function_usage table. Use when you need immediate access to recent logs that may not have been synced yet. Logs are auto-synced every 15 minutes, but this forces immediate sync.',
+      parameters: {
+        type: 'object',
+        properties: {
+          hours_back: { 
+            type: 'number', 
+            description: 'How many hours of logs to sync (default: 1, max: 24)' 
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_function_usage_analytics',
+      description: '📊 Get comprehensive analytics for edge function usage including success rates, execution times, error patterns, and trends. Essential for understanding function health and making data-driven decisions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: { 
+            type: 'string', 
+            description: 'Filter to specific function (optional - omit for all functions)' 
+          },
+          time_window_hours: { 
+            type: 'number', 
+            description: 'Time window for analysis in hours (default: 24)' 
+          },
+          group_by: { 
+            type: 'string', 
+            enum: ['function', 'category', 'executive', 'hour'],
+            description: 'How to group the results (default: function)' 
+          }
+        },
+        required: []
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'check_system_status',
+      description: '🏥 Get comprehensive ecosystem status report with 15+ sections including health score, governance, knowledge base, GitHub activity, workflows, AI providers, XMRT charger, user acquisition, cron jobs, and more. This is the PRIMARY tool for ecosystem health checks.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
+      }
+    }
+  }
 ];
