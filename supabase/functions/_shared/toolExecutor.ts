@@ -1998,6 +1998,41 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         body: parsedArgs
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : { success: true, result: res.data });
 
+    // ====================================================================
+    // ANALYTICS & LOG MANAGEMENT TOOLS
+    // ====================================================================
+    case 'sync_function_logs':
+      console.log(`🔄 [${executiveName}] Sync function logs - ${parsedArgs.hours_back || 1}h back`);
+      const syncResult = await supabase.functions.invoke('sync-function-logs', {
+        body: { hours_back: Math.min(parsedArgs.hours_back || 1, 24) }
+      });
+      result = syncResult.error
+        ? { success: false, error: syncResult.error.message }
+        : { success: true, result: syncResult.data };
+      break;
+
+    case 'get_function_usage_analytics':
+      console.log(`📊 [${executiveName}] Get function usage analytics`);
+      const analyticsResult = await supabase.functions.invoke('function-usage-analytics', {
+        body: { 
+          function_name: parsedArgs.function_name,
+          time_window_hours: parsedArgs.time_window_hours || 24,
+          group_by: parsedArgs.group_by || 'function'
+        }
+      });
+      result = analyticsResult.error
+        ? { success: false, error: analyticsResult.error.message }
+        : { success: true, result: analyticsResult.data };
+      break;
+
+    case 'check_system_status':
+      console.log(`🏥 [${executiveName}] Check system status`);
+      const statusResult = await supabase.functions.invoke('system-status', { body: {} });
+      result = statusResult.error
+        ? { success: false, error: statusResult.error.message }
+        : { success: true, result: statusResult.data };
+      break;
+
     default:
       return null;
   }
