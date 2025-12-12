@@ -7,8 +7,10 @@ import { buildContextualPrompt } from "../_shared/contextBuilder.ts";
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { executeToolCall } from '../_shared/toolExecutor.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const logger = EdgeFunctionLogger("kimi-chat");
+const FUNCTION_NAME = 'kimi-chat';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -178,6 +180,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME);
+
   try {
     const requestBody = await req.json();
     const {
@@ -191,6 +196,8 @@ serve(async (req) => {
       councilMode = false
     } = requestBody;
 
+    usageTracker['parameters'] = { messagesCount: messages?.length, councilMode, hasImages: images?.length > 0 };
+
     await logger.info("Request received", "ai_interaction", {
       messagesCount: messages?.length,
       hasHistory: conversationHistory?.length > 0,
@@ -203,6 +210,7 @@ serve(async (req) => {
     if (!OPENROUTER_API_KEY) {
       console.error("⚠️ OPENROUTER_API_KEY not configured");
       await logger.warning("Missing API key", "security", { credential_type: "openrouter" });
+      await usageTracker.failure('OpenRouter API key not configured', 401);
       return new Response(
         JSON.stringify(createCredentialRequiredResponse(
           "openrouter",
@@ -217,6 +225,7 @@ serve(async (req) => {
     if (!messages || !Array.isArray(messages)) {
       console.error("❌ Invalid messages parameter");
       await logger.error("Invalid request format", new Error("Messages must be an array"), "validation");
+      await usageTracker.failure('Invalid request: messages must be an array', 400);
       return new Response(
         JSON.stringify({
           success: false,

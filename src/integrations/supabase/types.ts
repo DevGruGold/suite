@@ -7255,6 +7255,7 @@ export type Database = {
           name: string
           start_time: string
           status: string
+          template_name: string | null
           total_steps: number
           updated_at: string
           workflow_id: string
@@ -7271,6 +7272,7 @@ export type Database = {
           name: string
           start_time?: string
           status?: string
+          template_name?: string | null
           total_steps: number
           updated_at?: string
           workflow_id: string
@@ -7287,6 +7289,7 @@ export type Database = {
           name?: string
           start_time?: string
           status?: string
+          template_name?: string | null
           total_steps?: number
           updated_at?: string
           workflow_id?: string

@@ -16,8 +16,11 @@ import {
   callGeminiFallback
 } from '../_shared/executiveHelpers.ts';
 import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const logger = EdgeFunctionLogger('cto-executive');
+const FUNCTION_NAME = 'deepseek-chat';
+const EXECUTIVE_NAME = 'CTO';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -29,6 +32,9 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
+
   try {
     let requestBody;
     try {
@@ -36,6 +42,7 @@ serve(async (req) => {
     } catch (parseError) {
       console.error('❌ Failed to parse request body:', parseError);
       await logger.error('Body parsing failed', parseError, 'request_parsing');
+      await usageTracker.failure('Invalid JSON in request body', 400);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -54,12 +61,14 @@ serve(async (req) => {
       councilMode = false,
       images = []
     } = requestBody;
+
+    usageTracker['parameters'] = { messagesCount: messages?.length, councilMode, hasImages: images?.length > 0 };
     
     await logger.info('Request received', 'ai_interaction', { 
       messagesCount: messages?.length,
       hasHistory: conversationHistory?.length > 0,
       userContext,
-      executive: 'CTO',
+      executive: EXECUTIVE_NAME,
       councilMode,
       hasImages: images?.length > 0
     });
@@ -67,6 +76,7 @@ serve(async (req) => {
     if (!messages || !Array.isArray(messages)) {
       console.error('❌ Invalid messages parameter');
       await logger.error('Invalid request format', new Error('Messages must be an array'), 'validation');
+      await usageTracker.failure('Invalid request: messages must be an array', 400);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -379,10 +389,17 @@ serve(async (req) => {
     
     console.log(`✅ CTO Executive responded in ${apiDuration}ms`);
     await logger.apiCall('deepseek_api', 200, apiDuration, { 
-      executive: 'CTO',
+      executive: EXECUTIVE_NAME,
       responseLength: content?.length || 0,
       toolCalls: toolCalls?.length || 0,
       usage: deepseekData.usage
+    });
+
+    // Log successful completion
+    await usageTracker.success({
+      provider: 'deepseek',
+      model: 'deepseek-chat',
+      tool_calls: toolCalls?.length || 0
     });
 
     return new Response(
@@ -404,6 +421,10 @@ serve(async (req) => {
   } catch (error) {
     console.error('❌ CTO Executive error:', error);
     await logger.error('Function execution failed', error, 'error');
+    
+    // Log failure
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    await usageTracker.failure(errorMessage, 500);
     
     const errorMessage = error instanceof Error ? error.message : String(error);
     let statusCode = 500;

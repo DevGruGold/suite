@@ -7,6 +7,11 @@ import { getAICredential, createCredentialRequiredResponse } from "../_shared/cr
 import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
 import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 import { executeToolCall as sharedExecuteToolCall } from '../_shared/toolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'lovable-chat';
+const EXECUTIVE_NAME = 'Eliza';
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
@@ -160,8 +165,13 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
+
   try {
     const { messages, conversationHistory, userContext, miningStats, systemVersion, session_credentials, images, isLiveCameraFeed } = await req.json();
+
+    usageTracker['parameters'] = { messagesCount: messages?.length, hasImages: images?.length > 0, isLiveCameraFeed };
     
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -188,9 +198,23 @@ serve(async (req) => {
       }
     }
     
+    // Validate messages parameter
+    if (!messages || !Array.isArray(messages)) {
+      console.error('❌ Invalid messages parameter');
+      await usageTracker.failure('Invalid request: messages must be an array', 400);
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'Invalid request: messages must be an array'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     // Check if Lovable AI Gateway is configured
     if (!LOVABLE_API_KEY) {
       console.error('❌ LOVABLE_API_KEY not configured');
+      await usageTracker.failure('Lovable AI Gateway not configured', 401);
       return new Response(
         JSON.stringify({
           success: false,
@@ -1335,6 +1359,8 @@ You are looking at the user RIGHT NOW through their webcam. This means:
 
   } catch (error) {
     console.error('Main error:', error);
+    // Log failure
+    await usageTracker.failure(error instanceof Error ? error.message : String(error), 500);
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' },
