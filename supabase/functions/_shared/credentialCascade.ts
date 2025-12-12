@@ -200,6 +200,79 @@ export function getAICredential(
 }
 
 /**
+ * Get Google Cloud credential via OAuth refresh flow
+ * Returns access token for use with Google Cloud APIs (Gemini, Vertex AI, etc.)
+ * Falls back to GEMINI_API_KEY if OAuth not configured
+ */
+export async function getGoogleCloudCredential(): Promise<{
+  token: string | null;
+  type: 'oauth_access_token' | 'api_key';
+  error?: string;
+}> {
+  const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
+  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
+  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
+
+  // 1. Try OAuth refresh flow (preferred - no quotas/expiry issues)
+  if (refreshToken && clientId && clientSecret) {
+    try {
+      const accessToken = await refreshGoogleAccessToken(refreshToken, clientId, clientSecret);
+      if (accessToken) {
+        console.log('✅ Using Google Cloud OAuth access token');
+        return { token: accessToken, type: 'oauth_access_token' };
+      }
+    } catch (error) {
+      console.warn('⚠️ Google OAuth refresh failed:', error);
+    }
+  }
+
+  // 2. Fallback to API key
+  const apiKey = Deno.env.get('GEMINI_API_KEY');
+  if (apiKey) {
+    console.log('✅ Using GEMINI_API_KEY (fallback)');
+    return { token: apiKey, type: 'api_key' };
+  }
+
+  // 3. No credentials available
+  console.error('⚠️ No Google Cloud credentials available (no OAuth, no API key)');
+  return { 
+    token: null, 
+    type: 'api_key',
+    error: 'No Google Cloud credentials configured'
+  };
+}
+
+/**
+ * Refresh Google OAuth access token using stored refresh token
+ */
+async function refreshGoogleAccessToken(
+  refreshToken: string,
+  clientId: string,
+  clientSecret: string
+): Promise<string | null> {
+  const response = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: clientId,
+      client_secret: clientSecret,
+      refresh_token: refreshToken,
+      grant_type: 'refresh_token'
+    })
+  });
+
+  if (response.ok) {
+    const data = await response.json();
+    console.log(`✅ Google access token refreshed (expires in ${data.expires_in}s)`);
+    return data.access_token;
+  }
+
+  const errorText = await response.text();
+  console.error('❌ Google token refresh failed:', response.status, errorText);
+  return null;
+}
+
+/**
  * Create standardized credential_required error response
  */
 export function createCredentialRequiredResponse(

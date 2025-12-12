@@ -1,5 +1,8 @@
 project_id = "vawouugtzwmejxqkeqqj"
 
+[functions.google-cloud-auth]
+verify_jwt = false
+
 [functions.correlate-user-identity]
 verify_jwt = false
 
