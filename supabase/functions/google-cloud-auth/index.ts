@@ -443,8 +443,10 @@ serve(async (req) => {
       }
     }
     
-    // Check action from query params OR body (body takes precedence for POST)
-    const action = body.action || url.searchParams.get('action') || 'status';
+    // Auto-detect callback mode when 'code' parameter is present (from Google's redirect)
+    // This allows us to use a redirect URI without query parameters
+    const hasAuthCode = url.searchParams.get('code');
+    const action = hasAuthCode ? 'callback' : (body.action || url.searchParams.get('action') || 'status');
 
     const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
     const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
@@ -462,8 +464,8 @@ serve(async (req) => {
           }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // Force HTTPS for redirect URI (url.origin may return http:// for edge functions)
-        const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth?action=callback`;
+        // Force HTTPS for redirect URI - NO query params (auto-detect callback via 'code' param)
+        const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth`;
         
         const authUrl = new URL(GOOGLE_AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
@@ -499,8 +501,8 @@ serve(async (req) => {
           }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        // Force HTTPS for redirect URI (must match get_authorization_url)
-        const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth?action=callback`;
+        // Force HTTPS for redirect URI - must match get_authorization_url (no query params)
+        const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth`;
 
         const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
           method: 'POST',
