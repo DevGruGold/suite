@@ -67,13 +67,6 @@ const Index = () => {
           </CardContent>
         </Card>
         </div>
-
-        {/* Footer */}
-        <footer className="text-center py-6 border-t border-border/60">
-          <p className="text-xs text-muted-foreground">
-            Powered by autonomous learning • Real-time monitoring • Enterprise AI
-          </p>
-        </footer>
       </div>
     </>
   );
