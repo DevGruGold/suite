@@ -462,7 +462,8 @@ serve(async (req) => {
           }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        const redirectUri = `${url.origin}/functions/v1/google-cloud-auth?action=callback`;
+        // Force HTTPS for redirect URI (url.origin may return http:// for edge functions)
+        const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth?action=callback`;
         
         const authUrl = new URL(GOOGLE_AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
@@ -498,7 +499,8 @@ serve(async (req) => {
           }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
-        const redirectUri = `${url.origin}/functions/v1/google-cloud-auth?action=callback`;
+        // Force HTTPS for redirect URI (must match get_authorization_url)
+        const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth?action=callback`;
 
         const tokenResponse = await fetch(GOOGLE_TOKEN_URL, {
           method: 'POST',

@@ -43,10 +43,13 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
 
       if (error) throw error;
       
-      if (data?.success && data?.configured) {
+      // Use 'ready' field which is a boolean, not 'configured' which is always an object
+      if (data?.success && data?.ready === true) {
         setStatus('connected');
-      } else {
+      } else if (data?.success) {
         setStatus('disconnected');
+      } else {
+        setStatus('error');
       }
     } catch (error) {
       console.error('Failed to check Google Cloud status:', error);
