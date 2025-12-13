@@ -4460,6 +4460,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           last_login_at: string | null
+          linked_worker_ids: string[] | null
           timezone: string | null
           total_mining_shares: number | null
           total_pop_points: number | null
@@ -4481,6 +4482,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           last_login_at?: string | null
+          linked_worker_ids?: string[] | null
           timezone?: string | null
           total_mining_shares?: number | null
           total_pop_points?: number | null
@@ -4502,6 +4504,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_login_at?: string | null
+          linked_worker_ids?: string[] | null
           timezone?: string | null
           total_mining_shares?: number | null
           total_pop_points?: number | null

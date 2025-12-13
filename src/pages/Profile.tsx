@@ -12,9 +12,11 @@ import { toast } from "sonner";
 import { 
   User, Wallet, GitCommit, Cpu, Battery, Coins, 
   ExternalLink, Copy, CheckCircle, Edit2, Save, X,
-  ArrowRight, Shield, Zap
+  Shield, Zap
 } from "lucide-react";
 import { Navigate } from "react-router-dom";
+import { MiningSessionsList } from "@/components/MiningSessionsList";
+import { ChargerSessionsList } from "@/components/ChargerSessionsList";
 
 interface UserEarnings {
   github_xmrt: number;
@@ -29,6 +31,7 @@ const Profile = () => {
   const { user, profile, roles, isAuthenticated, isLoading } = useAuth();
   const [earnings, setEarnings] = useState<UserEarnings | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [linkedWorkerIds, setLinkedWorkerIds] = useState<string[]>([]);
   const [editForm, setEditForm] = useState({
     display_name: '',
     github_username: '',
@@ -45,9 +48,29 @@ const Profile = () => {
         wallet_address: profile.wallet_address || '',
         bio: profile.bio || ''
       });
+      // Load linked worker IDs from profile
+      fetchLinkedWorkerIds();
       fetchEarnings();
     }
   }, [profile]);
+
+  const fetchLinkedWorkerIds = async () => {
+    if (!user?.id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('linked_worker_ids')
+        .eq('id', user.id)
+        .single();
+      
+      if (!error && data?.linked_worker_ids) {
+        setLinkedWorkerIds(data.linked_worker_ids);
+      }
+    } catch (err) {
+      console.log('Could not fetch linked workers:', err);
+    }
+  };
 
   const fetchEarnings = async () => {
     if (!user?.id) return;
@@ -293,6 +316,23 @@ const Profile = () => {
               </div>
             </CardContent>
           </Card>
+
+          {/* Mining Workers Section */}
+          {user?.id && (
+            <MiningSessionsList
+              userId={user.id}
+              linkedWorkerIds={linkedWorkerIds}
+              onWorkersUpdated={setLinkedWorkerIds}
+            />
+          )}
+
+          {/* Charger Sessions Section */}
+          {user?.id && (
+            <ChargerSessionsList
+              userId={user.id}
+              walletAddress={profile?.wallet_address || undefined}
+            />
+          )}
 
           {/* Wallet Connection Guide */}
           <Card>
