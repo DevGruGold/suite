@@ -6,15 +6,15 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
 import AppLayout from "@/components/layouts/AppLayout";
-import Contributors from "./pages/Contributors";
 import Credentials from "./pages/Credentials";
 import Index from "./pages/Index";
-import Treasury from "./pages/Treasury";
 import Council from "./pages/Council";
 import Governance from "./pages/Governance";
 import Licensing from "./pages/Licensing";
 import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
+import Earn from "./pages/Earn";
+import Profile from "./pages/Profile";
 
 const queryClient = new QueryClient();
 
@@ -41,12 +41,15 @@ const App = () => (
               <Route element={<AppLayout />}>
                 <Route path="/" element={<Index />} />
                 <Route path="/council" element={<Council />} />
-                <Route path="/treasury" element={<Treasury />} />
-                <Route path="/contributors" element={<Contributors />} />
-                <Route path="/credentials" element={<Credentials />} />
+                <Route path="/earn" element={<Earn />} />
                 <Route path="/governance" element={<Governance />} />
                 <Route path="/licensing" element={<Licensing />} />
+                <Route path="/credentials" element={<Credentials />} />
+                <Route path="/profile" element={<Profile />} />
                 <Route path="/admin" element={<Admin />} />
+                {/* Legacy redirects */}
+                <Route path="/treasury" element={<Earn />} />
+                <Route path="/contributors" element={<Earn />} />
               </Route>
             </Routes>
           </BrowserRouter>
