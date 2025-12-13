@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'api-key-health-monitor';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +13,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -73,6 +78,7 @@ serve(async (req) => {
     const healthyServices = healthResults.filter(h => h.is_healthy).length;
     console.log(`✅ Health check complete: ${healthyServices}/${healthResults.length} services healthy`);
 
+    await usageTracker.success({ healthy_services: healthyServices, total_services: healthResults.length });
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -84,6 +90,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Health monitor error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

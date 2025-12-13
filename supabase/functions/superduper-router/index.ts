@@ -1,6 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'superduper-router';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -38,6 +41,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -276,6 +281,7 @@ serve(async (req) => {
           status: 'completed'
         });
 
+      await usageTracker.success({ agent_name, action, execution_time_ms: executionTime });
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -313,6 +319,7 @@ serve(async (req) => {
         })
         .eq('id', agent.id);
 
+      await usageTracker.failure(executionError.message, 500);
       return new Response(
         JSON.stringify({ 
           success: false, 
@@ -326,6 +333,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('SuperDuper Router error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

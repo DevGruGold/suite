@@ -1,5 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'n8n-workflow-generator';
 
 interface N8NWorkflow {
   name: string
@@ -20,6 +23,8 @@ interface WorkflowRequest {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   try {
     const supabase = createClient(
       Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') ?? '',
@@ -68,6 +73,7 @@ serve(async (req) => {
       context: { type, purpose, workflow_id: stored?.[0]?.id }
     }])
 
+    await usageTracker.success({ workflow_type: type });
     return new Response(JSON.stringify({
       success: true,
       workflow: workflow,
@@ -81,6 +87,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('N8N Generator error:', error)
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       success: false,
       error: error.message,

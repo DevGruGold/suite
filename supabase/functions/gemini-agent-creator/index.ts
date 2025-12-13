@@ -1,5 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'gemini-agent-creator';
 
 interface GeminiAgentConfig {
   name: string
@@ -24,6 +27,8 @@ interface AgentRequest {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   try {
     const supabase = createClient(
       Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') ?? '',
@@ -115,6 +120,7 @@ serve(async (req) => {
       }
     }])
 
+    await usageTracker.success({ agent_type, domain });
     return new Response(JSON.stringify({
       success: true,
       agent: agentConfig,
@@ -129,6 +135,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('XMRT Gemini Agent Creator error:', error)
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       success: false,
       error: error.message,

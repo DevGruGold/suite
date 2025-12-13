@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'sync-function-logs';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +23,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const startTime = Date.now();
   console.log('🔄 Starting enhanced function logs sync...');
 
@@ -414,6 +418,7 @@ serve(async (req) => {
 
     const executionTime = Date.now() - startTime;
 
+    await usageTracker.success({ total_synced: totalSynced });
     return new Response(JSON.stringify({
       success: true,
       summary: {
@@ -433,6 +438,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Sync error:', error);
+    await usageTracker.failure(error instanceof Error ? error.message : 'Unknown error', 500);
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error'

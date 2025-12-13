@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'check-frontend-health';
 
 const VERCEL_SERVICES = [
   { name: 'frontend', url: 'https://xmrtdao.vercel.app/api/health' },
@@ -50,6 +53,8 @@ async function checkServiceHealth(service: { name: string; url: string }, supaba
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL')!,
@@ -67,6 +72,7 @@ serve(async (req) => {
     
     console.log(`✅ Health check completed:`, results);
 
+    await usageTracker.success({ all_healthy: allHealthy, services_checked: results.length });
     return new Response(
       JSON.stringify({ 
         success: true,
@@ -79,6 +85,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Error in health check scheduler:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ 
         success: false, 

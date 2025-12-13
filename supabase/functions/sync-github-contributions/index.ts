@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'sync-github-contributions';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +14,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const startTime = Date.now();
   
   try {
@@ -151,6 +155,7 @@ serve(async (req) => {
 
     console.log(`[sync-github-contributions] Complete: ${synced} synced, ${skipped} skipped, ${totalXmrtAwarded} XMRT awarded`);
 
+    await usageTracker.success({ synced, skipped, total_xmrt: totalXmrtAwarded });
     return new Response(JSON.stringify({
       success: true,
       message: `Synced ${synced} contributions`,
@@ -163,6 +168,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('[sync-github-contributions] Error:', error);
+    await usageTracker.failure(error.message || 'Sync failed', 500);
     return new Response(JSON.stringify({
       success: false,
       error: error.message || 'Sync failed'
