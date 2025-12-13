@@ -1,94 +1,111 @@
-import { useEffect } from 'react';
+import { useEffect, useRef } from 'react';
 import { BrowserCompatibilityService } from '@/utils/browserCompatibility';
 
-// Enhanced mobile voice optimizations
+// Enhanced mobile voice optimizations with PWA support
 export const MobileVoiceEnhancer = () => {
+  const audioContextRef = useRef<AudioContext | null>(null);
+  const hasInitializedRef = useRef(false);
+
   useEffect(() => {
     const capabilities = BrowserCompatibilityService.detectCapabilities();
     
-    if (capabilities.isMobile) {
-      console.log('🎤 Enhanced mobile voice optimizations initialized');
+    // Log capabilities on mount
+    BrowserCompatibilityService.logCapabilities();
+    
+    if (capabilities.isMobile || capabilities.isPWA) {
+      console.log('🎤 Enhanced mobile/PWA voice optimizations initialized', {
+        isPWA: capabilities.isPWA,
+        isIOSSafari: capabilities.isIOSSafari,
+        isSecureContext: capabilities.isSecureContext
+      });
+
+      // Check secure context first
+      if (!capabilities.isSecureContext) {
+        console.warn('⚠️ Not a secure context - voice features will not work');
+        return;
+      }
       
-      // Enhanced audio unlock for mobile
-      const unlockAudio = async () => {
+      // Enhanced audio unlock for mobile - only unlock AudioContext, don't request permissions yet
+      const unlockAudioContext = async () => {
+        if (audioContextRef.current?.state === 'running') {
+          return; // Already unlocked
+        }
+
         try {
-          // Create silent audio to unlock AudioContext
-          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-          const oscillator = audioContext.createOscillator();
-          const gainNode = audioContext.createGain();
+          // Create or resume audio context
+          if (!audioContextRef.current) {
+            audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+          }
+
+          // Resume if suspended (required for iOS Safari)
+          if (audioContextRef.current.state === 'suspended') {
+            await audioContextRef.current.resume();
+          }
+
+          // Play silent sound to fully unlock on iOS
+          const oscillator = audioContextRef.current.createOscillator();
+          const gainNode = audioContextRef.current.createGain();
           
           oscillator.connect(gainNode);
-          gainNode.connect(audioContext.destination);
-          gainNode.gain.setValueAtTime(0, audioContext.currentTime);
+          gainNode.connect(audioContextRef.current.destination);
+          gainNode.gain.setValueAtTime(0, audioContextRef.current.currentTime);
           
-          oscillator.frequency.setValueAtTime(440, audioContext.currentTime);
-          oscillator.start(audioContext.currentTime);
-          oscillator.stop(audioContext.currentTime + 0.1);
+          oscillator.frequency.setValueAtTime(440, audioContextRef.current.currentTime);
+          oscillator.start(audioContextRef.current.currentTime);
+          oscillator.stop(audioContextRef.current.currentTime + 0.05);
           
-          console.log('🔓 Audio context unlocked for mobile');
+          console.log('🔓 Audio context unlocked for mobile/PWA');
         } catch (error) {
           console.warn('⚠️ Audio unlock failed:', error);
         }
       };
 
-      // Enhanced permission request for mobile
-      const requestPermissions = async () => {
-        try {
-          await navigator.mediaDevices.getUserMedia({ 
-            audio: {
-              echoCancellation: true,
-              noiseSuppression: true,
-              autoGainControl: true,
-              sampleRate: 16000,
-              channelCount: 1
-            }
-          }).then(stream => {
-            // Immediately stop the stream to avoid conflicts
-            stream.getTracks().forEach(track => track.stop());
-            console.log('🎤 Mobile microphone permissions granted');
-          });
-        } catch (error) {
-          console.warn('🎤 Mobile microphone permission failed:', error);
-        }
-      };
-
-      // Combined mobile initialization
-      const initializeMobile = async () => {
-        await unlockAudio();
-        await requestPermissions();
-      };
-
-      // Enhanced touch event listener
-      const touchHandler = (event: TouchEvent) => {
-        console.log('👆 Mobile touch detected, initializing audio...');
-        initializeMobile();
-        document.removeEventListener('touchstart', touchHandler);
-        document.removeEventListener('click', touchHandler);
+      // User interaction handler - only unlock audio, don't auto-request permissions
+      const interactionHandler = () => {
+        if (hasInitializedRef.current) return;
+        hasInitializedRef.current = true;
+        
+        console.log('👆 User interaction detected, unlocking audio context...');
+        unlockAudioContext();
+        
+        // Remove listeners after first interaction
+        document.removeEventListener('touchstart', interactionHandler);
+        document.removeEventListener('click', interactionHandler);
+        document.removeEventListener('touchend', interactionHandler);
       };
       
-      // Listen for both touch and click events
-      document.addEventListener('touchstart', touchHandler, { passive: true });
-      document.addEventListener('click', touchHandler, { passive: true });
+      // Listen for user interactions (required for audio unlock)
+      document.addEventListener('touchstart', interactionHandler, { passive: true, once: true });
+      document.addEventListener('click', interactionHandler, { passive: true, once: true });
+      document.addEventListener('touchend', interactionHandler, { passive: true, once: true });
       
-      // Mobile-specific optimizations
-      if (capabilities.userGestureRequired) {
-        console.log('🎤 Mobile: User gesture required for audio');
+      // Log PWA-specific info
+      if (capabilities.isPWA) {
+        console.log('📱 Running as PWA - permissions may require device settings');
+        const instructions = BrowserCompatibilityService.getPWAPermissionInstructions();
+        console.log('📋 Permission instructions:', instructions);
       }
       
-      // Prevent mobile Safari audio interruptions
+      // Handle app resume - re-unlock audio context
       const handleVisibilityChange = () => {
-        if (!document.hidden) {
-          console.log('📱 Mobile app resumed, reinitializing audio...');
-          initializeMobile();
+        if (!document.hidden && hasInitializedRef.current) {
+          console.log('📱 App resumed, re-checking audio context...');
+          unlockAudioContext();
         }
       };
       
       document.addEventListener('visibilitychange', handleVisibilityChange);
       
       return () => {
-        document.removeEventListener('touchstart', touchHandler);
-        document.removeEventListener('click', touchHandler);
+        document.removeEventListener('touchstart', interactionHandler);
+        document.removeEventListener('click', interactionHandler);
+        document.removeEventListener('touchend', interactionHandler);
         document.removeEventListener('visibilitychange', handleVisibilityChange);
+        
+        // Clean up audio context
+        if (audioContextRef.current && audioContextRef.current.state !== 'closed') {
+          audioContextRef.current.close();
+        }
       };
     }
   }, []);
