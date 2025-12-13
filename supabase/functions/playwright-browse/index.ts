@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'playwright-browse';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -31,6 +34,8 @@ interface BrowseResponse {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -197,6 +202,7 @@ serve(async (req) => {
 
       // Log successful browse
       console.log(`[playwright-browse] Success: ${browseRequest.url} (${response.status}) in ${loadTime}ms`);
+      await usageTracker.success({ url: browseRequest.url, status: response.status });
 
       return new Response(
         JSON.stringify(result),
@@ -252,6 +258,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('[playwright-browse] Error:', error);
+    await usageTracker.failure(error.message, 500);
 
     return new Response(
       JSON.stringify({ 

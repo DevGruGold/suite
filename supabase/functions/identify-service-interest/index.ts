@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'identify-service-interest';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +21,8 @@ const SERVICE_KEYWORDS: Record<string, string[]> = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -108,6 +113,8 @@ serve(async (req) => {
     // Sort by confidence
     detectedServices.sort((a, b) => b.confidence - a.confidence);
 
+    await usageTracker.success({ services_detected: detectedServices.length });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -122,6 +129,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Error in identify-service-interest:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

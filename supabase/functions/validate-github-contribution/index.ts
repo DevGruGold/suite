@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { callAIWithFallback } from "../_shared/unifiedAIFallback.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'validate-github-contribution';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +11,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -195,6 +200,8 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
       },
     });
 
+    await usageTracker.success({ validation_score: validation.validation_score, xmrt_reward: xmrtReward });
+
     return new Response(JSON.stringify({
       success: true,
       validation,
@@ -206,6 +213,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
 
   } catch (error) {
     console.error('Error validating contribution:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       error: error.message,
     }), {

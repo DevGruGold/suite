@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'ingest-github-contribution';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +10,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -210,6 +215,8 @@ serve(async (req) => {
       }
     });
 
+    await usageTracker.success({ contribution_id: contribution.id, github_username: githubUsername });
+
     return new Response(JSON.stringify({
       success: true,
       contribution_id: contribution.id,
@@ -222,6 +229,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('[ingest-github-contribution] Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       error: error.message
     }), {

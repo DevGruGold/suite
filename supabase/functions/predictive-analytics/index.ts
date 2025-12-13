@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'predictive-analytics';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +10,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -15,6 +20,7 @@ serve(async (req) => {
   const contentLength = parseInt(req.headers.get('content-length') || '0');
   if (contentLength === 0 || contentLength < 5) {
     console.log('📊 Empty body - cron trigger, returning fast');
+    await usageTracker.success({ cron: true });
     return new Response(JSON.stringify({ 
       success: true, 
       cron: true, 
@@ -193,6 +199,8 @@ serve(async (req) => {
       }
     });
 
+    await usageTracker.success({ action, data_source });
+
     return new Response(
       JSON.stringify({ 
         success: true, 
@@ -207,6 +215,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Predictive analytics error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

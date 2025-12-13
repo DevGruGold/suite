@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'qualify-lead';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +10,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -96,6 +101,8 @@ serve(async (req) => {
     const leadScore = session?.lead_score || 0;
     const qualification = leadScore >= 70 ? 'high' : leadScore >= 40 ? 'medium' : 'low';
 
+    await usageTracker.success({ lead_score: leadScore, qualification });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -114,6 +121,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Error in qualify-lead:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

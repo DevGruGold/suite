@@ -1,4 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'process-license-application';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -25,6 +28,8 @@ interface LicenseApplicationData {
 }
 
 Deno.serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -223,6 +228,7 @@ Deno.serve(async (req) => {
       }
 
       default:
+        await usageTracker.failure(`Unknown action: ${action}`, 400);
         return new Response(JSON.stringify({
           success: false,
           error: `Unknown action: ${action}`
@@ -231,6 +237,7 @@ Deno.serve(async (req) => {
 
   } catch (error: any) {
     console.error('❌ License Application Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       success: false,
       error: error.message

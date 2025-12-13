@@ -1,6 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'summarize-conversation';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +13,8 @@ const corsHeaders = {
 const AI_TIMEOUT_MS = 12000; // 12 second timeout for AI calls
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,6 +23,7 @@ serve(async (req) => {
   const contentLength = parseInt(req.headers.get('content-length') || '0');
   if (contentLength === 0 || contentLength < 5) {
     console.log('📝 Empty body - cron trigger, returning fast');
+    await usageTracker.success({ cron: true });
     return new Response(JSON.stringify({ 
       success: true, 
       cron: true, 
@@ -131,6 +137,7 @@ SUMMARY:`;
     }
 
     console.log(`✅ Created summary for session ${session_id} using ${aiProvider}`);
+    await usageTracker.success({ session_id, ai_provider: aiProvider });
 
     return new Response(
       JSON.stringify({ 
@@ -143,6 +150,7 @@ SUMMARY:`;
     );
   } catch (error) {
     console.error('Error in summarize-conversation function:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

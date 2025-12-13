@@ -1,6 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'diagnose-workflow-failure';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +11,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -228,6 +233,7 @@ Provide:
 
     const executionTime = Date.now() - startTime;
     console.log(`[Diagnose Workflow Failure] Completed in ${executionTime}ms`);
+    await usageTracker.success({ template_name, failure_rate: failureRate, severity: diagnosticReport.severity });
 
     return new Response(
       JSON.stringify({ 
@@ -240,6 +246,7 @@ Provide:
 
   } catch (error: any) {
     console.error('[Diagnose Workflow Failure] Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ 
         success: false, 
