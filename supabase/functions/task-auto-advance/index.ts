@@ -42,7 +42,7 @@ serve(async (req) => {
       const { data: tasks, error: fetchError } = await supabase
         .from('tasks')
         .select('id, stage, stage_started_at, auto_advance_threshold_hours')
-        .in('status', ['PENDING', 'IN_PROGRESS'])
+        .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
         .not('stage_started_at', 'is', null);
 
       if (fetchError) throw fetchError;
@@ -73,7 +73,7 @@ serve(async (req) => {
       const { data: tasks, error: fetchError } = await supabase
         .from('tasks')
         .select('*')
-        .in('status', ['PENDING', 'IN_PROGRESS'])
+        .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
         .is('blocking_reason', null)
         .gte('progress_percentage', 100);
 
@@ -204,7 +204,7 @@ serve(async (req) => {
       const { data: urgentTasks } = await supabase
         .from('tasks')
         .select('id, title, stage, progress_percentage, assignee_agent_id, last_agent_notified_at')
-        .in('status', ['PENDING', 'IN_PROGRESS'])
+        .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
         .gte('progress_percentage', 75)
         .lt('progress_percentage', 100);
 
