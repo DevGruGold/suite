@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
-import { generateEmbedding } from '../_shared/unifiedAIFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +10,17 @@ const corsHeaders = {
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Fast boot: check content-length BEFORE parsing JSON
+  const contentLength = parseInt(req.headers.get('content-length') || '0');
+  if (contentLength === 0 || contentLength < 5) {
+    console.log('📋 Empty body - cron trigger, returning fast');
+    return new Response(JSON.stringify({ 
+      success: true, 
+      cron: true, 
+      message: 'Cron trigger - no memory data provided' 
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -43,6 +53,9 @@ serve(async (req) => {
     }
     
     console.log(`🧠 Vectorizing memory ${memory_id} (${content.length} chars)...`);
+
+    // Lazy import to avoid boot-time overhead
+    const { generateEmbedding } = await import('../_shared/unifiedAIFallback.ts');
 
     // Try to generate embedding with timeout guard (prevent cron hangs)
     let embedding: number[];

@@ -11,6 +11,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Fast boot: check content-length BEFORE parsing JSON
+  const contentLength = parseInt(req.headers.get('content-length') || '0');
+  if (contentLength === 0 || contentLength < 5) {
+    console.log('📊 Empty body - cron trigger, returning fast');
+    return new Response(JSON.stringify({ 
+      success: true, 
+      cron: true, 
+      message: 'Cron trigger - no analytics action provided' 
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
+
   try {
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',

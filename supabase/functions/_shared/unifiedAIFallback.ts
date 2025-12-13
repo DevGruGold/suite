@@ -625,7 +625,7 @@ export async function callLovableAIGateway(
 }
 
 /**
- * Generate text embeddings using Gemini
+ * Generate text embeddings using Gemini with timeout protection
  */
 export async function generateEmbedding(text: string): Promise<number[]> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
@@ -636,7 +636,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
 
   console.log('🧠 Generating embedding via Gemini...');
   
-  const response = await fetch(
+  // Use fetchWithTimeout to prevent hanging
+  const response = await fetchWithTimeout(
     `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${GEMINI_API_KEY}`,
     {
       method: 'POST',
@@ -644,7 +645,8 @@ export async function generateEmbedding(text: string): Promise<number[]> {
       body: JSON.stringify({
         content: { parts: [{ text }] }
       }),
-    }
+    },
+    10000 // 10 second timeout for embeddings
   );
   
   if (!response.ok) {
