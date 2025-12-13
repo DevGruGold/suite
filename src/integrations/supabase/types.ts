@@ -4446,6 +4446,57 @@ export type Database = {
         }
         Relationships: []
       }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string | null
+          display_name: string | null
+          email: string
+          email_verified: boolean | null
+          full_name: string | null
+          github_username: string | null
+          id: string
+          is_active: boolean | null
+          last_login_at: string | null
+          timezone: string | null
+          twitter_handle: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          email: string
+          email_verified?: boolean | null
+          full_name?: string | null
+          github_username?: string | null
+          id: string
+          is_active?: boolean | null
+          last_login_at?: string | null
+          timezone?: string | null
+          twitter_handle?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string | null
+          display_name?: string | null
+          email?: string
+          email_verified?: boolean | null
+          full_name?: string | null
+          github_username?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_login_at?: string | null
+          timezone?: string | null
+          twitter_handle?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       proposal_comments: {
         Row: {
           author_name: string
@@ -5884,6 +5935,30 @@ export type Database = {
           updated_at?: string
           wallet_connected_at?: string | null
           wallet_last_verified?: string | null
+        }
+        Relationships: []
+      }
+      user_roles: {
+        Row: {
+          granted_at: string | null
+          granted_by: string | null
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          granted_at?: string | null
+          granted_by?: string | null
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
         }
         Relationships: []
       }
@@ -8527,6 +8602,10 @@ export type Database = {
           user_profile_id: string
         }[]
       }
+      get_user_roles: {
+        Args: { _user_id: string }
+        Returns: Database["public"]["Enums"]["app_role"][]
+      }
       get_xmrt_charger_leaderboard: {
         Args: { limit_count?: number }
         Returns: {
@@ -8538,6 +8617,13 @@ export type Database = {
           total_charging_sessions: number
           total_pop_points: number
         }[]
+      }
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
       }
       http_post_wrap: {
         Args: { p_body?: Json; p_headers?: Json; p_url: string }
@@ -8654,6 +8740,8 @@ export type Database = {
               isSetofReturn: false
             }
           }
+      is_admin_or_above: { Args: { _user_id: string }; Returns: boolean }
+      is_superadmin: { Args: { _user_id: string }; Returns: boolean }
       is_valid_jsonb: { Args: { v: Json }; Returns: boolean }
       jsonb_shallow_diff: { Args: { new_j: Json; old_j: Json }; Returns: Json }
       lease_job: {
@@ -8929,6 +9017,7 @@ export type Database = {
         | "device"
         | "generic"
       agent_status: "IDLE" | "BUSY" | "OFFLINE" | "ARCHIVED" | "ERROR"
+      app_role: "user" | "contributor" | "moderator" | "admin" | "superadmin"
       command_status:
         | "pending"
         | "sent"
@@ -9144,6 +9233,7 @@ export const Constants = {
         "generic",
       ],
       agent_status: ["IDLE", "BUSY", "OFFLINE", "ARCHIVED", "ERROR"],
+      app_role: ["user", "contributor", "moderator", "admin", "superadmin"],
       command_status: [
         "pending",
         "sent",
