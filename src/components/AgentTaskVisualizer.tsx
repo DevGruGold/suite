@@ -132,7 +132,7 @@ function AgentCard({ agent, taskCount, assignedTasks, onAgentClick, onTaskDropTo
         isDragOverAgent
           ? 'border-primary bg-primary/20 ring-2 ring-primary/50 scale-105'
           : hasUrgent
-            ? 'border-red-500/50 bg-red-500/10 animate-pulse'
+            ? 'border-amber-500/50 bg-amber-500/10'
             : isActive 
               ? 'border-green-500/50 bg-green-500/10' 
               : 'border-blue-500/30 bg-blue-500/5'
@@ -141,8 +141,8 @@ function AgentCard({ agent, taskCount, assignedTasks, onAgentClick, onTaskDropTo
       <div className="flex items-center gap-2">
         <div 
           className={`w-2 h-2 rounded-full flex-shrink-0 ${
-            isDragOverAgent ? 'bg-primary' : hasUrgent ? 'bg-red-500 animate-pulse' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
-          }`} 
+            isDragOverAgent ? 'bg-primary' : hasUrgent ? 'bg-amber-500' : isActive ? 'bg-green-500 animate-pulse' : 'bg-blue-400'
+          }`}
         />
         <span className="text-xs font-medium truncate text-foreground">{shortName}</span>
       </div>
@@ -155,8 +155,8 @@ function AgentCard({ agent, taskCount, assignedTasks, onAgentClick, onTaskDropTo
       )}
       
       <div className="text-[10px] text-muted-foreground mt-1 flex items-center gap-1.5">
-        <span className={isDragOverAgent ? 'text-primary' : hasUrgent ? 'text-red-400' : isActive ? 'text-green-400' : 'text-blue-400'}>
-          {isDragOverAgent ? 'DROP HERE' : hasUrgent ? 'URGENT' : agent.status}
+        <span className={isDragOverAgent ? 'text-primary' : hasUrgent ? 'text-amber-400' : isActive ? 'text-green-400' : 'text-blue-400'}>
+          {isDragOverAgent ? 'DROP HERE' : hasUrgent ? 'DUE SOON' : agent.status}
         </span>
         <span>•</span>
         <span>{taskCount} task{taskCount !== 1 ? 's' : ''}</span>

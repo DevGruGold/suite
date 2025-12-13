@@ -241,7 +241,7 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
                   Success Rate
                 </div>
                 <div className="text-lg font-semibold text-foreground">
-                  {(performance.success_rate * 100).toFixed(0)}%
+                  {performance.success_rate.toFixed(0)}%
                 </div>
               </div>
             </div>

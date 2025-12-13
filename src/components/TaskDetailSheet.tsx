@@ -164,9 +164,13 @@ export function TaskDetailSheet({
         const savedCompleted = (taskData as Task).completed_checklist_items || [];
         setCompletedItems(Array.isArray(savedCompleted) ? savedCompleted : []);
         
-        // Get checklist based on category or use default
+        // Get checklist - prefer task's metadata checklist over category defaults
+        const taskMetadata = (taskData as Record<string, unknown>).metadata as Record<string, unknown> | null;
+        const taskChecklist = taskMetadata?.checklist as string[] | undefined;
         const category = (taskData as Task).category?.toLowerCase() || 'default';
-        const templateChecklist = DEFAULT_CHECKLIST[category] || DEFAULT_CHECKLIST.default;
+        const templateChecklist = Array.isArray(taskChecklist) && taskChecklist.length > 0
+          ? taskChecklist
+          : (DEFAULT_CHECKLIST[category] || DEFAULT_CHECKLIST.default);
         setChecklist(templateChecklist);
         
         // Fetch activity log for this task
@@ -288,7 +292,8 @@ export function TaskDetailSheet({
   const displayTask = fullTask || task;
   const statusStyle = STATUS_STYLES[displayTask.status] || STATUS_STYLES.PENDING;
   const StageIcon = STAGE_ICONS[displayTask.stage] || Circle;
-  const progressPercentage = displayTask.progress_percentage || 0;
+  const timeProgress = displayTask.progress_percentage || 0;
+  const workProgress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 0;
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
@@ -330,13 +335,31 @@ export function TaskDetailSheet({
               </div>
             </div>
 
-            {/* Progress Bar */}
-            <div className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Progress</span>
-                <span className="font-medium">{progressPercentage}%</span>
+            {/* Dual Progress Indicators */}
+            <div className="space-y-3">
+              {/* Time Progress */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    Time in Stage
+                  </span>
+                  <span className="font-medium text-amber-400">{timeProgress}%</span>
+                </div>
+                <Progress value={timeProgress} className="h-2 [&>div]:bg-amber-500" />
               </div>
-              <Progress value={progressPercentage} className="h-2" />
+              
+              {/* Work Progress */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between text-sm">
+                  <span className="text-muted-foreground flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    Work Complete
+                  </span>
+                  <span className="font-medium text-green-400">{workProgress}%</span>
+                </div>
+                <Progress value={workProgress} className="h-2 [&>div]:bg-green-500" />
+              </div>
             </div>
 
             {/* Blocking Reason */}
