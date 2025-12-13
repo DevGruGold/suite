@@ -1,11 +1,14 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { corsHeaders } from "../_shared/cors.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('cleanup-duplicate-tasks');
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -86,6 +89,7 @@ serve(async (req) => {
         console.log('✨ No duplicates found!');
       }
       
+      await usageTracker.success({ result_summary: `deleted_${deletedCount}_duplicates` });
       return new Response(
         JSON.stringify({ 
           success: true, 
@@ -96,6 +100,7 @@ serve(async (req) => {
       );
     }
 
+    await usageTracker.success({ result_summary: 'cleanup_completed' });
     return new Response(
       JSON.stringify({ success: true, message: 'Cleanup completed' }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -103,6 +108,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Cleanup Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -37,6 +38,8 @@ const TIER_PRICES = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('service-monetization-engine');
+
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -441,6 +444,7 @@ serve(async (req) => {
       }
 
       default:
+        await usageTracker.failure(`Unknown action: ${action}`, 400);
         return new Response(
           JSON.stringify({ error: `Unknown action: ${action}` }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
@@ -448,6 +452,7 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error('[Service Monetization] Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

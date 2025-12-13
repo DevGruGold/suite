@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,6 +18,8 @@ interface CorrelationEvent {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('correlate-user-identity');
+
   if (req.method === "OPTIONS") {
     return new Response("ok", { headers: corsHeaders });
   }
@@ -276,6 +279,7 @@ serve(async (req) => {
     }
   } catch (error) {
     console.error("Correlation error:", error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },
