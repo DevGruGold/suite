@@ -8,6 +8,7 @@ import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
 import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 import { executeToolCall as sharedExecuteToolCall } from '../_shared/toolExecutor.ts';
 import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { needsDataRetrieval } from '../_shared/executiveHelpers.ts';
 
 const FUNCTION_NAME = 'lovable-chat';
 const EXECUTIVE_NAME = 'Eliza';
@@ -753,13 +754,19 @@ JUST CALL THE TOOL DIRECTLY.
             console.log('⚡ Injected confirmation mandate into system prompt');
           }
           
+          // Force tool execution for data-seeking queries OR confirmations
+          const forceToolExecution = isConfirmation || needsDataRetrieval(messages);
+          if (forceToolExecution && !isConfirmation) {
+            console.log('📊 Data-seeking query detected - forcing tool execution');
+          }
+          
           message = await callLovableAIGateway(messagesForGateway, {
             model: 'google/gemini-2.5-flash',
             systemPrompt: effectiveSystemPrompt,
-            temperature: isConfirmation ? 0.3 : 0.7, // Lower temp for deterministic tool calls
+            temperature: forceToolExecution ? 0.3 : 0.7, // Lower temp for deterministic tool calls
             max_tokens: 4000,
             tools: ELIZA_TOOLS, // Enable native tool calling
-            tool_choice: isConfirmation ? 'required' : 'auto' // Force tool call on confirmation
+            tool_choice: forceToolExecution ? 'required' : 'auto' // Force tool call on confirmation OR data queries
           });
           
           // Gateway now returns full message object with tool_calls array

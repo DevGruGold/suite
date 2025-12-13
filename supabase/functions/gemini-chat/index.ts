@@ -238,6 +238,10 @@ First call tools to gather data, then provide a focused, data-driven CIO perspec
     // Prepare function declarations for tool calling
     const geminiTools = convertToolsToGeminiFormat(ELIZA_TOOLS);
     
+    // Force tool execution for data-seeking queries
+    const forceToolExecution = needsDataRetrieval(messages);
+    console.log(`📊 Gemini CIO - Data retrieval detected: ${forceToolExecution}, forcing tool use: ${forceToolExecution}`);
+    
     // ALWAYS include tools - expand to 40 most critical tools for council mode too
     let geminiResponse = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
@@ -247,8 +251,9 @@ First call tools to gather data, then provide a focused, data-driven CIO perspec
         body: JSON.stringify({
           contents: [{ parts }],
           tools: [{ functionDeclarations: geminiTools.slice(0, 40) }], // Expanded to 40 tools, always enabled
+          toolConfig: forceToolExecution ? { functionCallingConfig: { mode: 'ANY' } } : undefined, // Force tool use
           generationConfig: {
-            temperature: 0.7,
+            temperature: forceToolExecution ? 0.3 : 0.7, // Lower temp for data queries
             maxOutputTokens: 8000
           }
         })
