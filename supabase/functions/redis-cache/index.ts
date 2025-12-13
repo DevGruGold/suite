@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'redis-cache';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,6 +11,8 @@ const corsHeaders = {
 console.log('🗄️ Redis Cache Service starting...');
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -74,6 +79,7 @@ serve(async (req) => {
     }
 
     console.log(`✅ Redis ${action} completed successfully`);
+    await usageTracker.success({ action });
 
     return new Response(
       JSON.stringify({ success: true, data: result }),
@@ -82,6 +88,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Redis cache error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ 
         success: false, 

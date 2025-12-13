@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'render-api';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -50,6 +53,8 @@ async function handleGetServiceStatus(renderApiKey: string, renderApiBase: strin
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -327,6 +332,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Render API error:", error);
+    await usageTracker.failure(error instanceof Error ? error.message : "Unknown error", 500);
     return new Response(
       JSON.stringify({ 
         success: false, 

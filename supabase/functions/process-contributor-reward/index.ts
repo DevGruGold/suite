@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'process-contributor-reward';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +10,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -81,6 +86,7 @@ serve(async (req) => {
     // TODO: Integrate with actual XMRT token contract
     // For now, we're just logging the reward
     console.log(`Would transfer ${contribution.xmrt_earned} XMRT to ${contribution.wallet_address}`);
+    await usageTracker.success({ xmrt_paid: contribution.xmrt_earned });
 
     return new Response(JSON.stringify({
       success: true,
@@ -92,6 +98,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('Error processing reward:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       error: error.message,
     }), {

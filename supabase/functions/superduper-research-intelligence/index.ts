@@ -1,5 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'superduper-research-intelligence';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,6 +15,8 @@ const corsHeaders = {
  */
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -20,6 +25,7 @@ serve(async (req) => {
   const contentLength = parseInt(req.headers.get('content-length') || '0');
   if (contentLength === 0 || contentLength < 5) {
     console.log('🎯 Empty body - cron trigger, returning fast');
+    await usageTracker.success({ cron: true });
     return new Response(JSON.stringify({ 
       success: true, 
       cron: true, 
@@ -40,12 +46,15 @@ serve(async (req) => {
       data: params
     };
 
+    await usageTracker.success({ action });
+
     return new Response(
       JSON.stringify({ success: true, result }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error: any) {
     console.error("Research & Intelligence Synthesizer error:", error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

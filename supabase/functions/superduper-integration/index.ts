@@ -1,6 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'superduper-integration';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -18,6 +21,8 @@ const corsHeaders = {
  */
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -67,6 +72,8 @@ serve(async (req) => {
         );
     }
 
+    await usageTracker.success({ action, result_type: typeof result });
+
     return new Response(
       JSON.stringify({ success: true, result }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -74,6 +81,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('SuperDuper Integration error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

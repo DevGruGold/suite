@@ -1,5 +1,8 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.39.3';
 import { EDGE_FUNCTIONS_REGISTRY } from '../_shared/edgeFunctionRegistry.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'search-edge-functions';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +10,8 @@ const corsHeaders = {
 };
 
 Deno.serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -60,6 +65,7 @@ Deno.serve(async (req) => {
       .slice(0, 10);
 
     console.log(`✅ Found ${results.length} matching functions`);
+    await usageTracker.success({ query, results_count: results.length });
 
     return new Response(
       JSON.stringify({
@@ -73,6 +79,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Error searching edge functions:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
