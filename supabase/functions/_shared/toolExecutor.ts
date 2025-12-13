@@ -2093,6 +2093,15 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         headers: { 'Authorization': `Bearer ${SERVICE_ROLE_KEY}` }
       }).then(r => r.json());
 
+    case 'introspect_function_actions':
+      console.log(`🔍 [${executiveName}] Introspecting function: ${parsedArgs.function_name || 'all'}`);
+      return supabase.functions.invoke('get-function-actions', {
+        body: { 
+          function_name: parsedArgs.function_name, 
+          category: parsedArgs.category 
+        }
+      }).then((res: any) => res.error ? { success: false, error: res.error.message } : res.data);
+
     default:
       return null;
   }

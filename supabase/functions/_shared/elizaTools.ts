@@ -3051,5 +3051,30 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: []
       }
     }
+  },
+
+  // ====================================================================
+  // 🔍 FUNCTION INTROSPECTION TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'introspect_function_actions',
+      description: '🔍 DISCOVER ACTIONS: Get the complete list of all valid action names and their parameters for multi-action edge functions. Use this BEFORE attempting to use an action you are unsure about. Supported functions: vsco-workspace (89 actions), github-integration (25+ actions), agent-manager (27+ actions), workflow-template-manager (8 actions). Returns action names, required/optional params, and example payloads.',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: { 
+            type: 'string', 
+            description: 'Function to introspect. Options: vsco-workspace, github-integration, agent-manager, workflow-template-manager. Leave empty to see all supported functions.' 
+          },
+          category: { 
+            type: 'string', 
+            description: 'Optional: Filter by action category (e.g., "jobs", "contacts", "issues", "tasks")' 
+          }
+        },
+        required: []
+      }
+    }
   }
 ];

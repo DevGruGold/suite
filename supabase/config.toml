@@ -491,6 +491,9 @@ verify_jwt = false
 [functions.list-available-functions]
 verify_jwt = false
 
+[functions.get-function-actions]
+verify_jwt = false
+
 # ====================================================================
 # MOBILE MINING INFRASTRUCTURE
 # ====================================================================
