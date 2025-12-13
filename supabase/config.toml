@@ -624,28 +624,28 @@ verify_jwt = false
 # ====================================================================
 # GOVERNANCE CRON JOBS
 # ====================================================================
-# Trigger executive votes for new proposals - every 5 minutes
+# Trigger executive votes for new proposals - every 5 minutes (offset :01)
 [[edge_runtime.scheduled_functions]]
 function_name = "governance-phase-manager"
-schedule = "*/5 * * * *"
+schedule = "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
 body = '{"action":"trigger_executive_votes"}'
 
-# Check phase transitions - every 10 minutes
+# Check phase transitions - every 10 minutes (offset :04)
 [[edge_runtime.scheduled_functions]]
 function_name = "governance-phase-manager"
-schedule = "2,12,22,32,42,52 * * * *"
+schedule = "4,14,24,34,44,54 * * * *"
 body = '{"action":"check_phase_transitions"}'
 
-# Finalize voting - every 15 minutes
+# Finalize voting - every 15 minutes (offset :08)
 [[edge_runtime.scheduled_functions]]
 function_name = "governance-phase-manager"
-schedule = "5,20,35,50 * * * *"
+schedule = "8,23,38,53 * * * *"
 body = '{"action":"finalize_voting"}'
 
-# Deploy approved functions - every 10 minutes
+# Deploy approved functions - every 10 minutes (offset :06)
 [[edge_runtime.scheduled_functions]]
 function_name = "deploy-approved-edge-function"
-schedule = "3,13,23,33,43,53 * * * *"
+schedule = "6,16,26,36,46,56 * * * *"
 body = '{"action":"process_queue"}'
 
 # ====================================================================

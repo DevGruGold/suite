@@ -5,11 +5,24 @@ import { calculateUnifiedHealthScore, extractCronMetrics, buildHealthMetrics } f
 import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const FUNCTION_NAME = 'system-status';
+const QUERY_TIMEOUT_MS = 8000; // 8 second timeout per query
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
+
+// Timeout wrapper for database queries
+async function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`${operation} timeout after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
+// In-memory cache for health metrics (60 second TTL)
+let statusCache: { data: any; timestamp: number } | null = null;
+const CACHE_TTL_MS = 60000;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -19,11 +32,23 @@ serve(async (req) => {
   const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
+    // Check cache for recent results
+    if (statusCache && Date.now() - statusCache.timestamp < CACHE_TTL_MS) {
+      console.log('📦 Returning cached system status (< 60s old)');
+      await usageTracker.success({ cached: true });
+      return new Response(JSON.stringify(statusCache.data), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
+      });
+    }
+
     console.log('🔍 System Status Check - Starting comprehensive diagnostics...');
     
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
+      db: { schema: 'public' },
+      global: { headers: { 'x-statement-timeout': '10000' } } // 10s statement timeout
+    });
     
     const VERCEL_SERVICES = {
       io: 'https://xmrt-io.vercel.app',
@@ -37,18 +62,20 @@ serve(async (req) => {
       components: {}
     };
     
-    // 1. Check Database Health
+    // 1. Check Database Health (with timeout)
     console.log('📊 Checking database health...');
     try {
-      const { data: dbTest, error: dbError } = await supabase
-        .from('agents')
-        .select('id')
-        .limit(1);
+      const dbStart = Date.now();
+      const { data: dbTest, error: dbError } = await withTimeout(
+        supabase.from('agents').select('id').limit(1),
+        QUERY_TIMEOUT_MS,
+        'database_health_check'
+      );
       
       statusReport.components.database = {
         status: dbError ? 'unhealthy' : 'healthy',
         error: dbError?.message,
-        response_time_ms: 0 // Could add timing if needed
+        response_time_ms: Date.now() - dbStart
       };
     } catch (error) {
       statusReport.components.database = {
@@ -58,13 +85,14 @@ serve(async (req) => {
       statusReport.overall_status = 'degraded';
     }
     
-    // 2. Check Agents Status
+    // 2. Check Agents Status (with timeout)
     console.log('🤖 Checking agents status...');
     try {
-      const { data: agents, error: agentsError } = await supabase
-        .from('agents')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const { data: agents, error: agentsError } = await withTimeout(
+        supabase.from('agents').select('id, name, role, status, created_at').order('created_at', { ascending: false }).limit(50),
+        QUERY_TIMEOUT_MS,
+        'agents_status_check'
+      );
       
       if (agentsError) throw agentsError;
       
@@ -101,13 +129,14 @@ serve(async (req) => {
       statusReport.overall_status = 'degraded';
     }
     
-    // 3. Check Tasks Status
+    // 3. Check Tasks Status (with timeout, limited fields)
     console.log('📋 Checking tasks status...');
     try {
-      const { data: tasks, error: tasksError } = await supabase
-        .from('tasks')
-        .select('*')
-        .order('updated_at', { ascending: false });
+      const { data: tasks, error: tasksError } = await withTimeout(
+        supabase.from('tasks').select('id, title, status, stage, priority, updated_at').order('updated_at', { ascending: false }).limit(100),
+        QUERY_TIMEOUT_MS,
+        'tasks_status_check'
+      );
       
       if (tasksError) throw tasksError;
       
@@ -882,16 +911,20 @@ serve(async (req) => {
     
     console.log(`✅ System Status Check Complete - Overall: ${statusReport.overall_status} (${statusReport.health_score}/100)`);
     
+    // Cache the result
+    const responseData = { success: true, status: statusReport };
+    statusCache = { data: responseData, timestamp: Date.now() };
+    
+    await usageTracker.success({ health_score: statusReport.health_score });
+    
     return new Response(
-      JSON.stringify({
-        success: true,
-        status: statusReport
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify(responseData),
+      { headers: { ...corsHeaders, "Content-Type": "application/json", 'X-Cache': 'MISS' } }
     );
 
   } catch (error) {
     console.error("System status check error:", error);
+    await usageTracker.error(error instanceof Error ? error.message : 'Unknown error');
     return new Response(
       JSON.stringify({ 
         success: false, 
