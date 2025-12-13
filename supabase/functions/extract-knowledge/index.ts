@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -10,6 +11,8 @@ const corsHeaders = {
 const AI_TIMEOUT_MS = 12000; // 12 second timeout for AI calls
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('extract-knowledge');
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -18,6 +21,7 @@ serve(async (req) => {
   const contentLength = parseInt(req.headers.get('content-length') || '0');
   if (contentLength === 0 || contentLength < 5) {
     console.log('🔍 Empty body - cron trigger, returning fast');
+    await usageTracker.success({ result_summary: 'cron_trigger' });
     return new Response(JSON.stringify({ 
       success: true, 
       cron: true, 
@@ -148,12 +152,14 @@ Return format: [{"entity_name": "...", "entity_type": "...", "description": "...
 
     console.log(`✅ Extracted ${entities.length} entities from message ${message_id} using ${aiProvider}`);
 
+    await usageTracker.success({ result_summary: `extracted_${entities.length}_entities`, provider: aiProvider });
     return new Response(
       JSON.stringify({ success: true, entities, ai_provider: aiProvider }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in extract-knowledge function:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       {

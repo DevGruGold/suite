@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +8,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('handle-rejected-proposal');
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -199,6 +202,7 @@ Generate improvement suggestions that address the concerns raised. Format as a J
         });
     }
 
+    await usageTracker.success({ result_summary: 'feedback_generated' });
     return new Response(
       JSON.stringify({
         success: true,
@@ -213,6 +217,7 @@ Generate improvement suggestions that address the concerns raised. Format as a J
 
   } catch (error: any) {
     console.error('❌ Handle rejected proposal error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 500 }

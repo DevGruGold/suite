@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.4";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,6 +14,8 @@ function isValidUUID(str: string): boolean {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('conversation-access');
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -327,6 +330,7 @@ serve(async (req) => {
       }
 
       default:
+        await usageTracker.failure('Invalid action', 400);
         return new Response(
           JSON.stringify({ error: "Invalid action" }),
           { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -335,6 +339,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error("Conversation access error:", error);
+    await usageTracker.failure(error instanceof Error ? error.message : "Unknown error", 500);
     return new Response(
       JSON.stringify({ 
         error: error instanceof Error ? error.message : "Unknown error" 

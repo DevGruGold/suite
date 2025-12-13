@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -121,6 +122,8 @@ async function generateGeminiEmbedding(content: string): Promise<number[] | null
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('get-embedding');
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -155,12 +158,14 @@ serve(async (req) => {
       );
     }
 
+    await usageTracker.success({ result_summary: `embedding_generated_${provider}`, provider });
     return new Response(
       JSON.stringify({ success: true, embedding, provider }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   } catch (error) {
     console.error('Error in get-embedding function:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

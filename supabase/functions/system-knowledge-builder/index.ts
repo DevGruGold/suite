@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -7,6 +8,8 @@ const corsHeaders = {
 };
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('system-knowledge-builder');
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -123,6 +126,7 @@ serve(async (req) => {
 
     console.log('📊 System Knowledge Summary:', summary);
 
+    await usageTracker.success({ result_summary: 'knowledge_updated' });
     return new Response(JSON.stringify({
       success: true,
       message: 'System architecture knowledge updated',
@@ -133,6 +137,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ System knowledge builder error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -182,6 +183,8 @@ function determineCategory(proposal: any): string {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking('execute-approved-proposal');
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -460,6 +463,7 @@ ${generatedCode.substring(0, 1500)}${generatedCode.length > 1500 ? '\n// ... (tr
         });
     }
 
+    await usageTracker.success({ result_summary: 'proposal_queued', provider: ai_provider });
     return new Response(
       JSON.stringify({
         success: true,
@@ -479,6 +483,7 @@ ${generatedCode.substring(0, 1500)}${generatedCode.length > 1500 ? '\n// ... (tr
 
   } catch (error: any) {
     console.error('Execute Approved Proposal Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
