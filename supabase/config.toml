@@ -773,3 +773,25 @@ body = '{"action":"self_evaluate","source":"scheduled"}'
 function_name = "get-my-feedback"
 schedule = "35 */6 * * *"
 body = '{"executive_name":"Eliza","limit":20,"unacknowledged_only":true}'
+
+# ====================================================================
+# MEMORY & ANALYTICS FUNCTIONS (migrated from pg_cron)
+# ====================================================================
+
+[functions.vectorize-memory]
+verify_jwt = false
+
+[functions.predictive-analytics]
+verify_jwt = false
+
+# Vectorize Memory - Every 10 minutes at :03 (batch pending memory vectorizations)
+[[edge_runtime.scheduled_functions]]
+function_name = "vectorize-memory"
+schedule = "3,13,23,33,43,53 * * * *"
+body = '{}'
+
+# Predictive Analytics - Hourly at :09 (analyze system patterns)
+[[edge_runtime.scheduled_functions]]
+function_name = "predictive-analytics"
+schedule = "9 * * * *"
+body = '{"action":"analyze_current","data_source":"tasks"}'
