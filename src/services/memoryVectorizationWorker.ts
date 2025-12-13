@@ -77,6 +77,19 @@ export class MemoryVectorizationWorker {
           const payload = task.payload as any;
           const { memory_id, content, context_type } = payload;
 
+          // Skip empty content - don't even call the function
+          if (!content || content.trim().length === 0) {
+            console.log(`⏭️ Skipping vectorization for ${memory_id} - empty content`);
+            await supabase
+              .from('webhook_logs')
+              .update({ 
+                status: 'completed',
+                response: { skipped: true, reason: 'empty_content' }
+              })
+              .eq('id', task.id);
+            continue;
+          }
+
           // Call vectorization function
           const { data, error: vectorizeError } = await supabase.functions.invoke('vectorize-memory', {
             body: {
@@ -86,7 +99,17 @@ export class MemoryVectorizationWorker {
             }
           });
 
-          if (vectorizeError) {
+          // Handle skipped responses (400 with skipped: true) as success
+          if (data?.skipped) {
+            console.log(`⏭️ Vectorization skipped for ${memory_id}: ${data.error || 'empty content'}`);
+            await supabase
+              .from('webhook_logs')
+              .update({ 
+                status: 'completed',
+                response: data
+              })
+              .eq('id', task.id);
+          } else if (vectorizeError) {
             console.error(`Failed to vectorize memory ${memory_id}:`, vectorizeError);
             
             // Mark as failed
