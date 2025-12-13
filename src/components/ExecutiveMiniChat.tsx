@@ -210,6 +210,7 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
           <QuickResponseButtons
             onQuickResponse={(message) => handleSend(message)}
             disabled={isLoading}
+            lastMessageRole={messages.length === 0 ? null : messages[messages.length - 1].role}
           />
           
           {messages.length > 0 && (
