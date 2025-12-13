@@ -4,11 +4,31 @@ import { Button } from "./ui/button";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-export function MobileNav() {
-  const [isOpen, setIsOpen] = useState(false);
-  const { t } = useLanguage();
+interface MobileNavTriggerProps {
+  isOpen: boolean;
+  onToggle: () => void;
+}
 
-  const toggleMenu = () => setIsOpen(!isOpen);
+export function MobileNavTrigger({ isOpen, onToggle }: MobileNavTriggerProps) {
+  return (
+    <Button
+      variant="outline"
+      size="icon"
+      onClick={onToggle}
+      className="bg-card/90 backdrop-blur-sm border-border/60 shadow-md"
+    >
+      {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
+    </Button>
+  );
+}
+
+interface MobileNavOverlayProps {
+  isOpen: boolean;
+  onClose: () => void;
+}
+
+export function MobileNavOverlay({ isOpen, onClose }: MobileNavOverlayProps) {
+  const { t } = useLanguage();
 
   const navItems = [
     { to: "/", label: t('nav.home'), icon: Home },
@@ -18,36 +38,37 @@ export function MobileNav() {
     { to: "/licensing", label: "Enterprise", icon: Building2 },
   ];
 
-  return (
-    <div className="relative">
-      <div className="fixed top-4 right-4 z-50 md:hidden">
-        <Button
-          variant="outline"
-          size="icon"
-          onClick={toggleMenu}
-          className="bg-card/90 backdrop-blur-sm border-border/60 shadow-md"
-        >
-          {isOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-        </Button>
-      </div>
+  if (!isOpen) return null;
 
-      {isOpen && (
-        <div className="fixed inset-0 z-40 bg-background/98 backdrop-blur-md md:hidden animate-fade-in">
-          <nav className="flex flex-col items-center justify-center h-full space-y-6">
-            {navItems.map((item) => (
-              <Link
-                key={item.to}
-                to={item.to}
-                className="flex items-center gap-3 text-lg font-medium text-foreground hover:text-primary transition-colors"
-                onClick={toggleMenu}
-              >
-                <item.icon className="h-5 w-5" />
-                {item.label}
-              </Link>
-            ))}
-          </nav>
-        </div>
-      )}
+  return (
+    <div className="fixed inset-0 z-40 bg-background/98 backdrop-blur-md md:hidden animate-fade-in">
+      <nav className="flex flex-col items-center justify-center h-full space-y-6">
+        {navItems.map((item) => (
+          <Link
+            key={item.to}
+            to={item.to}
+            className="flex items-center gap-3 text-lg font-medium text-foreground hover:text-primary transition-colors"
+            onClick={onClose}
+          >
+            <item.icon className="h-5 w-5" />
+            {item.label}
+          </Link>
+        ))}
+      </nav>
     </div>
+  );
+}
+
+// Legacy component for backwards compatibility
+export function MobileNav() {
+  const [isOpen, setIsOpen] = useState(false);
+
+  return (
+    <>
+      <div className="md:hidden">
+        <MobileNavTrigger isOpen={isOpen} onToggle={() => setIsOpen(!isOpen)} />
+      </div>
+      <MobileNavOverlay isOpen={isOpen} onClose={() => setIsOpen(false)} />
+    </>
   );
 }
