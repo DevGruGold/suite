@@ -149,8 +149,10 @@ serve(async (req) => {
       console.log(`⚡ Quick task (${estimatedMinutes} min) - executing directly without agent assignment`);
     }
     
-    // Create the visual pipeline task
+    // Create the visual pipeline task with checklist from step names
     const pipelineTaskId = `task-${execution.id}`;
+    const stepNames = execution.steps.map(s => s.name);
+    
     const { data: pipelineTask, error: taskError } = await supabase
       .from('tasks')
       .insert({
@@ -165,10 +167,12 @@ serve(async (req) => {
         progress_percentage: 0,
         stage_started_at: new Date().toISOString(),
         assignee_agent_id: assignedAgentId,
+        completed_checklist_items: [], // Initialize empty, will be populated as steps complete
         metadata: { 
           workflow_id: execution.id, 
           total_steps: execution.steps.length,
-          step_names: execution.steps.map(s => s.name)
+          step_names: stepNames,
+          checklist: stepNames // Store checklist in metadata for STAE compatibility
         }
       })
       .select()
@@ -313,11 +317,29 @@ serve(async (req) => {
           const completedProgressPercent = Math.round(((i + 1) / execution.steps.length) * 100);
           const completedStage = getStageForProgress(i, execution.steps.length);
           
+          // ========== UPDATE COMPLETED CHECKLIST ITEMS ==========
+          // Get current task to retrieve existing completed items
+          const { data: currentTask } = await supabase
+            .from('tasks')
+            .select('completed_checklist_items, metadata')
+            .eq('id', pipelineTaskId)
+            .single();
+          
+          const existingCompleted = currentTask?.completed_checklist_items || [];
+          const checklist = currentTask?.metadata?.checklist || currentTask?.metadata?.step_names || [];
+          
+          // Add the completed step name to checklist items
+          const stepName = step.name;
+          const updatedCompleted = existingCompleted.includes(stepName) 
+            ? existingCompleted 
+            : [...existingCompleted, stepName];
+          
           await supabase
             .from('tasks')
             .update({
               progress_percentage: completedProgressPercent,
               stage: completedStage,
+              completed_checklist_items: updatedCompleted,
               updated_at: new Date().toISOString()
             })
             .eq('id', pipelineTaskId);
