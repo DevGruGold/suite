@@ -539,7 +539,13 @@ serve(async (req) => {
           const threshold = STAGE_THRESHOLDS[task.stage];
           
           if (threshold && currentStageIdx < STAGE_ORDER.length - 1) {
-            const shouldAdvance = checklistProgress >= threshold.minChecklist || hoursInStage >= threshold.minHours;
+            // REQUIRE documented progress: at least one checklist item OR explicit progress
+            const hasDocumentedProgress = completedItems.length > 0 || (task.progress_percentage > 0);
+            
+            // Only advance if: (checklist progress met AND has any progress) OR (time elapsed AND has any progress)
+            const meetsChecklistThreshold = checklistProgress >= threshold.minChecklist;
+            const meetsTimeThreshold = hoursInStage >= threshold.minHours;
+            const shouldAdvance = hasDocumentedProgress && (meetsChecklistThreshold || meetsTimeThreshold);
             
             if (shouldAdvance) {
               const nextStage = STAGE_ORDER[currentStageIdx + 1];
@@ -691,6 +697,76 @@ serve(async (req) => {
           completed_items: completedItems,
           pending_items: checklist.filter((item: string) => !completedItems.includes(item)),
           total_items: checklist.length
+        };
+        break;
+      }
+
+      // ====================================================================
+      // PHASE 2: DOCUMENT AGENT PROGRESS
+      // ====================================================================
+      case 'document_agent_progress': {
+        const { task_id, agent_id, work_summary, items_completed = [], progress_note } = data;
+
+        if (!task_id) throw new Error('task_id is required');
+
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+
+        const existingCompleted = task.completed_checklist_items || [];
+        const checklist = task.metadata?.checklist || [];
+        
+        // Add newly completed items
+        const newlyCompleted = items_completed.filter((item: string) => !existingCompleted.includes(item));
+        const updatedCompleted = [...existingCompleted, ...newlyCompleted];
+        
+        // Calculate progress percentage
+        const progressPercent = checklist.length > 0 
+          ? Math.round((updatedCompleted.length / checklist.length) * 100) 
+          : Math.min(100, (task.progress_percentage || 0) + 10);
+
+        // Build agent notes history
+        const existingNotes = task.metadata?.agent_notes || [];
+        const newNote = {
+          timestamp: new Date().toISOString(),
+          agent_id: agent_id || task.assignee_agent_id,
+          summary: work_summary || progress_note || `Completed: ${newlyCompleted.join(', ')}`,
+          items_completed: newlyCompleted
+        };
+
+        // Update task with progress
+        await supabase.from('tasks').update({
+          completed_checklist_items: updatedCompleted,
+          progress_percentage: progressPercent,
+          metadata: {
+            ...task.metadata,
+            agent_notes: [...existingNotes, newNote],
+            last_progress_update: new Date().toISOString()
+          }
+        }).eq('id', task_id);
+
+        // Log activity
+        await supabase.from('eliza_activity_log').insert({
+          activity_type: 'agent_progress_documented',
+          title: `📝 Agent Progress: ${task.title}`,
+          description: work_summary || `Completed ${newlyCompleted.length} items (${progressPercent}% total)`,
+          status: 'completed',
+          task_id: task_id,
+          agent_id: agent_id || task.assignee_agent_id,
+          metadata: { 
+            items_completed: newlyCompleted, 
+            progress_percent: progressPercent,
+            note: progress_note
+          }
+        });
+
+        result = {
+          success: true,
+          task_id,
+          progress_percent: progressPercent,
+          items_newly_completed: newlyCompleted,
+          total_completed: updatedCompleted.length,
+          total_items: checklist.length,
+          note_recorded: !!work_summary || !!progress_note
         };
         break;
       }

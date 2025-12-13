@@ -527,7 +527,7 @@ serve(async (req) => {
       // UPDATE TASK STATUS
       // ------------------------
       case "update_task_status": {
-        const { task_id, status, completion_data } = data ?? {};
+        const { task_id, status, completion_data, resolution_notes, items_completed = [] } = data ?? {};
         if (!task_id || !status) throw new ValidationError("update_task_status requires task_id and status");
 
         // Validate status
@@ -540,12 +540,48 @@ serve(async (req) => {
         const task = fetched.data;
         const oldStatus = task?.status;
 
-        const updated = await supabase.from("tasks").update({ status, ...(completion_data ?? {}) }).eq("id", task_id).select().single();
+        // Build update payload
+        const updatePayload: any = { 
+          status, 
+          updated_at: new Date().toISOString(),
+          ...(completion_data ?? {}) 
+        };
+        
+        // If completing, set progress to 100% and mark all checklist items complete
+        const completionStatuses = ["COMPLETED", "DONE"];
+        if (completionStatuses.includes(status.toUpperCase())) {
+          updatePayload.progress_percentage = 100;
+          updatePayload.completed_at = new Date().toISOString();
+          
+          // Mark all checklist items as completed
+          const checklist = task?.metadata?.checklist || [];
+          if (checklist.length > 0) {
+            updatePayload.completed_checklist_items = checklist;
+          }
+          
+          if (resolution_notes) {
+            updatePayload.resolution_notes = resolution_notes;
+          }
+        }
+
+        // If items_completed provided, merge with existing
+        if (items_completed.length > 0) {
+          const existing = task?.completed_checklist_items || [];
+          const merged = [...new Set([...existing, ...items_completed])];
+          updatePayload.completed_checklist_items = merged;
+          
+          const checklist = task?.metadata?.checklist || [];
+          if (checklist.length > 0) {
+            updatePayload.progress_percentage = Math.round((merged.length / checklist.length) * 100);
+          }
+        }
+
+        const updated = await supabase.from("tasks").update(updatePayload).eq("id", task_id).select().single();
         if (updated.error) throw new AppError(updated.error.message);
 
         // free agent if COMPLETED/DONE/FAILED/CANCELLED
-        const completionStatuses = ["COMPLETED", "DONE", "FAILED", "CANCELLED"];
-        if (completionStatuses.includes(status.toUpperCase()) && task?.assignee_agent_id) {
+        const freeAgentStatuses = ["COMPLETED", "DONE", "FAILED", "CANCELLED"];
+        if (freeAgentStatuses.includes(status.toUpperCase()) && task?.assignee_agent_id) {
           await supabase.from("agents").update({ status: "IDLE" }).eq("id", task.assignee_agent_id);
         }
 
@@ -553,12 +589,16 @@ serve(async (req) => {
         await supabase.from("eliza_activity_log").insert({
           activity_type: "task_status_updated",
           title: `Task Status Updated: ${task?.title ?? task_id}`,
-          description: `Status changed from ${oldStatus} to ${status}`,
+          description: `Status changed from ${oldStatus} to ${status}${resolution_notes ? ` - ${resolution_notes}` : ''}`,
+          task_id: task_id,
+          agent_id: task?.assignee_agent_id,
           metadata: {
             task_id: updated.data.id,
             old_status: oldStatus,
             new_status: status,
             completion_data,
+            resolution_notes,
+            progress_percentage: updatePayload.progress_percentage
           },
           status: "completed",
         });
@@ -568,18 +608,51 @@ serve(async (req) => {
       }
 
       // ------------------------
-      // REPORT PROGRESS
+      // REPORT PROGRESS (enhanced to update task checklist)
       // ------------------------
       case "report_progress": {
-        const { agent_id, task_id, progress, notes } = data ?? {};
+        const { agent_id, task_id, progress, notes, items_completed = [], work_summary } = data ?? {};
         if (!agent_id || !task_id) throw new ValidationError("report_progress requires agent_id and task_id");
+        
+        // Log agent activity
         const inserted = await supabase.from("agent_activities").insert({
           agent_id,
           activity: `Progress: ${progress ?? "N/A"}. Notes: ${notes ?? "N/A"}`,
           level: "info",
         }).select().single();
         if (inserted.error) throw new AppError(inserted.error.message);
-        result = inserted.data;
+
+        // If items completed or work summary provided, update task progress via STAE
+        if (items_completed.length > 0 || work_summary || notes) {
+          try {
+            const staeResponse = await callEdgeFunction('suite-task-automation-engine', {
+              action: 'document_agent_progress',
+              data: {
+                task_id,
+                agent_id,
+                items_completed,
+                work_summary: work_summary || notes,
+                progress_note: notes
+              }
+            });
+            
+            if (staeResponse.success) {
+              console.info("[agent-manager] report_progress updated task via STAE:", staeResponse);
+            }
+          } catch (staeError) {
+            console.warn("[agent-manager] report_progress STAE update failed (non-blocking):", staeError);
+          }
+        }
+
+        // Also update the task's progress_percentage if numeric progress provided
+        if (typeof progress === 'number' && progress >= 0 && progress <= 100) {
+          await supabase.from("tasks").update({ 
+            progress_percentage: progress,
+            updated_at: new Date().toISOString()
+          }).eq("id", task_id);
+        }
+        
+        result = { ...inserted.data, task_updated: true };
         break;
       }
 
