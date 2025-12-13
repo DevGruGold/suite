@@ -158,7 +158,45 @@ async function logToolExecution(supabase: any, toolName: string, args: any, stat
 
 // Tool execution is now handled by shared toolExecutor.ts (128+ tools)
 
+// ⚡ CONFIRMATION PHRASE DETECTION - Forces immediate tool execution
+function detectConfirmationPhrase(userInput: string): boolean {
+  const confirmationPatterns = [
+    /^ok,?\s*do\s*it!?$/i,
+    /^yes,?\s*(go ahead|proceed)?!?$/i,
+    /^do\s*it!?$/i,
+    /^go\s*ahead!?$/i,
+    /^proceed!?$/i,
+    /^execute\s*it!?$/i,
+    /^run\s*it!?$/i,
+    /^make\s*it\s*happen!?$/i,
+    /great\s*work.*proceed/i,
+    /good\s*job.*proceed/i,
+    /solid\s*analysis.*proceed/i,
+    /good\s*analysis.*continue/i,
+    /^ok!?$/i,
+    /^yes!?$/i,
+    /^👍$/,
+    /ok,?\s*do\s*it/i,  // Non-anchored version to catch in middle of sentence
+  ];
+  const trimmed = userInput.trim();
+  return confirmationPatterns.some(p => p.test(trimmed));
+}
 
+// Extract the previous assistant message to recall promised actions
+function extractPreviousAssistantPromise(conversationHistory: any): string | null {
+  if (!conversationHistory?.messages || !Array.isArray(conversationHistory.messages)) {
+    return null;
+  }
+  
+  const assistantMessages = conversationHistory.messages
+    .filter((m: any) => m.message_type === 'assistant' || m.role === 'assistant')
+    .slice(-2); // Get last 2 assistant messages
+  
+  if (assistantMessages.length === 0) return null;
+  
+  const lastMessage = assistantMessages[assistantMessages.length - 1];
+  return lastMessage?.content || null;
+}
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -239,6 +277,20 @@ serve(async (req) => {
     
     // Extract user input for multi-step detection
     const userInput = messages[messages.length - 1]?.content || '';
+    
+    // ⚡ CONFIRMATION DETECTION - Force immediate execution mode
+    const isConfirmation = detectConfirmationPhrase(userInput);
+    const previousPromise = isConfirmation ? extractPreviousAssistantPromise(conversationHistory) : null;
+    
+    if (isConfirmation) {
+      console.log('⚡ ════════════════════════════════════════════════');
+      console.log('⚡ CONFIRMATION PHRASE DETECTED - FORCING TOOL EXECUTION');
+      console.log(`⚡ User said: "${userInput}"`);
+      if (previousPromise) {
+        console.log(`⚡ Previous promise (first 200 chars): "${previousPromise.substring(0, 200)}..."`);
+      }
+      console.log('⚡ ════════════════════════════════════════════════');
+    }
     
     // ========== PHASE 1: SELECTIVE ORCHESTRATION (ONLY FOR LONG-RUNNING TASKS) ==========
     // Only orchestrate for truly complex, multi-day tasks - NOT simple queries
@@ -678,16 +730,68 @@ You are looking at the user RIGHT NOW through their webcam. This means:
             console.warn('⚠️ Request body very large (>400K chars) - may cause context overflow');
           }
           
+          // ⚡ CONFIRMATION MODE: Inject previous promise context and force tool execution
+          let effectiveSystemPrompt = systemPrompt;
+          if (isConfirmation && previousPromise) {
+            const confirmationInjection = `
+
+⚡⚡⚡ CRITICAL CONFIRMATION RECEIVED ⚡⚡⚡
+User just said: "${userInput}"
+Your PREVIOUS message was: "${previousPromise.substring(0, 800)}"
+
+YOU MUST NOW:
+1. IMMEDIATELY call the tool you promised - NO explanations, NO "I'll now...", NO preamble
+2. Execute the action you described in your previous message
+3. Return ONLY the result of that execution
+
+DO NOT SAY: "I'll proceed to...", "Let me...", "I'm going to..."
+JUST CALL THE TOOL DIRECTLY.
+⚡⚡⚡ END CONFIRMATION MANDATE ⚡⚡⚡
+
+`;
+            effectiveSystemPrompt = confirmationInjection + effectiveSystemPrompt;
+            console.log('⚡ Injected confirmation mandate into system prompt');
+          }
+          
           message = await callLovableAIGateway(messagesForGateway, {
             model: 'google/gemini-2.5-flash',
-            systemPrompt,
-            temperature: 0.7,
+            systemPrompt: effectiveSystemPrompt,
+            temperature: isConfirmation ? 0.3 : 0.7, // Lower temp for deterministic tool calls
             max_tokens: 4000,
-            tools: ELIZA_TOOLS // Enable native tool calling
+            tools: ELIZA_TOOLS, // Enable native tool calling
+            tool_choice: isConfirmation ? 'required' : 'auto' // Force tool call on confirmation
           });
           
           // Gateway now returns full message object with tool_calls array
           console.log(`🔧 Gateway returned ${message.tool_calls?.length || 0} tool calls`);
+          
+          // ⚡ CONFIRMATION RE-TRY: If user confirmed but AI still returned 0 tool calls
+          if (isConfirmation && (!message.tool_calls || message.tool_calls.length === 0)) {
+            console.warn('⚠️ Confirmation detected but gateway returned 0 tool calls - forcing re-call');
+            
+            const forcedPrompt = `
+🚨 MANDATORY TOOL EXECUTION 🚨
+User confirmed with "${userInput}" - You MUST call a tool NOW.
+Your previous message promised an action. EXECUTE IT IMMEDIATELY.
+DO NOT respond with text. CALL THE TOOL.
+
+Previous promise: "${previousPromise?.substring(0, 500) || 'Check system status'}"
+
+If unsure which tool, call invoke_edge_function with function_name: "system-status"
+` + effectiveSystemPrompt;
+
+            console.log('⚡ Re-calling gateway with FORCED tool execution mandate');
+            message = await callLovableAIGateway(messagesForGateway, {
+              model: 'google/gemini-2.5-flash',
+              systemPrompt: forcedPrompt,
+              temperature: 0.2, // Very low for deterministic behavior
+              max_tokens: 4000,
+              tools: ELIZA_TOOLS,
+              tool_choice: 'required' // Absolutely force tool call
+            });
+            
+            console.log(`🔧 Forced re-call returned ${message.tool_calls?.length || 0} tool calls`);
+          }
           
         } catch (error) {
           console.error('❌ Lovable AI Gateway error:', error);
