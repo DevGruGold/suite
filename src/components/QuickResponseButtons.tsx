@@ -13,12 +13,18 @@ const emptyConversationResponses = [
   { label: "Help me get started", emoji: "🎯" }
 ];
 
-// Buttons shown during active conversation
-const activeConversationResponses = [
-  { label: "What can you help me with?", emoji: "❓" },
-  { label: "Show me system status", emoji: "📊" },
+// Buttons shown after AI responds (prompts for follow-up)
+const afterAssistantResponses = [
+  { label: "Tell me more", emoji: "🔄" },
+  { label: "What else can you help with?", emoji: "❓" },
+  { label: "Show me system status", emoji: "📊" }
+];
+
+// Buttons shown after user sends (discovery prompts while waiting)
+const afterUserResponses = [
   { label: "List available tools", emoji: "🛠️" },
-  { label: "Tell me more", emoji: "🔄" }
+  { label: "Check system health", emoji: "💚" },
+  { label: "What's new?", emoji: "✨" }
 ];
 
 export const QuickResponseButtons = ({ 
@@ -29,7 +35,9 @@ export const QuickResponseButtons = ({
   // Select appropriate button set based on context
   const responses = lastMessageRole === null 
     ? emptyConversationResponses 
-    : activeConversationResponses;
+    : lastMessageRole === 'assistant'
+      ? afterAssistantResponses
+      : afterUserResponses;
 
   return (
     <div className="flex flex-wrap gap-2 mt-2">
