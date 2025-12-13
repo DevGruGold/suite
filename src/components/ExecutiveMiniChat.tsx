@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Send, Loader2 } from 'lucide-react';
 import { ExecutiveName, EXECUTIVE_PROFILES } from '@/components/ExecutiveBio';
 import { UnifiedElizaService } from '@/services/unifiedElizaService';
+import { QuickResponseButtons } from './QuickResponseButtons';
 
 interface Message {
   id: string;
@@ -55,13 +56,14 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
     }
   }, [messages]);
 
-  const handleSend = async () => {
-    if (!input.trim() || isLoading) return;
+  const handleSend = async (quickMessage?: string) => {
+    const messageText = quickMessage || input.trim();
+    if (!messageText || isLoading) return;
 
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
-      content: input.trim(),
+      content: messageText,
       timestamp: new Date(),
     };
 
@@ -192,7 +194,7 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
             />
             <Button
               size="sm"
-              onClick={handleSend}
+              onClick={() => handleSend()}
               disabled={!input.trim() || isLoading}
               className="h-9 w-9 p-0"
             >
@@ -203,6 +205,13 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
               )}
             </Button>
           </div>
+          
+          {/* Quick Response Buttons */}
+          <QuickResponseButtons
+            onQuickResponse={(message) => handleSend(message)}
+            disabled={isLoading}
+          />
+          
           {messages.length > 0 && (
             <button
               onClick={clearChat}
