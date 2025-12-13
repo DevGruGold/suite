@@ -217,6 +217,10 @@ serve(async (req) => {
     console.log('📤 Calling DeepSeek API with tools...');
     const apiStartTime = Date.now();
     
+    // Force tool execution for data-seeking queries
+    const forceToolExecution = needsDataRetrieval(messages);
+    console.log(`📊 DeepSeek - Data retrieval detected: ${forceToolExecution}, using tool_choice: ${forceToolExecution ? 'required' : 'auto'}`);
+    
     // Call DeepSeek API with tools
     let deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
@@ -228,8 +232,8 @@ serve(async (req) => {
         model: 'deepseek-chat',
         messages: aiMessages,
         tools: ELIZA_TOOLS,
-        tool_choice: 'auto',
-        temperature: 0.7,
+        tool_choice: forceToolExecution ? 'required' : 'auto',
+        temperature: forceToolExecution ? 0.3 : 0.7, // Lower temp for data queries
         max_tokens: councilMode ? 800 : 2000
       })
     });

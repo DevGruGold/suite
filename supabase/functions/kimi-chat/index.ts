@@ -55,10 +55,41 @@ function parseTextToolCalls(content: string): Array<any> | null {
 }
 
 // Detect if query needs data (should force tool calls)
+// EXPANDED: Now catches most data-seeking queries to force immediate execution
 function needsDataRetrieval(messages: any[]): boolean {
   const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
-  const dataKeywords = ['what is', 'show me', 'check', 'status', 'how much', 'how many', 'get', 'list', 'find', 'current', 'mining', 'hashrate', 'workers', 'health', 'agents', 'tasks', 'ecosystem', 'stats'];
-  return dataKeywords.some(k => lastUser.includes(k));
+  
+  // Comprehensive data-seeking patterns - force tool execution immediately
+  const dataKeywords = [
+    // Questions (any question likely needs data)
+    'what is', 'what\'s', 'what are', 'who is', 'who are', 'where is', 'when is',
+    'how is', 'how are', 'how much', 'how many', 'why is', 'why are',
+    // Commands/Actions
+    'show me', 'tell me', 'give me', 'fetch', 'get', 'list', 'find', 'search',
+    'check', 'analyze', 'run', 'execute', 'perform', 'scan', 'diagnose',
+    'look up', 'lookup', 'retrieve', 'query', 'pull', 'grab',
+    // Status/Metrics
+    'status', 'health', 'stats', 'statistics', 'metrics', 'analytics',
+    'performance', 'report', 'overview', 'summary', 'dashboard',
+    // System/Ecosystem
+    'current', 'recent', 'latest', 'today', 'now', 'real-time', 'realtime', 'live',
+    'mining', 'hashrate', 'workers', 'agents', 'tasks', 'ecosystem',
+    'proposals', 'governance', 'cron', 'functions', 'logs', 'activity',
+    // Memory/Knowledge
+    'recall', 'remember', 'stored', 'saved', 'previous', 'history',
+    // Comparisons/Specifics
+    'compare', 'between', 'vs', 'versus', 'difference',
+    'count', 'total', 'number', 'amount', 'percentage', 'rate'
+  ];
+  
+  // Also check for question marks - any question likely needs data
+  const hasQuestionMark = lastUser.includes('?');
+  
+  // Check for imperative sentences that imply action
+  const imperativePatterns = /^(show|tell|give|get|list|find|check|run|execute|analyze|fetch|retrieve|scan|diagnose|look|pull)/i;
+  const startsWithImperative = imperativePatterns.test(lastUser.trim());
+  
+  return hasQuestionMark || startsWithImperative || dataKeywords.some(k => lastUser.includes(k));
 }
 
 // CRITICAL TOOL CALLING INSTRUCTION
