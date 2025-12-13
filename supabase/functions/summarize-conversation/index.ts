@@ -40,13 +40,14 @@ SUMMARY:`;
 
     try {
       console.log('🔄 Generating summary with AI fallback cascade...');
-      summary = await generateTextWithFallback(prompt, undefined, {
+      const result = await generateTextWithFallback(prompt, undefined, {
         temperature: 0.5,
         maxTokens: 500,
         useFullElizaContext: false
       });
-      aiProvider = 'ai_cascade';
-      console.log('✅ Summary generated via AI cascade');
+      summary = result.content;
+      aiProvider = result.provider;
+      console.log(`✅ Summary generated via ${aiProvider}`);
     } catch (aiError) {
       console.warn('⚠️ All AI providers failed, using static fallback:', aiError);
       summary = staticFallback;

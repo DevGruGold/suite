@@ -66,29 +66,68 @@ serve(async (req) => {
       }
     }
 
-    // Read Python code
-    const pythonCode = await Deno.readTextFile('./predictive_analytics_core.py');
-
-    // Execute Python analytics
-    const { data: pythonResult, error: pythonError } = await supabase.functions.invoke('python-executor', {
-      body: {
-        code: pythonCode,
-        language: 'python',
-        stdin: JSON.stringify({
-          data_source,
-          data: sourceData,
-          action
+    // Read Python code with timeout guard
+    let pythonCode: string;
+    try {
+      pythonCode = await Deno.readTextFile('./predictive_analytics_core.py');
+    } catch (fileError) {
+      console.error('Failed to read Python file:', fileError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Python analytics script not found',
+          action,
+          data_source 
         }),
-        purpose: 'predictive_analytics'
-      }
-    });
-
-    if (pythonError) {
-      console.error('Python execution error:', pythonError);
-      throw new Error(`Python execution failed: ${pythonError.message}`);
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
-    const result = pythonResult.output ? JSON.parse(pythonResult.output) : {};
+    // Execute Python analytics with timeout guard (15 seconds)
+    const PYTHON_TIMEOUT_MS = 15000;
+    let pythonResult: any;
+    
+    try {
+      const pythonPromise = supabase.functions.invoke('python-executor', {
+        body: {
+          code: pythonCode,
+          language: 'python',
+          stdin: JSON.stringify({
+            data_source,
+            data: sourceData,
+            action
+          }),
+          purpose: 'predictive_analytics'
+        }
+      });
+      
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Python execution timeout')), PYTHON_TIMEOUT_MS)
+      );
+      
+      const { data, error: pythonError } = await Promise.race([pythonPromise, timeoutPromise]);
+      
+      if (pythonError) {
+        console.error('Python execution error:', pythonError);
+        throw new Error(`Python execution failed: ${pythonError.message}`);
+      }
+      
+      pythonResult = data;
+    } catch (timeoutError) {
+      console.error('Python execution timeout or error:', timeoutError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: timeoutError.message,
+          action,
+          data_source,
+          partial: true
+        }),
+        { status: 504, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const result = pythonResult?.output ? JSON.parse(pythonResult.output) : {};
 
     // Store insights in database
     if (action === 'analyze_current' && result.anomalies && result.anomalies.length > 0) {

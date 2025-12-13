@@ -471,23 +471,34 @@ export async function callAIWithFallback(
 
 /**
  * Simple text generation with fallback (convenience wrapper)
+ * Returns { content, provider } for tracking which AI provider was used
  */
 export async function generateTextWithFallback(
   prompt: string,
   systemPrompt?: string,
   options: Omit<UnifiedAIOptions, 'systemPrompt'> = {}
-): Promise<string> {
-  const result = await callAIWithFallback(
+): Promise<{ content: string; provider: string }> {
+  const timeoutMs = options.maxTokens && options.maxTokens > 4000 ? 25000 : 15000;
+  
+  // Race against timeout to prevent cron job hangs
+  const aiPromise = callAIWithFallback(
     [{ role: 'user', content: prompt }],
     { ...options, systemPrompt }
   );
   
+  const timeoutPromise = new Promise<never>((_, reject) => 
+    setTimeout(() => reject(new Error('AI generation timeout')), timeoutMs)
+  );
+  
+  const result = await Promise.race([aiPromise, timeoutPromise]);
+  
   // Handle case where result might be a message object with tool calls
-  if (typeof result === 'object' && result.content) {
-    return result.content;
+  if (typeof result === 'object' && result.content !== undefined) {
+    return { content: result.content, provider: result.provider || 'unknown' };
   }
   
-  return typeof result === 'string' ? result : JSON.stringify(result);
+  const content = typeof result === 'string' ? result : JSON.stringify(result);
+  return { content, provider: 'unknown' };
 }
 
 /**
