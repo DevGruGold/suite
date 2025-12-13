@@ -1,14 +1,15 @@
 import { Outlet, useLocation } from "react-router-dom";
-import { MobileNav } from "@/components/MobileNav";
+import { MobileNavTrigger, MobileNavOverlay } from "@/components/MobileNav";
 import { DesktopNav } from "@/components/DesktopNav";
 import { Footer } from "@/components/Footer";
 import { UserMenu } from "@/components/UserMenu";
 import { Activity } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export const AppLayout = () => {
   const location = useLocation();
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   // Audio autoplay on first load (only on home)
   useEffect(() => {
@@ -34,7 +35,7 @@ export const AppLayout = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <MobileNav />
+      <MobileNavOverlay isOpen={mobileNavOpen} onClose={() => setMobileNavOpen(false)} />
       
       {/* Persistent Header */}
       <header className="border-b border-border/60 bg-card/50 backdrop-blur-sm sticky top-0 z-40">
@@ -65,9 +66,10 @@ export const AppLayout = () => {
               <UserMenu />
             </div>
 
-            {/* Mobile User Menu */}
-            <div className="md:hidden">
+            {/* Mobile: User Menu + Hamburger side-by-side */}
+            <div className="md:hidden flex items-center gap-2">
               <UserMenu />
+              <MobileNavTrigger isOpen={mobileNavOpen} onToggle={() => setMobileNavOpen(!mobileNavOpen)} />
             </div>
           </div>
         </div>
