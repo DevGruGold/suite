@@ -1,10 +1,11 @@
-import { useState, useEffect, DragEvent } from 'react';
+import { useState, useEffect, DragEvent, TouchEvent as ReactTouchEvent } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { 
   MessageSquare, 
   FileText, 
@@ -21,8 +22,17 @@ import {
   ArrowLeft,
   ArrowRight,
   GripVertical,
-  ExternalLink
+  ExternalLink,
+  UserPlus,
+  Loader2
 } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { TaskProgressRing, TaskProgressBar } from './TaskProgressRing';
 import { AgentTaskSummary } from './AgentTaskSummary';
 import { TaskDetailSheet } from './TaskDetailSheet';
@@ -390,6 +400,7 @@ export function AgentTaskVisualizer() {
   const [error, setError] = useState<string | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [isLive, setIsLive] = useState(true);
+  const isMobile = useIsMobile();
   
   // Drag and drop state
   const [draggedTask, setDraggedTask] = useState<Task | null>(null);
@@ -404,6 +415,11 @@ export function AgentTaskVisualizer() {
   const [selectedAgent, setSelectedAgent] = useState<Agent | null>(null);
   const [isAgentSheetOpen, setIsAgentSheetOpen] = useState(false);
   const [dragOverAgentId, setDragOverAgentId] = useState<string | null>(null);
+  
+  // Mobile reassign dialog state
+  const [mobileReassignTask, setMobileReassignTask] = useState<Task | null>(null);
+  const [isMobileReassignOpen, setIsMobileReassignOpen] = useState(false);
+  const [isGeneratingHandoff, setIsGeneratingHandoff] = useState(false);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -417,6 +433,37 @@ export function AgentTaskVisualizer() {
   const handleAgentClick = (agent: Agent) => {
     setSelectedAgent(agent);
     setIsAgentSheetOpen(true);
+  };
+  
+  // Mobile reassign handler - tap task to open reassign dialog
+  const handleMobileReassign = (task: Task) => {
+    if (isMobile) {
+      setMobileReassignTask(task);
+      setIsMobileReassignOpen(true);
+    }
+  };
+  
+  // Handle mobile agent selection for reassignment
+  const handleMobileAgentSelect = async (agentId: string) => {
+    if (!mobileReassignTask) return;
+    
+    setIsGeneratingHandoff(true);
+    try {
+      const newAgent = agentMap.get(agentId);
+      const oldAgent = mobileReassignTask.assignee_agent_id 
+        ? agentMap.get(mobileReassignTask.assignee_agent_id) 
+        : undefined;
+      
+      const aiConfirmation = newAgent 
+        ? await generateHandoffConfirmation(mobileReassignTask, newAgent, oldAgent)
+        : 'Task unassigned.';
+      
+      await handleTaskReassignWithHandoff(mobileReassignTask.id, agentId, aiConfirmation, oldAgent, newAgent);
+      setIsMobileReassignOpen(false);
+      setMobileReassignTask(null);
+    } finally {
+      setIsGeneratingHandoff(false);
+    }
   };
   
   const handleTaskReassign = async (taskId: string, newAgentId: string | null) => {
@@ -513,6 +560,29 @@ export function AgentTaskVisualizer() {
     }
   };
   
+  // Generate AI handoff confirmation
+  const generateHandoffConfirmation = async (
+    task: Task, 
+    newAgent: Agent, 
+    oldAgent?: Agent
+  ): Promise<string> => {
+    try {
+      const { data, error } = await supabase.functions.invoke('lovable-chat', {
+        body: {
+          message: `Generate a brief 1-2 sentence handoff confirmation from agent "${newAgent.name}" (role: ${newAgent.role}) accepting task "${task.title}" at ${task.progress_percentage || 0}% progress in ${task.stage} stage. Make it sound like the agent understands the work context and is ready to continue. Be concise and professional.`,
+          quick: true
+        }
+      });
+      
+      if (error) throw error;
+      return data?.response || data?.content || `${newAgent.name} acknowledges task and is reviewing current progress.`;
+    } catch (err) {
+      console.error('[AgentTaskVisualizer] Failed to generate handoff confirmation:', err);
+      // Fallback to static confirmation
+      return `${newAgent.name} acknowledges "${task.title}" at ${task.progress_percentage || 0}% completion and is taking over from the ${task.stage} stage.`;
+    }
+  };
+  
   const handleTaskDropToAgent = async (e: DragEvent<HTMLDivElement>, agentId: string) => {
     e.preventDefault();
     setDragOverAgentId(null);
@@ -525,10 +595,119 @@ export function AgentTaskVisualizer() {
     
     setIsUpdating(true);
     try {
-      await handleTaskReassign(draggedTask.id, agentId);
+      const newAgent = agentMap.get(agentId);
+      const oldAgent = draggedTask.assignee_agent_id ? agentMap.get(draggedTask.assignee_agent_id) : undefined;
+      
+      // Generate AI confirmation for the handoff
+      const aiConfirmation = newAgent 
+        ? await generateHandoffConfirmation(draggedTask, newAgent, oldAgent)
+        : 'Task unassigned.';
+      
+      // Perform the reassignment
+      await handleTaskReassignWithHandoff(draggedTask.id, agentId, aiConfirmation, oldAgent, newAgent);
     } finally {
       setIsUpdating(false);
       setDraggedTask(null);
+    }
+  };
+  
+  // Enhanced task reassign with intelligent handoff logging
+  const handleTaskReassignWithHandoff = async (
+    taskId: string, 
+    newAgentId: string | null,
+    aiConfirmation: string,
+    oldAgent?: Agent,
+    newAgent?: Agent
+  ) => {
+    const task = tasks.find(t => t.id === taskId);
+    if (!task) return;
+    
+    const oldAgentId = task.assignee_agent_id;
+    
+    try {
+      // Update task in database
+      const { error: updateError } = await supabase
+        .from('tasks')
+        .update({ 
+          assignee_agent_id: newAgentId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', taskId);
+      
+      if (updateError) throw updateError;
+      
+      // Update agent workloads
+      if (oldAgentId) {
+        await supabase
+          .from('agents')
+          .update({ 
+            current_workload: Math.max(0, (oldAgent?.current_workload || 1) - 1),
+            status: 'IDLE'
+          })
+          .eq('id', oldAgentId);
+      }
+      
+      if (newAgentId) {
+        await supabase
+          .from('agents')
+          .update({ 
+            current_workload: (newAgent?.current_workload || 0) + 1,
+            status: 'BUSY'
+          })
+          .eq('id', newAgentId);
+      }
+      
+      // Log activity with AI handoff confirmation
+      await supabase.from('eliza_activity_log').insert({
+        activity_type: 'task_handoff',
+        title: newAgentId 
+          ? `Task handed off: ${oldAgent?.name || 'Unassigned'} → ${newAgent?.name}`
+          : `Task unassigned from ${oldAgent?.name || 'agent'}`,
+        description: aiConfirmation,
+        status: 'completed',
+        task_id: taskId,
+        agent_id: newAgentId || oldAgentId || null,
+        metadata: {
+          handoff_type: 'drag_drop',
+          from_agent: { id: oldAgentId, name: oldAgent?.name },
+          to_agent: { id: newAgentId, name: newAgent?.name },
+          task_progress: task.progress_percentage,
+          task_stage: task.stage,
+          ai_confirmation: aiConfirmation
+        }
+      });
+      
+      // Update local state
+      setTasks(prev => prev.map(t => 
+        t.id === taskId ? { ...t, assignee_agent_id: newAgentId } : t
+      ));
+      
+      // Update agents state
+      setAgents(prev => prev.map(a => {
+        if (a.id === oldAgentId) {
+          return { ...a, current_workload: Math.max(0, (a.current_workload || 1) - 1), status: 'IDLE' };
+        }
+        if (a.id === newAgentId) {
+          return { ...a, current_workload: (a.current_workload || 0) + 1, status: 'BUSY' };
+        }
+        return a;
+      }));
+      
+      // Show toast with AI confirmation
+      toast({
+        title: newAgentId ? `🤝 Handoff to ${newAgent?.name}` : 'Task unassigned',
+        description: aiConfirmation,
+        duration: 5000,
+      });
+      
+    } catch (err) {
+      console.error('[AgentTaskVisualizer] Failed to reassign task:', err);
+      toast({
+        title: 'Failed to reassign task',
+        description: err instanceof Error ? err.message : 'An error occurred',
+        variant: 'destructive',
+      });
+      throw err;
     }
   };
 
@@ -897,6 +1076,57 @@ export function AgentTaskVisualizer() {
         onTaskDrop={(taskId) => handleTaskReassign(taskId, selectedAgent?.id || null)}
         draggedTaskId={draggedTask?.id || null}
       />
+      
+      {/* Mobile Reassign Dialog */}
+      <Dialog open={isMobileReassignOpen} onOpenChange={setIsMobileReassignOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <UserPlus className="w-5 h-5 text-primary" />
+              Reassign Task
+            </DialogTitle>
+            <DialogDescription>
+              {mobileReassignTask?.title}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2 max-h-[50vh] overflow-y-auto">
+            {isGeneratingHandoff ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+                <span className="ml-2 text-sm text-muted-foreground">Generating handoff...</span>
+              </div>
+            ) : (
+              agents.map((agent) => {
+                const isCurrentAgent = mobileReassignTask?.assignee_agent_id === agent.id;
+                return (
+                  <Button
+                    key={agent.id}
+                    variant={isCurrentAgent ? "secondary" : "outline"}
+                    className="w-full justify-start h-auto py-3 px-4"
+                    onClick={() => handleMobileAgentSelect(agent.id)}
+                    disabled={isCurrentAgent}
+                  >
+                    <div className="flex items-center gap-3 w-full">
+                      <div className={`w-2.5 h-2.5 rounded-full flex-shrink-0 ${
+                        agent.status === 'BUSY' ? 'bg-green-500' : 'bg-blue-400'
+                      }`} />
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-sm">{agent.name.split(' - ')[0]}</div>
+                        <div className="text-xs text-muted-foreground">
+                          {agent.status} • {getAgentTaskCount(agent.id)} tasks
+                        </div>
+                      </div>
+                      {isCurrentAgent && (
+                        <Badge variant="secondary" className="text-xs">Current</Badge>
+                      )}
+                    </div>
+                  </Button>
+                );
+              })
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
