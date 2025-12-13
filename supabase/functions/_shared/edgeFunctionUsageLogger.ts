@@ -4,7 +4,11 @@ import { SupabaseClient, createClient } from 'https://esm.sh/@supabase/supabase-
  * Unified Edge Function Usage Logger
  * Writes directly to eliza_function_usage for ALL edge function invocations
  * This ensures complete analytics coverage including early validation failures
+ * 
+ * Enhanced with execution_source tracking for cross-platform cron job awareness
  */
+
+export type ExecutionSource = 'supabase_native' | 'pg_cron' | 'github_actions' | 'vercel_cron' | 'api' | 'tool_call';
 
 interface UsageLogEntry {
   function_name: string;
@@ -19,6 +23,48 @@ interface UsageLogEntry {
   tool_calls?: number;
   fallback?: string;
   status_code?: number;
+  execution_source?: ExecutionSource;
+}
+
+/**
+ * Detect execution source from request headers and body
+ * This identifies which platform initiated the function call
+ */
+export function detectExecutionSource(req: Request, body?: any): ExecutionSource {
+  // Check for Supabase native scheduler header
+  const schedulerHeader = req.headers.get('x-supabase-scheduler');
+  if (schedulerHeader === 'true' || schedulerHeader === '1') {
+    return 'supabase_native';
+  }
+  
+  // Check for Vercel cron header
+  const vercelCron = req.headers.get('x-vercel-cron');
+  if (vercelCron === '1' || vercelCron === 'true') {
+    return 'vercel_cron';
+  }
+  
+  // Check for GitHub Actions (via body payload or header)
+  if (body?.source === 'github_actions' || body?.source === 'github_action') {
+    return 'github_actions';
+  }
+  const githubHeader = req.headers.get('x-github-action');
+  if (githubHeader) {
+    return 'github_actions';
+  }
+  
+  // Check for pg_cron (usually via pg_net with specific user-agent)
+  const userAgent = req.headers.get('user-agent') || '';
+  if (userAgent.includes('pg_net') || userAgent.includes('PostgreSQL')) {
+    return 'pg_cron';
+  }
+  
+  // Check if this was a tool call (from body payload)
+  if (body?.invoked_by === 'tool_call' || body?.source === 'tool_call') {
+    return 'tool_call';
+  }
+  
+  // Default to API call
+  return 'api';
 }
 
 /**
@@ -63,6 +109,7 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
         error_message: entry.error_message,
         parameters: entry.parameters || {},
         result_summary: entry.result_summary,
+        execution_source: entry.execution_source || 'api',
         metadata: {
           provider: entry.provider,
           model: entry.model,
@@ -78,7 +125,7 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
     if (error) {
       console.error(`⚠️ Failed to log usage for ${entry.function_name}:`, error.message);
     } else {
-      console.log(`📊 Logged usage: ${entry.function_name} (${entry.success ? 'success' : 'failure'})`);
+      console.log(`📊 Logged usage: ${entry.function_name} [${entry.execution_source || 'api'}] (${entry.success ? 'success' : 'failure'})`);
     }
   } catch (e) {
     // Never let logging errors break the main function
@@ -92,7 +139,7 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
 function categorizeFunction(functionName: string): string {
   const categories: Record<string, string[]> = {
     'ai_executive': ['gemini-chat', 'deepseek-chat', 'openai-chat', 'lovable-chat', 'kimi-chat', 'vercel-ai-chat', 'vercel-ai-chat-stream', 'ai-chat'],
-    'system': ['system-status', 'system-health', 'system-diagnostics', 'ecosystem-monitor', 'list-available-functions', 'get-edge-function-logs', 'prometheus-metrics', 'api-key-health-monitor', 'check-frontend-health', 'sync-function-logs'],
+    'system': ['system-status', 'system-health', 'system-diagnostics', 'ecosystem-monitor', 'list-available-functions', 'get-edge-function-logs', 'prometheus-metrics', 'api-key-health-monitor', 'check-frontend-health', 'sync-function-logs', 'get-cron-registry'],
     'agent': ['agent-manager', 'task-orchestrator', 'task-auto-advance', 'suite-task-automation-engine', 'eliza-self-evaluation', 'eliza-intelligence-coordinator'],
     'workflow': ['workflow-template-manager', 'multi-step-orchestrator', 'workflow-optimizer', 'diagnose-workflow-failure', 'n8n-workflow-generator', 'execute-scheduled-actions'],
     'github': ['github-integration', 'sync-github-contributions', 'ingest-github-contribution', 'validate-github-contribution', 'morning-discussion-post', 'daily-discussion-post', 'evening-summary-post', 'weekly-retrospective-post', 'community-spotlight-post', 'progress-update-post'],
@@ -126,12 +173,21 @@ export class UsageTracker {
   private executiveName?: string;
   private startTime: number;
   private parameters?: any;
+  private executionSource: ExecutionSource;
 
-  constructor(functionName: string, executiveName?: string, parameters?: any) {
+  constructor(functionName: string, executiveName?: string, parameters?: any, executionSource: ExecutionSource = 'api') {
     this.functionName = functionName;
     this.executiveName = executiveName;
     this.startTime = Date.now();
     this.parameters = parameters;
+    this.executionSource = executionSource;
+  }
+
+  /**
+   * Set execution source after initialization (useful when detecting from request)
+   */
+  setExecutionSource(source: ExecutionSource): void {
+    this.executionSource = source;
   }
 
   /**
@@ -150,6 +206,7 @@ export class UsageTracker {
       success: true,
       execution_time_ms: Date.now() - this.startTime,
       parameters: this.parameters,
+      execution_source: this.executionSource,
       ...details
     });
   }
@@ -165,6 +222,7 @@ export class UsageTracker {
       execution_time_ms: Date.now() - this.startTime,
       error_message,
       parameters: this.parameters,
+      execution_source: this.executionSource,
       status_code
     });
   }
@@ -179,4 +237,17 @@ export function startUsageTracking(
   parameters?: any
 ): UsageTracker {
   return new UsageTracker(functionName, executiveName, parameters);
+}
+
+/**
+ * Helper to create a usage tracker with request-based source detection
+ */
+export function startUsageTrackingWithRequest(
+  functionName: string,
+  req: Request,
+  body?: any,
+  executiveName?: string
+): UsageTracker {
+  const executionSource = detectExecutionSource(req, body);
+  return new UsageTracker(functionName, executiveName, body, executionSource);
 }

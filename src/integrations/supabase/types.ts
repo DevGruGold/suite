@@ -1575,6 +1575,72 @@ export type Database = {
         }
         Relationships: []
       }
+      cron_registry: {
+        Row: {
+          avg_execution_ms: number | null
+          created_at: string | null
+          description: string | null
+          failure_count: number | null
+          function_name: string
+          github_workflow_file: string | null
+          id: string
+          is_active: boolean | null
+          job_name: string
+          last_run_at: string | null
+          last_status: string | null
+          owner_agent: string | null
+          payload: Json | null
+          pg_cron_jobid: number | null
+          platform: string
+          run_count: number | null
+          schedule: string
+          updated_at: string | null
+          vercel_config_path: string | null
+        }
+        Insert: {
+          avg_execution_ms?: number | null
+          created_at?: string | null
+          description?: string | null
+          failure_count?: number | null
+          function_name: string
+          github_workflow_file?: string | null
+          id?: string
+          is_active?: boolean | null
+          job_name: string
+          last_run_at?: string | null
+          last_status?: string | null
+          owner_agent?: string | null
+          payload?: Json | null
+          pg_cron_jobid?: number | null
+          platform: string
+          run_count?: number | null
+          schedule: string
+          updated_at?: string | null
+          vercel_config_path?: string | null
+        }
+        Update: {
+          avg_execution_ms?: number | null
+          created_at?: string | null
+          description?: string | null
+          failure_count?: number | null
+          function_name?: string
+          github_workflow_file?: string | null
+          id?: string
+          is_active?: boolean | null
+          job_name?: string
+          last_run_at?: string | null
+          last_status?: string | null
+          owner_agent?: string | null
+          payload?: Json | null
+          pg_cron_jobid?: number | null
+          platform?: string
+          run_count?: number | null
+          schedule?: string
+          updated_at?: string | null
+          vercel_config_path?: string | null
+        }
+        Relationships: []
+      }
       dao_members: {
         Row: {
           created_at: string
@@ -2432,6 +2498,7 @@ export type Database = {
           deployment_id: string | null
           deployment_version: string | null
           error_message: string | null
+          execution_source: string | null
           execution_time_ms: number | null
           executive_name: string | null
           function_hash: string | null
@@ -2456,6 +2523,7 @@ export type Database = {
           deployment_id?: string | null
           deployment_version?: string | null
           error_message?: string | null
+          execution_source?: string | null
           execution_time_ms?: number | null
           executive_name?: string | null
           function_hash?: string | null
@@ -2480,6 +2548,7 @@ export type Database = {
           deployment_id?: string | null
           deployment_version?: string | null
           error_message?: string | null
+          execution_source?: string | null
           execution_time_ms?: number | null
           executive_name?: string | null
           function_hash?: string | null

@@ -820,6 +820,9 @@ verify_jwt = false
 [functions.superduper-integration]
 verify_jwt = false
 
+[functions.get-cron-registry]
+verify_jwt = false
+
 # Vectorize Memory - Every 10 minutes at :03 (batch pending memory vectorizations)
 [[edge_runtime.scheduled_functions]]
 function_name = "vectorize-memory"
