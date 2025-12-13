@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
 import { HumeMode } from '@/components/MakeMeHumanToggle';
+import { BrowserCompatibilityService } from '@/utils/browserCompatibility';
 
 export type PermissionStatus = 'prompt' | 'granted' | 'denied' | 'unavailable';
 
@@ -11,10 +12,14 @@ interface HumePermissions {
   error: string | null;
   audioStream: MediaStream | null;
   videoStream: MediaStream | null;
+  isPWA: boolean;
+  needsSettingsChange: boolean;
+  permissionInstructions: string;
   requestMicPermission: () => Promise<boolean>;
   requestCameraPermission: () => Promise<boolean>;
   requestPermissionsForMode: (mode: HumeMode) => Promise<boolean>;
   releaseStreams: () => void;
+  retryPermissions: () => void;
 }
 
 export const useHumePermissions = (): HumePermissions => {
@@ -25,20 +30,38 @@ export const useHumePermissions = (): HumePermissions => {
   const [error, setError] = useState<string | null>(null);
   const [audioStream, setAudioStream] = useState<MediaStream | null>(null);
   const [videoStream, setVideoStream] = useState<MediaStream | null>(null);
+  const [needsSettingsChange, setNeedsSettingsChange] = useState(false);
   
   const audioStreamRef = useRef<MediaStream | null>(null);
   const videoStreamRef = useRef<MediaStream | null>(null);
 
+  // Detect PWA and browser capabilities
+  const capabilities = BrowserCompatibilityService.detectCapabilities();
+  const isPWA = capabilities.isPWA;
+  const permissionInstructions = BrowserCompatibilityService.getPWAPermissionInstructions();
+
   // Check initial permission states
   useEffect(() => {
     const checkPermissions = async () => {
+      // Check secure context first
+      if (!capabilities.isSecureContext) {
+        console.warn('⚠️ Not a secure context - media permissions will fail');
+        setError('Camera/microphone requires HTTPS');
+        return;
+      }
+
       try {
         // Check microphone permission
         if (navigator.permissions) {
           try {
             const micStatus = await navigator.permissions.query({ name: 'microphone' as PermissionName });
             setMicPermission(micStatus.state as PermissionStatus);
-            micStatus.onchange = () => setMicPermission(micStatus.state as PermissionStatus);
+            micStatus.onchange = () => {
+              setMicPermission(micStatus.state as PermissionStatus);
+              if (micStatus.state === 'granted') {
+                setNeedsSettingsChange(false);
+              }
+            };
           } catch {
             // Some browsers don't support microphone permission query
           }
@@ -46,7 +69,12 @@ export const useHumePermissions = (): HumePermissions => {
           try {
             const camStatus = await navigator.permissions.query({ name: 'camera' as PermissionName });
             setCameraPermission(camStatus.state as PermissionStatus);
-            camStatus.onchange = () => setCameraPermission(camStatus.state as PermissionStatus);
+            camStatus.onchange = () => {
+              setCameraPermission(camStatus.state as PermissionStatus);
+              if (camStatus.state === 'granted') {
+                setNeedsSettingsChange(false);
+              }
+            };
           } catch {
             // Some browsers don't support camera permission query
           }
@@ -57,7 +85,7 @@ export const useHumePermissions = (): HumePermissions => {
     };
 
     checkPermissions();
-  }, []);
+  }, [capabilities.isSecureContext]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -84,8 +112,15 @@ export const useHumePermissions = (): HumePermissions => {
       return true; // Already have stream
     }
 
+    // Check secure context
+    if (!capabilities.isSecureContext) {
+      setError('Microphone requires HTTPS. Please use a secure connection.');
+      return false;
+    }
+
     setIsRequestingMic(true);
     setError(null);
+    setNeedsSettingsChange(false);
 
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
@@ -101,6 +136,7 @@ export const useHumePermissions = (): HumePermissions => {
       audioStreamRef.current = stream;
       setAudioStream(stream);
       setMicPermission('granted');
+      setNeedsSettingsChange(false);
       return true;
     } catch (err) {
       console.error('Microphone permission error:', err);
@@ -108,10 +144,17 @@ export const useHumePermissions = (): HumePermissions => {
       if (err instanceof DOMException) {
         if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
           setMicPermission('denied');
-          setError('Microphone access denied. Please enable it in your browser settings.');
+          setNeedsSettingsChange(true);
+          if (isPWA) {
+            setError(`Microphone blocked. ${permissionInstructions}`);
+          } else {
+            setError('Microphone access denied. Please click the lock icon → Site settings → Allow microphone.');
+          }
         } else if (err.name === 'NotFoundError') {
           setMicPermission('unavailable');
           setError('No microphone found on this device.');
+        } else if (err.name === 'NotReadableError') {
+          setError('Microphone is in use by another app. Please close other apps using the microphone.');
         } else {
           setError(`Microphone error: ${err.message}`);
         }
@@ -123,7 +166,7 @@ export const useHumePermissions = (): HumePermissions => {
     } finally {
       setIsRequestingMic(false);
     }
-  }, []);
+  }, [capabilities.isSecureContext, isPWA, permissionInstructions]);
 
   const requestCameraPermission = useCallback(async (): Promise<boolean> => {
     if (videoStreamRef.current) {
@@ -245,7 +288,15 @@ export const useHumePermissions = (): HumePermissions => {
     }
 
     return false;
-  }, []);
+  }, [requestMicPermission]);
+
+  const retryPermissions = useCallback(() => {
+    setError(null);
+    setNeedsSettingsChange(false);
+    setMicPermission('prompt');
+    setCameraPermission('prompt');
+    releaseStreams();
+  }, [releaseStreams]);
 
   return {
     micPermission,
@@ -255,10 +306,14 @@ export const useHumePermissions = (): HumePermissions => {
     error,
     audioStream,
     videoStream,
+    isPWA,
+    needsSettingsChange,
+    permissionInstructions,
     requestMicPermission,
     requestCameraPermission,
     requestPermissionsForMode,
-    releaseStreams
+    releaseStreams,
+    retryPermissions
   };
 };
 
