@@ -2,6 +2,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { MobileNav } from "@/components/MobileNav";
 import { DesktopNav } from "@/components/DesktopNav";
 import { Footer } from "@/components/Footer";
+import { UserMenu } from "@/components/UserMenu";
 import { Activity } from "lucide-react";
 import { useEffect, useRef } from "react";
 
@@ -49,8 +50,8 @@ export const AppLayout = () => {
             {/* Desktop Navigation */}
             <DesktopNav />
             
-            {/* Status Indicators */}
-            <div className="hidden md:flex items-center gap-2">
+            {/* Status Indicators & User Menu */}
+            <div className="hidden md:flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <div className="w-1.5 h-1.5 rounded-full bg-suite-success animate-pulse" />
                 <span>Active</span>
@@ -60,6 +61,13 @@ export const AppLayout = () => {
                 <Activity className="w-3 h-3" />
                 <span>120+</span>
               </div>
+              <div className="w-px h-4 bg-border" />
+              <UserMenu />
+            </div>
+
+            {/* Mobile User Menu */}
+            <div className="md:hidden">
+              <UserMenu />
             </div>
           </div>
         </div>
