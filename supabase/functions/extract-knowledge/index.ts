@@ -8,13 +8,35 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const AI_TIMEOUT_MS = 12000; // 12 second timeout for AI calls
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message_id, content, session_id } = await req.json();
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Empty body for cron triggers
+    }
+
+    const { message_id, content, session_id } = body;
+
+    // Early return for cron triggers with no content
+    if (!content || !message_id) {
+      console.log('🔍 Cron trigger - no content to extract, returning early');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        cron: true, 
+        message: 'No content provided for extraction',
+        entities: [] 
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     console.log(`🔍 Extracting knowledge from message ${message_id}...`);
 
@@ -24,7 +46,8 @@ serve(async (req) => {
     try {
       console.log('🔄 Extracting entities with AI fallback cascade...');
       
-      const result = await callAIWithFallback(
+      // Wrap AI call with timeout
+      const aiPromise = callAIWithFallback(
         [
           {
             role: 'system',
@@ -34,29 +57,42 @@ serve(async (req) => {
             role: 'user', 
             content: `Extract entities from this text and return as JSON array:
 
-${content}
+${content.slice(0, 2000)}
 
 Return format: [{"entity_name": "...", "entity_type": "...", "description": "...", "confidence_score": 0.8}]` 
           }
         ],
         {
           temperature: 0.3,
-          maxTokens: 1000,
+          maxTokens: 500,
           useFullElizaContext: false
         }
       );
 
-      // Parse entities from response
-      const responseText = result.content || '';
-      const jsonMatch = responseText.match(/\[[\s\S]*\]/);
-      if (jsonMatch) {
-        entities = JSON.parse(jsonMatch[0]);
-        aiProvider = result.provider || 'ai_cascade';
-        console.log(`✅ Extracted ${entities.length} entities via ${aiProvider}`);
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => {
+          console.warn('⚠️ AI extraction timed out, using fallback');
+          resolve(null);
+        }, AI_TIMEOUT_MS)
+      );
+
+      const result = await Promise.race([aiPromise, timeoutPromise]);
+
+      if (result) {
+        const responseText = result.content || '';
+        const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+        if (jsonMatch) {
+          entities = JSON.parse(jsonMatch[0]);
+          aiProvider = result.provider || 'ai_cascade';
+          console.log(`✅ Extracted ${entities.length} entities via ${aiProvider}`);
+        }
       }
     } catch (aiError) {
       console.warn('⚠️ AI extraction failed, using basic fallback:', aiError);
-      // Basic entity extraction fallback
+    }
+
+    // Basic entity extraction fallback
+    if (entities.length === 0) {
       const words = content.split(/\s+/).filter((w: string) => w.length > 5);
       const uniqueWords = [...new Set(words)].slice(0, 5);
       entities = uniqueWords.map((word: string) => ({
@@ -80,15 +116,21 @@ Return format: [{"entity_name": "...", "entity_type": "...", "description": "...
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    for (const entity of entities) {
-      await supabase.from('knowledge_entities').insert({
+    // Insert entities with timeout guard
+    const insertPromise = Promise.all(entities.slice(0, 10).map(entity =>
+      supabase.from('knowledge_entities').insert({
         entity_name: entity.entity_name,
         entity_type: entity.entity_type,
         description: entity.description || null,
         confidence_score: entity.confidence_score || 0.5,
         metadata: { source_message_id: message_id, session_id, ai_provider: aiProvider }
-      });
-    }
+      })
+    ));
+
+    await Promise.race([
+      insertPromise,
+      new Promise((resolve) => setTimeout(resolve, 5000))
+    ]);
 
     console.log(`✅ Extracted ${entities.length} entities from message ${message_id} using ${aiProvider}`);
 
