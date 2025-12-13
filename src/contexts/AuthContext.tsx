@@ -83,6 +83,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
+  // Process hash fragment tokens from OAuth redirects
+  useEffect(() => {
+    if (window.location.hash.includes('access_token')) {
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session) {
+          window.history.replaceState(null, '', window.location.pathname);
+        }
+      });
+    }
+  }, []);
+
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -116,8 +127,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
+  const getRedirectUrl = () => {
+    // Always redirect to production suite-beta.vercel.app
+    if (window.location.hostname.includes('lovable') || 
+        window.location.hostname.includes('lovableproject')) {
+      return 'https://suite-beta.vercel.app/';
+    }
+    return `${window.location.origin}/`;
+  };
+
   const signInWithGoogle = async () => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = getRedirectUrl();
     
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -159,7 +179,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
-    const redirectUrl = `${window.location.origin}/`;
+    const redirectUrl = getRedirectUrl();
     
     const { error } = await supabase.auth.signUp({
       email,
