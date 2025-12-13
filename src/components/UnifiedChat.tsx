@@ -1930,6 +1930,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           <QuickResponseButtons
             onQuickResponse={(message) => handleSendMessage(message)}
             disabled={isProcessing}
+            lastMessageRole={messages.length === 0 ? null : messages[messages.length - 1].sender === 'user' ? 'user' : 'assistant'}
           />
         </div>
       </div>
