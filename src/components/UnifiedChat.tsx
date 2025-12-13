@@ -14,6 +14,7 @@ import { mobilePermissionService } from '@/services/mobilePermissionService';
 import { formatTime } from '@/utils/dateFormatter';
 import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X } from 'lucide-react';
 import { AttachmentPreview, type AttachmentFile } from './AttachmentPreview';
+import { QuickResponseButtons } from './QuickResponseButtons';
 import { ExecutiveCouncilChat } from './ExecutiveCouncilChat';
 import { GovernanceStatusBadge } from './GovernanceStatusBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
@@ -1068,14 +1069,15 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   };
 
   // Text message handler
-  const handleSendMessage = async () => {
-    if (!textInput.trim() || isProcessing) return;
+  const handleSendMessage = async (quickMessage?: string) => {
+    const messageText = quickMessage || textInput.trim();
+    if (!messageText || isProcessing) return;
 
     // Check if user pasted a Gemini API key (starts with "AIza")
-    if (textInput.trim().startsWith('AIza') && textInput.trim().length > 30) {
+    if (messageText.startsWith('AIza') && messageText.length > 30) {
       setIsProcessing(true);
       try {
-        const apiKey = textInput.trim();
+        const apiKey = messageText;
         const result = await apiKeyManager.setUserApiKey(apiKey);
         
         if (result.success) {
@@ -1202,12 +1204,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     }
 
     try {
-      console.log('💬 Starting message processing:', textInput.trim());
+      console.log('💬 Starting message processing:', messageText);
       console.log('🔧 Context:', { miningStats: !!miningStats, userContext: !!userContext });
       
       // Check if user is teaching pronunciation
-      const userInput = textInput.trim();
-      const learnedSpeech = speechLearningService.parseInstruction(userInput);
+      const learnedSpeech = speechLearningService.parseInstruction(messageText);
       if (learnedSpeech) {
         const confirmMessage: UnifiedMessage = {
           id: `eliza-${Date.now()}`,
@@ -1226,7 +1227,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const fullContext = await conversationPersistence.getFullConversationContext();
       
       // Process response using Gemini AI Gateway or Council
-      const response = await UnifiedElizaService.generateResponse(userInput, {
+      const response = await UnifiedElizaService.generateResponse(messageText, {
         miningStats,
         userContext,
         inputMode: imageBase64Array.length > 0 ? 'vision' : 'text',
@@ -1442,7 +1443,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       } else {
         // Parse and diagnose the error
         const diagnosis = await IntelligentErrorHandler.diagnoseError(error, {
-          userInput: textInput.trim(),
+          userInput: messageText,
           attemptedExecutive: (window as any).__lastElizaExecutive
         });
         
@@ -1464,7 +1465,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           description: errorContent.substring(0, 200),
           activity_type: 'error_diagnostics',
           status: 'completed',
-          metadata: { userInput: textInput.trim() } as any,
+          metadata: { userInput: messageText } as any,
           mentioned_to_user: true
         });
       } catch (logError) {
@@ -1916,7 +1917,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               disabled={isProcessing}
             />
             <Button
-              onClick={handleSendMessage}
+              onClick={() => handleSendMessage()}
               disabled={(!textInput.trim() && attachments.length === 0) || isProcessing}
               size="sm"
               className="rounded-lg min-h-[44px] min-w-[44px]"
@@ -1924,6 +1925,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               <Send className="h-4 w-4" />
             </Button>
           </div>
+          
+          {/* Quick Response Buttons */}
+          <QuickResponseButtons
+            onQuickResponse={(message) => handleSendMessage(message)}
+            disabled={isProcessing}
+          />
         </div>
       </div>
     </Card>
