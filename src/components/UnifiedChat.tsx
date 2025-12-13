@@ -111,6 +111,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [isProcessing, setIsProcessing] = useState(false);
   const [isConnected, setIsConnected] = useState(true); // Always connected for text/TTS mode
   const [realtimeConnected, setRealtimeConnected] = useState(false);
+  const [hasUserEngaged, setHasUserEngaged] = useState(false); // Track if user has sent first message
   
   // Office Clerk loading progress
   const [officeClerkProgress, setOfficeClerkProgress] = useState<{
@@ -1072,6 +1073,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const handleSendMessage = async (quickMessage?: string) => {
     const messageText = quickMessage || textInput.trim();
     if (!messageText || isProcessing) return;
+    
+    // Mark that user has engaged with the chat
+    if (!hasUserEngaged) {
+      setHasUserEngaged(true);
+    }
 
     // Check if user pasted a Gemini API key (starts with "AIza")
     if (messageText.startsWith('AIza') && messageText.length > 30) {
@@ -1931,6 +1937,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             onQuickResponse={(message) => handleSendMessage(message)}
             disabled={isProcessing}
             lastMessageRole={messages.length === 0 ? null : messages[messages.length - 1].sender === 'user' ? 'user' : 'assistant'}
+            hasUserEngaged={hasUserEngaged}
           />
         </div>
       </div>

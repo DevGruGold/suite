@@ -4,6 +4,7 @@ interface QuickResponseButtonsProps {
   onQuickResponse: (message: string) => void;
   disabled?: boolean;
   lastMessageRole?: 'user' | 'assistant' | null;
+  hasUserEngaged?: boolean;
 }
 
 // Buttons shown when conversation is empty
@@ -30,10 +31,11 @@ const afterUserResponses = [
 export const QuickResponseButtons = ({ 
   onQuickResponse, 
   disabled,
-  lastMessageRole 
+  lastMessageRole,
+  hasUserEngaged = false
 }: QuickResponseButtonsProps) => {
-  // Select appropriate button set based on context
-  const responses = lastMessageRole === null 
+  // Show welcome buttons until user engages, then switch to contextual buttons
+  const responses = !hasUserEngaged
     ? emptyConversationResponses 
     : lastMessageRole === 'assistant'
       ? afterAssistantResponses
