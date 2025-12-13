@@ -2,6 +2,16 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders } from "../_shared/cors.ts";
 
+const QUERY_TIMEOUT_MS = 8000; // 8 second timeout per query
+
+// Timeout wrapper for database queries
+async function withTimeout<T>(promise: Promise<T>, ms: number, operation: string): Promise<T> {
+  const timeout = new Promise<never>((_, reject) =>
+    setTimeout(() => reject(new Error(`${operation} timeout after ${ms}ms`)), ms)
+  );
+  return Promise.race([promise, timeout]);
+}
+
 // UUID validation helper
 const isValidUUID = (str: string): boolean => {
   if (!str || typeof str !== 'string') return false;
@@ -30,7 +40,7 @@ function fingerprintToUUID(fingerprint: string): string {
   return `${hex}-${hex2}-4000-8000-${fingerprint.slice(0, 12).padEnd(12, '0')}`;
 }
 
-// Find session by ID (UUID) or session_key (string)
+// Find session by ID (UUID) or session_key (string) - with timeout
 async function findSessionByIdOrKey(supabase: any, idOrKey: string): Promise<{ id: string; device_id: string } | null> {
   if (!idOrKey) {
     console.warn('⚠️ findSessionByIdOrKey called with empty idOrKey');
@@ -39,33 +49,37 @@ async function findSessionByIdOrKey(supabase: any, idOrKey: string): Promise<{ i
 
   // First try as UUID
   if (isValidUUID(idOrKey)) {
-    const { data, error } = await supabase
-      .from('device_connection_sessions')
-      .select('id, device_id')
-      .eq('id', idOrKey)
-      .eq('is_active', true)
-      .single();
-    
-    if (data && !error) {
-      console.log(`✅ Session found by UUID: ${idOrKey}`);
-      return data;
+    try {
+      const { data, error } = await withTimeout(
+        supabase.from('device_connection_sessions').select('id, device_id').eq('id', idOrKey).eq('is_active', true).single(),
+        QUERY_TIMEOUT_MS,
+        'findSessionByUUID'
+      );
+      
+      if (data && !error) {
+        console.log(`✅ Session found by UUID: ${idOrKey}`);
+        return data;
+      }
+    } catch (e) {
+      console.warn(`⚠️ UUID lookup timed out for: ${idOrKey}`);
     }
     console.log(`⚠️ No active session found for UUID: ${idOrKey}, trying as session_key...`);
   }
 
   // Fallback: try as session_key
-  const { data, error } = await supabase
-    .from('device_connection_sessions')
-    .select('id, device_id')
-    .eq('session_key', idOrKey)
-    .eq('is_active', true)
-    .order('connected_at', { ascending: false })
-    .limit(1)
-    .single();
+  try {
+    const { data, error } = await withTimeout(
+      supabase.from('device_connection_sessions').select('id, device_id').eq('session_key', idOrKey).eq('is_active', true).order('connected_at', { ascending: false }).limit(1).single(),
+      QUERY_TIMEOUT_MS,
+      'findSessionByKey'
+    );
 
-  if (data && !error) {
-    console.log(`✅ Session found by session_key: ${idOrKey} -> UUID: ${data.id}`);
-    return data;
+    if (data && !error) {
+      console.log(`✅ Session found by session_key: ${idOrKey} -> UUID: ${data.id}`);
+      return data;
+    }
+  } catch (e) {
+    console.warn(`⚠️ Session key lookup timed out for: ${idOrKey}`);
   }
 
   console.warn(`⚠️ No session found for idOrKey: ${idOrKey}`);

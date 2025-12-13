@@ -8,11 +8,16 @@ import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const FUNCTION_NAME = 'system-health';
 const logger = EdgeFunctionLogger(FUNCTION_NAME);
+const QUERY_TIMEOUT_MS = 6000; // 6 second timeout per query batch
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// In-memory cache for health metrics (60 second TTL)
+let healthCache: { data: any; timestamp: number } | null = null;
+const CACHE_TTL_MS = 60000;
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -22,9 +27,19 @@ serve(async (req) => {
   const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
+    // Check cache for recent results
+    if (healthCache && Date.now() - healthCache.timestamp < CACHE_TTL_MS) {
+      console.log('📦 Returning cached system health (< 60s old)');
+      await usageTracker.success({ cached: true });
+      return new Response(JSON.stringify(healthCache.data), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
+      });
+    }
+
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      { db: { schema: 'public' }, global: { headers: { 'x-statement-timeout': '8000' } } }
     );
 
     // Check if this is a scheduled snapshot

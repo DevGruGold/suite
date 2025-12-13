@@ -8780,6 +8780,7 @@ export type Database = {
         Returns: string
       }
       run_opportunity_scanner: { Args: never; Returns: undefined }
+      safe_refresh_recent_messages: { Args: never; Returns: undefined }
       service_status_change_type: {
         Args: { new_j: Json; old_j: Json }
         Returns: string
