@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'knowledge-manager';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -48,6 +51,7 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const startTime = Date.now();
   
   try {
@@ -462,6 +466,7 @@ serve(async (req) => {
       console.warn('⚠️ [KnowledgeManager] Failed to log activity:', logError);
     }
 
+    await usageTracker.success({ result_summary: `${action} completed` });
     return okResponse(result, `${action} completed successfully`);
 
   } catch (error: any) {

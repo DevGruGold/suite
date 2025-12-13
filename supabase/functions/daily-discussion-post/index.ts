@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
+import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'daily-discussion-post';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +14,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, 'eliza', { method: req.method });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -309,6 +314,7 @@ Daily thoughts for ${reportDate}.
       status: 'completed'
     });
 
+    await usageTracker.success({ result_summary: 'discussion_posted', provider: aiProvider });
     return new Response(
       JSON.stringify({
         success: true,
@@ -321,6 +327,7 @@ Daily thoughts for ${reportDate}.
 
   } catch (error: any) {
     console.error('Daily Discussion Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

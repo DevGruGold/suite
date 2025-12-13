@@ -1,7 +1,9 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
 import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
+import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
 
+const FUNCTION_NAME = 'autonomous-code-fixer';
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -193,6 +195,8 @@ Provide a JSON response with:
 }
 
 Deno.serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+  
   try {
     const body = await req.json();
     console.log('🔍 Received request body:', JSON.stringify(body, null, 2));
@@ -304,6 +308,7 @@ Deno.serve(async (req) => {
       success ? "completed" : "failed"
     );
 
+    await usageTracker.success({ result_summary: success ? 'fix_applied' : 'fix_failed' });
     return new Response(
       JSON.stringify({
         success,
@@ -326,6 +331,7 @@ Deno.serve(async (req) => {
       "failed"
     );
 
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       {
