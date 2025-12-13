@@ -4,10 +4,62 @@
  * 
  * ENHANCED: Now includes full Eliza intelligence (system prompt, tools, memory)
  * to ensure ALL fallback providers are equally intelligent as lovable-chat.
+ * 
+ * TIMEOUT GUARDS: Per-provider timeouts prevent cascade hangs
+ * FAST-FAIL: 402/429 errors skip immediately to next provider
  */
 
 import { generateElizaSystemPrompt } from './elizaSystemPrompt.ts';
 import { ELIZA_TOOLS } from './elizaTools.ts';
+
+// Per-provider timeout configuration (ms)
+const PROVIDER_TIMEOUTS = {
+  lovable: 8000,
+  deepseek: 10000, // Slightly longer for reasoning
+  kimi: 8000,
+  gemini: 8000,
+  embedding: 10000,
+};
+
+/**
+ * Fetch with timeout - aborts request if provider is slow/hung
+ */
+async function fetchWithTimeout(
+  url: string,
+  options: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const response = await fetch(url, { ...options, signal: controller.signal });
+    clearTimeout(timeoutId);
+    return response;
+  } catch (error) {
+    clearTimeout(timeoutId);
+    if (error.name === 'AbortError') {
+      throw new Error(`Request timeout after ${timeoutMs}ms`);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Fast-fail check for credit exhaustion/rate limiting
+ * Returns error message if should skip, null if OK to proceed
+ */
+function checkFastFail(response: Response, provider: string): string | null {
+  if (response.status === 402) {
+    console.warn(`💳 ${provider} out of credits (402) - skipping to next provider`);
+    return '402 Payment Required - out of credits';
+  }
+  if (response.status === 429) {
+    console.warn(`⏱️ ${provider} rate limited (429) - skipping to next provider`);
+    return '429 Rate Limited';
+  }
+  return null;
+}
 
 export interface UnifiedAIOptions {
   model?: string;
@@ -132,14 +184,24 @@ async function callDeepSeek(
       requestBody.tool_choice = 'auto';
     }
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      'https://api.deepseek.com/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       },
-      body: JSON.stringify(requestBody),
-    });
+      PROVIDER_TIMEOUTS.deepseek
+    );
+
+    // Fast-fail for credit exhaustion
+    const fastFailError = checkFastFail(response, 'deepseek');
+    if (fastFailError) {
+      return { success: false, provider: 'deepseek', error: fastFailError };
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -206,14 +268,24 @@ async function callLovable(
       requestBody.tool_choice = 'auto';
     }
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-        'Content-Type': 'application/json',
+    const response = await fetchWithTimeout(
+      'https://ai.gateway.lovable.dev/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
       },
-      body: JSON.stringify(requestBody),
-    });
+      PROVIDER_TIMEOUTS.lovable
+    );
+
+    // Fast-fail for credit exhaustion
+    const fastFailError = checkFastFail(response, 'lovable');
+    if (fastFailError) {
+      return { success: false, provider: 'lovable', error: fastFailError };
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -281,16 +353,26 @@ async function callKimi(
       requestBody.tool_choice = 'auto';
     }
 
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://xmrt.pro',
-        'X-Title': 'XMRT Eliza'
+    const response = await fetchWithTimeout(
+      'https://openrouter.ai/api/v1/chat/completions',
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': 'https://xmrt.pro',
+          'X-Title': 'XMRT Eliza'
+        },
+        body: JSON.stringify(requestBody),
       },
-      body: JSON.stringify(requestBody),
-    });
+      PROVIDER_TIMEOUTS.kimi
+    );
+
+    // Fast-fail for credit exhaustion
+    const fastFailError = checkFastFail(response, 'kimi');
+    if (fastFailError) {
+      return { success: false, provider: 'kimi', error: fastFailError };
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
@@ -367,14 +449,21 @@ async function callGemini(
       }];
     }
 
-    const response = await fetch(
+    const response = await fetchWithTimeout(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(requestBody),
-      }
+      },
+      PROVIDER_TIMEOUTS.gemini
     );
+
+    // Fast-fail for credit exhaustion
+    const fastFailError = checkFastFail(response, 'gemini');
+    if (fastFailError) {
+      return { success: false, provider: 'gemini', error: fastFailError };
+    }
 
     if (!response.ok) {
       const errorText = await response.text();
