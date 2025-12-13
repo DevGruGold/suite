@@ -784,6 +784,42 @@ verify_jwt = false
 [functions.predictive-analytics]
 verify_jwt = false
 
+[functions.summarize-conversation]
+verify_jwt = false
+
+[functions.extract-knowledge]
+verify_jwt = false
+
+[functions.superduper-router]
+verify_jwt = false
+
+[functions.superduper-business-growth]
+verify_jwt = false
+
+[functions.superduper-research-intelligence]
+verify_jwt = false
+
+[functions.superduper-content-media]
+verify_jwt = false
+
+[functions.superduper-communication-outreach]
+verify_jwt = false
+
+[functions.superduper-design-brand]
+verify_jwt = false
+
+[functions.superduper-finance-investment]
+verify_jwt = false
+
+[functions.superduper-domain-experts]
+verify_jwt = false
+
+[functions.superduper-development-coach]
+verify_jwt = false
+
+[functions.superduper-integration]
+verify_jwt = false
+
 # Vectorize Memory - Every 10 minutes at :03 (batch pending memory vectorizations)
 [[edge_runtime.scheduled_functions]]
 function_name = "vectorize-memory"
@@ -795,3 +831,91 @@ body = '{}'
 function_name = "predictive-analytics"
 schedule = "9 * * * *"
 body = '{"action":"analyze_current","data_source":"tasks"}'
+
+# Summarize Conversation - Every 15 min at :08 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "summarize-conversation"
+schedule = "8,23,38,53 * * * *"
+body = '{}'
+
+# Extract Knowledge - Every 20 min at :04 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "extract-knowledge"
+schedule = "4,24,44 * * * *"
+body = '{}'
+
+# Monitor Device Connections - Every 10 min at :06 offset (consolidated)
+[[edge_runtime.scheduled_functions]]
+function_name = "monitor-device-connections"
+schedule = "6,16,26,36,46,56 * * * *"
+body = '{}'
+
+# Aggregate Device Metrics - Hourly at :12 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "aggregate-device-metrics"
+schedule = "12 * * * *"
+body = '{}'
+
+# ====================================================================
+# SUPERDUPER AGENT SCHEDULES (migrated from pg_cron)
+# ====================================================================
+
+# SuperDuper Router - Daily 2am
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-router"
+schedule = "0 2 * * *"
+body = '{"action":"route"}'
+
+# SuperDuper Business Growth - Every 4 hours at :15 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-business-growth"
+schedule = "15 */4 * * *"
+body = '{"action":"analyze"}'
+
+# SuperDuper Research Intelligence - Hourly at :18 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-research-intelligence"
+schedule = "18 * * * *"
+body = '{"action":"research"}'
+
+# SuperDuper Content Media - Morning 7am & Evening 7pm
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-content-media"
+schedule = "0 7,19 * * *"
+body = '{"action":"produce"}'
+
+# SuperDuper Communication Outreach - Every 6 hours at :22 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-communication-outreach"
+schedule = "22 */6 * * *"
+body = '{"action":"outreach"}'
+
+# SuperDuper Design Brand - Daily 5am
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-design-brand"
+schedule = "0 5 * * *"
+body = '{"action":"design"}'
+
+# SuperDuper Finance Investment - Daily 6am
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-finance-investment"
+schedule = "0 6 * * *"
+body = '{"action":"analyze"}'
+
+# SuperDuper Domain Experts - Weekday mornings 8:30am
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-domain-experts"
+schedule = "30 8 * * 1-5"
+body = '{"action":"consult"}'
+
+# SuperDuper Development Coach - Work hours (9am Mon-Fri)
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-development-coach"
+schedule = "0 9 * * 1-5"
+body = '{"action":"coach"}'
+
+# SuperDuper Integration - Every 2 hours at :25 offset
+[[edge_runtime.scheduled_functions]]
+function_name = "superduper-integration"
+schedule = "25 */2 * * *"
+body = '{"action":"integrate"}'
