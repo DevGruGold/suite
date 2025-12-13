@@ -1,5 +1,8 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'agent-deployment-coordinator';
 
 interface DeploymentRequest {
   action: 'deploy' | 'undeploy' | 'status' | 'list' | 'update' | 'health_check'
@@ -10,6 +13,8 @@ interface DeploymentRequest {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   try {
     const supabase = createClient(
       Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') ?? '',
@@ -73,6 +78,7 @@ serve(async (req) => {
       }
     }])
 
+    await usageTracker.success({ action, deployment_target });
     return new Response(JSON.stringify({
       success: true,
       action: action,
@@ -86,6 +92,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('XMRT Deployment Coordinator error:', error)
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       success: false,
       error: error.message,

@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'system-diagnostics';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -9,6 +12,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     console.log('🔍 System Diagnostics - Gathering system information...');
@@ -50,6 +55,7 @@ serve(async (req) => {
 
     console.log('✅ System diagnostics gathered:', formattedDiagnostics);
 
+    await usageTracker.success({ heap_used: diagnostics.memory.heap_used });
     return new Response(JSON.stringify({
       success: true,
       diagnostics: formattedDiagnostics,
@@ -59,6 +65,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('❌ System diagnostics error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({ 
       success: false,
       error: error.message 

@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'evaluate-community-idea';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -20,6 +23,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   // Create overall timeout guard
   const timeoutPromise = new Promise<Response>((resolve) =>
@@ -82,6 +87,7 @@ serve(async (req) => {
           }
         }
 
+        await usageTracker.success({ evaluated: results.length });
         return new Response(JSON.stringify({
           success: true,
           evaluated: results.length,
@@ -94,6 +100,7 @@ serve(async (req) => {
       // Single idea evaluation
       if (ideaId) {
         const result = await evaluateIdea(supabase, ideaId);
+        await usageTracker.success({ idea_id: ideaId });
         return new Response(JSON.stringify(result), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
@@ -103,6 +110,7 @@ serve(async (req) => {
 
     } catch (error) {
       console.error('❌ Idea evaluation error:', error);
+      await usageTracker.failure(error.message, 500);
       return new Response(JSON.stringify({ error: error.message }), {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }

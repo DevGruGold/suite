@@ -1,5 +1,8 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "jsr:@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'code-monitor-daemon';
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -123,6 +126,7 @@ function generateLearningPoint(execution: any, fixResult: any): string {
 }
 
 Deno.serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const scanStartTime = new Date();
   
   await logActivity(
@@ -301,6 +305,7 @@ Deno.serve(async (req) => {
     
     console.log(`📊 SCAN SUMMARY:`, summary);
 
+    await usageTracker.success({ auto_fixes_succeeded: successfulFixes, auto_fixes_attempted: executionsToFix.length });
     return new Response(
       JSON.stringify({
         success: true,
@@ -324,6 +329,7 @@ Deno.serve(async (req) => {
 
     console.error(`❌ SCAN ERROR:`, error);
 
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ 
         success: false,
