@@ -75,6 +75,29 @@ const executiveButtonSets: Record<string, {
   }
 };
 
+// Action intent detection - when Eliza is offering to do something
+const detectActionIntent = (content: string): boolean => {
+  const lowerContent = content.toLowerCase();
+  
+  const actionPatterns = [
+    /i('m going to|'ll|'m about to|can|will|shall)\s/,
+    /let me\s/,
+    /would you like me to/,
+    /i('d| would) recommend/,
+    /should i\s/,
+    /i('m| am) ready to/,
+    /proceed with/,
+    /i can (fix|check|run|deploy|create|analyze|generate|start)/,
+    /run (the|a|this)/,
+    /check (the|this|your)/,
+    /create (a|the|this)/,
+    /generate (a|the|this)/,
+    /start (the|a)/,
+  ];
+  
+  return actionPatterns.some(pattern => pattern.test(lowerContent));
+};
+
 // Topic detection patterns
 const detectConversationTopics = (content: string): string[] => {
   const topics: string[] = [];
@@ -158,12 +181,19 @@ const getContextualButtons = (
   // Get executive config or default to lovable-chat
   const execConfig = executiveButtonSets[lastExecutive || 'lovable-chat'] || executiveButtonSets['lovable-chat'];
   
-  // 1. Always add the feedback button first
-  buttons.push(execConfig.feedbackButton);
+  // Check if AI is offering to do something
+  const hasActionIntent = detectActionIntent(lastMessageContent || '');
+  
+  // 1. Add action confirmation or feedback button first
+  if (hasActionIntent) {
+    buttons.push({ label: "Ok, do it!", emoji: "👍" });
+  } else {
+    buttons.push(execConfig.feedbackButton);
+  }
   
   // 2. Detect topics and add relevant buttons
   const topics = detectConversationTopics(lastMessageContent || '');
-  const addedLabels = new Set([execConfig.feedbackButton.label]);
+  const addedLabels = new Set([buttons[0].label]);
   
   for (const topic of topics.slice(0, 2)) {
     const topicBtns = topicButtons[topic];
