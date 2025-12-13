@@ -4455,13 +4455,18 @@ export type Database = {
           email: string
           email_verified: boolean | null
           full_name: string | null
+          github_contributions_count: number | null
           github_username: string | null
           id: string
           is_active: boolean | null
           last_login_at: string | null
           timezone: string | null
+          total_mining_shares: number | null
+          total_pop_points: number | null
+          total_xmrt_earned: number | null
           twitter_handle: string | null
           updated_at: string | null
+          wallet_address: string | null
         }
         Insert: {
           avatar_url?: string | null
@@ -4471,13 +4476,18 @@ export type Database = {
           email: string
           email_verified?: boolean | null
           full_name?: string | null
+          github_contributions_count?: number | null
           github_username?: string | null
           id: string
           is_active?: boolean | null
           last_login_at?: string | null
           timezone?: string | null
+          total_mining_shares?: number | null
+          total_pop_points?: number | null
+          total_xmrt_earned?: number | null
           twitter_handle?: string | null
           updated_at?: string | null
+          wallet_address?: string | null
         }
         Update: {
           avatar_url?: string | null
@@ -4487,13 +4497,18 @@ export type Database = {
           email?: string
           email_verified?: boolean | null
           full_name?: string | null
+          github_contributions_count?: number | null
           github_username?: string | null
           id?: string
           is_active?: boolean | null
           last_login_at?: string | null
           timezone?: string | null
+          total_mining_shares?: number | null
+          total_pop_points?: number | null
+          total_xmrt_earned?: number | null
           twitter_handle?: string | null
           updated_at?: string | null
+          wallet_address?: string | null
         }
         Relationships: []
       }
@@ -8602,6 +8617,7 @@ export type Database = {
           user_profile_id: string
         }[]
       }
+      get_user_earnings: { Args: { user_profile_id: string }; Returns: Json }
       get_user_roles: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"][]

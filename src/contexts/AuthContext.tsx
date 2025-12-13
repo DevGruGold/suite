@@ -20,6 +20,11 @@ interface Profile {
   last_login_at: string | null;
   created_at: string;
   updated_at: string;
+  wallet_address: string | null;
+  total_xmrt_earned: number;
+  total_pop_points: number;
+  total_mining_shares: number;
+  github_contributions_count: number;
 }
 
 interface AuthContextType {

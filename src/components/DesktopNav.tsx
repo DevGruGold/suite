@@ -1,15 +1,13 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Users, DollarSign, Award, Scale, Building2, Key } from "lucide-react";
+import { Home, Users, Coins, Scale, Building2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home },
   { to: "/council", label: "Board", icon: Users },
-  { to: "/treasury", label: "Finance", icon: DollarSign },
-  { to: "/contributors", label: "Team", icon: Award },
+  { to: "/earn", label: "Earn", icon: Coins },
   { to: "/governance", label: "Governance", icon: Scale },
   { to: "/licensing", label: "Enterprise", icon: Building2 },
-  { to: "/credentials", label: "Credentials", icon: Key },
 ];
 
 export const DesktopNav = () => {
