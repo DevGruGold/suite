@@ -1162,7 +1162,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
     const userMessage: UnifiedMessage = {
       id: `user-${Date.now()}`,
-      content: textInput,
+      content: messageText,
       sender: 'user',
       timestamp: new Date(),
       attachments: imageBase64Array.length > 0 ? { images: imageBase64Array } : undefined
