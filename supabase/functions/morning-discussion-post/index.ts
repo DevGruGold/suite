@@ -51,11 +51,11 @@ serve(async (req) => {
       .from('agents')
       .select('name, status, current_workload, role');
 
-    // Get pending/active tasks with full details
-    const { data: pendingTasks } = await supabase
+    // Get ALL active tasks (PENDING, CLAIMED, IN_PROGRESS, BLOCKED)
+    const { data: activeTasks } = await supabase
       .from('tasks')
       .select('title, status, category, stage, priority, blocking_reason, assignee_agent_id')
-      .in('status', ['PENDING', 'IN_PROGRESS', 'BLOCKED'])
+      .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED'])
       .order('priority', { ascending: true })
       .limit(15);
 
@@ -90,8 +90,11 @@ serve(async (req) => {
     
     const busyAgents = agents?.filter(a => a.status === 'BUSY') || [];
     const idleAgents = agents?.filter(a => a.status === 'IDLE') || [];
-    const blockedTasks = pendingTasks?.filter(t => t.status === 'BLOCKED') || [];
-    const inProgressTasks = pendingTasks?.filter(t => t.status === 'IN_PROGRESS') || [];
+    const blockedTasks = activeTasks?.filter(t => t.status === 'BLOCKED') || [];
+    const inProgressTasks = activeTasks?.filter(t => t.status === 'IN_PROGRESS') || [];
+    const claimedTasks = activeTasks?.filter(t => t.status === 'CLAIMED') || [];
+    const pendingTasks = activeTasks?.filter(t => t.status === 'PENDING') || [];
+    const totalActiveTasks = activeTasks?.length || 0;
     
     const pythonTotal = pythonStats?.length || 0;
     const pythonSuccess = pythonStats?.filter(p => p.status === 'completed').length || 0;
@@ -119,12 +122,14 @@ serve(async (req) => {
 **BUSY (${busyAgents.length}):** ${busyAgents.map(a => a.name.split(' - ')[0]).join(', ') || 'None'}
 **IDLE (${idleAgents.length}):** ${idleAgents.map(a => a.name.split(' - ')[0]).join(', ') || 'None'}`;
 
-    // Task details with blocking reasons
-    const taskDetails = pendingTasks?.slice(0, 8).map(t => {
-      const status = t.status === 'BLOCKED' ? '🔴 BLOCKED' : t.status === 'IN_PROGRESS' ? '🟡 IN_PROGRESS' : '⚪ PENDING';
+    // Task details with blocking reasons (include CLAIMED status)
+    const taskDetails = activeTasks?.slice(0, 8).map(t => {
+      const statusIcon = t.status === 'BLOCKED' ? '🔴 BLOCKED' : 
+                         t.status === 'IN_PROGRESS' ? '🟡 IN_PROGRESS' : 
+                         t.status === 'CLAIMED' ? '🟢 CLAIMED' : '⚪ PENDING';
       const blockReason = t.blocking_reason ? ` — Blocked: ${t.blocking_reason}` : '';
-      return `  - "${t.title}" [${t.category || 'general'}/${t.stage || 'N/A'}] ${status}${blockReason}`;
-    }).join('\n') || '  No pending tasks';
+      return `  - "${t.title}" [${t.category || 'general'}/${t.stage || 'N/A'}] ${statusIcon}${blockReason}`;
+    }).join('\n') || '  No active tasks';
 
     // Blocked tasks specifically
     const blockedTasksText = blockedTasks.length > 0 
@@ -156,8 +161,10 @@ serve(async (req) => {
 ### 🤖 Agent Status (${agents?.length || 0} total)
 ${agentStatusText}
 
-### 📋 Task Pipeline (${pendingTasks?.length || 0} active)
+### 📋 Task Pipeline (${totalActiveTasks} active)
+- **Claimed:** ${claimedTasks.length}
 - **In Progress:** ${inProgressTasks.length}
+- **Pending:** ${pendingTasks.length}
 - **Blocked:** ${blockedTasks.length}
 
 **Active Tasks:**
@@ -194,7 +201,7 @@ Format as GitHub markdown with emojis. Sign off as Eliza.`;
 
 **System Health:** ${healthScore}/100
 **Active Agents:** ${busyAgents.length} busy, ${idleAgents.length} idle
-**Tasks:** ${pendingTasks?.length || 0} active (${blockedTasks.length} blocked)
+**Tasks:** ${totalActiveTasks} active (${claimedTasks.length} claimed, ${inProgressTasks.length} in progress, ${blockedTasks.length} blocked)
 **Python Success Rate:** ${pythonSuccessRate}%
 **Function Success Rate:** ${functionSuccessRate}%
 
@@ -254,7 +261,9 @@ Morning check-in for ${today}.
         overnight_activity_count: overnightActivity?.length || 0,
         overnight_successes: overnightSuccesses,
         overnight_failures: overnightFailures,
-        pending_tasks_count: pendingTasks?.length || 0,
+        pending_tasks_count: totalActiveTasks,
+        claimed_tasks_count: claimedTasks.length,
+        in_progress_tasks_count: inProgressTasks.length,
         blocked_tasks_count: blockedTasks.length,
         busy_agents: busyAgents.map(a => a.name),
         idle_agents: idleAgents.map(a => a.name),

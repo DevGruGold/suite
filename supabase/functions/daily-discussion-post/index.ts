@@ -55,6 +55,14 @@ serve(async (req) => {
       .eq('status', 'BLOCKED')
       .order('priority', { ascending: true });
 
+    // Get ALL active tasks (PENDING, CLAIMED, IN_PROGRESS, BLOCKED)
+    const { data: activeTasks } = await supabase
+      .from('tasks')
+      .select('title, status, category, stage, priority, assignee_agent_id')
+      .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED'])
+      .order('priority', { ascending: true })
+      .limit(15);
+
     // Get recent activity with details
     const { data: recentActivity } = await supabase
       .from('eliza_activity_log')
@@ -149,6 +157,21 @@ serve(async (req) => {
 
     // ============= BUILD DETAILED CONTEXT =============
 
+    // Active tasks breakdown
+    const totalActiveTasks = activeTasks?.length || 0;
+    const claimedTasks = activeTasks?.filter(t => t.status === 'CLAIMED') || [];
+    const inProgressTasksLocal = activeTasks?.filter(t => t.status === 'IN_PROGRESS') || [];
+    const pendingTasksLocal = activeTasks?.filter(t => t.status === 'PENDING') || [];
+
+    const activeTasksText = activeTasks && activeTasks.length > 0
+      ? activeTasks.slice(0, 8).map(t => {
+          const statusIcon = t.status === 'BLOCKED' ? '🔴' : 
+                             t.status === 'IN_PROGRESS' ? '🟡' : 
+                             t.status === 'CLAIMED' ? '🟢' : '⚪';
+          return `  - ${statusIcon} **"${t.title}"** [${t.category}/${t.stage}] (${t.status})`;
+        }).join('\n')
+      : '  ✅ No active tasks!';
+
     const blockedTasksText = blockedTasks && blockedTasks.length > 0
       ? blockedTasks.map(t => `  - **"${t.title}"** [${t.category}/${t.stage}]: ${t.blocking_reason || 'No reason specified'}`).join('\n')
       : '  ✅ No blocked tasks!';
@@ -192,6 +215,14 @@ serve(async (req) => {
 - **Failed Activities:** ${failedActivities.length}
 - **Python Executions:** ${pythonTotal} (${pythonSuccessRate}% success)
 - **Edge Function Calls:** ${functionPerformance?.length || 0}
+
+### 📋 Active Tasks (${totalActiveTasks} total)
+- **Claimed:** ${claimedTasks.length}
+- **In Progress:** ${inProgressTasksLocal.length}
+- **Pending:** ${pendingTasksLocal.length}
+- **Blocked:** ${blockedTasks?.length || 0}
+
+${activeTasksText}
 
 ### 🚫 Blocked Tasks (${blockedTasks?.length || 0})
 ${blockedTasksText}
@@ -239,7 +270,7 @@ Format as GitHub markdown with emojis. Sign off as Eliza.`;
     const staticFallback = `## 💡 Daily Thoughts - ${reportDate}
 
 **Activities Today:** ${recentActivity?.length || 0}
-**Blocked Tasks:** ${blockedTasks?.length || 0}
+**Active Tasks:** ${totalActiveTasks} (${claimedTasks.length} claimed, ${inProgressTasksLocal.length} in progress, ${blockedTasks?.length || 0} blocked)
 **Function Calls:** ${functionPerformance?.length || 0}
 **Python Success Rate:** ${pythonSuccessRate}%
 
@@ -302,6 +333,9 @@ Daily thoughts for ${reportDate}.
         discussion_id: discussion?.id,
         discussion_title: discussion?.title,
         report_reference: todayReport?.metadata?.issue_url,
+        active_tasks_count: totalActiveTasks,
+        claimed_tasks_count: claimedTasks.length,
+        in_progress_tasks_count: inProgressTasksLocal.length,
         blocked_tasks_count: blockedTasks?.length || 0,
         blocked_tasks: blockedTasks?.map(t => t.title),
         problem_functions: problemFunctions,

@@ -89,12 +89,12 @@ serve(async (req) => {
       .select('function_name, success')
       .gte('invoked_at', new Date(Date.now() - 60 * 60 * 1000).toISOString());
 
-    // Get in-progress tasks
-    const { data: inProgressTasks } = await supabase
+    // Get ALL active tasks (PENDING, CLAIMED, IN_PROGRESS)
+    const { data: activeTasks } = await supabase
       .from('tasks')
-      .select('title, stage, assignee_agent_id')
-      .eq('status', 'IN_PROGRESS')
-      .limit(5);
+      .select('title, stage, status, assignee_agent_id')
+      .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
+      .limit(10);
 
     // ============= CALCULATE REAL METRICS =============
 
@@ -153,9 +153,12 @@ serve(async (req) => {
       ? blockedTasks.slice(0, 3).map(t => `  - 🚫 "${t.title}": ${t.blocking_reason || 'Unknown'}`).join('\n')
       : '  ✅ No blockers';
 
-    const inProgressText = inProgressTasks && inProgressTasks.length > 0
-      ? inProgressTasks.map(t => `  - 🔄 "${t.title}" [${t.stage}]`).join('\n')
-      : '  No tasks in progress';
+    const activeTasksText = activeTasks && activeTasks.length > 0
+      ? activeTasks.map(t => {
+          const statusIcon = t.status === 'IN_PROGRESS' ? '🔄' : t.status === 'CLAIMED' ? '🟢' : '⚪';
+          return `  - ${statusIcon} "${t.title}" [${t.stage}] (${t.status})`;
+        }).join('\n')
+      : '  No active tasks';
 
     const workflowsText = runningWorkflows && runningWorkflows.length > 0
       ? runningWorkflows.map(w => `  - ⚙️ ${w.workflow_template_id}`).join('\n')
@@ -186,8 +189,8 @@ ${activeAgentsText}
 
 **Idle Agents:** ${idleAgents?.length || 0}
 
-### 🔄 Tasks In Progress
-${inProgressText}
+### 🔄 Active Tasks (${activeTasks?.length || 0})
+${activeTasksText}
 
 ### 🚫 Blockers (${blockedCount})
 ${blockedText}

@@ -143,10 +143,13 @@ serve(async (req) => {
       const taskStats = {
         total: tasks?.length || 0,
         pending: tasks?.filter((t: any) => t.status === 'PENDING').length || 0,
+        claimed: tasks?.filter((t: any) => t.status === 'CLAIMED').length || 0,
         in_progress: tasks?.filter((t: any) => t.status === 'IN_PROGRESS').length || 0,
         blocked: tasks?.filter((t: any) => t.status === 'BLOCKED').length || 0,
         completed: tasks?.filter((t: any) => t.status === 'COMPLETED').length || 0,
-        failed: tasks?.filter((t: any) => t.status === 'FAILED').length || 0
+        failed: tasks?.filter((t: any) => t.status === 'FAILED').length || 0,
+        // Active = anything in the pipeline (not completed/cancelled/failed)
+        active: tasks?.filter((t: any) => ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED'].includes(t.status)).length || 0
       };
       
       statusReport.components.tasks = {
