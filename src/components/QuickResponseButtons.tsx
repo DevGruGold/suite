@@ -14,6 +14,75 @@ interface QuickResponseButtonsProps {
   lastExecutive?: string;
 }
 
+// Number emoji mapping for detected options
+const numberEmojis: Record<number, string> = {
+  1: '1️⃣',
+  2: '2️⃣',
+  3: '3️⃣',
+  4: '4️⃣',
+  5: '5️⃣',
+  6: '6️⃣',
+  7: '7️⃣',
+  8: '8️⃣',
+  9: '9️⃣',
+};
+
+// Extract numbered options from AI response (e.g., "1. Option" "2) Choice" "(3) Action")
+const extractNumberedOptions = (content: string): ButtonConfig[] | null => {
+  if (!content) return null;
+  
+  const options: ButtonConfig[] = [];
+  const seenNumbers = new Set<number>();
+  
+  // Pattern matches: "1. text", "1) text", "(1) text", "**1.** text"
+  const patterns = [
+    /(?:^|\n)\s*\*?\*?(\d+)[.)\]]\*?\*?\s+([^\n]+)/gm,
+    /(?:^|\n)\s*\((\d+)\)\s+([^\n]+)/gm,
+  ];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const num = parseInt(match[1], 10);
+      let label = match[2].trim();
+      
+      // Skip if we've seen this number or it's out of range
+      if (seenNumbers.has(num) || num < 1 || num > 9) continue;
+      seenNumbers.add(num);
+      
+      // Clean up the label
+      label = label
+        .replace(/\*\*/g, '') // Remove markdown bold
+        .replace(/\*([^*]+)\*/g, '$1') // Remove markdown italic
+        .replace(/`([^`]+)`/g, '$1') // Remove code backticks
+        .replace(/\s*[-–—]\s*.*$/, '') // Remove dash explanations
+        .trim();
+      
+      // Truncate long labels
+      if (label.length > 50) {
+        label = label.substring(0, 47) + '...';
+      }
+      
+      // Skip empty or too short labels
+      if (label.length < 3) continue;
+      
+      options.push({
+        label,
+        emoji: numberEmojis[num] || `${num}.`,
+      });
+    }
+  }
+  
+  // Sort by number and return if we found at least 2 options
+  options.sort((a, b) => {
+    const numA = Object.entries(numberEmojis).find(([, e]) => e === a.emoji)?.[0] || '0';
+    const numB = Object.entries(numberEmojis).find(([, e]) => e === b.emoji)?.[0] || '0';
+    return parseInt(numA) - parseInt(numB);
+  });
+  
+  return options.length >= 2 ? options.slice(0, 5) : null;
+};
+
 // Buttons shown when conversation is empty
 const emptyConversationResponses: ButtonConfig[] = [
   { label: "Hello! What can you do?", emoji: "👋" },
@@ -173,6 +242,12 @@ const getContextualButtons = (
   // While waiting for AI response
   if (lastMessageRole === 'user') {
     return afterUserResponses;
+  }
+  
+  // NEW: Check for numbered options FIRST (e.g., "1. Option 2. Choice 3. Action")
+  const numberedOptions = extractNumberedOptions(lastMessageContent || '');
+  if (numberedOptions) {
+    return numberedOptions;
   }
   
   // After AI response - build dynamic buttons
