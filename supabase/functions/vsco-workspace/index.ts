@@ -130,6 +130,148 @@ Deno.serve(async (req) => {
 
     switch (action) {
       // ====================================================================
+      // META: LIST ALL AVAILABLE ACTIONS
+      // ====================================================================
+      case 'list_actions': {
+        const allActions = [
+          // Studio & Brands
+          { name: 'get_studio', category: 'studio', required: [], optional: [] },
+          { name: 'list_brands', category: 'studio', required: [], optional: [] },
+          { name: 'create_brand', category: 'studio', required: ['name'], optional: [] },
+          { name: 'update_brand', category: 'studio', required: ['brand_id'], optional: ['name'] },
+          { name: 'delete_brand', category: 'studio', required: ['brand_id'], optional: [] },
+          // Jobs
+          { name: 'list_jobs', category: 'jobs', required: [], optional: ['stage', 'closed', 'brand_id', 'page', 'per_page'] },
+          { name: 'get_job', category: 'jobs', required: ['job_id'], optional: [] },
+          { name: 'create_job', category: 'jobs', required: ['name'], optional: ['stage', 'job_type_id', 'lead_rating', 'event_date'] },
+          { name: 'update_job', category: 'jobs', required: ['job_id'], optional: ['name', 'stage', 'lead_rating'] },
+          { name: 'close_job', category: 'jobs', required: ['job_id'], optional: ['reason'] },
+          { name: 'delete_job', category: 'jobs', required: ['job_id'], optional: [] },
+          { name: 'get_job_worksheet', category: 'jobs', required: ['job_id'], optional: [] },
+          { name: 'create_job_from_worksheet', category: 'jobs', required: ['worksheet_id'], optional: ['name'] },
+          // Job Contacts
+          { name: 'list_job_contacts', category: 'job_contacts', required: ['job_id'], optional: [] },
+          { name: 'create_job_contact', category: 'job_contacts', required: ['job_id', 'contact_id'], optional: ['role', 'is_primary'] },
+          { name: 'get_job_contact', category: 'job_contacts', required: ['job_id', 'job_contact_id'], optional: [] },
+          { name: 'update_job_contact', category: 'job_contacts', required: ['job_id', 'job_contact_id'], optional: ['role'] },
+          { name: 'delete_job_contact', category: 'job_contacts', required: ['job_id', 'job_contact_id'], optional: [] },
+          // Contacts
+          { name: 'list_contacts', category: 'contacts', required: [], optional: ['page', 'per_page', 'search'] },
+          { name: 'get_contact', category: 'contacts', required: ['contact_id'], optional: [] },
+          { name: 'create_contact', category: 'contacts', required: ['email'], optional: ['first_name', 'last_name', 'phone'] },
+          { name: 'update_contact', category: 'contacts', required: ['contact_id'], optional: ['email', 'first_name', 'last_name'] },
+          { name: 'delete_contact', category: 'contacts', required: ['contact_id'], optional: [] },
+          // Events
+          { name: 'list_events', category: 'events', required: [], optional: ['start_date', 'end_date', 'job_id'] },
+          { name: 'get_event', category: 'events', required: ['event_id'], optional: [] },
+          { name: 'create_event', category: 'events', required: ['title', 'start_date'], optional: ['end_date', 'job_id'] },
+          { name: 'update_event', category: 'events', required: ['event_id'], optional: ['title', 'start_date'] },
+          { name: 'delete_event', category: 'events', required: ['event_id'], optional: [] },
+          // Orders
+          { name: 'list_orders', category: 'orders', required: [], optional: ['job_id', 'status'] },
+          { name: 'get_order', category: 'orders', required: ['order_id'], optional: [] },
+          { name: 'create_order', category: 'orders', required: ['job_id'], optional: ['status'] },
+          { name: 'update_order', category: 'orders', required: ['order_id'], optional: ['status'] },
+          { name: 'delete_order', category: 'orders', required: ['order_id'], optional: [] },
+          // Products
+          { name: 'list_products', category: 'products', required: [], optional: ['page', 'per_page'] },
+          { name: 'get_product', category: 'products', required: ['product_id'], optional: [] },
+          { name: 'create_product', category: 'products', required: ['name', 'price'], optional: ['description'] },
+          { name: 'update_product', category: 'products', required: ['product_id'], optional: ['name', 'price'] },
+          { name: 'delete_product', category: 'products', required: ['product_id'], optional: [] },
+          // Worksheets
+          { name: 'list_worksheets', category: 'worksheets', required: [], optional: ['page'] },
+          { name: 'get_worksheet', category: 'worksheets', required: ['worksheet_id'], optional: [] },
+          { name: 'create_worksheet', category: 'worksheets', required: ['name'], optional: ['fields'] },
+          { name: 'update_worksheet', category: 'worksheets', required: ['worksheet_id'], optional: ['name'] },
+          { name: 'delete_worksheet', category: 'worksheets', required: ['worksheet_id'], optional: [] },
+          // Notes
+          { name: 'list_notes', category: 'notes', required: ['job_id'], optional: [] },
+          { name: 'create_note', category: 'notes', required: ['job_id', 'contentHtml'], optional: ['title'] },
+          { name: 'update_note', category: 'notes', required: ['note_id'], optional: ['contentHtml'] },
+          { name: 'delete_note', category: 'notes', required: ['note_id'], optional: [] },
+          // Files & Galleries
+          { name: 'list_files', category: 'files', required: ['job_id'], optional: [] },
+          { name: 'create_file', category: 'files', required: ['job_id', 'url'], optional: ['name'] },
+          { name: 'update_file', category: 'files', required: ['file_id'], optional: ['name'] },
+          { name: 'delete_file', category: 'files', required: ['file_id'], optional: [] },
+          { name: 'list_galleries', category: 'galleries', required: [], optional: ['job_id'] },
+          { name: 'create_gallery', category: 'galleries', required: ['name'], optional: ['job_id'] },
+          { name: 'update_gallery', category: 'galleries', required: ['gallery_id'], optional: ['name'] },
+          { name: 'delete_gallery', category: 'galleries', required: ['gallery_id'], optional: [] },
+          // Financials
+          { name: 'list_payment_methods', category: 'financials', required: [], optional: [] },
+          { name: 'get_payment_method', category: 'financials', required: ['payment_method_id'], optional: [] },
+          { name: 'create_payment_method', category: 'financials', required: ['name', 'type'], optional: [] },
+          { name: 'update_payment_method', category: 'financials', required: ['payment_method_id'], optional: ['name'] },
+          { name: 'delete_payment_method', category: 'financials', required: ['payment_method_id'], optional: [] },
+          { name: 'list_profit_centers', category: 'financials', required: [], optional: [] },
+          { name: 'create_profit_center', category: 'financials', required: ['name'], optional: [] },
+          { name: 'update_profit_center', category: 'financials', required: ['profit_center_id'], optional: ['name'] },
+          { name: 'delete_profit_center', category: 'financials', required: ['profit_center_id'], optional: [] },
+          { name: 'list_tax_groups', category: 'financials', required: [], optional: [] },
+          { name: 'create_tax_group', category: 'financials', required: ['name'], optional: ['rate'] },
+          { name: 'update_tax_group', category: 'financials', required: ['tax_group_id'], optional: ['name'] },
+          { name: 'delete_tax_group', category: 'financials', required: ['tax_group_id'], optional: [] },
+          { name: 'list_tax_rates', category: 'financials', required: [], optional: [] },
+          { name: 'create_tax_rate', category: 'financials', required: ['name', 'rate'], optional: [] },
+          { name: 'update_tax_rate', category: 'financials', required: ['tax_rate_id'], optional: ['name'] },
+          { name: 'delete_tax_rate', category: 'financials', required: ['tax_rate_id'], optional: [] },
+          // Settings
+          { name: 'list_custom_fields', category: 'settings', required: [], optional: ['entity_type'] },
+          { name: 'create_custom_field', category: 'settings', required: ['name', 'field_type'], optional: [] },
+          { name: 'update_custom_field', category: 'settings', required: ['custom_field_id'], optional: ['name'] },
+          { name: 'delete_custom_field', category: 'settings', required: ['custom_field_id'], optional: [] },
+          { name: 'list_discounts', category: 'settings', required: [], optional: [] },
+          { name: 'create_discount', category: 'settings', required: ['name', 'type', 'value'], optional: [] },
+          { name: 'delete_discount', category: 'settings', required: ['discount_id'], optional: [] },
+          { name: 'list_event_types', category: 'settings', required: [], optional: [] },
+          { name: 'list_job_types', category: 'settings', required: [], optional: [] },
+          { name: 'list_lead_types', category: 'settings', required: [], optional: [] },
+          { name: 'list_file_types', category: 'settings', required: [], optional: [] },
+          // Users
+          { name: 'list_users', category: 'users', required: [], optional: [] },
+          { name: 'get_user', category: 'users', required: ['user_id'], optional: [] },
+          { name: 'create_user', category: 'users', required: ['email'], optional: ['first_name', 'last_name'] },
+          { name: 'update_user', category: 'users', required: ['user_id'], optional: ['first_name'] },
+          { name: 'delete_user', category: 'users', required: ['user_id'], optional: [] },
+          // Webhooks
+          { name: 'list_webhooks', category: 'webhooks', required: [], optional: [] },
+          { name: 'create_webhook', category: 'webhooks', required: ['url', 'events'], optional: [] },
+          { name: 'update_webhook', category: 'webhooks', required: ['webhook_id'], optional: ['url', 'events'] },
+          { name: 'delete_webhook', category: 'webhooks', required: ['webhook_id'], optional: [] },
+          // Analytics
+          { name: 'get_analytics', category: 'analytics', required: [], optional: ['start_date', 'end_date'] },
+          { name: 'get_revenue_report', category: 'analytics', required: [], optional: ['start_date', 'end_date'] },
+          // Utilities
+          { name: 'sync_all', category: 'utilities', required: [], optional: [] },
+          { name: 'sync_jobs', category: 'utilities', required: [], optional: ['since'] },
+          { name: 'sync_contacts', category: 'utilities', required: [], optional: ['since'] },
+          { name: 'get_api_health', category: 'utilities', required: [], optional: [] },
+          { name: 'list_timezones', category: 'utilities', required: [], optional: [] },
+          { name: 'health', category: 'utilities', required: [], optional: [] },
+          { name: 'debug_api', category: 'utilities', required: [], optional: [] },
+          { name: 'list_actions', category: 'utilities', required: [], optional: ['category'] },
+        ];
+        
+        const filterCategory = data.category;
+        const filteredActions = filterCategory 
+          ? allActions.filter(a => a.category === filterCategory)
+          : allActions;
+        
+        const categories = [...new Set(allActions.map(a => a.category))];
+        
+        result = {
+          success: true,
+          total_actions: allActions.length,
+          filtered_actions: filteredActions.length,
+          categories,
+          actions: filteredActions,
+          usage: 'Call with { "action": "<action_name>", "data": { ...params } }'
+        };
+        break;
+      }
+      // ====================================================================
       // STUDIO & BRANDS (Táve uses singular /brand)
       // ====================================================================
       case 'get_studio': {

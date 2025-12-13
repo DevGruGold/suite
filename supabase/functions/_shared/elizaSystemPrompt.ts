@@ -160,6 +160,39 @@ Before stating ANY fact about:
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// INTROSPECTION PROTOCOL FOR MULTI-ACTION FUNCTIONS
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const INTROSPECTION_PROTOCOL = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔍 INTROSPECTION PROTOCOL (MULTI-ACTION FUNCTIONS)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Some edge functions accept multiple "action" values. If you're unsure which actions are available,
+use introspect_function_actions FIRST before attempting to use an action.
+
+SUPPORTED MULTI-ACTION FUNCTIONS:
+• vsco-workspace: 89 actions for photography studio management
+• github-integration: 25+ actions for GitHub operations
+• agent-manager: 27+ actions for agent/task orchestration
+• workflow-template-manager: 8 actions for workflow templates
+
+INTROSPECTION EXAMPLES:
+• "What VSCO actions exist?" → introspect_function_actions({ function_name: "vsco-workspace" })
+• "What job actions can I use?" → introspect_function_actions({ function_name: "vsco-workspace", category: "jobs" })
+• "List GitHub PR actions" → introspect_function_actions({ function_name: "github-integration", category: "prs" })
+• "Show all functions" → introspect_function_actions({}) -- lists all supported functions
+
+WHEN TO INTROSPECT:
+• Before using an action for the first time
+• When you receive "Unknown action" error
+• When user asks "what can you do with X"
+• When you need to discover available parameters
+
+DIRECT INTROSPECTION via vsco-workspace:
+You can also call vsco-workspace directly with action: "list_actions" to get the same result:
+invoke_edge_function("vsco-workspace", { action: "list_actions", data: { category: "jobs" } })
+`;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // TRIGGER PHRASE → TOOL MAPPINGS
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const TRIGGER_PHRASE_MAPPINGS = `
@@ -1917,7 +1950,8 @@ You are the Chief Analytics Officer of XMRT Council. Your responsibilities:
   return basePrompt + '\n\n' + 
     ABSOLUTE_RULES + '\n\n' + 
     ANTI_HALLUCINATION_PROTOCOL + '\n\n' + 
-    TRIGGER_PHRASE_MAPPINGS + '\n\n' + 
+    INTROSPECTION_PROTOCOL + '\n\n' +
+    TRIGGER_PHRASE_MAPPINGS + '\n\n' +
     TOOL_SYNTAX_EXAMPLES + '\n\n' + 
     ERROR_HANDLING_PROTOCOL + '\n\n' + 
     executivePersonas[executiveName] + '\n\n' + 
@@ -6142,7 +6176,8 @@ Focus on being genuinely helpful while showcasing the depth of your ecosystem kn
   ACTION_ORIENTED_RESPONSE_STYLE + '\n\n' +
   ABSOLUTE_RULES + '\n\n' +
   ANTI_HALLUCINATION_PROTOCOL + '\n\n' + 
-  TRIGGER_PHRASE_MAPPINGS + '\n\n' + 
+  INTROSPECTION_PROTOCOL + '\n\n' +
+  TRIGGER_PHRASE_MAPPINGS + '\n\n' +
   TOOL_SYNTAX_EXAMPLES + '\n\n' + 
   ERROR_HANDLING_PROTOCOL + '\n\n' + 
   PYTHON_SANDBOX_LIMITATIONS + '\n\n' + 
