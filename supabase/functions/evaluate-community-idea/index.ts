@@ -6,6 +6,8 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const OVERALL_TIMEOUT_MS = 18000; // 18 second overall timeout
+
 interface EvaluationScores {
   financial_sovereignty: number;
   democracy: number;
@@ -19,62 +21,102 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
+  // Create overall timeout guard
+  const timeoutPromise = new Promise<Response>((resolve) =>
+    setTimeout(() => {
+      console.warn('⚠️ Overall timeout reached, returning partial result');
+      resolve(new Response(JSON.stringify({ 
+        success: true, 
+        timeout: true,
+        message: 'Evaluation timed out - will retry on next cycle'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }));
+    }, OVERALL_TIMEOUT_MS)
+  );
 
-    const { action, ideaId } = await req.json();
+  const mainPromise = (async () => {
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+      const supabase = createClient(supabaseUrl, supabaseKey);
 
-    if (action === 'evaluate_pending') {
-      // Get all ideas in 'submitted' status
-      const { data: pendingIdeas } = await supabase
-        .from('community_ideas')
-        .select('*')
-        .eq('status', 'submitted')
-        .limit(5);
+      let body: any = {};
+      try {
+        body = await req.json();
+      } catch {
+        // Empty body for cron - use default action
+      }
 
-      if (!pendingIdeas || pendingIdeas.length === 0) {
-        return new Response(JSON.stringify({ message: 'No pending ideas to evaluate' }), {
+      const { action, ideaId } = body;
+
+      // Cron trigger or evaluate_pending
+      if (action === 'evaluate_pending' || !action) {
+        console.log('📋 Evaluating pending community ideas...');
+        
+        const { data: pendingIdeas } = await supabase
+          .from('community_ideas')
+          .select('*')
+          .eq('status', 'submitted')
+          .limit(3); // Reduced from 5 to 3 for faster processing
+
+        if (!pendingIdeas || pendingIdeas.length === 0) {
+          return new Response(JSON.stringify({ 
+            success: true,
+            message: 'No pending ideas to evaluate',
+            cron: !action
+          }), {
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+          });
+        }
+
+        // Process ideas sequentially to avoid timeouts
+        const results = [];
+        for (const idea of pendingIdeas) {
+          try {
+            const result = await evaluateIdea(supabase, idea.id);
+            results.push({ id: idea.id, ...result });
+          } catch (e) {
+            console.warn(`⚠️ Failed to evaluate idea ${idea.id}:`, e);
+            results.push({ id: idea.id, error: e.message });
+          }
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          evaluated: results.length,
+          results
+        }), {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         });
       }
 
-      for (const idea of pendingIdeas) {
-        await evaluateIdea(supabase, idea.id);
+      // Single idea evaluation
+      if (ideaId) {
+        const result = await evaluateIdea(supabase, ideaId);
+        return new Response(JSON.stringify(result), {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
       }
 
-      return new Response(JSON.stringify({
-        success: true,
-        evaluated: pendingIdeas.length
-      }), {
+      throw new Error('Missing action or ideaId');
+
+    } catch (error) {
+      console.error('❌ Idea evaluation error:', error);
+      return new Response(JSON.stringify({ error: error.message }), {
+        status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
+  })();
 
-    // Single idea evaluation
-    if (ideaId) {
-      const result = await evaluateIdea(supabase, ideaId);
-      return new Response(JSON.stringify(result), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
-    }
-
-    throw new Error('Missing action or ideaId');
-
-  } catch (error) {
-    console.error('❌ Idea evaluation error:', error);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
+  // Race between main processing and timeout
+  return Promise.race([mainPromise, timeoutPromise]);
 });
 
 async function evaluateIdea(supabase: any, ideaId: string) {
   console.log(`🔍 Evaluating idea: ${ideaId}`);
 
-  // Get idea details
   const { data: idea, error: ideaError } = await supabase
     .from('community_ideas')
     .select('*')
@@ -91,24 +133,16 @@ async function evaluateIdea(supabase: any, ideaId: string) {
     .update({ status: 'under_review' })
     .eq('id', ideaId);
 
-  // Log initial review
-  await supabase.from('idea_evaluation_history').insert({
-    idea_id: ideaId,
-    evaluation_stage: 'initial_review',
-    evaluator: 'eliza',
-    notes: 'Starting evaluation process'
-  });
+  // STEP 1: Score the idea (fast, no external calls)
+  const scores = scoreIdea(idea);
 
-  // STEP 1: Initial Triage - Score the idea
-  const scores = await scoreIdea(idea);
+  // STEP 2: Generate council perspectives (fast, no external calls)
+  const councilPerspectives = generateCouncilPerspectives(idea, scores);
 
-  // STEP 2: Executive Council Deliberation
-  const councilPerspectives = await conveneCouncil(supabase, idea, scores);
+  // STEP 3: Analyze architecture (fast, no external calls)
+  const architectureAnalysis = analyzeArchitecture(idea);
 
-  // STEP 3: System Architecture Analysis
-  const architectureAnalysis = await analyzeArchitecture(supabase, idea);
-
-  // STEP 4: Calculate average score and make recommendation
+  // Calculate average score
   const avgScore = Math.round(
     (scores.financial_sovereignty + scores.democracy + scores.privacy + 
      scores.technical_feasibility + scores.community_benefit) / 5
@@ -142,24 +176,15 @@ async function evaluateIdea(supabase: any, ideaId: string) {
     })
     .eq('id', ideaId);
 
-  // Log council deliberation
-  await supabase.from('idea_evaluation_history').insert({
-    idea_id: ideaId,
-    evaluation_stage: 'council_deliberation',
-    evaluator: 'executive_council',
-    notes: `Average score: ${avgScore}/100. ${approved ? 'APPROVED' : 'REJECTED'}`,
-    scores: { ...scores, average: avgScore }
-  });
-
   // If approved, create implementation task
   if (approved) {
     await supabase.from('tasks').insert({
       title: `Implement: ${idea.title}`,
-      description: `Community idea implementation:\n\n${idea.description}\n\nImplementation Plan:\n${JSON.stringify(architectureAnalysis.plan, null, 2)}`,
+      description: `Community idea implementation:\n\n${idea.description}\n\nEstimated: ${architectureAnalysis.timeline}`,
       status: 'pending',
       priority: avgScore >= 80 ? 'high' : avgScore >= 70 ? 'medium' : 'low',
       category: 'community_idea',
-      metadata: { idea_id: ideaId, scores, council_perspectives: councilPerspectives }
+      metadata: { idea_id: ideaId, scores }
     });
 
     console.log(`✅ Idea ${ideaId} APPROVED (${avgScore}/100) - Task created`);
@@ -167,49 +192,28 @@ async function evaluateIdea(supabase: any, ideaId: string) {
     console.log(`❌ Idea ${ideaId} REJECTED (${avgScore}/100)`);
   }
 
-  return {
-    success: true,
-    ideaId,
-    approved,
-    avgScore,
-    scores,
-    councilPerspectives,
-    architectureAnalysis
-  };
+  return { success: true, ideaId, approved, avgScore, scores };
 }
 
 function scoreIdea(idea: any): EvaluationScores {
   const { title, description, category } = idea;
   const text = `${title} ${description}`.toLowerCase();
 
-  // Financial Sovereignty Keywords
   const sovereigntyKeywords = ['mining', 'wallet', 'crypto', 'xmr', 'monero', 'payment', 'transaction', 'economic', 'revenue', 'income'];
-  const sovereigntyScore = Math.min(100, 
-    40 + (sovereigntyKeywords.filter(k => text.includes(k)).length * 10)
-  );
+  const sovereigntyScore = Math.min(100, 40 + (sovereigntyKeywords.filter(k => text.includes(k)).length * 10));
 
-  // Democracy Keywords
   const democracyKeywords = ['governance', 'vote', 'dao', 'community', 'proposal', 'decision', 'transparent', 'participation'];
-  const democracyScore = Math.min(100,
-    30 + (democracyKeywords.filter(k => text.includes(k)).length * 12)
-  );
+  const democracyScore = Math.min(100, 30 + (democracyKeywords.filter(k => text.includes(k)).length * 12));
 
-  // Privacy Keywords
   const privacyKeywords = ['privacy', 'anonymous', 'encryption', 'secure', 'private', 'confidential', 'stealth'];
-  const privacyScore = Math.min(100,
-    40 + (privacyKeywords.filter(k => text.includes(k)).length * 10)
-  );
+  const privacyScore = Math.min(100, 40 + (privacyKeywords.filter(k => text.includes(k)).length * 10));
 
-  // Technical Feasibility
   const technicalKeywords = ['integrate', 'api', 'function', 'database', 'optimization', 'performance'];
-  const technicalScore = Math.min(100,
-    50 + (technicalKeywords.filter(k => text.includes(k)).length * 8)
-  );
+  const technicalScore = Math.min(100, 50 + (technicalKeywords.filter(k => text.includes(k)).length * 8));
 
-  // Community Benefit (based on category and description length)
   let communityScore = 50;
   if (category === 'community') communityScore += 20;
-  if (description.length > 200) communityScore += 15; // detailed ideas score higher
+  if (description.length > 200) communityScore += 15;
   if (text.includes('user') || text.includes('member')) communityScore += 15;
 
   return {
@@ -221,32 +225,18 @@ function scoreIdea(idea: any): EvaluationScores {
   };
 }
 
-async function conveneCouncil(supabase: any, idea: any, scores: EvaluationScores) {
-  // CSO: Strategic alignment, community impact
+function generateCouncilPerspectives(idea: any, scores: EvaluationScores) {
   const csoPerspective = `Strategic Value: ${scores.community_benefit}/100. ` +
-    (scores.community_benefit >= 70 ? 'Strong community alignment. ' : 'Moderate community impact. ') +
-    `Supports ${idea.category} pillar of XMRT DAO.`;
+    (scores.community_benefit >= 70 ? 'Strong community alignment.' : 'Moderate community impact.');
 
-  // CTO: Technical feasibility, architecture fit
   const ctoPerspective = `Technical Feasibility: ${scores.technical_feasibility}/100. ` +
-    (scores.technical_feasibility >= 70 
-      ? 'Implementation is straightforward with existing infrastructure. '
-      : 'Will require new components and careful integration. ') +
-    'Reviewing system architecture compatibility...';
+    (scores.technical_feasibility >= 70 ? 'Implementation is straightforward.' : 'Will require new components.');
 
-  // CIO: Data/information implications
   const cioPerspective = `Information Security: ${scores.privacy}/100. ` +
-    (scores.privacy >= 70 
-      ? 'Strong privacy considerations. Aligns with XMRT values. '
-      : 'Privacy implications need careful review. ') +
-    'Data handling procedures adequate.';
+    (scores.privacy >= 70 ? 'Strong privacy considerations.' : 'Privacy implications need review.');
 
-  // CAO: Cost-benefit analysis
   const caoPerspective = `Financial Impact: ${scores.financial_sovereignty}/100. ` +
-    (scores.financial_sovereignty >= 70
-      ? 'Positive ROI expected. Strengthens financial sovereignty. '
-      : 'Financial benefits unclear. Further analysis needed. ') +
-    'Resource allocation recommended.';
+    (scores.financial_sovereignty >= 70 ? 'Positive ROI expected.' : 'Financial benefits unclear.');
 
   const avgScore = Math.round(
     (scores.financial_sovereignty + scores.democracy + scores.privacy + 
@@ -259,64 +249,33 @@ async function conveneCouncil(supabase: any, idea: any, scores: EvaluationScores
     ? 'CONDITIONAL APPROVAL - Proceed with monitoring'
     : 'REJECTION - Does not meet quality threshold';
 
-  return {
-    cso: csoPerspective,
-    cto: ctoPerspective,
-    cio: cioPerspective,
-    cao: caoPerspective,
-    recommendation
-  };
+  return { cso: csoPerspective, cto: ctoPerspective, cio: cioPerspective, cao: caoPerspective, recommendation };
 }
 
-async function analyzeArchitecture(supabase: any, idea: any) {
+function analyzeArchitecture(idea: any) {
   const { title, description } = idea;
   const text = `${title} ${description}`.toLowerCase();
 
-  // Determine what components would be needed
-  const components: any = {
-    existing_to_leverage: [],
-    new_needed: []
-  };
+  const components: any = { existing_to_leverage: [], new_needed: [] };
 
-  // Check for mining-related
   if (text.includes('mining') || text.includes('miner')) {
-    components.existing_to_leverage.push('mining-proxy', 'device_connection_sessions', 'mining_sessions');
-    components.new_needed.push('Extended mining analytics');
+    components.existing_to_leverage.push('mining-proxy', 'mining_sessions');
   }
-
-  // Check for wallet/transaction
-  if (text.includes('wallet') || text.includes('transaction') || text.includes('xmr')) {
-    components.existing_to_leverage.push('xmrt_transactions', 'xmrt_balances');
+  if (text.includes('wallet') || text.includes('xmr')) {
+    components.existing_to_leverage.push('xmrt_transactions');
   }
-
-  // Check for community features
   if (text.includes('community') || text.includes('social')) {
-    components.existing_to_leverage.push('user_profiles', 'github-integration');
+    components.existing_to_leverage.push('user_profiles');
   }
 
-  // Estimate complexity
   const newComponentCount = components.new_needed.length;
-  const complexity = newComponentCount === 0 ? 'low' 
-    : newComponentCount <= 2 ? 'medium'
-    : newComponentCount <= 4 ? 'high'
-    : 'very_high';
-
-  const timeline = complexity === 'low' ? '1-2 days'
-    : complexity === 'medium' ? '3-7 days'
-    : complexity === 'high' ? '1-2 weeks'
-    : '2-4 weeks';
-
-  const plan = {
-    phase1: 'Database schema updates',
-    phase2: 'Edge function development',
-    phase3: 'Frontend integration',
-    phase4: 'Testing and deployment'
-  };
+  const complexity = newComponentCount === 0 ? 'low' : newComponentCount <= 2 ? 'medium' : 'high';
+  const timeline = complexity === 'low' ? '1-2 days' : complexity === 'medium' ? '3-7 days' : '1-2 weeks';
 
   return {
     components,
     complexity,
     timeline,
-    plan
+    plan: { phase1: 'Schema updates', phase2: 'Edge functions', phase3: 'Frontend', phase4: 'Testing' }
   };
 }

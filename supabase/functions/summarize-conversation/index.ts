@@ -8,46 +8,83 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+const AI_TIMEOUT_MS = 12000; // 12 second timeout for AI calls
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { session_id, messages } = await req.json();
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Empty body for cron triggers
+    }
+
+    const { session_id, messages } = body;
+
+    // Early return for cron triggers with no session/messages
+    if (!session_id || !messages || messages.length === 0) {
+      console.log('📝 Cron trigger - no conversation to summarize');
+      return new Response(JSON.stringify({ 
+        success: true, 
+        cron: true, 
+        message: 'No conversation provided for summarization'
+      }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      });
+    }
 
     console.log(`📝 Summarizing conversation for session ${session_id}...`);
 
-    // Prepare conversation text
-    const conversationText = messages.map((msg: any) => 
-      `${msg.message_type}: ${msg.content}`
+    // Prepare conversation text (truncate to avoid token limits)
+    const conversationText = messages.slice(-20).map((msg: any) => 
+      `${msg.message_type}: ${msg.content?.slice(0, 200) || ''}`
     ).join('\n');
 
-    const prompt = `Create a concise summary of this conversation. Focus on key topics, decisions, and action items. Keep it under 200 words.
+    const prompt = `Create a concise summary of this conversation. Focus on key topics and decisions. Keep it under 150 words.
 
 CONVERSATION:
-${conversationText}
+${conversationText.slice(0, 3000)}
 
 SUMMARY:`;
 
     const staticFallback = `Conversation summary for session ${session_id}:
 - ${messages.length} messages exchanged
-- Topics discussed: General conversation
-- Key points: See full conversation for details`;
+- Topics: General conversation
+- See full conversation for details`;
 
     let summary: string;
     let aiProvider = 'static_fallback';
 
     try {
       console.log('🔄 Generating summary with AI fallback cascade...');
-      const result = await generateTextWithFallback(prompt, undefined, {
+      
+      // Wrap AI call with timeout
+      const aiPromise = generateTextWithFallback(prompt, undefined, {
         temperature: 0.5,
-        maxTokens: 500,
+        maxTokens: 300,
         useFullElizaContext: false
       });
-      summary = result.content;
-      aiProvider = result.provider;
-      console.log(`✅ Summary generated via ${aiProvider}`);
+
+      const timeoutPromise = new Promise<null>((resolve) =>
+        setTimeout(() => {
+          console.warn('⚠️ AI summarization timed out');
+          resolve(null);
+        }, AI_TIMEOUT_MS)
+      );
+
+      const result = await Promise.race([aiPromise, timeoutPromise]);
+      
+      if (result) {
+        summary = result.content;
+        aiProvider = result.provider;
+        console.log(`✅ Summary generated via ${aiProvider}`);
+      } else {
+        summary = staticFallback;
+      }
     } catch (aiError) {
       console.warn('⚠️ All AI providers failed, using static fallback:', aiError);
       summary = staticFallback;

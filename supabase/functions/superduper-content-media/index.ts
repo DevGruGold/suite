@@ -17,7 +17,31 @@ serve(async (req) => {
   }
 
   try {
-    const { action, params, context } = await req.json();
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Empty body for cron triggers - return early
+    }
+
+    const { action, params, context } = body;
+
+    // Early return for cron triggers with no action (fast response to prevent timeout)
+    if (!action) {
+      console.log('🎯 Content Production & Media Studio: Cron health check - OK');
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          cron: true,
+          agent: "Content Production & Media Studio",
+          status: "healthy",
+          message: "Ready for content production tasks",
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log(`🎯 Content Production & Media Studio: ${action}`);
 
     const result = {
