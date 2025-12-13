@@ -6,26 +6,19 @@ interface QuickResponseButtonsProps {
   lastMessageRole?: 'user' | 'assistant' | null;
 }
 
-// Buttons shown after AI responds (user needs to give feedback)
-const afterAIResponses = [
-  { label: "Great work! Please proceed.", emoji: "✅" },
-  { label: "That's not what I asked", emoji: "❌" },
-  { label: "Please try again", emoji: "🔄" },
-  { label: "Give me more details", emoji: "📝" }
-];
-
-// Buttons shown after user message (discovery prompts)
-const afterUserResponses = [
-  { label: "What can you help me with?", emoji: "❓" },
-  { label: "Show me system status", emoji: "📊" },
-  { label: "List available tools", emoji: "🛠️" }
-];
-
 // Buttons shown when conversation is empty
 const emptyConversationResponses = [
   { label: "Hello! What can you do?", emoji: "👋" },
   { label: "Show me system status", emoji: "📊" },
   { label: "Help me get started", emoji: "🎯" }
+];
+
+// Buttons shown during active conversation
+const activeConversationResponses = [
+  { label: "What can you help me with?", emoji: "❓" },
+  { label: "Show me system status", emoji: "📊" },
+  { label: "List available tools", emoji: "🛠️" },
+  { label: "Tell me more", emoji: "🔄" }
 ];
 
 export const QuickResponseButtons = ({ 
@@ -34,11 +27,9 @@ export const QuickResponseButtons = ({
   lastMessageRole 
 }: QuickResponseButtonsProps) => {
   // Select appropriate button set based on context
-  const responses = lastMessageRole === 'assistant' 
-    ? afterAIResponses 
-    : lastMessageRole === 'user' 
-      ? afterUserResponses 
-      : emptyConversationResponses;
+  const responses = lastMessageRole === null 
+    ? emptyConversationResponses 
+    : activeConversationResponses;
 
   return (
     <div className="flex flex-wrap gap-2 mt-2">
