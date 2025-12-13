@@ -88,13 +88,29 @@ export class EnhancedMemoryService {
   // Trigger vectorization for a memory
   private async vectorizeMemory(memoryId: string, content: string, contextType: string): Promise<void> {
     try {
-      await supabase.functions.invoke('vectorize-memory', {
+      // Skip calling the edge function for empty content to avoid 400 errors
+      if (!content || content.trim().length === 0) {
+        console.log(`⏭️ Skipping vectorization for ${memoryId} - empty content`);
+        return;
+      }
+
+      const { data, error } = await supabase.functions.invoke('vectorize-memory', {
         body: {
           memory_id: memoryId,
           content,
           context_type: contextType
         }
       });
+
+      // Treat "skipped" responses from the edge function as non-fatal
+      if (data && (data as any).skipped) {
+        console.log(`⏭️ Vectorization skipped for ${memoryId}: ${(data as any).error || 'empty content'}`);
+        return;
+      }
+
+      if (error) {
+        console.error('Vectorization failed:', error);
+      }
     } catch (error) {
       console.error('Vectorization failed:', error);
     }
