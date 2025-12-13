@@ -1,6 +1,9 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'superduper-finance-investment';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -34,8 +37,34 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
+
   try {
-    const { action, params, context } = await req.json();
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch {
+      // Empty body for cron triggers
+    }
+
+    const { action, params, context } = body;
+
+    // Early return for cron triggers
+    if (!action) {
+      console.log('💰 Financial Intelligence Agent: Cron health check - OK');
+      await usageTracker.success({ result_summary: 'cron_health_check' });
+      return new Response(
+        JSON.stringify({ 
+          success: true, 
+          cron: true,
+          agent: "Financial Intelligence & Investment Advisor",
+          status: "healthy",
+          message: "Ready for financial tasks",
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     console.log(`💰 Financial Intelligence Agent: ${action}`);
 
@@ -90,6 +119,7 @@ serve(async (req) => {
         );
     }
 
+    await usageTracker.success({ result_summary: `${action}_completed` });
     return new Response(
       JSON.stringify({ success: true, result }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -97,6 +127,7 @@ serve(async (req) => {
 
   } catch (error: any) {
     console.error('Financial Intelligence Agent error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

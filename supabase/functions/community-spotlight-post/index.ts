@@ -1,6 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
+import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'community-spotlight-post';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -11,6 +14,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, 'cso', { method: req.method });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
@@ -145,6 +150,7 @@ Keep building, keep learning, keep growing together!
       status: 'completed'
     });
 
+    await usageTracker.success({ result_summary: 'spotlight_posted', provider: aiProvider });
     return new Response(
       JSON.stringify({
         success: true,
@@ -157,6 +163,7 @@ Keep building, keep learning, keep growing together!
 
   } catch (error: any) {
     console.error('Community Spotlight Error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(
       JSON.stringify({ error: error.message }),
       { 

@@ -1,7 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
 import { corsHeaders } from "../_shared/cors.ts";
+import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
 
+const FUNCTION_NAME = 'aggregate-device-metrics';
 const QUERY_TIMEOUT_MS = 6000; // 6 second timeout per query
 
 // Timeout wrapper for database queries
@@ -19,6 +21,8 @@ serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
+
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -39,6 +43,7 @@ serve(async (req) => {
       console.log('📊 Cron trigger - running quick aggregate for today');
       const today = new Date().toISOString().split('T')[0];
       const result = await quickAggregate(supabase, today);
+      await usageTracker.success({ result_summary: 'cron_aggregate' });
       return new Response(JSON.stringify({ success: true, cron: true, ...result }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -65,13 +70,15 @@ serve(async (req) => {
         throw new Error(`Unknown action: ${action}`);
     }
 
+    await usageTracker.success({ result_summary: `${action}_completed` });
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
     console.error('❌ Metrics Aggregation Error:', error);
-    return new Response(JSON.stringify({ 
+    await usageTracker.failure(error instanceof Error ? error.message : 'Unknown error', 400);
+    return new Response(JSON.stringify({
       error: error instanceof Error ? error.message : 'Unknown error' 
     }), {
       status: 400,
