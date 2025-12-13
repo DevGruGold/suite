@@ -3076,5 +3076,48 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: []
       }
     }
+  },
+
+  // ====================================================================
+  // ⏰ CRON REGISTRY & EXECUTION CONTEXT TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'query_cron_registry',
+      description: '⏰ Query the unified cron job registry across ALL platforms (Supabase Native, pg_cron, GitHub Actions, Vercel). See what scheduled jobs exist, their run status, failures, and execution stats. Essential for understanding what autonomous processes are running and diagnosing scheduling issues.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['list_all', 'list_by_platform', 'get_job_status', 'get_next_runs', 'get_failing_jobs', 'get_execution_stats'],
+            description: 'Registry action: list_all (all jobs), list_by_platform (filter by source), get_job_status (specific job), get_next_runs (upcoming executions), get_failing_jobs (problem jobs), get_execution_stats (aggregate stats)'
+          },
+          platform: { 
+            type: 'string', 
+            enum: ['supabase_native', 'pg_cron', 'github_actions', 'vercel_cron'],
+            description: 'Filter by execution platform (for list_by_platform, get_execution_stats)' 
+          },
+          function_name: { 
+            type: 'string', 
+            description: 'Filter by function name (for get_job_status)' 
+          },
+          job_name: { 
+            type: 'string', 
+            description: 'Specific job name to query (for get_job_status)' 
+          },
+          include_inactive: { 
+            type: 'boolean', 
+            description: 'Include disabled/inactive jobs (default: false)' 
+          },
+          time_window_hours: { 
+            type: 'number', 
+            description: 'Time window for stats/failures (default: 24 hours)' 
+          }
+        },
+        required: ['action']
+      }
+    }
   }
 ];

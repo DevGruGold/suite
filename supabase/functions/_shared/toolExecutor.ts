@@ -1842,11 +1842,28 @@ export async function executeToolCall(
         : { success: true, result: systemStatusResult.data };
       break;
 
+    case 'query_cron_registry':
+      console.log(`⏰ [${executiveName}] Query cron registry: ${parsedArgs?.action || 'list_all'}`);
+      const cronRegistryResult = await supabase.functions.invoke('get-cron-registry', { 
+        body: {
+          action: parsedArgs?.action || 'list_all',
+          platform: parsedArgs?.platform,
+          function_name: parsedArgs?.function_name,
+          job_name: parsedArgs?.job_name,
+          include_inactive: parsedArgs?.include_inactive,
+          time_window_hours: parsedArgs?.time_window_hours
+        }
+      });
+      result = cronRegistryResult.error
+        ? { success: false, error: cronRegistryResult.error.message }
+        : { success: true, ...cronRegistryResult.data };
+      break;
+
     default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = { 
           success: false, 
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, query_cron_registry, and more.`
         };
     }
     
