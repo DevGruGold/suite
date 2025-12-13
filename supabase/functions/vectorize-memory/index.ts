@@ -44,19 +44,26 @@ serve(async (req) => {
     
     console.log(`🧠 Vectorizing memory ${memory_id} (${content.length} chars)...`);
 
-    // Try to generate embedding with fallback support
+    // Try to generate embedding with timeout guard (prevent cron hangs)
     let embedding: number[];
+    const EMBEDDING_TIMEOUT_MS = 12000; // 12 second timeout for embeddings
     
     try {
-      embedding = await generateEmbedding(content);
+      const embeddingPromise = generateEmbedding(content);
+      const timeoutPromise = new Promise<never>((_, reject) => 
+        setTimeout(() => reject(new Error('Embedding generation timeout')), EMBEDDING_TIMEOUT_MS)
+      );
+      
+      embedding = await Promise.race([embeddingPromise, timeoutPromise]);
       console.log('✅ Embedding generated successfully');
     } catch (error) {
       console.error('❌ Embedding generation failed:', error.message);
       return new Response(
         JSON.stringify({ 
-          error: 'Vectorization unavailable - GEMINI_API_KEY required for embeddings',
+          error: 'Vectorization unavailable - timeout or GEMINI_API_KEY issue',
           details: error.message,
-          memory_id
+          memory_id,
+          skipped: true
         }),
         {
           status: 503,
