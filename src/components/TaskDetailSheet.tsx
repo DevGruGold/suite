@@ -13,6 +13,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import { 
   User, 
   Clock, 
@@ -26,7 +27,8 @@ import {
   Play,
   GitMerge,
   Loader2,
-  ListChecks
+  ListChecks,
+  ArrowUpRight
 } from 'lucide-react';
 import { toast } from '@/hooks/use-toast';
 
@@ -114,6 +116,7 @@ function getActivityIcon(activityType: string) {
     case 'checklist_update':
       return <CheckCircle2 className="w-3.5 h-3.5 text-green-400" />;
     case 'task_assigned':
+    case 'task_handoff':
       return <User className="w-3.5 h-3.5 text-purple-400" />;
     case 'task_blocked':
       return <AlertTriangle className="w-3.5 h-3.5 text-red-400" />;
@@ -136,6 +139,8 @@ export function TaskDetailSheet({
   const [isLoading, setIsLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
   const [isDescriptionOpen, setIsDescriptionOpen] = useState(false);
+  const [isHistoryOpen, setIsHistoryOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   // Fetch full task details and activity log when sheet opens
   useEffect(() => {
@@ -297,8 +302,24 @@ export function TaskDetailSheet({
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-md overflow-hidden flex flex-col">
-        <SheetHeader className="pb-4 border-b border-border">
+      <SheetContent 
+        side={isMobile ? "bottom" : "right"}
+        className={`
+          ${isMobile 
+            ? 'h-[90vh] rounded-t-2xl pb-safe-area-inset-bottom' 
+            : 'w-full sm:max-w-md'
+          }
+          overflow-hidden flex flex-col
+        `}
+      >
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div className="flex justify-center pt-2 pb-3">
+            <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
+          </div>
+        )}
+        
+        <SheetHeader className={`pb-4 border-b border-border ${isMobile ? 'px-1' : ''}`}>
           <SheetTitle className="text-lg leading-tight pr-6">
             {displayTask.title}
           </SheetTitle>
@@ -321,8 +342,8 @@ export function TaskDetailSheet({
           </SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className="flex-1 -mx-6 px-6">
-          <div className="space-y-6 py-4">
+        <ScrollArea className={`flex-1 ${isMobile ? '-mx-4 px-4' : '-mx-6 px-6'}`}>
+          <div className="space-y-5 py-4">
             {/* Agent & Time Info */}
             <div className="flex items-center justify-between text-sm">
               <div className="flex items-center gap-2 text-muted-foreground">
@@ -346,7 +367,7 @@ export function TaskDetailSheet({
                   </span>
                   <span className="font-medium text-amber-400">{timeProgress}%</span>
                 </div>
-                <Progress value={timeProgress} className="h-2 [&>div]:bg-amber-500" />
+                <Progress value={timeProgress} className="h-2.5 [&>div]:bg-amber-500" />
               </div>
               
               {/* Work Progress */}
@@ -358,13 +379,13 @@ export function TaskDetailSheet({
                   </span>
                   <span className="font-medium text-green-400">{workProgress}%</span>
                 </div>
-                <Progress value={workProgress} className="h-2 [&>div]:bg-green-500" />
+                <Progress value={workProgress} className="h-2.5 [&>div]:bg-green-500" />
               </div>
             </div>
 
             {/* Blocking Reason */}
             {displayTask.blocking_reason && (
-              <div className="p-3 rounded-lg bg-red-500/10 border border-red-500/30">
+              <div className="p-3.5 rounded-xl bg-red-500/10 border border-red-500/30">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-red-400 mt-0.5 flex-shrink-0" />
                   <div>
@@ -398,29 +419,30 @@ export function TaskDetailSheet({
                     return (
                       <div 
                         key={idx}
-                        className={`flex items-center gap-3 p-2.5 rounded-lg border transition-colors ${
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-colors touch-manipulation ${
                           isCompleted 
                             ? 'bg-green-500/10 border-green-500/30' 
-                            : 'bg-muted/30 border-border hover:border-primary/50'
+                            : 'bg-muted/30 border-border hover:border-primary/50 active:border-primary'
                         }`}
+                        onClick={() => handleChecklistToggle(item)}
                       >
                         <Checkbox
                           id={`checklist-${idx}`}
                           checked={isCompleted}
                           onCheckedChange={() => handleChecklistToggle(item)}
                           disabled={isUpdating}
-                          className="data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500"
+                          className="data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 h-5 w-5"
                         />
                         <label 
                           htmlFor={`checklist-${idx}`}
-                          className={`text-sm flex-1 cursor-pointer ${
+                          className={`text-sm flex-1 cursor-pointer select-none ${
                             isCompleted ? 'line-through text-muted-foreground' : ''
                           }`}
                         >
                           {item}
                         </label>
                         {isCompleted && (
-                          <CheckCircle2 className="w-4 h-4 text-green-400" />
+                          <CheckCircle2 className="w-4 h-4 text-green-400 flex-shrink-0" />
                         )}
                       </div>
                     );
@@ -429,65 +451,78 @@ export function TaskDetailSheet({
               )}
             </div>
 
-            {/* Work History Timeline */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-primary" />
-                <span className="text-sm font-medium">Work History</span>
-              </div>
+            {/* Work History Timeline - Collapsible */}
+            <Collapsible open={isHistoryOpen} onOpenChange={setIsHistoryOpen}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full py-2">
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-primary" />
+                  <span className="text-sm font-medium">Work History</span>
+                </div>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`} />
+              </CollapsibleTrigger>
               
-              {isLoading ? (
-                <div className="flex items-center justify-center py-4">
-                  <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
-                </div>
-              ) : activityLog.length === 0 ? (
-                <div className="text-center py-4 text-xs text-muted-foreground">
-                  No activity recorded yet
-                </div>
-              ) : (
-                <div className="relative space-y-0">
-                  {/* Timeline line */}
-                  <div className="absolute left-[11px] top-3 bottom-3 w-px bg-border" />
-                  
-                  {activityLog.map((activity, idx) => (
-                    <div key={activity.id} className="relative flex gap-3 pb-4">
-                      {/* Timeline dot */}
-                      <div className="relative z-10 flex items-center justify-center w-6 h-6 rounded-full bg-background border border-border">
-                        {getActivityIcon(activity.activity_type)}
-                      </div>
-                      
-                      {/* Content */}
-                      <div className="flex-1 min-w-0 pt-0.5">
-                        <p className="text-sm font-medium truncate">{activity.title}</p>
-                        {activity.description && (
-                          <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
-                            {activity.description}
+              <CollapsibleContent className="pt-2">
+                {isLoading ? (
+                  <div className="flex items-center justify-center py-4">
+                    <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : activityLog.length === 0 ? (
+                  <div className="text-center py-4 text-xs text-muted-foreground">
+                    No activity recorded yet
+                  </div>
+                ) : (
+                  <div className="relative space-y-0">
+                    {/* Timeline line */}
+                    <div className="absolute left-[11px] top-3 bottom-3 w-px bg-border" />
+                    
+                    {activityLog.slice(0, isMobile ? 5 : 10).map((activity) => (
+                      <div key={activity.id} className="relative flex gap-3 pb-4">
+                        {/* Timeline dot */}
+                        <div className="relative z-10 flex items-center justify-center w-6 h-6 rounded-full bg-background border border-border flex-shrink-0">
+                          {getActivityIcon(activity.activity_type)}
+                        </div>
+                        
+                        {/* Content */}
+                        <div className="flex-1 min-w-0 pt-0.5">
+                          <p className="text-xs font-medium text-foreground line-clamp-2">
+                            {activity.title}
                           </p>
-                        )}
-                        <p className="text-[10px] text-muted-foreground/70 mt-1">
-                          {getRelativeTime(activity.created_at)}
-                        </p>
+                          {activity.description && (
+                            <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-2">
+                              {activity.description}
+                            </p>
+                          )}
+                          <p className="text-[10px] text-muted-foreground/60 mt-1">
+                            {getRelativeTime(activity.created_at)}
+                          </p>
+                        </div>
                       </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+                    ))}
+                    
+                    {activityLog.length > (isMobile ? 5 : 10) && (
+                      <div className="text-center pt-2">
+                        <span className="text-xs text-muted-foreground">
+                          +{activityLog.length - (isMobile ? 5 : 10)} more entries
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CollapsibleContent>
+            </Collapsible>
 
-            {/* Description Section */}
+            {/* Description Section - Collapsible */}
             {displayTask.description && (
               <Collapsible open={isDescriptionOpen} onOpenChange={setIsDescriptionOpen}>
-                <CollapsibleTrigger asChild>
-                  <Button variant="ghost" className="w-full justify-between p-2 h-auto">
-                    <div className="flex items-center gap-2">
-                      <FileText className="w-4 h-4 text-primary" />
-                      <span className="text-sm font-medium">Description</span>
-                    </div>
-                    <ChevronDown className={`w-4 h-4 transition-transform ${isDescriptionOpen ? 'rotate-180' : ''}`} />
-                  </Button>
+                <CollapsibleTrigger className="flex items-center justify-between w-full py-2">
+                  <div className="flex items-center gap-2">
+                    <FileText className="w-4 h-4 text-primary" />
+                    <span className="text-sm font-medium">Description</span>
+                  </div>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isDescriptionOpen ? 'rotate-180' : ''}`} />
                 </CollapsibleTrigger>
                 <CollapsibleContent className="pt-2">
-                  <div className="p-3 rounded-lg bg-muted/30 border border-border">
+                  <div className="p-3 rounded-xl bg-muted/30 border border-border">
                     <p className="text-sm text-muted-foreground whitespace-pre-wrap">
                       {displayTask.description}
                     </p>
@@ -497,6 +532,20 @@ export function TaskDetailSheet({
             )}
           </div>
         </ScrollArea>
+        
+        {/* Mobile bottom action bar */}
+        {isMobile && (
+          <div className="border-t border-border pt-4 pb-2 mt-auto">
+            <Button 
+              variant="outline" 
+              className="w-full h-12 text-sm gap-2"
+              onClick={() => onOpenChange(false)}
+            >
+              <ArrowUpRight className="w-4 h-4" />
+              Close Task Details
+            </Button>
+          </div>
+        )}
       </SheetContent>
     </Sheet>
   );

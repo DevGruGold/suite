@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import {
   User,
   Briefcase,
@@ -22,8 +23,10 @@ import {
   XCircle,
   CheckCircle,
   AlertCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 
 interface Task {
   id: string;
@@ -85,6 +88,8 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
   const [performance, setPerformance] = useState<AgentPerformance | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
+  const [isMetricsOpen, setIsMetricsOpen] = useState(true);
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (agent && isOpen) {
@@ -188,25 +193,41 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
 
   return (
     <Sheet open={isOpen} onOpenChange={onClose}>
-      <SheetContent className="w-[400px] sm:w-[540px] bg-background border-border">
-        <SheetHeader className="space-y-3">
+      <SheetContent 
+        side={isMobile ? "bottom" : "right"}
+        className={`
+          ${isMobile 
+            ? 'h-[85vh] rounded-t-2xl pb-safe-area-inset-bottom' 
+            : 'w-full max-w-md'
+          }
+          bg-background border-border flex flex-col overflow-hidden
+        `}
+      >
+        {/* Mobile drag handle */}
+        {isMobile && (
+          <div className="flex justify-center pt-2 pb-4">
+            <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
+          </div>
+        )}
+        
+        <SheetHeader className={`space-y-3 ${isMobile ? 'px-1' : ''}`}>
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-primary/10">
+            <div className="p-2.5 rounded-xl bg-primary/10 flex-shrink-0">
               <User className="h-5 w-5 text-primary" />
             </div>
-            <div className="flex-1">
-              <SheetTitle className="text-foreground">{agent.name}</SheetTitle>
-              <SheetDescription className="text-muted-foreground">
+            <div className="flex-1 min-w-0">
+              <SheetTitle className="text-foreground text-lg">{agent.name}</SheetTitle>
+              <SheetDescription className="text-muted-foreground truncate">
                 {agent.role}
               </SheetDescription>
             </div>
-            <Badge className={STATUS_COLORS[agent.status] || STATUS_COLORS.IDLE}>
+            <Badge className={`${STATUS_COLORS[agent.status] || STATUS_COLORS.IDLE} text-xs`}>
               {agent.status}
             </Badge>
           </div>
 
           {/* Workload Bar */}
-          <div className="space-y-1">
+          <div className="space-y-1.5">
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>Workload</span>
               <span>
@@ -222,42 +243,50 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
           </div>
         </SheetHeader>
 
-        <div className="mt-6 space-y-6">
-          {/* Performance Metrics */}
-          {performance && (
-            <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <CheckCircle className="h-3 w-3" />
-                  Completed
-                </div>
-                <div className="text-lg font-semibold text-foreground">
-                  {performance.tasks_completed}
-                </div>
-              </div>
-              <div className="p-3 rounded-lg bg-muted/50 border border-border">
-                <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                  <TrendingUp className="h-3 w-3" />
-                  Success Rate
-                </div>
-                <div className="text-lg font-semibold text-foreground">
-                  {performance.success_rate.toFixed(0)}%
-                </div>
-              </div>
-            </div>
-          )}
+        <ScrollArea className={`flex-1 ${isMobile ? '-mx-4 px-4' : '-mx-6 px-6'} mt-4`}>
+          <div className="space-y-5 pb-4">
+            {/* Performance Metrics - Collapsible on mobile */}
+            {performance && (
+              <Collapsible open={isMetricsOpen} onOpenChange={setIsMetricsOpen}>
+                <CollapsibleTrigger className="flex items-center justify-between w-full py-2">
+                  <span className="text-sm font-medium text-foreground">Performance Metrics</span>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isMetricsOpen ? 'rotate-180' : ''}`} />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-3 rounded-xl bg-muted/50 border border-border">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                        <CheckCircle className="h-3 w-3" />
+                        Completed
+                      </div>
+                      <div className="text-lg font-semibold text-foreground">
+                        {performance.tasks_completed}
+                      </div>
+                    </div>
+                    <div className="p-3 rounded-xl bg-muted/50 border border-border">
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
+                        <TrendingUp className="h-3 w-3" />
+                        Success Rate
+                      </div>
+                      <div className="text-lg font-semibold text-foreground">
+                        {performance.success_rate.toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
-          {/* Assigned Tasks */}
-          <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                <Briefcase className="h-4 w-4" />
-                Assigned Tasks ({tasks.length})
-              </h3>
-            </div>
+            {/* Assigned Tasks */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+                  <Briefcase className="h-4 w-4" />
+                  Assigned Tasks ({tasks.length})
+                </h3>
+              </div>
 
-            <ScrollArea className="h-[280px]">
-              <div className="space-y-2 pr-4">
+              <div className={`space-y-2 ${isMobile ? '' : 'max-h-[280px] overflow-y-auto pr-1'}`}>
                 {loading ? (
                   <div className="text-center py-8 text-muted-foreground">Loading...</div>
                 ) : tasks.length === 0 ? (
@@ -270,15 +299,15 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
                       key={task.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
-                      className="p-3 rounded-lg bg-card border border-border hover:border-primary/50 cursor-grab active:cursor-grabbing transition-colors group"
+                      className="p-3.5 rounded-xl bg-card border border-border hover:border-primary/50 cursor-grab active:cursor-grabbing transition-colors group touch-manipulation"
                     >
                       <div className="flex items-start gap-2">
-                        <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 opacity-50 group-hover:opacity-100" />
+                        <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 opacity-50 group-hover:opacity-100 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-foreground truncate">
+                          <div className="font-medium text-sm text-foreground line-clamp-2">
                             {task.title}
                           </div>
-                          <div className="flex items-center gap-2 mt-1">
+                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
                             <Badge variant="outline" className="text-xs">
                               {task.stage}
                             </Badge>
@@ -289,53 +318,53 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
                           </div>
                           <Progress
                             value={task.progress_percentage || 0}
-                            className="h-1 mt-2"
+                            className="h-1.5 mt-2"
                           />
                         </div>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100"
+                          className={`h-10 w-10 p-0 ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex-shrink-0`}
                           onClick={() => handleUnassignTask(task.id)}
                         >
-                          <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive" />
+                          <XCircle className="h-5 w-5 text-muted-foreground hover:text-destructive" />
                         </Button>
                       </div>
                     </div>
                   ))
                 )}
               </div>
-            </ScrollArea>
-          </div>
-
-          {/* Drop Zone for Reassignment */}
-          <div
-            onDragOver={handleDragOver}
-            onDragLeave={handleDragLeave}
-            onDrop={handleDrop}
-            className={`
-              p-4 rounded-lg border-2 border-dashed transition-colors text-center
-              ${
-                isDragOver
-                  ? 'border-primary bg-primary/10 text-primary'
-                  : 'border-muted text-muted-foreground'
-              }
-              ${draggedTaskId ? 'opacity-100' : 'opacity-50'}
-            `}
-          >
-            <Target className="h-6 w-6 mx-auto mb-2" />
-            <p className="text-sm">
-              {isDragOver ? 'Release to assign task' : 'Drop task here to assign'}
-            </p>
-          </div>
-
-          {/* Last Seen */}
-          {agent.last_seen && (
-            <div className="text-xs text-muted-foreground text-center">
-              Last active {formatDistanceToNow(new Date(agent.last_seen))} ago
             </div>
-          )}
-        </div>
+
+            {/* Drop Zone for Reassignment */}
+            <div
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              className={`
+                p-5 rounded-xl border-2 border-dashed transition-all text-center
+                ${
+                  isDragOver
+                    ? 'border-primary bg-primary/10 text-primary scale-[1.02]'
+                    : 'border-muted text-muted-foreground'
+                }
+                ${draggedTaskId ? 'opacity-100' : 'opacity-50'}
+              `}
+            >
+              <Target className="h-7 w-7 mx-auto mb-2" />
+              <p className="text-sm font-medium">
+                {isDragOver ? 'Release to assign task' : 'Drop task here to assign'}
+              </p>
+            </div>
+
+            {/* Last Seen */}
+            {agent.last_seen && (
+              <div className="text-xs text-muted-foreground text-center pt-2">
+                Last active {formatDistanceToNow(new Date(agent.last_seen))} ago
+              </div>
+            )}
+          </div>
+        </ScrollArea>
       </SheetContent>
     </Sheet>
   );
