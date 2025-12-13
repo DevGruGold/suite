@@ -1,7 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
-import { generateTextWithFallback } from "../_shared/unifiedAIFallback.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -13,6 +12,17 @@ const AI_TIMEOUT_MS = 12000; // 12 second timeout for AI calls
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  // Fast boot: check content-length BEFORE parsing JSON
+  const contentLength = parseInt(req.headers.get('content-length') || '0');
+  if (contentLength === 0 || contentLength < 5) {
+    console.log('📝 Empty body - cron trigger, returning fast');
+    return new Response(JSON.stringify({ 
+      success: true, 
+      cron: true, 
+      message: 'No conversation provided for summarization'
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
   try {
@@ -61,6 +71,9 @@ SUMMARY:`;
 
     try {
       console.log('🔄 Generating summary with AI fallback cascade...');
+      
+      // Lazy import to avoid boot-time overhead
+      const { generateTextWithFallback } = await import('../_shared/unifiedAIFallback.ts');
       
       // Wrap AI call with timeout
       const aiPromise = generateTextWithFallback(prompt, undefined, {
