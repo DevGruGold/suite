@@ -210,17 +210,75 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
   const canVote = proposal.status === 'voting';
   const hasNotVoted = !userVote;
 
+  // Determine outcome summary
+  const getOutcomeSummary = () => {
+    if (executiveApprovals >= 3) return `${executiveApprovals}/4 executives approved`;
+    if (executiveRejections >= 2) return `${executiveRejections}/4 executives rejected`;
+    return `${executiveApprovals} approve, ${executiveRejections} reject, ${executiveAbstentions} abstain`;
+  };
+
   return (
-    <Card className="border border-border hover:border-primary/30 transition-colors">
+    <Card className="border border-border hover:border-primary/30 transition-colors overflow-hidden">
+      {/* OUTCOME BANNER - Clear status at top for decided proposals */}
+      {proposal.status === 'approved' && (
+        <div className="bg-green-500/10 border-b-2 border-green-500 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-green-600" />
+            <span className="font-semibold text-green-700 dark:text-green-400">Approved by Executive Council</span>
+          </div>
+          <p className="text-sm text-green-600/80 dark:text-green-400/80 mt-1">
+            {getOutcomeSummary()} • Consensus reached
+          </p>
+        </div>
+      )}
+      
+      {(proposal.status === 'rejected' || proposal.status === 'rejected_with_feedback') && (
+        <div className="bg-red-500/10 border-b-2 border-red-500 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <XCircle className="h-5 w-5 text-red-600" />
+            <span className="font-semibold text-red-700 dark:text-red-400">Rejected by Executive Council</span>
+          </div>
+          <p className="text-sm text-red-600/80 dark:text-red-400/80 mt-1">
+            {getOutcomeSummary()}
+          </p>
+        </div>
+      )}
+      
+      {proposal.status === 'queued_for_deployment' && (
+        <div className="bg-purple-500/10 border-b-2 border-purple-500 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <Rocket className="h-5 w-5 text-purple-600" />
+            <span className="font-semibold text-purple-700 dark:text-purple-400">Queued for Deployment</span>
+          </div>
+          <p className="text-sm text-purple-600/80 dark:text-purple-400/80 mt-1">
+            Approved and ready for implementation
+          </p>
+        </div>
+      )}
+      
+      {proposal.status === 'deployed' && (
+        <div className="bg-blue-500/10 border-b-2 border-blue-500 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle className="h-5 w-5 text-blue-600" />
+            <span className="font-semibold text-blue-700 dark:text-blue-400">Deployed & Live</span>
+          </div>
+          <p className="text-sm text-blue-600/80 dark:text-blue-400/80 mt-1">
+            Function is now active in the system
+          </p>
+        </div>
+      )}
+
       <CardHeader className="p-4 sm:pb-3">
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <Sparkles className="h-4 w-4 text-primary shrink-0" />
               <CardTitle className="text-base sm:text-lg break-words">{proposal.function_name}</CardTitle>
-              <Badge variant="outline" className={`${statusColors[proposal.status] || statusColors.pending} shrink-0`}>
-                {statusLabels[proposal.status] || proposal.status.toUpperCase()}
-              </Badge>
+              {proposal.status === 'voting' && (
+                <Badge variant="outline" className={`${statusColors[proposal.status]} shrink-0`}>
+                  {statusLabels[proposal.status]}
+                </Badge>
+              )}
             </div>
             <p className="text-xs sm:text-sm text-muted-foreground mt-1 flex flex-wrap items-center gap-x-2 gap-y-1">
               <span className="flex items-center gap-1">
@@ -238,7 +296,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
       </CardHeader>
 
       <CardContent className="p-4 pt-0 space-y-4">
-        {/* Voting Phase Indicator with Countdown */}
+        {/* Voting Phase Indicator with Countdown - only for voting status */}
         {proposal.status === 'voting' && (
           <VotingPhaseIndicator 
             phase={proposal.voting_phase || 'executive'}
@@ -251,38 +309,71 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
         {/* Description */}
         <p className="text-sm">{proposal.description}</p>
 
-        {/* AI Decision Panel - Show for decided proposals */}
-        {decisionReport && (proposal.status === 'approved' || proposal.status === 'rejected' || 
-          proposal.status === 'rejected_with_feedback' || proposal.status === 'queued_for_deployment' || 
-          proposal.status === 'deployed') && (
-          <AIDecisionPanel 
-            decision={decisionReport}
-            implementationAnalysis={implementationAnalysis}
-            functionName={proposal.function_name}
-          />
+        {/* Executive Reasoning - Always show for decided proposals (directly from votes, not stale reports) */}
+        {(proposal.status !== 'voting' && proposal.status !== 'pending') && executiveVotes.length > 0 && (
+          <div className="space-y-2 p-3 rounded-lg bg-muted/30 border border-border">
+            <h4 className="text-sm font-semibold flex items-center gap-2">
+              <Sparkles className="h-4 w-4 text-primary" />
+              Executive Reasoning
+            </h4>
+            <div className="space-y-2">
+              {executiveVotes.map(vote => (
+                <div key={vote.id} className="flex items-start gap-2 text-sm">
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <span className={`font-medium ${executiveColors[vote.executive_name] || 'text-foreground'}`}>
+                      {vote.executive_name}:
+                    </span>
+                    {vote.vote === 'approve' && <CheckCircle className="h-3.5 w-3.5 text-green-500" />}
+                    {vote.vote === 'reject' && <XCircle className="h-3.5 w-3.5 text-red-500" />}
+                    {vote.vote === 'abstain' && <MinusCircle className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </div>
+                  <p className="text-muted-foreground text-xs leading-relaxed">{vote.reasoning}</p>
+                </div>
+              ))}
+            </div>
+          </div>
         )}
 
-        {/* Executive Vote Progress */}
-        <div>
-          <p className="text-xs text-muted-foreground mb-2 font-medium">Executive Council (3/4 needed)</p>
-          <VoteProgress 
-            approvals={executiveApprovals} 
-            rejections={executiveRejections} 
-            abstentions={executiveAbstentions}
-            required={3}
-          />
-        </div>
-
-        {/* Community Vote Stats */}
-        {communityVotes.length > 0 && (
-          <div className="flex items-center gap-3 sm:gap-4 text-sm flex-wrap">
-            <div className="flex items-center gap-1">
-              <Users className="h-4 w-4 text-pink-500" />
-              <span className="text-muted-foreground text-xs sm:text-sm">Community:</span>
+        {/* Vote Summary - Compact for decided, detailed for voting */}
+        {proposal.status === 'voting' ? (
+          <>
+            {/* Executive Vote Progress - detailed view for active voting */}
+            <div>
+              <p className="text-xs text-muted-foreground mb-2 font-medium">Executive Council (3/4 needed)</p>
+              <VoteProgress 
+                approvals={executiveApprovals} 
+                rejections={executiveRejections} 
+                abstentions={executiveAbstentions}
+                required={3}
+              />
             </div>
-            <span className="text-green-600 text-xs sm:text-sm">✓ {communityApprovals}</span>
-            <span className="text-red-600 text-xs sm:text-sm">✗ {communityRejections}</span>
-            <span className="text-muted-foreground text-xs">({communityVotes.length} total)</span>
+
+            {/* Community Vote Stats */}
+            {communityVotes.length > 0 && (
+              <div className="flex items-center gap-3 sm:gap-4 text-sm flex-wrap">
+                <div className="flex items-center gap-1">
+                  <Users className="h-4 w-4 text-pink-500" />
+                  <span className="text-muted-foreground text-xs sm:text-sm">Community:</span>
+                </div>
+                <span className="text-green-600 text-xs sm:text-sm">✓ {communityApprovals}</span>
+                <span className="text-red-600 text-xs sm:text-sm">✗ {communityRejections}</span>
+                <span className="text-muted-foreground text-xs">({communityVotes.length} total)</span>
+              </div>
+            )}
+          </>
+        ) : (
+          /* Compact vote summary for decided proposals */
+          <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1">
+              <Sparkles className="h-3 w-3" />
+              Exec: {executiveApprovals}✓ {executiveRejections}✗
+            </span>
+            {communityVotes.length > 0 && (
+              <span className="flex items-center gap-1">
+                <Users className="h-3 w-3" />
+                Community: {communityApprovals}✓ {communityRejections}✗
+              </span>
+            )}
           </div>
         )}
 
@@ -481,9 +572,10 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
               </div>
             )}
 
-            {executiveVotes.length > 0 && (
+            {/* Show executive votes only during voting phase in expanded - decided proposals show it above */}
+            {proposal.status === 'voting' && executiveVotes.length > 0 && (
               <div>
-                <h4 className="text-sm font-semibold mb-2">Executive Reasoning</h4>
+                <h4 className="text-sm font-semibold mb-2">Executive Votes So Far</h4>
                 <div className="space-y-3">
                   {executiveVotes.map(vote => (
                     <div 
@@ -511,6 +603,25 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Implementation analysis for approved proposals */}
+            {implementationAnalysis && (proposal.status === 'approved' || proposal.status === 'queued_for_deployment' || proposal.status === 'deployed') && (
+              <div>
+                <h4 className="text-sm font-semibold mb-2">Implementation Details</h4>
+                {implementationAnalysis.implementation_plan && (
+                  <div className="text-xs text-muted-foreground mb-2">
+                    <strong>Plan:</strong> {JSON.stringify(implementationAnalysis.implementation_plan)}
+                  </div>
+                )}
+                {implementationAnalysis.next_steps && (
+                  <div className="text-xs text-muted-foreground">
+                    <strong>Next Steps:</strong> {Array.isArray(implementationAnalysis.next_steps) 
+                      ? implementationAnalysis.next_steps.join(', ') 
+                      : implementationAnalysis.next_steps}
+                  </div>
+                )}
               </div>
             )}
           </div>
