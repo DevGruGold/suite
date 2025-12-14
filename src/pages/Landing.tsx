@@ -3,7 +3,6 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { useAudio } from '@/contexts/AudioContext';
 import { SuiteLogo } from '@/components/SuiteLogo';
 import { DemoVideoModal } from '@/components/DemoVideoModal';
 import { LandingNav } from '@/components/LandingNav';
@@ -60,7 +59,6 @@ const steps = [
 export default function Landing() {
   const navigate = useNavigate();
   const { signInWithGoogle, isAuthenticated, isLoading } = useAuth();
-  const { initializeAudio } = useAudio();
   const [demoOpen, setDemoOpen] = useState(false);
 
   // Redirect authenticated users to dashboard
@@ -69,11 +67,6 @@ export default function Landing() {
       navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, isLoading, navigate]);
-
-  // Initialize audio on mount
-  useEffect(() => {
-    initializeAudio();
-  }, [initializeAudio]);
 
   const handleGetStarted = async () => {
     if (isAuthenticated) {
