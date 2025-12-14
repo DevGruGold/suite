@@ -13,7 +13,6 @@ import Credentials from "./pages/Credentials";
 import Council from "./pages/Council";
 import Governance from "./pages/Governance";
 import Licensing from "./pages/Licensing";
-import Auth from "./pages/Auth";
 import Admin from "./pages/Admin";
 import Earn from "./pages/Earn";
 import Profile from "./pages/Profile";
@@ -39,7 +38,6 @@ const App = () => (
               <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
-                <Route path="/auth" element={<Auth />} />
                 
                 {/* Protected routes - require authentication */}
                 <Route element={<ProtectedLayout />}>
