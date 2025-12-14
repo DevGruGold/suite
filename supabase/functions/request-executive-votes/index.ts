@@ -103,38 +103,35 @@ serve(async (req) => {
         
         const perspective = executivePerspectives[exec as keyof typeof executivePerspectives];
         
-        // Build analysis prompt with mandatory decision requirement
-        const analysisPrompt = `
-You are the ${perspective.title} (${exec}) of XMRT DAO. ${perspective.prompt}
+        // Build analysis prompt with STRICT JSON-only requirement
+        const analysisPrompt = `🚨 RESPOND WITH JSON ONLY - NO OTHER TEXT 🚨
 
-## Proposal to Evaluate:
-**Function Name:** ${proposal.function_name}
-**Description:** ${proposal.description}
-**Rationale:** ${proposal.rationale}
-**Use Cases:** ${Array.isArray(proposal.use_cases) ? proposal.use_cases.join(', ') : proposal.use_cases}
-**Proposed By:** ${proposal.proposed_by}
-**Category:** ${proposal.category || 'general'}
+You are the ${perspective.title} (${exec}) of XMRT DAO.
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-⚠️ MANDATORY VOTING RULES (YOU MUST FOLLOW THESE)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-1. You MUST vote either "approve" OR "reject" with clear reasoning
-2. Abstaining is ONLY allowed for these THREE specific reasons:
-   - "conflict of interest" (you proposed this function yourself)
-   - "insufficient information" (critical technical details missing to evaluate)
-   - "outside expertise" (completely outside your domain expertise)
-3. If NONE of these apply, you MUST vote approve or reject
-4. Vague reasoning like "need more info" without specifics = REJECT
+PROPOSAL TO EVALUATE:
+- Function: ${proposal.function_name}
+- Description: ${proposal.description}
+- Rationale: ${proposal.rationale}
+- Category: ${proposal.category || 'general'}
+- Use Cases: ${Array.isArray(proposal.use_cases) ? proposal.use_cases.join(', ') : proposal.use_cases || 'Not specified'}
 
-Your vote carries weight in governance. Make a decision and own it.
+YOUR TASK: Analyze from your ${perspective.focus} perspective and VOTE.
 
-Based on your analysis focusing on ${perspective.focus}, provide your vote and detailed reasoning (2-3 sentences).
+VOTING RULES:
+- You MUST vote "approve" or "reject" with 2-3 sentence reasoning
+- Abstain ONLY for: conflict of interest, insufficient info, outside expertise
+- If none apply, you MUST decide approve/reject
 
-Respond in JSON format:
-{"vote": "approve" OR "reject", "reasoning": "Your detailed reasoning here"}
+⚠️ CRITICAL: Output ONLY this JSON, nothing else:
+{"vote": "approve", "reasoning": "Your 2-3 sentence justification from ${perspective.focus} perspective"}
 
-ONLY use {"vote": "abstain", "reasoning": "..."} if you meet one of the three valid abstention criteria listed above.
-`;
+OR:
+{"vote": "reject", "reasoning": "Your 2-3 sentence justification from ${perspective.focus} perspective"}
+
+⛔ DO NOT output any text before the JSON
+⛔ DO NOT explain your thinking process
+⛔ DO NOT use markdown formatting
+✅ ONLY output the raw JSON object`;
 
         // Call lovable-chat to get executive's analysis using correct message format
         const { data: aiResponse, error: aiError } = await supabase.functions.invoke('lovable-chat', {
@@ -173,11 +170,48 @@ ONLY use {"vote": "abstain", "reasoning": "..."} if you meet one of the three va
 
         try {
           const responseText = aiResponse?.response || aiResponse?.message || '';
+          console.log(`📝 ${exec} raw response (first 500 chars): ${responseText.slice(0, 500)}`);
           
-          // Try to parse JSON from response
-          const jsonMatch = responseText.match(/\{[\s\S]*"vote"[\s\S]*"reasoning"[\s\S]*\}/);
+          // Try multiple JSON extraction strategies
+          let parsed = null;
+          
+          // Strategy 1: Look for JSON object anywhere in response
+          const jsonMatch = responseText.match(/\{\s*"vote"\s*:\s*"[^"]+"\s*,\s*"reasoning"\s*:\s*"[^"]*"\s*\}/);
           if (jsonMatch) {
-            const parsed = JSON.parse(jsonMatch[0]);
+            try {
+              parsed = JSON.parse(jsonMatch[0]);
+            } catch (e) {
+              console.log(`⚠️ JSON match found but parse failed: ${jsonMatch[0].slice(0, 100)}`);
+            }
+          }
+          
+          // Strategy 2: Try to find JSON with more flexible regex (handles escaped quotes)
+          if (!parsed) {
+            const flexMatch = responseText.match(/\{[\s\S]*?"vote"[\s\S]*?"reasoning"[\s\S]*?\}/);
+            if (flexMatch) {
+              try {
+                // Clean up common issues
+                const cleaned = flexMatch[0].replace(/\n/g, ' ').replace(/\r/g, '');
+                parsed = JSON.parse(cleaned);
+              } catch (e) {
+                console.log(`⚠️ Flexible match parse failed`);
+              }
+            }
+          }
+          
+          // Strategy 3: Extract vote and reasoning separately using regex
+          if (!parsed) {
+            const voteMatch = responseText.match(/"vote"\s*:\s*"(approve|reject|abstain)"/i);
+            const reasoningMatch = responseText.match(/"reasoning"\s*:\s*"([^"]+)"/);
+            if (voteMatch) {
+              parsed = {
+                vote: voteMatch[1].toLowerCase(),
+                reasoning: reasoningMatch ? reasoningMatch[1] : 'Reasoning extracted from response'
+              };
+            }
+          }
+          
+          if (parsed && parsed.vote) {
             const parsedVote = parsed.vote?.toLowerCase() || '';
             reasoning = parsed.reasoning || reasoning;
             
@@ -211,15 +245,27 @@ ONLY use {"vote": "abstain", "reasoning": "..."} if you meet one of the three va
               vote = parsedVote;
             }
           } else {
-            // Fallback: look for keywords - prioritize approve/reject over abstain
+            // Fallback: look for vote keywords in text with context
             const lowerResponse = responseText.toLowerCase();
-            if (lowerResponse.includes('approve') || lowerResponse.includes('support')) {
+            
+            // Look for explicit vote statements
+            if (lowerResponse.includes('i vote to approve') || 
+                lowerResponse.includes('my vote is approve') ||
+                lowerResponse.includes('vote: approve') ||
+                lowerResponse.includes('"approve"')) {
               vote = 'approve';
-            } else if (lowerResponse.includes('reject') || lowerResponse.includes('oppose') || lowerResponse.includes('against')) {
+            } else if (lowerResponse.includes('i vote to reject') || 
+                       lowerResponse.includes('my vote is reject') ||
+                       lowerResponse.includes('vote: reject') ||
+                       lowerResponse.includes('"reject"')) {
+              vote = 'reject';
+            } else if (lowerResponse.includes('approve') && !lowerResponse.includes('reject')) {
+              vote = 'approve';
+            } else if (lowerResponse.includes('reject') || lowerResponse.includes('oppose')) {
               vote = 'reject';
             }
-            // If neither found, keep default 'reject'
-            reasoning = responseText.slice(0, 500);
+            // Extract meaningful reasoning from the text (increased limit)
+            reasoning = responseText.slice(0, 1500);
           }
         } catch (parseError) {
           console.error(`⚠️ Failed to parse ${exec} response:`, parseError);
