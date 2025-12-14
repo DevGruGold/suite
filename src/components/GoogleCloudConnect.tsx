@@ -2,8 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
-import { CheckCircle, Cloud, ExternalLink, Loader2, AlertCircle, Copy, Check } from 'lucide-react';
+import { CheckCircle, Cloud, ExternalLink, Loader2, AlertCircle, Copy, Check, User } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface GoogleCloudConnectProps {
@@ -15,6 +16,8 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
   const [loading, setLoading] = useState(false);
   const [authUrl, setAuthUrl] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [connectedEmail, setConnectedEmail] = useState<string | null>(null);
+  const { user } = useAuth();
 
   // Check for OAuth callback in URL
   useEffect(() => {
@@ -29,21 +32,37 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
     }
   }, []);
 
-  // Check connection status on mount
+  // Check connection status on mount and when user changes
   useEffect(() => {
     checkStatus();
-  }, []);
+  }, [user]);
 
   const checkStatus = async () => {
     setStatus('checking');
     try {
+      // First check if connected via unified login (oauth_connections table)
+      if (user) {
+        const { data: oauthData } = await supabase
+          .from('oauth_connections')
+          .select('account_email, is_active, scopes')
+          .eq('user_id', user.id)
+          .eq('provider', 'google_cloud')
+          .single();
+        
+        if (oauthData?.is_active && oauthData?.account_email) {
+          setConnectedEmail(oauthData.account_email);
+          setStatus('connected');
+          return;
+        }
+      }
+
+      // Fallback: check edge function status
       const { data, error } = await supabase.functions.invoke('google-cloud-auth', {
         body: { action: 'status' }
       });
 
       if (error) throw error;
       
-      // Use 'ready' field which is a boolean, not 'configured' which is always an object
       if (data?.success && data?.ready === true) {
         setStatus('connected');
       } else if (data?.success) {
@@ -60,7 +79,6 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
   const handleConnect = async () => {
     setLoading(true);
     try {
-      // Get the current URL for the redirect
       const redirectUri = `${window.location.origin}/credentials`;
       
       const { data, error } = await supabase.functions.invoke('google-cloud-auth', {
@@ -73,11 +91,9 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
       if (error) throw error;
 
       if (data?.success && data?.authorization_url) {
-        // Open Google OAuth in a new window
         const authWindow = window.open(data.authorization_url, 'google_oauth', 'width=600,height=700');
         
         if (!authWindow) {
-          // Popup blocked - show URL instead
           setAuthUrl(data.authorization_url);
           toast.info('Popup blocked - click the link below to connect');
         }
@@ -108,24 +124,23 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
       if (error) throw error;
 
       if (data?.success && data?.refresh_token) {
-        toast.success('Google Cloud connected! Save the refresh token below.');
-        // Show the refresh token for user to save
+        toast.success('Google Cloud connected!');
         setAuthUrl(null);
         setStatus('connected');
         
-        // Display refresh token for manual save to secrets
-        toast.info(
-          <div className="space-y-2">
-            <p className="font-semibold">Save this refresh token to Supabase secrets:</p>
-            <code className="text-xs bg-muted p-2 rounded block break-all">
-              {data.refresh_token.substring(0, 20)}...
-            </code>
-            <p className="text-xs text-muted-foreground">
-              Add as GOOGLE_REFRESH_TOKEN in Supabase → Settings → Edge Functions → Secrets
-            </p>
-          </div>,
-          { duration: 30000 }
-        );
+        // If user is logged in, also store to oauth_connections
+        if (user) {
+          await supabase.from('oauth_connections').upsert({
+            user_id: user.id,
+            provider: 'google_cloud',
+            account_email: user.email,
+            refresh_token: data.refresh_token,
+            scopes: ['gmail', 'drive', 'sheets', 'calendar'],
+            connected_at: new Date().toISOString(),
+            is_active: true
+          }, { onConflict: 'user_id,provider' });
+          setConnectedEmail(user.email || null);
+        }
       } else {
         throw new Error(data?.error || 'OAuth callback failed');
       }
@@ -195,6 +210,16 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
         )}
       </div>
 
+      {/* Connected account info */}
+      {status === 'connected' && connectedEmail && (
+        <div className="flex items-center gap-2 p-3 mb-4 rounded-lg bg-success/10 border border-success/20">
+          <User className="h-4 w-4 text-success" />
+          <span className="text-sm text-success">
+            Authorized via Google login: <strong>{connectedEmail}</strong>
+          </span>
+        </div>
+      )}
+
       {/* Service icons */}
       <div className="flex gap-2 mb-4">
         {services.map((service) => (
@@ -214,6 +239,9 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
 
       {status !== 'connected' && (
         <div className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Sign in with Google to automatically authorize Eliza's access to your Google services.
+          </p>
           <Button
             onClick={handleConnect}
             disabled={loading}
@@ -258,10 +286,6 @@ export const GoogleCloudConnect: React.FC<GoogleCloudConnectProps> = ({ classNam
               </div>
             </div>
           )}
-
-          <p className="text-xs text-muted-foreground text-center">
-            Uses xmrtsolutions@gmail.com for backend service access
-          </p>
         </div>
       )}
 

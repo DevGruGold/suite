@@ -4212,6 +4212,57 @@ export type Database = {
         }
         Relationships: []
       }
+      oauth_connections: {
+        Row: {
+          access_token: string | null
+          account_email: string | null
+          connected_at: string | null
+          created_at: string | null
+          id: string
+          is_active: boolean | null
+          last_verified: string | null
+          metadata: Json | null
+          provider: string
+          refresh_token: string | null
+          scopes: string[] | null
+          token_expires_at: string | null
+          updated_at: string | null
+          user_id: string | null
+        }
+        Insert: {
+          access_token?: string | null
+          account_email?: string | null
+          connected_at?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_verified?: string | null
+          metadata?: Json | null
+          provider: string
+          refresh_token?: string | null
+          scopes?: string[] | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          access_token?: string | null
+          account_email?: string | null
+          connected_at?: string | null
+          created_at?: string | null
+          id?: string
+          is_active?: boolean | null
+          last_verified?: string | null
+          metadata?: Json | null
+          provider?: string
+          refresh_token?: string | null
+          scopes?: string[] | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       onboarding_checkpoints: {
         Row: {
           api_key: string
