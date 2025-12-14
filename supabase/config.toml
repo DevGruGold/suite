@@ -125,11 +125,11 @@ schedule = "15 */6 * * *"
 function_name = "system-health"
 schedule = "20 * * * *"
 
-# Device Connection Monitoring - Every 15 min at :25, :40, :55
+# Device Connection Monitoring - Every 10 min (consolidated)
 [[edge_runtime.scheduled_functions]]
 function_name = "monitor-device-connections"
-schedule = "25,40,55 * * * *"
-body = '{"action":"status"}'
+schedule = "5,15,25,35,45,55 * * * *"
+body = '{"action":"list_active"}'
 
 # Code Monitor Daemon - Every 5 minutes (backup check - instant triggers from python-executor)
 [[edge_runtime.scheduled_functions]]
@@ -847,11 +847,6 @@ function_name = "extract-knowledge"
 schedule = "4,24,44 * * * *"
 body = '{}'
 
-# Monitor Device Connections - Every 10 min at :06 offset (consolidated)
-[[edge_runtime.scheduled_functions]]
-function_name = "monitor-device-connections"
-schedule = "6,16,26,36,46,56 * * * *"
-body = '{}'
 
 # Aggregate Device Metrics - Hourly at :12 offset
 [[edge_runtime.scheduled_functions]]
