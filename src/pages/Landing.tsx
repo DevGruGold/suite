@@ -107,7 +107,7 @@ export default function Landing() {
       </header>
 
       {/* Hero Section - immediate render, no animation delays */}
-      <section className="pt-28 pb-20 px-4">
+      <section className="pt-24 pb-10 px-4">
         <div className="container mx-auto text-center max-w-5xl">
           <div className="flex justify-center mb-8">
             <SuiteAnimatedLogo size="xl" showWordmark={false} />
@@ -166,7 +166,7 @@ export default function Landing() {
       </section>
 
       {/* AI Executives Section */}
-      <section className="py-24 px-4 relative">
+      <section className="py-12 px-4 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/20 to-transparent" />
         
         <div className="container mx-auto max-w-6xl relative">
@@ -202,7 +202,7 @@ export default function Landing() {
       </section>
 
       {/* Why Section */}
-      <section className="py-24 px-4">
+      <section className="py-12 px-4">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Why Choose Suite AI?</h2>
@@ -250,7 +250,7 @@ export default function Landing() {
       </section>
 
       {/* How It Works */}
-      <section className="py-24 px-4 relative">
+      <section className="py-12 px-4 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/20 to-transparent" />
         
         <div className="container mx-auto max-w-4xl relative">
@@ -280,7 +280,7 @@ export default function Landing() {
       </section>
 
       {/* Final CTA */}
-      <section className="py-32 px-4 relative">
+      <section className="py-16 px-4 relative">
         <div className="absolute inset-0">
           <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[400px] h-[400px] bg-primary/10 rounded-full blur-xl" />
         </div>
