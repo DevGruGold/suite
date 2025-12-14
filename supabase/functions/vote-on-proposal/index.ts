@@ -66,6 +66,37 @@ serve(async (req) => {
       );
     }
 
+    // MANDATORY: Abstention requires valid justification
+    if (vote === 'abstain') {
+      const validAbstentionReasons = [
+        'conflict of interest',
+        'insufficient information', 
+        'outside expertise',
+        'outside my expertise',
+        'outside my area',
+        'cannot objectively evaluate',
+        'proposed this function',
+        'i proposed this',
+        'my proposal'
+      ];
+      
+      const hasValidReason = validAbstentionReasons.some(reason => 
+        reasoning.toLowerCase().includes(reason)
+      );
+      
+      if (!hasValidReason) {
+        console.log(`❌ Invalid abstention attempt by ${executive_name}: "${reasoning}"`);
+        return new Response(
+          JSON.stringify({ 
+            error: 'Abstention requires specific justification. Valid reasons: "conflict of interest", "insufficient information", or "outside my expertise". Otherwise, vote approve or reject with your reasoning.',
+            invalid_reasoning: reasoning
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
+        );
+      }
+      console.log(`✅ Valid abstention by ${executive_name}: ${reasoning}`);
+    }
+
     // Get proposal
     const { data: proposal, error: proposalError } = await supabase
       .from('edge_function_proposals')
