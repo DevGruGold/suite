@@ -2291,6 +2291,7 @@ You are the Chief Analytics Officer of XMRT Council. Your responsibilities:
   };
   
   // Include new hierarchical sections in priority order for executives
+  // CRITICAL: Include GOOGLE_CLOUD_MASTERY so all executives know how to use Gmail, Drive, Sheets, Calendar
   return basePrompt + '\n\n' + 
     ABSOLUTE_RULES + '\n\n' + 
     ANTI_HALLUCINATION_PROTOCOL + '\n\n' + 
@@ -2303,6 +2304,7 @@ You are the Chief Analytics Officer of XMRT Council. Your responsibilities:
     PYTHON_SANDBOX_LIMITATIONS + '\n\n' + 
     MULTIMODAL_EMOTIONAL_AWARENESS + '\n\n' + 
     FILE_ATTACHMENT_CAPABILITIES + '\n\n' +
+    GOOGLE_CLOUD_MASTERY + '\n\n' +
     CONTINUOUS_IMPROVEMENT_MANDATE;
 };
 
