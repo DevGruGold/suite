@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAudio } from '@/contexts/AudioContext';
-import { SuiteAnimatedLogo } from '@/components/SuiteAnimatedLogo';
+import { SuiteLogo } from '@/components/SuiteLogo';
 import { DemoVideoModal } from '@/components/DemoVideoModal';
 import { LandingNav } from '@/components/LandingNav';
 import { 
@@ -99,13 +99,9 @@ export default function Landing() {
       {/* Navigation with Auth Modal */}
       <LandingNav />
 
-      {/* Hero Section - immediate render, no animation delays */}
+      {/* Hero Section */}
       <section className="pt-24 pb-10 px-4">
         <div className="container mx-auto text-center max-w-5xl">
-          <div className="flex justify-center mb-8">
-            <SuiteAnimatedLogo size="xl" showWordmark={false} />
-          </div>
-          
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
             Replace Your{' '}
             <span className="bg-gradient-to-r from-primary via-primary/80 to-primary bg-clip-text text-transparent">
@@ -301,8 +297,8 @@ export default function Landing() {
         <div className="container mx-auto max-w-6xl">
           <div className="flex flex-col md:flex-row items-center justify-between gap-4">
             <div className="flex items-center gap-2">
-              <SuiteAnimatedLogo size="sm" />
-              <span className="text-sm text-muted-foreground">© 2025 Suite AI. All rights reserved.</span>
+              <SuiteLogo size="sm" />
+              <span className="text-sm text-muted-foreground">© 2025 All rights reserved.</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <Link to="/licensing" className="hover:text-primary transition-colors">Enterprise</Link>
