@@ -2102,6 +2102,52 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         }
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : res.data);
 
+    // ====================================================================
+    // 🔷 VERTEX AI EXPRESS TOOLS
+    // ====================================================================
+    case 'vertex_ai_generate':
+      console.log(`🔷 [${executiveName}] Vertex AI Generate: ${parsedArgs.model || 'gemini-2.5-flash'}`);
+      return supabase.functions.invoke('vertex-ai-chat', {
+        body: {
+          messages: [{ role: 'user', content: parsedArgs.prompt }],
+          model: parsedArgs.model || 'gemini-2.5-flash',
+          temperature: parsedArgs.temperature || 0.7,
+          maxTokens: parsedArgs.max_tokens || 4096,
+          systemPrompt: parsedArgs.system_prompt
+        }
+      }).then((res: any) => res.error 
+        ? { success: false, error: res.error.message }
+        : { success: true, response: res.data?.response, model: res.data?.model, provider: 'vertex-ai-express' });
+
+    case 'vertex_ai_count_tokens':
+      console.log(`🔢 [${executiveName}] Vertex AI Token Count`);
+      const VERTEX_AI_API_KEY = Deno.env.get('VERTEX_AI_API_KEY');
+      if (!VERTEX_AI_API_KEY) {
+        return { success: false, error: 'VERTEX_AI_API_KEY not configured' };
+      }
+      const model = parsedArgs.model || 'gemini-2.5-flash';
+      const tokenCountResponse = await fetch(
+        `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:countTokens?key=${VERTEX_AI_API_KEY}`,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            contents: [{ role: 'user', parts: [{ text: parsedArgs.text }] }]
+          })
+        }
+      );
+      if (!tokenCountResponse.ok) {
+        const errorText = await tokenCountResponse.text();
+        return { success: false, error: `Token count failed: ${errorText}` };
+      }
+      const tokenData = await tokenCountResponse.json();
+      return { 
+        success: true, 
+        total_tokens: tokenData.totalTokens,
+        text_length: parsedArgs.text?.length || 0,
+        model 
+      };
+
     default:
       return null;
   }

@@ -289,6 +289,9 @@ verify_jwt = false
 [functions.vercel-ai-chat]
 verify_jwt = false
 
+[functions.vertex-ai-chat]
+verify_jwt = false
+
 [functions.vercel-ai-chat-stream]
 verify_jwt = false
 

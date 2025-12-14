@@ -3119,5 +3119,46 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: ['action']
       }
     }
+  },
+
+  // ====================================================================
+  // 🔷 VERTEX AI EXPRESS TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_ai_generate',
+      description: '🔷 Generate content using Vertex AI Express Mode (Google Cloud Gemini). Supports text generation, multimodal inputs, and tool calling. Available models: gemini-2.5-flash (default, fast), gemini-2.5-pro (most capable), gemini-2.5-flash-lite (cheapest). Free tier: 10 requests/minute/model.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Text prompt for generation' },
+          model: { 
+            type: 'string', 
+            enum: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
+            description: 'Vertex AI model to use (default: gemini-2.5-flash)' 
+          },
+          temperature: { type: 'number', description: 'Creativity level 0-1 (default: 0.7)' },
+          max_tokens: { type: 'number', description: 'Max output tokens (default: 4096)' },
+          system_prompt: { type: 'string', description: 'Optional system instructions' }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_ai_count_tokens',
+      description: '🔢 Count tokens in text using Vertex AI. Useful for context window management and cost estimation before making expensive API calls.',
+      parameters: {
+        type: 'object',
+        properties: {
+          text: { type: 'string', description: 'Text to count tokens for' },
+          model: { type: 'string', description: 'Model to use for counting (default: gemini-2.5-flash)' }
+        },
+        required: ['text']
+      }
+    }
   }
 ];
