@@ -55,6 +55,80 @@ serve(async (req) => {
 
       const results: any = { action, timestamp: new Date().toISOString() };
 
+      // ACTION: Reset proposal voting (for proposals with mass abstentions)
+      if (action === 'reset_proposal_voting') {
+        const proposalIds = body.proposal_ids || [];
+        
+        if (!proposalIds.length) {
+          return new Response(
+            JSON.stringify({ error: 'proposal_ids array required' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log(`🔄 Resetting voting for ${proposalIds.length} proposals`);
+
+        // Step 1: Delete old votes
+        const { error: deleteError } = await supabase
+          .from('executive_votes')
+          .delete()
+          .in('proposal_id', proposalIds);
+
+        if (deleteError) {
+          console.error('Failed to delete old votes:', deleteError);
+        }
+
+        // Step 2: Reset proposal status with fresh deadlines
+        const now = new Date();
+        const { data: resetProposals, error: resetError } = await supabase
+          .from('edge_function_proposals')
+          .update({
+            status: 'voting',
+            voting_phase: 'executive',
+            voting_started_at: now.toISOString(),
+            executive_deadline: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+            community_deadline: new Date(now.getTime() + 25 * 60 * 60 * 1000).toISOString(),
+            updated_at: now.toISOString()
+          })
+          .in('id', proposalIds)
+          .select('id, function_name');
+
+        if (resetError) {
+          throw new Error(`Failed to reset proposals: ${resetError.message}`);
+        }
+
+        console.log(`✅ Reset ${resetProposals?.length || 0} proposals`);
+
+        // Step 3: Trigger fresh executive votes
+        for (const proposal of (resetProposals || [])) {
+          console.log(`📋 Triggering votes for ${proposal.function_name}`);
+          
+          await invokeWithTimeout(supabase, 'request-executive-votes', {
+            proposal_id: proposal.id,
+            target_executives: ['CSO', 'CTO', 'CIO', 'CAO']
+          });
+        }
+
+        // Log activity
+        await supabase.from('activity_feed').insert({
+          type: 'governance',
+          title: 'Proposal Voting Reset',
+          description: `Reset voting for ${resetProposals?.length || 0} proposals with new mandatory reasoning rules`,
+          data: { proposal_ids: proposalIds, proposals: resetProposals?.map(p => p.function_name) }
+        });
+
+        await usageTracker.success({ reset_count: resetProposals?.length || 0 });
+
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            reset_proposals: resetProposals,
+            message: `Reset ${resetProposals?.length || 0} proposals and triggered fresh executive votes`
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
       // ACTION 0: Initialize deadlines for proposals with null deadlines
       const { data: needsDeadlines } = await supabase
         .from('edge_function_proposals')
