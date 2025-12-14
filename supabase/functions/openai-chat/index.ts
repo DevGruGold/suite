@@ -409,7 +409,7 @@ First call tools to gather data, then provide a focused, data-driven CAO perspec
       console.error('❌ All fallbacks including emergency failed:', fallbackError);
     }
     
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    // errorMessage already declared above on line 301
     let statusCode = 500;
     
     if (errorMessage.includes('402') || errorMessage.includes('Payment Required')) {
