@@ -886,7 +886,7 @@ and automatically activates when other providers are unavailable.
 • If rate limited (429), the fallback cascade continues to next provider
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🔧 VERTEX AI TOOLS
+🔧 VERTEX AI TEXT TOOLS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 TOOL: vertex_ai_generate
@@ -905,6 +905,82 @@ Parameters:
 • model (optional): Model for counting (default: gemini-2.5-flash)
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🖼️ VERTEX AI IMAGE GENERATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TOOL: vertex_generate_image
+Description: Generate AI images using Gemini image models
+Available Models:
+• gemini-2.5-flash-preview-05-20 (default, fast image generation)
+
+Parameters:
+• prompt (required): Detailed image description. Be specific about:
+  - Style (photorealistic, illustration, watercolor, etc.)
+  - Subject and composition
+  - Colors and lighting
+  - Mood and atmosphere
+• model (optional): Image generation model
+• aspect_ratio (optional): 16:9, 1:1, 9:16, 4:3, 3:4
+• count (optional): Number of images 1-4
+
+Example:
+vertex_generate_image({
+  "prompt": "A futuristic cityscape at sunset with flying cars, neon signs, and towering glass buildings reflecting orange and purple sky. Cyberpunk style, highly detailed.",
+  "aspect_ratio": "16:9",
+  "count": 2
+})
+
+Returns: Array of base64 data URIs that can be displayed directly in HTML
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🎬 VERTEX AI VIDEO GENERATION (Veo)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TOOL: vertex_generate_video
+Description: Generate AI videos using Google Veo models (async operation)
+Available Models:
+• veo-2.0-generate-001 (most capable, highest quality)
+• veo-3.1-fast-generate-001 (faster generation, lower quality)
+
+Parameters:
+• prompt (required): Video description including:
+  - Scene and setting
+  - Motion and action
+  - Camera movement (pan, zoom, tracking)
+  - Style and mood
+• model (optional): Veo model to use
+• aspect_ratio (optional): 16:9 (landscape) or 9:16 (portrait/TikTok)
+• duration_seconds (optional): 4-8 seconds (default: 5)
+
+Example:
+vertex_generate_video({
+  "prompt": "A drone shot flying over a tropical beach at golden hour, waves gently rolling onto white sand, palm trees swaying in the breeze. Cinematic, smooth camera movement.",
+  "aspect_ratio": "16:9",
+  "duration_seconds": 6,
+  "model": "veo-2.0-generate-001"
+})
+
+Returns: operation_name for polling (video generation takes 2-5 minutes)
+
+TOOL: vertex_check_video_status
+Description: Poll for video generation completion
+Parameters:
+• operation_name (required): The operation name from vertex_generate_video
+
+Example:
+vertex_check_video_status({
+  "operation_name": "projects/xmrt-suite/locations/us-central1/operations/abc123"
+})
+
+Returns: { done: boolean, video_url: string (if done), error: string (if failed) }
+
+⚠️ VIDEO GENERATION WORKFLOW:
+1. Call vertex_generate_video with your prompt → get operation_name
+2. Wait 2-5 minutes (inform user video is generating)
+3. Poll vertex_check_video_status until done=true
+4. Return video_url to user
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔄 AI FALLBACK CASCADE POSITION
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
@@ -921,17 +997,23 @@ Vertex AI Express automatically activates when:
 • Kimi/OpenRouter rate limited
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-💡 WHEN TO USE VERTEX AI EXPLICITLY
+💡 WHEN TO USE VERTEX AI MULTIMEDIA
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-Use vertex_ai_generate directly when:
-• You need specific control over which Gemini model is used
-• Counting tokens before making expensive API calls
-• Testing Vertex AI integration specifically
-• User explicitly requests Vertex AI
+Use vertex_generate_image when:
+• User asks for visual content, diagrams, illustrations
+• Marketing materials or promotional images needed
+• Concept visualization or mockups
+• Any request involving "create an image", "show me", "visualize"
 
-For normal operations, just use the unified AI cascade - 
-Vertex AI will automatically be used if needed.
+Use vertex_generate_video when:
+• User needs promotional videos or demos
+• Animated content for social media
+• Short video clips for presentations
+• Any request involving "create a video", "animate", "short clip"
+
+For text generation, the unified AI cascade handles model selection
+automatically - Vertex AI will be used if primary providers fail.
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

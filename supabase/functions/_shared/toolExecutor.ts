@@ -2148,6 +2148,69 @@ export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any,
         model 
       };
 
+    // ====================================================================
+    // 🖼️ VERTEX AI IMAGE GENERATION
+    // ====================================================================
+    case 'vertex_generate_image':
+      console.log(`🖼️ [${executiveName}] Vertex AI Image Generation: ${parsedArgs.prompt?.substring(0, 50)}...`);
+      return supabase.functions.invoke('vertex-ai-chat', {
+        body: {
+          action: 'generate_image',
+          prompt: parsedArgs.prompt,
+          image_model: parsedArgs.model,
+          aspect_ratio: parsedArgs.aspect_ratio,
+          count: parsedArgs.count || 1
+        }
+      }).then((res: any) => res.error 
+        ? { success: false, error: res.error.message }
+        : { 
+            success: true, 
+            images: res.data?.images, 
+            count: res.data?.count,
+            text: res.data?.text,
+            provider: 'vertex-ai-express'
+          });
+
+    // ====================================================================
+    // 🎬 VERTEX AI VIDEO GENERATION (Veo)
+    // ====================================================================
+    case 'vertex_generate_video':
+      console.log(`🎬 [${executiveName}] Vertex AI Video Generation: ${parsedArgs.prompt?.substring(0, 50)}...`);
+      return supabase.functions.invoke('vertex-ai-chat', {
+        body: {
+          action: 'generate_video',
+          prompt: parsedArgs.prompt,
+          video_model: parsedArgs.model,
+          aspect_ratio: parsedArgs.aspect_ratio,
+          duration_seconds: parsedArgs.duration_seconds || 5
+        }
+      }).then((res: any) => res.error 
+        ? { success: false, error: res.error.message }
+        : { 
+            success: true, 
+            operation_id: res.data?.operationId,
+            operation_name: res.data?.operationName,
+            message: res.data?.message,
+            provider: 'vertex-ai-express'
+          });
+
+    case 'vertex_check_video_status':
+      console.log(`📽️ [${executiveName}] Checking video status: ${parsedArgs.operation_name}`);
+      return supabase.functions.invoke('vertex-ai-chat', {
+        body: {
+          action: 'check_video_status',
+          operation_name: parsedArgs.operation_name
+        }
+      }).then((res: any) => res.error 
+        ? { success: false, error: res.error.message }
+        : { 
+            success: true, 
+            done: res.data?.done,
+            video_url: res.data?.videoUrl,
+            error: res.data?.error,
+            provider: 'vertex-ai-express'
+          });
+
     default:
       return null;
   }
