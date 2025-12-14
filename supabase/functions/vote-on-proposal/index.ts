@@ -285,9 +285,87 @@ serve(async (req) => {
         console.error('⚠️ Post-approval workflow error:', wfErr);
       }
 
-    } else if (executiveRejections >= 2 || totalExecutiveVotes === 4) {
-      // If 2+ rejections or all executive votes are in and < 3 approvals
-      if (executiveApprovals < 3 && totalExecutiveVotes === 4) {
+    } else if (executiveRejections >= 2) {
+      // Explicit rejection threshold - 2+ executives actively rejected
+      consensusReached = true;
+      newStatus = 'rejected';
+      
+      await supabase
+        .from('edge_function_proposals')
+        .update({ status: 'rejected', updated_at: new Date().toISOString() })
+        .eq('id', proposal_id);
+
+      await supabase
+        .from('activity_feed')
+        .insert({
+          type: 'function_rejected',
+          title: `Edge Function Rejected: ${proposal.function_name}`,
+          description: `Rejected by executive council (${executiveRejections} explicit rejections).`,
+          data: {
+            proposal_id,
+            function_name: proposal.function_name,
+            executive_approvals: executiveApprovals,
+            executive_rejections: executiveRejections
+          }
+        });
+
+      console.log('❌ Proposal rejected (2+ explicit rejections)');
+
+      // Trigger post-rejection workflow
+      try {
+        await supabase.functions.invoke('handle-rejected-proposal', { body: { proposal_id } });
+      } catch (rejErr) {
+        console.error('⚠️ Post-rejection workflow error:', rejErr);
+      }
+
+    } else if (totalExecutiveVotes === 4) {
+      // All 4 executives have voted - evaluate based on ACTUAL decisions (not abstentions)
+      const abstentions = totalExecutiveVotes - (executiveApprovals + executiveRejections);
+      const actualDecisions = executiveApprovals + executiveRejections;
+      
+      console.log(`📊 Vote breakdown: ${executiveApprovals} approve, ${executiveRejections} reject, ${abstentions} abstain`);
+      
+      if (actualDecisions === 0) {
+        // All 4 abstained - keep in voting for re-evaluation
+        console.log('⚠️ All executives abstained - proposal stays in voting for re-evaluation');
+        newStatus = 'voting';
+        
+      } else if (executiveApprovals > executiveRejections) {
+        // Majority of actual voters approved (e.g., 2 approve + 0 reject + 2 abstain = 100% of deciders approved)
+        consensusReached = true;
+        newStatus = 'approved';
+        
+        await supabase
+          .from('edge_function_proposals')
+          .update({ status: 'approved', updated_at: new Date().toISOString() })
+          .eq('id', proposal_id);
+
+        await supabase
+          .from('activity_feed')
+          .insert({
+            type: 'function_approved',
+            title: `Edge Function Approved: ${proposal.function_name}`,
+            description: `Approved by majority of deciders (${executiveApprovals} approve, ${executiveRejections} reject, ${abstentions} abstain).`,
+            data: {
+              proposal_id,
+              function_name: proposal.function_name,
+              executive_approvals: executiveApprovals,
+              executive_rejections: executiveRejections,
+              abstentions
+            }
+          });
+
+        console.log('🎉 Proposal approved (majority of actual voters)');
+
+        // Trigger post-approval workflow
+        try {
+          await supabase.functions.invoke('execute-approved-proposal', { body: { proposal_id } });
+        } catch (wfErr) {
+          console.error('⚠️ Post-approval workflow error:', wfErr);
+        }
+
+      } else if (executiveRejections > executiveApprovals) {
+        // Majority of actual voters rejected
         consensusReached = true;
         newStatus = 'rejected';
         
@@ -301,31 +379,28 @@ serve(async (req) => {
           .insert({
             type: 'function_rejected',
             title: `Edge Function Rejected: ${proposal.function_name}`,
-            description: `Failed to reach consensus (${executiveApprovals}/4 executive approvals needed).`,
+            description: `Rejected by majority of deciders (${executiveApprovals} approve, ${executiveRejections} reject, ${abstentions} abstain).`,
             data: {
               proposal_id,
               function_name: proposal.function_name,
               executive_approvals: executiveApprovals,
-              executive_rejections: executiveRejections
+              executive_rejections: executiveRejections,
+              abstentions
             }
           });
 
-        console.log('❌ Proposal rejected');
+        console.log('❌ Proposal rejected (majority of actual voters)');
 
-        // Trigger post-rejection workflow
         try {
-          const { data: rejectionData, error: rejectionError } = await supabase.functions.invoke('handle-rejected-proposal', {
-            body: { proposal_id }
-          });
-          
-          if (rejectionError) {
-            console.error('⚠️ Post-rejection workflow failed:', rejectionError);
-          } else {
-            console.log('✅ Post-rejection workflow completed');
-          }
+          await supabase.functions.invoke('handle-rejected-proposal', { body: { proposal_id } });
         } catch (rejErr) {
           console.error('⚠️ Post-rejection workflow error:', rejErr);
         }
+
+      } else {
+        // Tie (e.g., 1 approve + 1 reject + 2 abstain) - keep voting for re-evaluation
+        console.log('⚠️ Tied actual votes - proposal stays in voting');
+        newStatus = 'voting';
       }
     }
 
