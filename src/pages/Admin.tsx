@@ -10,7 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2, Shield, Users, Settings, Crown, UserCog } from 'lucide-react';
+import { Loader2, Shield, Users, Settings, Crown, UserCog, Key, Cloud, Plug } from 'lucide-react';
+import { CredentialsManager } from '@/components/admin/CredentialsManager';
+import { GoogleCloudConnect } from '@/components/GoogleCloudConnect';
 
 type AppRole = 'user' | 'contributor' | 'moderator' | 'admin' | 'superadmin';
 
@@ -226,7 +228,7 @@ export default function Admin() {
           Admin Dashboard
         </h1>
         <p className="text-muted-foreground mt-2">
-          Manage users, roles, and system settings
+          Manage users, credentials, integrations, and system settings
         </p>
       </div>
 
@@ -291,17 +293,26 @@ export default function Admin() {
 
       {/* Tabs */}
       <Tabs defaultValue="users" className="space-y-4">
-        <TabsList>
+        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
           <TabsTrigger value="users" className="gap-2">
             <Users className="h-4 w-4" />
-            Users
+            <span className="hidden sm:inline">Users</span>
+          </TabsTrigger>
+          <TabsTrigger value="credentials" className="gap-2">
+            <Key className="h-4 w-4" />
+            <span className="hidden sm:inline">Credentials</span>
+          </TabsTrigger>
+          <TabsTrigger value="integrations" className="gap-2">
+            <Plug className="h-4 w-4" />
+            <span className="hidden sm:inline">Integrations</span>
           </TabsTrigger>
           <TabsTrigger value="settings" className="gap-2">
             <Settings className="h-4 w-4" />
-            Settings
+            <span className="hidden sm:inline">Settings</span>
           </TabsTrigger>
         </TabsList>
 
+        {/* Users Tab */}
         <TabsContent value="users">
           <Card>
             <CardHeader>
@@ -398,6 +409,81 @@ export default function Admin() {
           </Card>
         </TabsContent>
 
+        {/* Credentials Tab */}
+        <TabsContent value="credentials">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Key className="h-5 w-5" />
+                AI & Service Credentials
+              </CardTitle>
+              <CardDescription>
+                API keys powering Eliza and the AI executives. View status and troubleshoot issues.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <CredentialsManager />
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Integrations Tab */}
+        <TabsContent value="integrations">
+          <div className="space-y-6">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plug className="h-5 w-5" />
+                  OAuth Integrations
+                </CardTitle>
+                <CardDescription>
+                  Connect external services for Eliza to access on your behalf
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Google Cloud OAuth */}
+                <div>
+                  <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
+                    <Cloud className="h-4 w-4" />
+                    Google Cloud Services
+                  </h4>
+                  <GoogleCloudConnect className="max-w-md" />
+                  <p className="text-xs text-muted-foreground mt-2 max-w-md">
+                    Authorizes Eliza to access Gmail, Google Drive, Sheets, and Calendar 
+                    for xmrtsolutions@gmail.com. Required for email automation and document management.
+                  </p>
+                </div>
+
+                {/* GitHub Integration Info */}
+                <div className="pt-4 border-t">
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+                      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+                    </svg>
+                    GitHub Integration
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    GitHub is configured via Personal Access Token (PAT) stored in Supabase secrets.
+                    Check the Credentials tab for current status.
+                  </p>
+                </div>
+
+                {/* VSCO/Táve Info */}
+                <div className="pt-4 border-t">
+                  <h4 className="text-sm font-medium mb-2 flex items-center gap-2">
+                    📸 VSCO Workspace (Táve)
+                  </h4>
+                  <p className="text-sm text-muted-foreground">
+                    Táve integration is configured via API key stored in Supabase secrets.
+                    Powers Party Favor Photo business operations.
+                  </p>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
+        {/* Settings Tab */}
         <TabsContent value="settings">
           <Card>
             <CardHeader>
