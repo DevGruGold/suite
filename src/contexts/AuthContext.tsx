@@ -106,6 +106,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => {
             fetchProfile(session.user.id);
           }, 0);
+          
+          // If signed in with Google and we have a provider refresh token, store it for Eliza
+          if (event === 'SIGNED_IN' && session.provider_refresh_token) {
+            const userEmail = session.user.email || '';
+            setTimeout(() => {
+              storeGoogleCloudToken(session.user.id, session.provider_refresh_token!, userEmail);
+            }, 100);
+          }
         } else {
           setProfile(null);
           setRoles([]);
@@ -136,6 +144,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return `${window.location.origin}/`;
   };
 
+  // Store Google Cloud refresh token after login
+  const storeGoogleCloudToken = useCallback(async (userId: string, refreshToken: string, email: string) => {
+    try {
+      const { error } = await supabase.from('oauth_connections').upsert({
+        user_id: userId,
+        provider: 'google_cloud',
+        account_email: email,
+        refresh_token: refreshToken,
+        scopes: ['gmail', 'drive', 'sheets', 'calendar'],
+        connected_at: new Date().toISOString(),
+        is_active: true
+      }, { onConflict: 'user_id,provider' });
+
+      if (error) {
+        console.error('Failed to store Google Cloud token:', error);
+      } else {
+        console.log('Google Cloud token stored for Eliza access');
+      }
+    } catch (err) {
+      console.error('Error storing Google Cloud token:', err);
+    }
+  }, []);
+
+  // Extended Google OAuth scopes for full Google Cloud access
+  const GOOGLE_CLOUD_SCOPES = [
+    'https://www.googleapis.com/auth/gmail.send',
+    'https://www.googleapis.com/auth/gmail.readonly',
+    'https://www.googleapis.com/auth/gmail.modify',
+    'https://www.googleapis.com/auth/drive',
+    'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/calendar',
+    'openid',
+    'email',
+    'profile'
+  ].join(' ');
+
   const signInWithGoogle = async () => {
     const redirectUrl = getRedirectUrl();
     
@@ -143,6 +187,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
+        scopes: GOOGLE_CLOUD_SCOPES,
+        queryParams: {
+          access_type: 'offline',
+          prompt: 'consent',
+        }
       },
     });
 
