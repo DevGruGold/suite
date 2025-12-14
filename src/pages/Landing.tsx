@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
@@ -58,9 +58,17 @@ const steps = [
 ];
 
 export default function Landing() {
-  const { signInWithGoogle, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const { signInWithGoogle, isAuthenticated, isLoading } = useAuth();
   const { initializeAudio } = useAudio();
   const [demoOpen, setDemoOpen] = useState(false);
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!isLoading && isAuthenticated) {
+      navigate('/dashboard', { replace: true });
+    }
+  }, [isAuthenticated, isLoading, navigate]);
 
   // Initialize audio on mount
   useEffect(() => {
