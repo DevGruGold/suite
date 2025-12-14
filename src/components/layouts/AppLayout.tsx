@@ -1,37 +1,13 @@
-import { Outlet, useLocation } from "react-router-dom";
+import { Outlet } from "react-router-dom";
 import { MobileNavTrigger, MobileNavOverlay } from "@/components/MobileNav";
 import { DesktopNav } from "@/components/DesktopNav";
 import { Footer } from "@/components/Footer";
 import { UserMenu } from "@/components/UserMenu";
 import { Activity } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useState } from "react";
 
 export const AppLayout = () => {
-  const location = useLocation();
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-
-  // Audio autoplay on first load (only on home)
-  useEffect(() => {
-    if (location.pathname !== '/') return;
-    
-    const audio = new Audio('/audio/sweet.mp3');
-    audioRef.current = audio;
-
-    const playAudio = () => {
-      audio.play().catch(console.log);
-      document.removeEventListener('click', playAudio);
-    };
-
-    audio.play().catch(() => {
-      document.addEventListener('click', playAudio);
-    });
-
-    return () => {
-      audio.pause();
-      document.removeEventListener('click', playAudio);
-    };
-  }, [location.pathname]);
 
   return (
     <div className="min-h-screen bg-background">
