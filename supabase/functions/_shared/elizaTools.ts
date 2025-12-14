@@ -3160,5 +3160,93 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: ['text']
       }
     }
+  },
+
+  // ====================================================================
+  // 🖼️ VERTEX AI IMAGE GENERATION
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_generate_image',
+      description: '🖼️ Generate images using Vertex AI Gemini image models. Returns high-quality AI-generated images as base64 data URIs. Models: gemini-2.5-flash-preview-05-20 (default, fast). Use for creating visual content, diagrams, illustrations, marketing materials.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { 
+            type: 'string', 
+            description: 'Detailed description of the image to generate. Be specific about style, composition, colors, and subject matter.' 
+          },
+          model: { 
+            type: 'string', 
+            enum: ['gemini-2.5-flash-preview-05-20'],
+            description: 'Image generation model (default: gemini-2.5-flash-preview-05-20)' 
+          },
+          aspect_ratio: { 
+            type: 'string', 
+            enum: ['16:9', '1:1', '9:16', '4:3', '3:4'],
+            description: 'Image aspect ratio (default: 1:1)' 
+          },
+          count: { 
+            type: 'number', 
+            description: 'Number of images to generate 1-4 (default: 1)' 
+          }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+
+  // ====================================================================
+  // 🎬 VERTEX AI VIDEO GENERATION (Veo)
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_generate_video',
+      description: '🎬 Generate videos using Vertex AI Veo models. Returns an operation ID for async polling. Videos are 4-8 seconds. Models: veo-2.0-generate-001 (most capable, high quality), veo-3.1-fast-generate-001 (faster, lower quality). Use for creating promotional videos, animations, visual content.',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { 
+            type: 'string', 
+            description: 'Detailed description of the video to generate. Include motion, scene, style, and camera movement details.' 
+          },
+          model: { 
+            type: 'string', 
+            enum: ['veo-2.0-generate-001', 'veo-3.1-fast-generate-001'],
+            description: 'Video generation model. veo-2.0-generate-001 (most capable), veo-3.1-fast-generate-001 (faster)' 
+          },
+          aspect_ratio: { 
+            type: 'string', 
+            enum: ['16:9', '9:16'],
+            description: 'Video aspect ratio: 16:9 (landscape) or 9:16 (portrait/vertical)' 
+          },
+          duration_seconds: { 
+            type: 'number', 
+            enum: [4, 5, 6, 7, 8],
+            description: 'Video duration in seconds (4-8, default: 5)' 
+          }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_check_video_status',
+      description: '📽️ Check the status of an async video generation operation. Poll this endpoint until done=true to get the video URL. Video generation typically takes 2-5 minutes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation_name: { 
+            type: 'string', 
+            description: 'Full operation name returned from vertex_generate_video (e.g., "projects/.../operations/...")' 
+          }
+        },
+        required: ['operation_name']
+      }
+    }
   }
 ];
