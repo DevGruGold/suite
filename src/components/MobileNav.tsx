@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Menu, X, Home, Users, Coins, Scale, Building2 } from "lucide-react";
+import { Menu, X, Home, Users, Coins, Scale, Building2, Shield } from "lucide-react";
 import { Button } from "./ui/button";
 import { Link } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MobileNavTriggerProps {
   isOpen: boolean;
@@ -29,14 +30,19 @@ interface MobileNavOverlayProps {
 
 export function MobileNavOverlay({ isOpen, onClose }: MobileNavOverlayProps) {
   const { t } = useLanguage();
+  const { isAdmin } = useAuth();
 
-  const navItems = [
+  const baseNavItems = [
     { to: "/", label: t('nav.home'), icon: Home },
     { to: "/council", label: "Board", icon: Users },
     { to: "/earn", label: "Earn", icon: Coins },
     { to: "/governance", label: "Governance", icon: Scale },
     { to: "/licensing", label: "Enterprise", icon: Building2 },
   ];
+
+  const navItems = isAdmin
+    ? [...baseNavItems, { to: "/admin", label: "Admin", icon: Shield }]
+    : baseNavItems;
 
   if (!isOpen) return null;
 

@@ -1,6 +1,7 @@
 import { NavLink, useLocation } from "react-router-dom";
-import { Home, Users, Coins, Scale, Building2 } from "lucide-react";
+import { Home, Users, Coins, Scale, Building2, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { to: "/", label: "Home", icon: Home },
@@ -12,10 +13,15 @@ const navItems = [
 
 export const DesktopNav = () => {
   const location = useLocation();
+  const { isAdmin } = useAuth();
+
+  const allNavItems = isAdmin 
+    ? [...navItems, { to: "/admin", label: "Admin", icon: Shield }]
+    : navItems;
 
   return (
     <nav className="hidden md:flex items-center gap-1">
-      {navItems.map((item) => {
+      {allNavItems.map((item) => {
         const isActive = location.pathname === item.to;
         const Icon = item.icon;
         
