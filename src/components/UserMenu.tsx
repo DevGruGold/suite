@@ -26,7 +26,7 @@ export function UserMenu() {
   if (!isAuthenticated) {
     return (
       <Button asChild variant="outline" size="sm" className="gap-2">
-        <Link to="/auth">
+        <Link to="/">
           <LogIn className="h-4 w-4" />
           Sign In
         </Link>

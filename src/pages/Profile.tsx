@@ -131,7 +131,7 @@ const Profile = () => {
   }
 
   if (!isAuthenticated) {
-    return <Navigate to="/auth" replace />;
+    return <Navigate to="/" replace />;
   }
 
   const highestRole = roles[roles.length - 1] || 'user';
