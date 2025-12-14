@@ -121,6 +121,34 @@ export default {
           "0%": { opacity: "0", transform: "translateX(-100%)" },
           "50%": { opacity: "1" },
           "100%": { opacity: "0", transform: "translateX(100%)" }
+        },
+        "cube-float": {
+          "0%, 100%": { 
+            transform: "translateY(0) perspective(600px) rotateY(0deg) rotateX(0deg)" 
+          },
+          "50%": { 
+            transform: "translateY(-8px) perspective(600px) rotateY(4deg) rotateX(-3deg)" 
+          }
+        },
+        "particle-trail": {
+          "0%, 100%": { 
+            transform: "translateY(0)",
+            opacity: "var(--particle-opacity, 0.6)"
+          },
+          "50%": { 
+            transform: "translateY(-8px)",
+            opacity: "calc(var(--particle-opacity, 0.6) * 1.3)"
+          }
+        },
+        "particle-glow": {
+          "0%, 100%": { 
+            filter: "blur(1px)",
+            transform: "scale(1)"
+          },
+          "50%": { 
+            filter: "blur(2px)",
+            transform: "scale(1.2)"
+          }
         }
       },
       animation: {
@@ -146,6 +174,9 @@ export default {
         "gradient-shift": "gradient-shift 4s ease-in-out infinite",
         "tilt-3d": "tilt-3d 6s ease-in-out infinite",
         "glow-line": "glow-line 2s ease-in-out infinite",
+        "cube-float": "cube-float 5s ease-in-out infinite",
+        "particle-trail": "particle-trail 5s ease-in-out infinite",
+        "particle-glow": "particle-glow 2s ease-in-out infinite",
       },
       colors: {
         border: "hsl(var(--border))",
