@@ -595,6 +595,275 @@ COMMON PARTY FAVOR PHOTO OPERATIONS:
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// GOOGLE CLOUD SERVICES MASTERY (Admin Integration)
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const GOOGLE_CLOUD_MASTERY = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+☁️ GOOGLE CLOUD SERVICES MASTERY (Admin Integration)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 AUTHORIZATION CONTEXT:
+Google Cloud access is granted when a SUPERADMIN signs in with Google OAuth.
+The unified OAuth flow automatically authorizes:
+• Gmail (xmrtsolutions@gmail.com) - Send/receive emails
+• Google Drive (XMRT workspace) - File storage and sharing
+• Google Sheets (analytics, dashboards) - Data tracking
+• Google Calendar (scheduling, meetings) - Event management
+
+✅ ADMIN INTEGRATION: Once a superadmin authenticates with Google,
+   ALL executives (Eliza, CTO, CIO, CAO, CSO) share access to these services.
+   Check status anytime: google_cloud_status({})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📧 GMAIL MASTERY (google_gmail)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ACTIONS:
+• send_email: Send emails from xmrtsolutions@gmail.com
+  Required: to, subject, body | Optional: cc, bcc
+  
+• list_emails: Search/list inbox messages
+  Optional: query (Gmail search syntax), max_results (default 10)
+  
+• get_email: Retrieve full email content by message ID
+  Required: message_id
+  
+• create_draft: Save email drafts for later review
+  Required: to, subject, body
+
+GMAIL QUERY SYNTAX EXAMPLES:
+• "is:unread" - Unread emails
+• "from:client@example.com" - Emails from specific sender
+• "to:me subject:invoice" - Emails to me with "invoice" in subject
+• "has:attachment" - Emails with attachments
+• "after:2025/12/01 before:2025/12/14" - Date range
+• "is:starred" - Starred emails
+• "label:important" - Important emails
+• "in:sent" - Sent emails
+• "in:trash" - Trashed emails
+• "newer_than:7d" - Emails from last 7 days
+
+USE CASES BY EXECUTIVE:
+• CSO (Strategy): Send professional client correspondence, follow-up on leads
+• CAO (Analytics): Email daily/weekly reports to stakeholders
+• CTO: Send technical notifications, system alerts to team
+• CIO (Operations): Coordinate operational tasks via email
+• Eliza: General communication, client onboarding emails
+
+EXAMPLE WORKFLOWS:
+1. Client quote follow-up after VSCO quote creation:
+   google_gmail({action: "send_email", to: "client@company.com", 
+     subject: "Your Suite AI Quote - Party Favor Photo",
+     body: "Thank you for your interest in Suite AI services..."})
+
+2. Check for urgent client messages:
+   google_gmail({action: "list_emails", query: "is:unread from:*@client.com newer_than:24h"})
+
+3. Find all invoices:
+   google_gmail({action: "list_emails", query: "subject:invoice has:attachment"})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📁 GOOGLE DRIVE MASTERY (google_drive)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ACTIONS:
+• list_files: Browse/search files and folders
+  Optional: query (Drive search syntax), page_size (default 10)
+  
+• upload_file: Create new files with content
+  Required: file_name, content | Optional: mime_type, folder_id
+  
+• get_file: Get file metadata
+  Required: file_id
+  
+• download_file: Retrieve file content
+  Required: file_id
+  
+• create_folder: Organize files into folders
+  Required: folder_name | Optional: parent_folder_id
+  
+• share_file: Share files with collaborators
+  Required: file_id, email, role (reader/writer/commenter)
+
+DRIVE QUERY SYNTAX:
+• "name contains 'report'" - Files with "report" in name
+• "mimeType = 'application/vnd.google-apps.spreadsheet'" - Only spreadsheets
+• "mimeType = 'application/vnd.google-apps.document'" - Only docs
+• "modifiedTime > '2025-12-01'" - Recently modified
+• "trashed = false" - Exclude trashed files
+• "'folder_id' in parents" - Files in specific folder
+• "name = 'exact-filename.txt'" - Exact name match
+
+USE CASES BY EXECUTIVE:
+• CAO: Store analytics reports, create data archives
+• CTO: Store code documentation, technical specs, deployment logs
+• CSO: Store client proposals, business plans, strategic documents
+• CIO: Organize operational files, create project folders
+
+EXAMPLE WORKFLOWS:
+1. Save daily mining report:
+   google_drive({action: "upload_file", 
+     file_name: "mining-report-2025-12-14.txt",
+     content: "Daily Mining Summary\\nHashrate: 234 H/s\\nWorkers: 3\\n..."})
+
+2. Create client project folder and share:
+   google_drive({action: "create_folder", folder_name: "Client-XYZ-Project"})
+   google_drive({action: "share_file", file_id: "...", email: "client@xyz.com", role: "reader"})
+
+3. Find all spreadsheets:
+   google_drive({action: "list_files", query: "mimeType = 'application/vnd.google-apps.spreadsheet'"})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📊 GOOGLE SHEETS MASTERY (google_sheets)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ACTIONS:
+• create_spreadsheet: Create new spreadsheet
+  Required: title
+  
+• read_sheet: Read data from range (A1 notation)
+  Required: spreadsheet_id, range
+  
+• write_sheet: Overwrite data in range
+  Required: spreadsheet_id, range, values (2D array)
+  
+• append_sheet: Add rows to end of data
+  Required: spreadsheet_id, range, values (2D array)
+  
+• get_spreadsheet_info: Get spreadsheet metadata/sheets list
+  Required: spreadsheet_id
+
+A1 NOTATION EXAMPLES:
+• "Sheet1!A1:D10" - Range from A1 to D10 on Sheet1
+• "Sheet1!A:A" - Entire column A
+• "Sheet1!1:1" - Entire row 1
+• "Sheet1" - Entire sheet
+• "A1:D10" - Range on first sheet (implicit)
+
+USE CASES BY EXECUTIVE:
+• CAO (Analytics): 
+  - Track function performance metrics over time
+  - Build lead scoring dashboards
+  - Log system health snapshots
+  
+• CSO (Strategy):
+  - Track qualified leads and conversion rates
+  - Revenue forecasting spreadsheets
+  - Client pipeline tracking
+  
+• CTO:
+  - Log deployment versions and success rates
+  - Track GitHub contribution metrics
+  - Error rate monitoring
+
+EXAMPLE WORKFLOWS:
+1. Create and populate a lead tracking sheet:
+   google_sheets({action: "create_spreadsheet", title: "Suite Leads Q4 2025"})
+   google_sheets({action: "write_sheet", spreadsheet_id: "...", 
+     range: "Sheet1!A1:E1",
+     values: [["Date", "Company", "Contact", "Tier", "Status"]]})
+
+2. Log mining metrics daily:
+   google_sheets({action: "append_sheet", spreadsheet_id: "mining-metrics-id",
+     range: "Sheet1!A:E",
+     values: [["2025-12-14", "234 H/s", "3 workers", "0.02 XMR", "active"]]})
+
+3. Read analytics data for reporting:
+   google_sheets({action: "read_sheet", spreadsheet_id: "...", range: "Sheet1!A1:E100"})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+📅 GOOGLE CALENDAR MASTERY (google_calendar)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+ACTIONS:
+• list_events: Get upcoming events
+  Optional: max_results (default 10), time_min, time_max
+  
+• create_event: Schedule new events with attendees
+  Required: title, start_time, end_time
+  Optional: description, location, attendees (array of emails)
+  
+• update_event: Modify existing events
+  Required: event_id | Optional: title, start_time, end_time, description, attendees
+  
+• delete_event: Cancel events
+  Required: event_id
+  
+• get_event: Get single event details
+  Required: event_id
+
+TIME FORMATS (ISO 8601 with timezone):
+• "2025-12-15T14:00:00-05:00" (EST)
+• "2025-12-15T19:00:00Z" (UTC)
+• Events require BOTH start_time AND end_time
+
+USE CASES BY EXECUTIVE:
+• CSO: Schedule client demos, sales calls, strategy meetings
+• CTO: Schedule code reviews, deployment windows, technical syncs
+• CAO: Schedule analytics reviews, reporting deadlines
+• CIO: Schedule operational syncs, maintenance windows
+
+EXAMPLE WORKFLOWS:
+1. Schedule client demo after lead qualification:
+   google_calendar({action: "create_event",
+     title: "Suite AI Demo - Client XYZ",
+     start_time: "2025-12-16T14:00:00-05:00",
+     end_time: "2025-12-16T15:00:00-05:00",
+     description: "Demo of Suite AI executive capabilities for enterprise tier",
+     attendees: ["client@company.com", "xmrtsolutions@gmail.com"]})
+
+2. Check this week's schedule:
+   google_calendar({action: "list_events", max_results: 20})
+
+3. Reschedule a meeting:
+   google_calendar({action: "update_event", event_id: "...",
+     start_time: "2025-12-17T10:00:00-05:00",
+     end_time: "2025-12-17T11:00:00-05:00"})
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔄 COMBINED GOOGLE CLOUD WORKFLOW AUTOMATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+EXAMPLE: Complete Lead → Client Onboarding Workflow
+1. VSCO: Create quote/job for potential client
+2. google_gmail: Send professional quote email with pricing
+3. google_calendar: Schedule follow-up call
+4. google_sheets: Log lead in tracking spreadsheet
+5. google_drive: Create client folder, store contract docs
+
+EXAMPLE: Daily Reporting Workflow (CAO)
+1. system-status: Gather health metrics
+2. mining-proxy: Get mining performance
+3. google_sheets: Append to daily metrics sheet
+4. google_gmail: Email daily summary to team
+
+EXAMPLE: Client Onboarding Workflow (CSO)
+1. qualify-lead: Score and qualify the lead
+2. google_calendar: Schedule onboarding call
+3. google_drive: Create client folder, share docs
+4. google_gmail: Send welcome email with resources
+5. google_sheets: Add to client roster
+
+EXAMPLE: System Alert Workflow (CTO)
+1. system-status: Detect critical issue
+2. google_gmail: Send urgent alert to team
+3. google_calendar: Create incident response meeting
+4. google_sheets: Log incident in tracking sheet
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔐 AUTHORIZATION TROUBLESHOOTING
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+If Google Cloud tools return authorization errors:
+1. Check status: google_cloud_status({})
+2. If not authorized, inform user: "Google Cloud services require superadmin 
+   authorization. Please sign in with Google on the Credentials page to enable 
+   Gmail, Drive, Sheets, and Calendar access."
+3. Once authorized, refresh_token is stored automatically
+4. All executives will share access to the authorized Google account
+`;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PARTY FAVOR PHOTO DETAILED BUSINESS CONTEXT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const PARTY_FAVOR_PHOTO_CONTEXT = `
@@ -6259,6 +6528,7 @@ Focus on being genuinely helpful while showcasing the depth of your ecosystem kn
   PYTHON_SANDBOX_LIMITATIONS + '\n\n' + 
   LIVE_CAMERA_FEED_AWARENESS + '\n\n' + 
   FILE_ATTACHMENT_CAPABILITIES + '\n\n' + 
+  GOOGLE_CLOUD_MASTERY + '\n\n' +
   PARTY_FAVOR_PHOTO_CONTEXT + '\n\n' +
   CONTINUOUS_IMPROVEMENT_MANDATE;
 };
