@@ -430,7 +430,6 @@ serve(async (req) => {
     const errorMessage = error instanceof Error ? error.message : String(error);
     await usageTracker.failure(errorMessage, 500);
     
-    const errorMessage = error instanceof Error ? error.message : String(error);
     let statusCode = 500;
     
     if (errorMessage.includes('402') || errorMessage.includes('Payment Required')) {
