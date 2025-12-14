@@ -136,12 +136,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [fetchProfile]);
 
   const getRedirectUrl = () => {
-    // Always redirect to production suite-beta.vercel.app
+    // Always redirect to dashboard after auth
     if (window.location.hostname.includes('lovable') || 
         window.location.hostname.includes('lovableproject')) {
-      return 'https://suite-beta.vercel.app/';
+      return 'https://suite-beta.vercel.app/dashboard';
     }
-    return `${window.location.origin}/`;
+    return `${window.location.origin}/dashboard`;
   };
 
   // Store Google Cloud refresh token after login
