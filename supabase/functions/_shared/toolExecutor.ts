@@ -1916,7 +1916,7 @@ export async function executeToolCall(
 }
 
 // Add VSCO tool handlers to the switch statement by exporting a helper
-export function getVscoToolHandler(name: string, parsedArgs: any, supabase: any, executiveName: string): Promise<any> | null {
+export async function getVscoToolHandler(name: string, parsedArgs: any, supabase: any, executiveName: string): Promise<any | null> {
   switch (name) {
     case 'vsco_manage_jobs':
       console.log(`📸 [${executiveName}] VSCO Manage Jobs: ${parsedArgs.action}`);
