@@ -30,6 +30,9 @@ verify_jwt = false
 [functions.stripe-payment-webhook]
 verify_jwt = false
 
+[functions.vsco-webhook-handler]
+verify_jwt = false
+
 [functions.usage-monitor]
 verify_jwt = false
 
