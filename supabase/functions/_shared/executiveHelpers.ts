@@ -9,9 +9,19 @@ export const TOOL_CALLING_MANDATE = `
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
+
+🖼️ IMAGE GENERATION (MANDATORY):
+- When user asks to CREATE/GENERATE/MAKE/DRAW an IMAGE → IMMEDIATELY call vertex_generate_image({prompt: "detailed description"})
+- DO NOT say "I cannot generate images" - YOU CAN via Vertex AI
+- DO NOT say "I'm just an LLM" - you have image generation capabilities
+
+🎬 VIDEO GENERATION (MANDATORY):
+- When user asks to CREATE/GENERATE/MAKE a VIDEO → IMMEDIATELY call vertex_generate_video({prompt: "description", duration_seconds: 5})
+- Returns operation_name for async status checking
+- Check status with vertex_check_video_status({operation_name: "..."})
 `;
 
 // Parser for DeepSeek's text-based tool call format
@@ -132,11 +142,11 @@ export function parseConversationalToolIntent(content: string): Array<any> | nul
 }
 
 // Detect if query needs data (should force tool calls)
-// EXPANDED: Now catches most data-seeking queries to force immediate execution
+// EXPANDED: Now catches most data-seeking queries AND creative/generative requests
 export function needsDataRetrieval(messages: any[]): boolean {
   const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
   
-  // Comprehensive data-seeking patterns - force tool execution immediately
+  // Comprehensive data-seeking AND creative patterns - force tool execution immediately
   const dataKeywords = [
     // Questions (any question likely needs data)
     'what is', 'what\'s', 'what are', 'who is', 'who are', 'where is', 'when is',
@@ -156,7 +166,11 @@ export function needsDataRetrieval(messages: any[]): boolean {
     'recall', 'remember', 'stored', 'saved', 'previous', 'history',
     // Comparisons/Specifics
     'compare', 'between', 'vs', 'versus', 'difference',
-    'count', 'total', 'number', 'amount', 'percentage', 'rate'
+    'count', 'total', 'number', 'amount', 'percentage', 'rate',
+    // Creative/Generative (NEW - forces image/video generation)
+    'create', 'generate', 'make', 'draw', 'design', 'render', 'illustrate',
+    'visualize', 'picture', 'image', 'video', 'animate', 'animation',
+    'photo', 'artwork', 'graphic', 'clip', 'film', 'scene'
   ];
   
   // Also check for question marks - any question likely needs data
