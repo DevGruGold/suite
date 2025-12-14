@@ -864,6 +864,77 @@ If Google Cloud tools return authorization errors:
 `;
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// VERTEX AI EXPRESS MODE MASTERY
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+const VERTEX_AI_EXPRESS_MASTERY = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔷 VERTEX AI EXPRESS MODE MASTERY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📌 WHAT IS VERTEX AI EXPRESS MODE?
+Vertex AI Express Mode provides API key authentication for Google's Gemini models
+through Google Cloud's enterprise infrastructure. It's part of the AI fallback cascade
+and automatically activates when other providers are unavailable.
+
+✅ AVAILABLE MODELS:
+• gemini-2.5-flash (DEFAULT) - Fast, efficient, great for most tasks
+• gemini-2.5-pro - Most capable, best for complex reasoning
+• gemini-2.5-flash-lite - Fastest & cheapest, good for simple tasks
+
+📊 RATE LIMITS (Free Tier):
+• 10 requests per minute per model
+• If rate limited (429), the fallback cascade continues to next provider
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔧 VERTEX AI TOOLS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+TOOL: vertex_ai_generate
+Description: Generate content using Vertex AI Express Mode
+Parameters:
+• prompt (required): Text prompt for generation
+• model (optional): gemini-2.5-flash, gemini-2.5-pro, gemini-2.5-flash-lite
+• temperature (optional): Creativity level 0-1 (default: 0.7)
+• max_tokens (optional): Max output tokens (default: 4096)
+• system_prompt (optional): System instructions
+
+TOOL: vertex_ai_count_tokens  
+Description: Count tokens in text for context management
+Parameters:
+• text (required): Text to count tokens for
+• model (optional): Model for counting (default: gemini-2.5-flash)
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🔄 AI FALLBACK CASCADE POSITION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Vertex AI Express is position 4 in the fallback cascade:
+1. Lovable AI Gateway (primary)
+2. DeepSeek (CTO fallback)
+3. Kimi K2 (OpenRouter)
+4. Vertex AI Express ← YOU ARE HERE
+5. Gemini API (direct)
+
+Vertex AI Express automatically activates when:
+• Lovable AI Gateway tokens exhausted
+• DeepSeek API unavailable
+• Kimi/OpenRouter rate limited
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+💡 WHEN TO USE VERTEX AI EXPLICITLY
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Use vertex_ai_generate directly when:
+• You need specific control over which Gemini model is used
+• Counting tokens before making expensive API calls
+• Testing Vertex AI integration specifically
+• User explicitly requests Vertex AI
+
+For normal operations, just use the unified AI cascade - 
+Vertex AI will automatically be used if needed.
+`;
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // PARTY FAVOR PHOTO DETAILED BUSINESS CONTEXT
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 const PARTY_FAVOR_PHOTO_CONTEXT = `
@@ -2305,6 +2376,7 @@ You are the Chief Analytics Officer of XMRT Council. Your responsibilities:
     MULTIMODAL_EMOTIONAL_AWARENESS + '\n\n' + 
     FILE_ATTACHMENT_CAPABILITIES + '\n\n' +
     GOOGLE_CLOUD_MASTERY + '\n\n' +
+    VERTEX_AI_EXPRESS_MASTERY + '\n\n' +
     CONTINUOUS_IMPROVEMENT_MANDATE;
 };
 
@@ -6532,6 +6604,7 @@ Focus on being genuinely helpful while showcasing the depth of your ecosystem kn
   LIVE_CAMERA_FEED_AWARENESS + '\n\n' + 
   FILE_ATTACHMENT_CAPABILITIES + '\n\n' + 
   GOOGLE_CLOUD_MASTERY + '\n\n' +
+  VERTEX_AI_EXPRESS_MASTERY + '\n\n' +
   PARTY_FAVOR_PHOTO_CONTEXT + '\n\n' +
   CONTINUOUS_IMPROVEMENT_MANDATE;
 };

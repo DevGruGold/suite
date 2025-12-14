@@ -17,6 +17,7 @@ const PROVIDER_TIMEOUTS = {
   lovable: 8000,
   deepseek: 10000, // Slightly longer for reasoning
   kimi: 8000,
+  vertexai: 8000, // Vertex AI Express Mode
   gemini: 8000,
   embedding: 10000,
 };
@@ -68,7 +69,7 @@ export interface UnifiedAIOptions {
   max_tokens?: number; // Alias for compatibility
   systemPrompt?: string;
   tools?: Array<any>;
-  preferProvider?: 'lovable' | 'deepseek' | 'kimi' | 'gemini';
+  preferProvider?: 'lovable' | 'deepseek' | 'kimi' | 'vertexai' | 'gemini';
   // Eliza intelligence context
   userContext?: any;
   miningStats?: any;
@@ -512,8 +513,118 @@ async function callGemini(
 }
 
 /**
+ * Call Vertex AI Express Mode with tool calling support
+ */
+async function callVertexAI(
+  messages: AIMessage[],
+  options: UnifiedAIOptions = {}
+): Promise<ProviderResult> {
+  const VERTEX_AI_API_KEY = Deno.env.get('VERTEX_AI_API_KEY');
+  
+  if (!VERTEX_AI_API_KEY) {
+    return { success: false, provider: 'vertexai', error: 'VERTEX_AI_API_KEY not configured' };
+  }
+
+  try {
+    console.log('🔷 Attempting Vertex AI Express with full Eliza context...');
+    
+    const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+    const effectiveTools = getEffectiveTools(options);
+    
+    // Convert messages to Vertex AI format
+    const userMessages = messages.filter(m => m.role !== 'system');
+    const contents = userMessages.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    }));
+
+    const maxTokens = options.maxTokens || options.max_tokens || 2000;
+    const model = options.model || 'gemini-2.5-flash';
+
+    const requestBody: any = {
+      contents,
+      systemInstruction: { parts: [{ text: effectiveSystemPrompt }] },
+      generationConfig: {
+        temperature: options.temperature || 0.7,
+        maxOutputTokens: maxTokens,
+      },
+    };
+    
+    // Add tool definitions (Vertex AI uses same format as Gemini)
+    if (effectiveTools.length > 0) {
+      requestBody.tools = [{
+        functionDeclarations: effectiveTools.slice(0, 30).map(tool => ({
+          name: tool.function.name,
+          description: tool.function.description,
+          parameters: tool.function.parameters
+        }))
+      }];
+    }
+
+    const response = await fetchWithTimeout(
+      `https://aiplatform.googleapis.com/v1/publishers/google/models/${model}:generateContent?key=${VERTEX_AI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+      },
+      PROVIDER_TIMEOUTS.vertexai
+    );
+
+    // Fast-fail for rate limiting (free tier is 10 RPM)
+    const fastFailError = checkFastFail(response, 'vertexai');
+    if (fastFailError) {
+      return { success: false, provider: 'vertexai', error: fastFailError };
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`⚠️ Vertex AI failed (${response.status}):`, errorText);
+      return { success: false, provider: 'vertexai', error: `${response.status}: ${errorText}` };
+    }
+
+    const data = await response.json();
+    const parts = data.candidates?.[0]?.content?.parts;
+    
+    if (!parts || parts.length === 0) {
+      return { success: false, provider: 'vertexai', error: 'No content in response' };
+    }
+
+    console.log('✅ Vertex AI Express successful with Eliza intelligence');
+    
+    // Check for function calls
+    const functionCall = parts.find((p: any) => p.functionCall);
+    if (functionCall) {
+      console.log(`🔧 Vertex AI returned function call: ${functionCall.functionCall.name}`);
+      return {
+        success: true,
+        provider: 'vertexai',
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{
+            id: `vertexai_${Date.now()}`,
+            type: 'function',
+            function: {
+              name: functionCall.functionCall.name,
+              arguments: JSON.stringify(functionCall.functionCall.args || {})
+            }
+          }]
+        }
+      };
+    }
+    
+    const content = parts[0]?.text || '';
+    return { success: true, provider: 'vertexai', content };
+  } catch (error) {
+    console.warn('⚠️ Vertex AI error:', error.message);
+    return { success: false, provider: 'vertexai', error: error.message };
+  }
+}
+
+/**
  * Unified AI call with automatic fallback cascade
- * Order: Lovable → DeepSeek → Kimi → Gemini
+ * Order: Lovable → DeepSeek → Kimi → Vertex AI → Gemini
  * 
  * ENHANCED: All providers now receive full Eliza intelligence context
  * 
@@ -529,14 +640,16 @@ export async function callAIWithFallback(
   console.log('🧠 callAIWithFallback: Using full Eliza intelligence context for all providers');
   
   // Define provider order based on preference
-  // Default cascade: Lovable → DeepSeek → Kimi → Gemini
+  // Default cascade: Lovable → DeepSeek → Kimi → Vertex AI → Gemini
   const providers = options.preferProvider === 'deepseek'
-    ? [callDeepSeek, callLovable, callKimi, callGemini]
+    ? [callDeepSeek, callLovable, callKimi, callVertexAI, callGemini]
     : options.preferProvider === 'kimi'
-    ? [callKimi, callLovable, callDeepSeek, callGemini]
+    ? [callKimi, callLovable, callDeepSeek, callVertexAI, callGemini]
     : options.preferProvider === 'gemini'
-    ? [callGemini, callLovable, callDeepSeek, callKimi]
-    : [callLovable, callDeepSeek, callKimi, callGemini]; // Default: Lovable first
+    ? [callGemini, callLovable, callDeepSeek, callKimi, callVertexAI]
+    : options.preferProvider === 'vertexai'
+    ? [callVertexAI, callLovable, callDeepSeek, callKimi, callGemini]
+    : [callLovable, callDeepSeek, callKimi, callVertexAI, callGemini]; // Default: Lovable first
 
   for (const providerFn of providers) {
     const result = await providerFn(messages, options);
@@ -599,6 +712,7 @@ export function getAvailableProviders(): string[] {
   if (Deno.env.get('LOVABLE_API_KEY')) available.push('lovable');
   if (Deno.env.get('DEEPSEEK_API_KEY')) available.push('deepseek');
   if (Deno.env.get('OPENROUTER_API_KEY')) available.push('kimi');
+  if (Deno.env.get('VERTEX_AI_API_KEY')) available.push('vertexai');
   if (Deno.env.get('GEMINI_API_KEY')) available.push('gemini');
   
   return available;
