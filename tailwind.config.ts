@@ -87,6 +87,40 @@ export default {
         "spin-slow": {
           "0%": { transform: "rotate(0deg)" },
           "100%": { transform: "rotate(360deg)" }
+        },
+        "float": {
+          "0%, 100%": { transform: "translateY(0) rotate(0deg)" },
+          "50%": { transform: "translateY(-20px) rotate(3deg)" }
+        },
+        "float-reverse": {
+          "0%, 100%": { transform: "translateY(-20px) rotate(-3deg)" },
+          "50%": { transform: "translateY(0) rotate(0deg)" }
+        },
+        "text-shimmer": {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" }
+        },
+        "morph": {
+          "0%, 100%": { borderRadius: "60% 40% 30% 70% / 60% 30% 70% 40%" },
+          "25%": { borderRadius: "30% 60% 70% 40% / 50% 60% 30% 60%" },
+          "50%": { borderRadius: "50% 50% 40% 60% / 40% 50% 60% 50%" },
+          "75%": { borderRadius: "40% 60% 50% 50% / 60% 40% 50% 60%" }
+        },
+        "gradient-shift": {
+          "0%": { backgroundPosition: "0% 50%" },
+          "50%": { backgroundPosition: "100% 50%" },
+          "100%": { backgroundPosition: "0% 50%" }
+        },
+        "tilt-3d": {
+          "0%, 100%": { transform: "perspective(1000px) rotateY(0deg) rotateX(0deg)" },
+          "25%": { transform: "perspective(1000px) rotateY(2deg) rotateX(-2deg)" },
+          "75%": { transform: "perspective(1000px) rotateY(-2deg) rotateX(2deg)" }
+        },
+        "glow-line": {
+          "0%": { opacity: "0", transform: "translateX(-100%)" },
+          "50%": { opacity: "1" },
+          "100%": { opacity: "0", transform: "translateX(100%)" }
         }
       },
       animation: {
@@ -105,6 +139,13 @@ export default {
         "glow-pulse": "glow-pulse 2s ease-in-out infinite",
         "bounce-subtle": "bounce-subtle 1s ease-in-out infinite",
         "spin-slow": "spin-slow 3s linear infinite",
+        "float": "float 6s ease-in-out infinite",
+        "float-reverse": "float-reverse 7s ease-in-out infinite",
+        "text-shimmer": "text-shimmer 3s ease-in-out infinite",
+        "morph": "morph 8s ease-in-out infinite",
+        "gradient-shift": "gradient-shift 4s ease-in-out infinite",
+        "tilt-3d": "tilt-3d 6s ease-in-out infinite",
+        "glow-line": "glow-line 2s ease-in-out infinite",
       },
       colors: {
         border: "hsl(var(--border))",
