@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useAudio } from '@/contexts/AudioContext';
 import { SuiteAnimatedLogo } from '@/components/SuiteAnimatedLogo';
 import { DemoVideoModal } from '@/components/DemoVideoModal';
+import { LandingNav } from '@/components/LandingNav';
 import { 
   Target, Code, BarChart3, FileText, 
   Users, Bot, Shield,
@@ -87,24 +88,8 @@ export default function Landing() {
         <div className="absolute inset-0 bg-[linear-gradient(hsl(var(--primary)/0.015)_1px,transparent_1px),linear-gradient(90deg,hsl(var(--primary)/0.015)_1px,transparent_1px)] bg-[size:60px_60px] [mask-image:radial-gradient(ellipse_80%_80%_at_50%_50%,black,transparent)]" />
       </div>
 
-      {/* Header - reduced blur */}
-      <header className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-background/70 border-b border-border/30">
-        <div className="container mx-auto px-4 h-16 flex items-center justify-between">
-          <SuiteAnimatedLogo size="sm" />
-          <div className="flex items-center gap-3">
-            <Link to="/auth">
-              <Button variant="ghost" size="sm">Sign In</Button>
-            </Link>
-            <Button 
-              size="sm" 
-              onClick={handleGetStarted} 
-              className="bg-primary hover:bg-primary/90"
-            >
-              Start Free Trial
-            </Button>
-          </div>
-        </div>
-      </header>
+      {/* Navigation with Auth Modal */}
+      <LandingNav />
 
       {/* Hero Section - immediate render, no animation delays */}
       <section className="pt-24 pb-10 px-4">
@@ -166,7 +151,7 @@ export default function Landing() {
       </section>
 
       {/* AI Executives Section */}
-      <section className="py-12 px-4 relative">
+      <section id="executives" className="py-12 px-4 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/20 to-transparent" />
         
         <div className="container mx-auto max-w-6xl relative">
@@ -202,7 +187,7 @@ export default function Landing() {
       </section>
 
       {/* Why Section */}
-      <section className="py-12 px-4">
+      <section id="benefits" className="py-12 px-4">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Why Choose Suite AI?</h2>
@@ -250,7 +235,7 @@ export default function Landing() {
       </section>
 
       {/* How It Works */}
-      <section className="py-12 px-4 relative">
+      <section id="how-it-works" className="py-12 px-4 relative">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/20 to-transparent" />
         
         <div className="container mx-auto max-w-4xl relative">
@@ -314,7 +299,6 @@ export default function Landing() {
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
               <Link to="/licensing" className="hover:text-primary transition-colors">Enterprise</Link>
               <Link to="/governance" className="hover:text-primary transition-colors">Governance</Link>
-              <Link to="/auth" className="hover:text-primary transition-colors">Sign In</Link>
             </div>
           </div>
         </div>
