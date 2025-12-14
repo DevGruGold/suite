@@ -26,7 +26,7 @@ export default function Auth() {
   // Redirect if already authenticated
   useEffect(() => {
     if (isAuthenticated && !isLoading) {
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   }, [isAuthenticated, isLoading, navigate]);
 
@@ -62,7 +62,7 @@ export default function Auth() {
     setIsSubmitting(false);
 
     if (!error) {
-      navigate('/', { replace: true });
+      navigate('/dashboard', { replace: true });
     }
   };
 

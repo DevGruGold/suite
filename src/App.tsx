@@ -5,9 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { AuthProvider } from "@/contexts/AuthContext";
-import AppLayout from "@/components/layouts/AppLayout";
+import ProtectedLayout from "@/components/layouts/ProtectedLayout";
+import Landing from "./pages/Landing";
+import Dashboard from "./pages/Dashboard";
 import Credentials from "./pages/Credentials";
-import Index from "./pages/Index";
 import Council from "./pages/Council";
 import Governance from "./pages/Governance";
 import Licensing from "./pages/Licensing";
@@ -34,12 +35,13 @@ const App = () => (
           
           <BrowserRouter>
             <Routes>
-              {/* Auth page - standalone without layout */}
+              {/* Public routes */}
+              <Route path="/" element={<Landing />} />
               <Route path="/auth" element={<Auth />} />
               
-              {/* All routes wrapped in AppLayout for persistent header */}
-              <Route element={<AppLayout />}>
-                <Route path="/" element={<Index />} />
+              {/* Protected routes - require authentication */}
+              <Route element={<ProtectedLayout />}>
+                <Route path="/dashboard" element={<Dashboard />} />
                 <Route path="/council" element={<Council />} />
                 <Route path="/earn" element={<Earn />} />
                 <Route path="/governance" element={<Governance />} />
