@@ -103,7 +103,7 @@ serve(async (req) => {
         
         const perspective = executivePerspectives[exec as keyof typeof executivePerspectives];
         
-        // Build analysis prompt
+        // Build analysis prompt with mandatory decision requirement
         const analysisPrompt = `
 You are the ${perspective.title} (${exec}) of XMRT DAO. ${perspective.prompt}
 
@@ -115,12 +115,25 @@ You are the ${perspective.title} (${exec}) of XMRT DAO. ${perspective.prompt}
 **Proposed By:** ${proposal.proposed_by}
 **Category:** ${proposal.category || 'general'}
 
-Based on your analysis focusing on ${perspective.focus}, provide:
-1. Your vote: approve, reject, or abstain
-2. Your detailed reasoning (2-3 sentences)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚠️ MANDATORY VOTING RULES (YOU MUST FOLLOW THESE)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+1. You MUST vote either "approve" OR "reject" with clear reasoning
+2. Abstaining is ONLY allowed for these THREE specific reasons:
+   - "conflict of interest" (you proposed this function yourself)
+   - "insufficient information" (critical technical details missing to evaluate)
+   - "outside expertise" (completely outside your domain expertise)
+3. If NONE of these apply, you MUST vote approve or reject
+4. Vague reasoning like "need more info" without specifics = REJECT
+
+Your vote carries weight in governance. Make a decision and own it.
+
+Based on your analysis focusing on ${perspective.focus}, provide your vote and detailed reasoning (2-3 sentences).
 
 Respond in JSON format:
-{"vote": "approve|reject|abstain", "reasoning": "Your detailed reasoning here"}
+{"vote": "approve" OR "reject", "reasoning": "Your detailed reasoning here"}
+
+ONLY use {"vote": "abstain", "reasoning": "..."} if you meet one of the three valid abstention criteria listed above.
 `;
 
         // Call lovable-chat to get executive's analysis using correct message format
@@ -154,8 +167,9 @@ Respond in JSON format:
         }
 
         // Parse the AI response to extract vote and reasoning
-        let vote = 'abstain';
-        let reasoning = `${exec} could not complete analysis.`;
+        // Default to REJECT (accountability) instead of abstain (avoidance)
+        let vote = 'reject';
+        let reasoning = `${exec} could not complete analysis - defaulting to reject for accountability.`;
 
         try {
           const responseText = aiResponse?.response || aiResponse?.message || '';
@@ -164,23 +178,58 @@ Respond in JSON format:
           const jsonMatch = responseText.match(/\{[\s\S]*"vote"[\s\S]*"reasoning"[\s\S]*\}/);
           if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
-            vote = parsed.vote?.toLowerCase() || 'abstain';
+            const parsedVote = parsed.vote?.toLowerCase() || '';
             reasoning = parsed.reasoning || reasoning;
+            
+            // Only accept abstain if it has valid justification
+            if (parsedVote === 'abstain') {
+              const validAbstentionReasons = [
+                'conflict of interest',
+                'insufficient information', 
+                'outside expertise',
+                'outside my expertise',
+                'outside my area',
+                'cannot objectively evaluate'
+              ];
+              const hasValidReason = validAbstentionReasons.some(reason => 
+                reasoning.toLowerCase().includes(reason)
+              );
+              if (hasValidReason) {
+                vote = 'abstain';
+              } else {
+                // Invalid abstention - look for approval/rejection signals
+                const lowerReasoning = reasoning.toLowerCase();
+                if (lowerReasoning.includes('approve') || lowerReasoning.includes('support') || lowerReasoning.includes('beneficial')) {
+                  vote = 'approve';
+                } else {
+                  vote = 'reject';
+                  reasoning = `${reasoning} (Abstention without valid justification converted to reject)`;
+                }
+                console.log(`⚠️ ${exec} attempted invalid abstention - converted to ${vote}`);
+              }
+            } else if (['approve', 'reject'].includes(parsedVote)) {
+              vote = parsedVote;
+            }
           } else {
-            // Fallback: look for keywords
+            // Fallback: look for keywords - prioritize approve/reject over abstain
             const lowerResponse = responseText.toLowerCase();
-            if (lowerResponse.includes('approve')) vote = 'approve';
-            else if (lowerResponse.includes('reject')) vote = 'reject';
+            if (lowerResponse.includes('approve') || lowerResponse.includes('support')) {
+              vote = 'approve';
+            } else if (lowerResponse.includes('reject') || lowerResponse.includes('oppose') || lowerResponse.includes('against')) {
+              vote = 'reject';
+            }
+            // If neither found, keep default 'reject'
             reasoning = responseText.slice(0, 500);
           }
         } catch (parseError) {
           console.error(`⚠️ Failed to parse ${exec} response:`, parseError);
-          reasoning = `${exec} analysis: ${aiResponse?.response?.slice(0, 300) || 'Analysis completed.'}`;
+          reasoning = `${exec} analysis failed - defaulting to reject. Original: ${aiResponse?.response?.slice(0, 200) || 'No response'}`;
+          vote = 'reject';
         }
 
-        // Validate vote value
+        // Final validation - abstain only with valid reason, otherwise reject
         if (!['approve', 'reject', 'abstain'].includes(vote)) {
-          vote = 'abstain';
+          vote = 'reject';
         }
 
         console.log(`✅ ${exec} voted: ${vote}`);
