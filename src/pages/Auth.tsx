@@ -21,6 +21,7 @@ export default function Auth() {
   const [password, setPassword] = useState('');
   const [fullName, setFullName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [oauthRedirecting, setOauthRedirecting] = useState(false);
   const [errors, setErrors] = useState<{ email?: string; password?: string }>({});
 
   // Redirect if already authenticated
@@ -75,10 +76,16 @@ export default function Auth() {
     setIsSubmitting(false);
   };
 
+
   const handleGoogleSignIn = async () => {
     setIsSubmitting(true);
+    setOauthRedirecting(true);
     await signInWithGoogle();
-    // OAuth redirects, so no need to reset isSubmitting
+    // OAuth redirects - if we're still here after 5s, something went wrong
+    setTimeout(() => {
+      setIsSubmitting(false);
+      setOauthRedirecting(false);
+    }, 5000);
   };
 
   if (isLoading) {
@@ -106,17 +113,28 @@ export default function Auth() {
           {/* Google OAuth Button */}
           <Button
             variant="outline"
-            className="w-full h-12 text-base font-medium gap-3 hover:bg-primary/5"
+            className="w-full h-12 text-base font-medium gap-3 hover:bg-primary/5 transition-all"
             onClick={handleGoogleSignIn}
             disabled={isSubmitting}
           >
             {isSubmitting ? (
-              <Loader2 className="h-5 w-5 animate-spin" />
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                {oauthRedirecting ? 'Redirecting to Google...' : 'Connecting...'}
+              </>
             ) : (
-              <Chrome className="h-5 w-5" />
+              <>
+                <Chrome className="h-5 w-5" />
+                Continue with Google
+              </>
             )}
-            Continue with Google
           </Button>
+          
+          {oauthRedirecting && (
+            <p className="text-center text-sm text-muted-foreground animate-pulse">
+              Opening Google sign-in...
+            </p>
+          )}
 
           <div className="relative">
             <Separator />

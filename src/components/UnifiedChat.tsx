@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -16,6 +16,7 @@ import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X } 
 import { AttachmentPreview, type AttachmentFile } from './AttachmentPreview';
 import { QuickResponseButtons } from './QuickResponseButtons';
 import { ExecutiveCouncilChat } from './ExecutiveCouncilChat';
+import { ImageResponsePreview, extractImagesFromResponse, isLargeResponse, sanitizeLargeResponse } from './ImageResponsePreview';
 import { GovernanceStatusBadge } from './GovernanceStatusBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { MakeMeHumanToggle, HumeState, HumeMode } from './MakeMeHumanToggle';
@@ -57,6 +58,8 @@ interface UnifiedMessage {
     audio?: Blob;
     transcript?: string;
   };
+  // Generated images extracted from AI response (separate from attachments for performance)
+  generatedImages?: string[];
   emotionalContext?: {
     voiceTone?: string;
     facialExpression?: string;
@@ -1321,13 +1324,28 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       
       // Handle standard string response
       const responseText = response as string;
-      console.log('✅ Response generated:', responseText.substring(0, 100) + '...');
+      console.log('✅ Response generated, length:', responseText.length);
 
       // Check if this is a workflow initiation message
       const isWorkflowInitiation = responseText.includes('🎬') && responseText.includes('background');
 
       // Remove tool_use tags from chat display
-      const cleanResponse = responseText.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim();
+      let cleanResponse = responseText.replace(/<tool_use>[\s\S]*?<\/tool_use>/g, '').trim();
+
+      // 🖼️ Extract base64 images from response to prevent UI freeze
+      let generatedImages: string[] = [];
+      if (isLargeResponse(cleanResponse)) {
+        console.log('⚠️ Large response detected, extracting images to prevent freeze...');
+        const extracted = extractImagesFromResponse(cleanResponse);
+        if (extracted.hasImages) {
+          generatedImages = extracted.images;
+          cleanResponse = extracted.textContent;
+          console.log(`📸 Extracted ${generatedImages.length} image(s) from response`);
+        } else {
+          // Truncate other large content
+          cleanResponse = sanitizeLargeResponse(cleanResponse);
+        }
+      }
 
       // If it's a workflow initiation, show a brief acknowledgment instead
       const displayContent = isWorkflowInitiation 
@@ -1362,7 +1380,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         reasoning: reasoning.length > 0 ? reasoning : undefined,
         tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
         providerUsed: providerUsed || undefined,
-        executiveTitle: executiveTitle || undefined
+        executiveTitle: executiveTitle || undefined,
+        generatedImages: generatedImages.length > 0 ? generatedImages : undefined
       };
 
       setMessages(prev => [...prev, elizaMessage]);
@@ -1780,6 +1799,21 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                           ))}
                         </div>
                       )}
+                      
+                      {/* Show AI-generated images with lazy loading to prevent freeze */}
+                      {message.generatedImages && message.generatedImages.length > 0 && (
+                        <div className="space-y-2 mb-2">
+                          {message.generatedImages.map((img, idx) => (
+                            <ImageResponsePreview
+                              key={`gen-${idx}`}
+                              imageData={img}
+                              alt={`Generated Image ${idx + 1}`}
+                              className="max-w-full"
+                            />
+                          ))}
+                        </div>
+                      )}
+                      
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
                     
                     {/* Tool Call Indicators */}
