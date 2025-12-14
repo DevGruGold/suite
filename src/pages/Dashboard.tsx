@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import UnifiedChat from "@/components/UnifiedChat";
 import PythonShell from "@/components/PythonShell";
 import AgentTaskVisualizer from "@/components/AgentTaskVisualizer";
@@ -6,8 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Activity, Bot } from "lucide-react";
 import { HeroSection } from "@/components/HeroSection";
 import { SEOHead } from "@/components/SEOHead";
+import { useAudio } from "@/contexts/AudioContext";
 
 const Index = () => {
+  const { playAudio } = useAudio();
+
+  // Play audio once when dashboard loads
+  useEffect(() => {
+    playAudio();
+  }, [playAudio]);
+
   return (
     <>
       <SEOHead

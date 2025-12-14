@@ -29,7 +29,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     if (!audioRef.current) {
       const audio = new Audio('/audio/sweet.mp3');
-      audio.loop = true;
+      audio.loop = false;
       audio.volume = 0.3;
       audioRef.current = audio;
 
