@@ -3,6 +3,19 @@ project_id = "vawouugtzwmejxqkeqqj"
 [functions.google-cloud-auth]
 verify_jwt = false
 
+# Google Cloud Service Functions (Dedicated per-service endpoints for Eliza)
+[functions.google-gmail]
+verify_jwt = false
+
+[functions.google-drive]
+verify_jwt = false
+
+[functions.google-sheets]
+verify_jwt = false
+
+[functions.google-calendar]
+verify_jwt = false
+
 [functions.correlate-user-identity]
 verify_jwt = false
 
