@@ -469,24 +469,28 @@ serve(async (req) => {
       } catch (error) {
         console.warn('Kimi K2 fallback failed:', error);
       }
-    } else if (geminiKey || GEMINI_API_KEY) {
-      API_KEY = geminiKey || GEMINI_API_KEY;
-      aiProvider = 'gemini';
-      aiModel = 'gemini-1.5-flash';
-      aiClient = createOpenAI({ 
-        apiKey: API_KEY, 
-        baseURL: 'https://generativelanguage.googleapis.com/v1beta/openai/'
-      });
-      console.log('✅ Using Gemini');
-    } else if (wanKey) {
-      API_KEY = wanKey;
-      aiProvider = 'wan';
-      aiModel = 'gpt-4o-mini';
-      aiClient = createOpenAI({ 
-        apiKey: wanKey,
-        baseURL: 'https://api.wan.ai/v1'
-      });
-      console.log('✅ Using WAN AI');
+    } else {
+      // Fallback to Lovable AI Gateway (always available)
+      const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+      if (LOVABLE_API_KEY) {
+        API_KEY = LOVABLE_API_KEY;
+        aiProvider = 'lovable';
+        aiModel = 'google/gemini-2.5-flash';
+        aiClient = createOpenAI({ 
+          apiKey: LOVABLE_API_KEY, 
+          baseURL: 'https://ai.gateway.lovable.dev/v1'
+        });
+        console.log('✅ Using Lovable AI Gateway (Gemini 2.5 Flash)');
+      } else if (wanKey) {
+        API_KEY = wanKey;
+        aiProvider = 'wan';
+        aiModel = 'gpt-4o-mini';
+        aiClient = createOpenAI({ 
+          apiKey: wanKey,
+          baseURL: 'https://api.wan.ai/v1'
+        });
+        console.log('✅ Using WAN AI');
+      }
     }
 
     if (!API_KEY) {
