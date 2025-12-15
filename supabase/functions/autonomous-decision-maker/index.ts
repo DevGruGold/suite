@@ -41,14 +41,19 @@ serve(async (req) => {
     if (opportunity.priority >= 9) {
       // CRITICAL - Immediate action required
       if (opportunity.opportunity_type === 'bug_fix') {
-        // Create high-priority task for immediate fixing
+      // Create high-priority task for immediate fixing
         const { data: task } = await supabase.from('tasks').insert({
           title: `[URGENT] ${opportunity.title}`,
           description: opportunity.description,
-          status: 'pending',
-          priority: 'critical',
+          status: 'PENDING',
+          stage: 'EXECUTE',
+          priority: 9,
           category: 'bug_fix',
-          metadata: { opportunity_id: opportunityId }
+          metadata: { 
+            opportunity_id: opportunityId,
+            checklist: ['Reproduce bug', 'Identify root cause', 'Implement fix', 'Test fix', 'Deploy fix']
+          },
+          completed_checklist_items: []
         }).select().single();
 
         action = 'task_created';
@@ -90,10 +95,15 @@ serve(async (req) => {
           await supabase.from('tasks').insert({
             title: opportunity.title,
             description: opportunity.description,
-            status: 'pending',
-            priority: 'high',
+            status: 'PENDING',
+            stage: 'PLAN',
+            priority: 7,
             category: opportunity.opportunity_type,
-            metadata: { opportunity_id: opportunityId }
+            metadata: { 
+              opportunity_id: opportunityId,
+              checklist: ['Analyze requirements', 'Design solution', 'Implement changes', 'Test implementation']
+            },
+            completed_checklist_items: []
           });
 
           action = 'task_created';
@@ -104,10 +114,15 @@ serve(async (req) => {
         await supabase.from('tasks').insert({
           title: opportunity.title,
           description: opportunity.description,
-          status: 'pending',
-          priority: 'high',
+          status: 'PENDING',
+          stage: 'PLAN',
+          priority: 7,
           category: opportunity.opportunity_type,
-          metadata: { opportunity_id: opportunityId }
+          metadata: { 
+            opportunity_id: opportunityId,
+            checklist: ['Analyze requirements', 'Design solution', 'Implement changes', 'Test implementation']
+          },
+          completed_checklist_items: []
         });
 
         action = 'task_created';

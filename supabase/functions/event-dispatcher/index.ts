@@ -230,18 +230,33 @@ async function triggerGitHubWorkflow(supabase: any, action: ActionDefinition, co
 async function assignTaskToAgent(supabase: any, action: ActionDefinition, context: any) {
   const params = interpolateParams(action.params, context);
   
+  // Default checklists by category
+  const DEFAULT_CHECKLISTS: Record<string, string[]> = {
+    GENERAL: ['Review request', 'Plan approach', 'Execute task', 'Verify completion'],
+    CODE: ['Analyze requirements', 'Implement solution', 'Test changes', 'Document changes'],
+    INFRA: ['Review current state', 'Plan changes', 'Apply changes', 'Verify deployment'],
+    RESEARCH: ['Gather data', 'Analyze findings', 'Document insights', 'Create recommendations'],
+    GOVERNANCE: ['Review proposal', 'Gather input', 'Make decision', 'Document rationale'],
+  };
+  
+  const category = params.category || 'GENERAL';
+  const checklist = DEFAULT_CHECKLISTS[category] || DEFAULT_CHECKLISTS.GENERAL;
+  
   const task = {
     title: params.title || `Task from event: ${context.event_type}`,
     description: params.description || JSON.stringify(context.payload, null, 2),
-    category: params.category || 'GENERAL',
+    category,
     priority: params.priority || 5,
     status: 'PENDING',
-    assigned_to: action.target,
+    stage: 'DISCUSS',
+    assignee_agent_id: action.target,
     metadata: {
       event_type: context.event_type,
       triggered_at: new Date().toISOString(),
+      checklist,
       ...params.metadata
-    }
+    },
+    completed_checklist_items: []
   };
 
   const { data, error } = await supabase.from('tasks').insert(task).select().single();

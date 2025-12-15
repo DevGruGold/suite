@@ -39,31 +39,72 @@ serve(async (req) => {
 
     if (action === 'update_progress') {
       // Update progress percentage for all active tasks
+      // PRIORITY: Checklist-based progress > Time-based progress
       const { data: tasks, error: fetchError } = await supabase
         .from('tasks')
-        .select('id, stage, stage_started_at, auto_advance_threshold_hours')
+        .select('id, stage, stage_started_at, auto_advance_threshold_hours, progress_percentage, metadata, completed_checklist_items')
         .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
         .not('stage_started_at', 'is', null);
 
       if (fetchError) throw fetchError;
 
       let updated = 0;
-      for (const task of tasks || []) {
-        const threshold = task.auto_advance_threshold_hours || STAGE_THRESHOLDS[task.stage] || 4;
-        const stageStart = new Date(task.stage_started_at);
-        const now = new Date();
-        const elapsedHours = (now.getTime() - stageStart.getTime()) / 3600000;
-        const progress = Math.min(100, Math.floor((elapsedHours / threshold) * 100));
+      let checklistBased = 0;
+      let timeBased = 0;
 
-        await supabase
-          .from('tasks')
-          .update({ progress_percentage: progress })
-          .eq('id', task.id);
+      for (const task of tasks || []) {
+        const checklist = task.metadata?.checklist || [];
+        const completedItems = task.completed_checklist_items || [];
+        const currentProgress = task.progress_percentage || 0;
+        
+        let newProgress: number;
+        let progressSource: string;
+
+        // PRIORITY 1: Use checklist-based progress if checklist exists
+        if (checklist.length > 0) {
+          newProgress = Math.round((completedItems.length / checklist.length) * 100);
+          progressSource = 'checklist';
+          checklistBased++;
+        } else {
+          // FALLBACK: Time-based progress only when no checklist defined
+          const threshold = task.auto_advance_threshold_hours || STAGE_THRESHOLDS[task.stage] || 4;
+          const stageStart = new Date(task.stage_started_at);
+          const now = new Date();
+          const elapsedHours = (now.getTime() - stageStart.getTime()) / 3600000;
+          newProgress = Math.min(100, Math.floor((elapsedHours / threshold) * 100));
+          progressSource = 'time';
+          timeBased++;
+        }
+
+        // NEVER regress progress - only allow increases
+        const finalProgress = Math.max(currentProgress, newProgress);
+
+        if (finalProgress !== currentProgress) {
+          await supabase
+            .from('tasks')
+            .update({ 
+              progress_percentage: finalProgress,
+              metadata: {
+                ...task.metadata,
+                progress_source: progressSource,
+                last_progress_update: new Date().toISOString()
+              }
+            })
+            .eq('id', task.id);
+        }
         updated++;
       }
 
       return new Response(
-        JSON.stringify({ ok: true, action: 'update_progress', updated }),
+        JSON.stringify({ 
+          ok: true, 
+          action: 'update_progress', 
+          updated,
+          progress_breakdown: {
+            checklist_based: checklistBased,
+            time_based: timeBased
+          }
+        }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

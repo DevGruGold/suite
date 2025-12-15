@@ -184,15 +184,28 @@ async function evaluateIdea(supabase: any, ideaId: string) {
     })
     .eq('id', ideaId);
 
-  // If approved, create implementation task
+  // If approved, create implementation task with checklist
   if (approved) {
+    const priorityNum = avgScore >= 80 ? 8 : avgScore >= 70 ? 6 : 4;
     await supabase.from('tasks').insert({
       title: `Implement: ${idea.title}`,
       description: `Community idea implementation:\n\n${idea.description}\n\nEstimated: ${architectureAnalysis.timeline}`,
-      status: 'pending',
-      priority: avgScore >= 80 ? 'high' : avgScore >= 70 ? 'medium' : 'low',
+      status: 'PENDING',
+      stage: 'DISCUSS',
+      priority: priorityNum,
       category: 'community_idea',
-      metadata: { idea_id: ideaId, scores }
+      metadata: { 
+        idea_id: ideaId, 
+        scores,
+        checklist: [
+          'Discuss requirements with stakeholders',
+          'Create technical design',
+          'Implement core functionality',
+          'Add tests and documentation',
+          'Review and deploy'
+        ]
+      },
+      completed_checklist_items: []
     });
 
     console.log(`✅ Idea ${ideaId} APPROVED (${avgScore}/100) - Task created`);
