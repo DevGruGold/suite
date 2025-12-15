@@ -47,6 +47,14 @@ export const EXECUTIVE_PROFILES: Record<string, ExecutiveProfile> = {
     specialty: 'Complex Analytics & Reasoning',
     color: 'orange'
   },
+  coo: {
+    icon: '⚙️',
+    name: 'COO',
+    fullTitle: 'Chief Operations Officer',
+    model: 'STAE-Integrated AI',
+    specialty: 'Operations & Agent Orchestration',
+    color: 'red'
+  },
   eliza: {
     icon: '🤖',
     name: 'Eliza',

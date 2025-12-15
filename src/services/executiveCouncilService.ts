@@ -3,7 +3,7 @@ import type { ElizaContext } from './unifiedElizaService';
 import { retryWithBackoff } from '@/utils/retryHelper';
 
 export interface ExecutiveResponse {
-  executive: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat';
+  executive: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat';
   executiveTitle: string;
   executiveIcon: string;
   executiveColor: string;
@@ -56,6 +56,13 @@ class ExecutiveCouncilService {
       color: 'orange',
       specialty: 'Complex Reasoning',
       model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
+    },
+    'coo-chat': { 
+      title: 'Chief Operations Officer (COO)', 
+      icon: '⚙️', 
+      color: 'red',
+      specialty: 'Operations & Agent Orchestration',
+      model: 'STAE-Integrated AI'
     }
   };
 
@@ -68,8 +75,8 @@ class ExecutiveCouncilService {
     
     // Get all executives (prioritize healthy ones)
     const healthyExecs = await this.getHealthyExecutives();
-    const allExecs: Array<'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat'> = 
-      ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat'];
+    const allExecs: Array<'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat'> = 
+      ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
     const executives = allExecs.filter(exec => healthyExecs.includes(exec));
     
     if (executives.length === 0) {
@@ -119,7 +126,7 @@ class ExecutiveCouncilService {
    * Get perspective from a specific executive with retry logic
    */
   private async getExecutivePerspective(
-    executive: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat',
+    executive: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat',
     userInput: string,
     context: ElizaContext
   ): Promise<ExecutiveResponse> {
@@ -314,6 +321,12 @@ Format your response EXACTLY as:
   private selectLeadExecutive(responses: ExecutiveResponse[], question: string): string {
     const q = question.toLowerCase();
     
+    // Operations/tasks/agents → COO
+    if (/task|pipeline|agent|workload|operations|progress|checklist|stae/i.test(q)) {
+      const coo = responses.find(r => r.executive === 'coo-chat');
+      if (coo) return coo.executiveTitle;
+    }
+    
     // Code/technical → CTO
     if (/code|debug|technical|architecture|bug|syntax/i.test(q)) {
       const cto = responses.find(r => r.executive === 'deepseek-chat');
@@ -366,7 +379,7 @@ Format your response EXACTLY as:
     console.log('💚 All executives healthy (using Lovable AI Gateway)');
     
     // All executives are always available since they all use Lovable AI Gateway
-    return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat'];
+    return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
   }
 
   /**

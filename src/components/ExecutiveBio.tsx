@@ -94,6 +94,30 @@ export const EXECUTIVE_PROFILES = {
     ],
     responseTime: '~1.5s',
     bio: 'The CAO provides the deepest analytical insights and strategic reasoning. Powered by GPT-5 for handling the most complex queries requiring multi-step reasoning, strategic analysis, and predictive intelligence.'
+  },
+  'coo-chat': {
+    name: 'COO',
+    title: 'Chief Operations Officer',
+    fullTitle: 'Chief Operations Officer',
+    icon: '⚙️',
+    color: 'red',
+    colorClass: 'executive-coo',
+    model: 'STAE-Integrated AI',
+    specialty: 'Operations & Agent Orchestration',
+    strengths: [
+      'Task pipeline management',
+      'Agent orchestration',
+      'Work documentation',
+      'Operational metrics'
+    ],
+    bestFor: [
+      'Task status and pipeline queries',
+      'Agent workload management',
+      'Making agents do work',
+      'Operational dashboards'
+    ],
+    responseTime: '~1.0s',
+    bio: 'The COO oversees all operational aspects of the autonomous agent system. Directly manages STAE (Suite Task Automation Engine) and agent-work-executor to ensure tasks progress through the pipeline with documented work. Best for operations and agent management.'
   }
 };
 
