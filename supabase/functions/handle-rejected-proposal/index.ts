@@ -129,17 +129,17 @@ Generate improvement suggestions that address the concerns raised. Format as a J
       decision_summary: `Rejected by ${rejectionVotes.length > 0 ? 'executive council' : 'community vote'}`,
       vote_breakdown: {
         executive: {
-          approvals: approvalVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
-          rejections: rejectionVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
-          details: votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).map(v => ({
+          approvals: approvalVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length,
+          rejections: rejectionVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length,
+          details: votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).map(v => ({
             executive: v.executive_name,
             vote: v.vote,
             reasoning: v.reasoning
           })) || []
         },
         community: {
-          approvals: approvalVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
-          rejections: rejectionVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length
+          approvals: approvalVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length,
+          rejections: rejectionVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length
         },
         total_votes: votes?.length || 0
       },

@@ -256,17 +256,17 @@ serve(async (req) => {
       decision_summary: `Approved by ${approvalVotes.length} vote(s) (${approverNames})`,
       vote_breakdown: {
         executive: {
-          approvals: approvalVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
-          rejections: rejectionVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
-          details: votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).map(v => ({
+          approvals: approvalVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length,
+          rejections: rejectionVotes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length,
+          details: votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).map(v => ({
             executive: v.executive_name,
             vote: v.vote,
             reasoning: v.reasoning
           })) || []
         },
         community: {
-          approvals: approvalVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length,
-          rejections: rejectionVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)).length
+          approvals: approvalVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length,
+          rejections: rejectionVotes.filter(v => !['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)).length
         },
         total_votes: votes?.length || 0
       },

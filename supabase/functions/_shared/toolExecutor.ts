@@ -42,7 +42,7 @@ function analyzeLearningFromError(toolName: string, error: string, params: any):
 export async function executeToolCall(
   supabase: SupabaseClient,
   toolCall: any,
-  executiveName: 'Eliza' | 'CSO' | 'CTO' | 'CIO' | 'CAO',
+  executiveName: 'Eliza' | 'CSO' | 'CTO' | 'CIO' | 'CAO' | 'COO',
   SUPABASE_URL: string,
   SERVICE_ROLE_KEY: string,
   session_credentials?: any

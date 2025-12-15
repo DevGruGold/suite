@@ -7,7 +7,7 @@ import { SuiteLogo } from '@/components/SuiteLogo';
 import { DemoVideoModal } from '@/components/DemoVideoModal';
 import { LandingNav } from '@/components/LandingNav';
 import { 
-  Target, Code, BarChart3, FileText, 
+  Target, Code, BarChart3, FileText, Settings,
   Users, Bot, Shield,
   ArrowRight, Play, CheckCircle2, Zap
 } from 'lucide-react';
@@ -38,8 +38,15 @@ const executives = [
     icon: FileText,
     title: 'CAO',
     role: 'Chief Administrative Officer',
-    description: 'Operations, compliance, administrative workflows',
+    description: 'Compliance, documentation, administrative workflows',
     gradient: 'from-green-500 to-emerald-500',
+  },
+  {
+    icon: Settings,
+    title: 'COO',
+    role: 'Chief Operations Officer',
+    description: 'Operations, agent orchestration, task pipeline management',
+    gradient: 'from-red-500 to-rose-500',
   },
 ];
 
@@ -155,11 +162,11 @@ export default function Landing() {
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Meet Your AI Executive Council</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-              Four specialized AI executives work together 24/7, making strategic decisions and executing autonomous workflows.
+              Five specialized AI executives work together 24/7, making strategic decisions and executing autonomous workflows.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid md:grid-cols-2 lg:grid-cols-5 gap-6">
             {executives.map((exec, i) => (
               <Card 
                 key={i} 
