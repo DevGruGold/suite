@@ -107,7 +107,7 @@ serve(async (req) => {
     console.log(`📋 Proposal created: ${proposal.id} by ${proposed_by}`);
 
     // Notify all executives via activity feed
-    const executives = ['CSO', 'CTO', 'CIO', 'CAO'];
+    const executives = ['CSO', 'CTO', 'CIO', 'CAO', 'COO'];
     const notifications = executives.map(exec => ({
       type: 'function_proposal',
       title: `New Edge Function Proposed: ${function_name}`,
@@ -158,7 +158,7 @@ serve(async (req) => {
         voting_result: votingResult,
         message: shouldAutoVote 
           ? `Proposal submitted and executives are deliberating.${votingResult?.consensus_reached ? ` Consensus: ${votingResult.final_status}` : ''}`
-          : `Proposal submitted. Awaiting votes from 4 executives (need 3/4 approval).`
+          : `Proposal submitted. Awaiting votes from 5 executives (need 4/5 approval).`
       }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
