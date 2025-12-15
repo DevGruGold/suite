@@ -914,6 +914,25 @@ serve(async (req) => {
     
     console.log(`✅ System Status Check Complete - Overall: ${statusReport.overall_status} (${statusReport.health_score}/100)`);
     
+    // Log health check to activity log for HeroSection consistency
+    try {
+      await supabase.from('eliza_activity_log').insert({
+        activity_type: 'system_health_check',
+        title: `System Health: ${statusReport.overall_status.toUpperCase()}`,
+        description: `Health Score: ${statusReport.health_score}/100, ${statusReport.health_issues?.length || 0} issue(s) detected`,
+        status: 'completed',
+        metadata: { 
+          health_score: statusReport.health_score, 
+          status: statusReport.overall_status, 
+          issues_count: statusReport.health_issues?.length || 0,
+          issues: statusReport.health_issues?.slice(0, 5) // Store up to 5 issues
+        }
+      });
+      console.log('📝 Health check logged to activity log');
+    } catch (logError) {
+      console.warn('Failed to log health check to activity log:', logError);
+    }
+    
     // Cache the result
     const responseData = { success: true, status: statusReport };
     statusCache = { data: responseData, timestamp: Date.now() };
