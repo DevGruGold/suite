@@ -278,7 +278,11 @@ async function handleConnect(supabase: any, payload: any) {
     session_key,
     device_id: normalized_device_id,
     original_fingerprint: device_fingerprint,
-    connected_at: session.connected_at
+    connected_at: session.connected_at,
+    // Heartbeat guidance for client
+    heartbeat_interval_recommended_ms: 60000,
+    heartbeat_required: true,
+    heartbeat_hint: 'Send heartbeat action every 30-60 seconds to maintain active status and receive commands'
   };
 }
 
