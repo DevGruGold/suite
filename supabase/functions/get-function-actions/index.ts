@@ -1,4 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { startUsageTrackingWithRequest } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const FUNCTION_NAME = 'get-function-actions';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -231,12 +234,18 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let body: any = {};
+  try { body = await req.json(); } catch { body = {}; }
+  
+  const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, body);
+
   try {
-    const { function_name, category } = await req.json();
+    const { function_name, category } = body;
     console.log(`🔍 [get-function-actions] Function: ${function_name}, Category: ${category || 'all'}`);
 
     // If no function specified, list all supported functions
     if (!function_name) {
+      await usageTracker.success({ result_summary: 'Listed all functions' });
       return new Response(JSON.stringify({
         success: true,
         supported_functions: SUPPORTED_FUNCTIONS.map(fn => ({
@@ -250,6 +259,7 @@ Deno.serve(async (req) => {
 
     const schema = FUNCTION_SCHEMAS[function_name];
     if (!schema) {
+      await usageTracker.failure(`Unknown function: ${function_name}`, 400);
       return new Response(JSON.stringify({
         success: false,
         error: `Unknown function: ${function_name}`,
@@ -264,6 +274,7 @@ Deno.serve(async (req) => {
 
     const categories = [...new Set(schema.map(a => a.category))];
 
+    await usageTracker.success({ result_summary: `${function_name}: ${actions.length} actions` });
     return new Response(JSON.stringify({
       success: true,
       function_name,
@@ -289,6 +300,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('❌ [get-function-actions] Error:', error);
+    await usageTracker.failure(error instanceof Error ? error.message : 'Unknown error', 500);
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',

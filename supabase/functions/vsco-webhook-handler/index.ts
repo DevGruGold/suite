@@ -1,4 +1,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'vsco-webhook-handler';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -49,11 +52,14 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req);
+
   const startTime = Date.now();
   
   try {
     // Only accept POST requests
     if (req.method !== 'POST') {
+      await usageTracker.failure('Method not allowed', 405);
       return new Response(
         JSON.stringify({ error: 'Method not allowed. Use POST.' }),
         { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -71,6 +77,7 @@ Deno.serve(async (req) => {
       payload = await req.json();
     } catch {
       console.error('[vsco-webhook-handler] Invalid JSON payload');
+      await usageTracker.failure('Invalid JSON payload', 400);
       return new Response(
         JSON.stringify({ error: 'Invalid JSON payload' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -172,6 +179,7 @@ Deno.serve(async (req) => {
       },
     });
 
+    await usageTracker.success({ result_summary: `${eventType}: ${processingResult.message}` });
     return new Response(
       JSON.stringify({
         success: true,
@@ -185,6 +193,7 @@ Deno.serve(async (req) => {
 
   } catch (error) {
     console.error('[vsco-webhook-handler] Error:', error);
+    await usageTracker.failure(error instanceof Error ? error.message : 'Unknown error', 500);
     return new Response(
       JSON.stringify({ 
         error: 'Internal server error', 
