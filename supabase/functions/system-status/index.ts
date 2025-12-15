@@ -661,8 +661,8 @@ serve(async (req) => {
     try {
       const { data: workflows, error: wfError } = await supabase
         .from('workflow_executions')
-        .select('id, template_name, status, started_at, completed_at')
-        .gte('started_at', last24h);
+        .select('id, template_name, status, start_time, end_time')
+        .gte('start_time', last24h);
 
       if (wfError) throw wfError;
 
