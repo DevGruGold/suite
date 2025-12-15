@@ -75,6 +75,11 @@ export const ContributorDashboard = () => {
         schema: 'public',
         table: 'github_contributions'
       }, () => fetchData())
+      .on('postgres_changes', {
+        event: '*',
+        schema: 'public',
+        table: 'device_connection_sessions'
+      }, () => fetchData())
       .subscribe();
 
     return () => {
@@ -144,17 +149,28 @@ export const ContributorDashboard = () => {
       console.log('Mining stats unavailable');
     }
 
-    // Fetch charger stats
+    // Fetch charger stats - LIVE connected devices
     try {
+      const fifteenMinAgo = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+      
+      // Count active device sessions
+      const { data: activeSessions } = await supabase
+        .from('device_connection_sessions')
+        .select('device_id')
+        .or(`is_active.eq.true,connected_at.gte.${fifteenMinAgo}`);
+      
+      // Count unique devices
+      const uniqueDevices = activeSessions ? new Set(activeSessions.map(s => s.device_id)).size : 0;
+      
+      // Also fetch PoP points from leaderboard for total
       const { data: chargerData } = await supabase.rpc('get_xmrt_charger_leaderboard', { limit_count: 100 });
-      if (chargerData) {
-        const totalPop = chargerData.reduce((sum: number, c: any) => sum + (c.pop_points || 0), 0);
-        setStats(prev => ({
-          ...prev,
-          chargerDevices: chargerData.length,
-          totalPopPoints: totalPop
-        }));
-      }
+      const totalPop = chargerData?.reduce((sum: number, c: any) => sum + (c.pop_points || 0), 0) || 0;
+      
+      setStats(prev => ({
+        ...prev,
+        chargerDevices: uniqueDevices,
+        totalPopPoints: totalPop
+      }));
     } catch (e) {
       console.log('Charger stats unavailable');
     }
