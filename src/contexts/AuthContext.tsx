@@ -36,7 +36,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   isSuperadmin: boolean;
+  hasGoogleCloudConnection: boolean;
   signInWithGoogle: () => Promise<void>;
+  connectGoogleCloud: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUpWithEmail: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
   signOut: () => Promise<void>;
@@ -51,6 +53,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [roles, setRoles] = useState<AppRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [hasGoogleCloudConnection, setHasGoogleCloudConnection] = useState(false);
   const { toast } = useToast();
 
   const fetchProfile = useCallback(async (userId: string) => {
@@ -78,6 +81,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setRoles((rolesData as AppRole[]) || ['user']);
       }
+
+      // Check if user has Google Cloud connection
+      const { data: oauthData } = await supabase
+        .from('oauth_connections')
+        .select('id')
+        .eq('user_id', userId)
+        .eq('provider', 'google_cloud')
+        .eq('is_active', true)
+        .maybeSingle();
+      
+      setHasGoogleCloudConnection(!!oauthData);
     } catch (error) {
       console.error('Error in fetchProfile:', error);
     }
@@ -107,16 +121,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             fetchProfile(session.user.id);
           }, 0);
           
-          // If signed in with Google and we have a provider refresh token, store it for Eliza
+          // Only store Google Cloud token if we have a refresh token (from extended scopes)
           if (event === 'SIGNED_IN' && session.provider_refresh_token) {
             const userEmail = session.user.email || '';
             setTimeout(() => {
               storeGoogleCloudToken(session.user.id, session.provider_refresh_token!, userEmail);
+              setHasGoogleCloudConnection(true);
             }, 100);
           }
         } else {
           setProfile(null);
           setRoles([]);
+          setHasGoogleCloudConnection(false);
         }
       }
     );
@@ -167,7 +183,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  // Extended Google OAuth scopes for full Google Cloud access
+  // Basic scopes for normal sign-in (no Google Cloud access)
+  const BASIC_SCOPES = 'openid email profile';
+
+  // Extended Google OAuth scopes for superadmins with full Google Cloud access
   const GOOGLE_CLOUD_SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
@@ -180,7 +199,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     'profile'
   ].join(' ');
 
+  // Standard sign-in for all users - simple OAuth with basic scopes
   const signInWithGoogle = async () => {
+    const redirectUrl = getRedirectUrl();
+    
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: redirectUrl,
+        scopes: BASIC_SCOPES,
+      },
+    });
+
+    if (error) {
+      toast({
+        title: 'Sign in failed',
+        description: error.message,
+        variant: 'destructive',
+      });
+    }
+  };
+
+  // Connect Google Cloud services - for superadmins only
+  const connectGoogleCloud = async () => {
     const redirectUrl = getRedirectUrl();
     
     const { error } = await supabase.auth.signInWithOAuth({
@@ -197,12 +238,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     if (error) {
       toast({
-        title: 'Sign in failed',
+        title: 'Failed to connect Google Cloud',
         description: error.message,
         variant: 'destructive',
       });
     }
   };
+
 
   const signInWithEmail = async (email: string, password: string) => {
     const { error } = await supabase.auth.signInWithPassword({
@@ -294,7 +336,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isAuthenticated: !!user,
     isAdmin: roles.includes('admin') || roles.includes('superadmin'),
     isSuperadmin: roles.includes('superadmin'),
+    hasGoogleCloudConnection,
     signInWithGoogle,
+    connectGoogleCloud,
     signInWithEmail,
     signUpWithEmail,
     signOut,

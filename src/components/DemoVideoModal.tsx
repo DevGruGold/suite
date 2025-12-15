@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Play, Pause, RotateCcw, X, MessageSquare, Users, Workflow, BarChart3, Rocket } from "lucide-react";
+import { Play, Pause, RotateCcw, MessageSquare, Users, Workflow, BarChart3, Rocket } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DemoVideoModalProps {
@@ -96,20 +96,10 @@ export function DemoVideoModal({ open, onOpenChange }: DemoVideoModalProps) {
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-4xl p-0 overflow-hidden bg-background/95 backdrop-blur-xl border-primary/20">
         <DialogHeader className="p-6 pb-0">
-          <div className="flex items-center justify-between">
-            <DialogTitle className="text-xl font-display flex items-center gap-2">
-              <Play className="w-5 h-5 text-primary" />
-              Suite AI Demo
-            </DialogTitle>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              className="h-8 w-8"
-            >
-              <X className="w-4 h-4" />
-            </Button>
-          </div>
+          <DialogTitle className="text-xl font-display flex items-center gap-2">
+            <Play className="w-5 h-5 text-primary" />
+            Suite AI Demo
+          </DialogTitle>
         </DialogHeader>
 
         {/* Demo Stage */}
