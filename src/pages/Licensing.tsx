@@ -67,8 +67,8 @@ const Licensing = () => {
             <Card className="bg-card/50 backdrop-blur border-primary/20">
               <CardContent className="pt-6 text-center">
                 <Building2 className="w-8 h-8 mx-auto mb-2 text-purple-500" />
-                <p className="text-3xl font-bold text-purple-500">4</p>
-                <p className="text-sm text-muted-foreground">AI Executives (CSO, CTO, CIO, CAO)</p>
+                <p className="text-3xl font-bold text-purple-500">5</p>
+                <p className="text-sm text-muted-foreground">AI Executives (CSO, CTO, CIO, CAO, COO)</p>
               </CardContent>
             </Card>
           </div>

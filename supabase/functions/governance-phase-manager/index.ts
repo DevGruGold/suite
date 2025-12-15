@@ -105,7 +105,7 @@ serve(async (req) => {
           
           await invokeWithTimeout(supabase, 'request-executive-votes', {
             proposal_id: proposal.id,
-            target_executives: ['CSO', 'CTO', 'CIO', 'CAO']
+            target_executives: ['CSO', 'CTO', 'CIO', 'CAO', 'COO']
           });
         }
 
@@ -172,10 +172,10 @@ serve(async (req) => {
               .from('executive_votes')
               .select('executive_name')
               .eq('proposal_id', proposal.id)
-              .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO']);
+              .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO', 'COO']);
 
             const votedExecutives = existingVotes?.map(v => v.executive_name) || [];
-            const missingExecutives = ['CSO', 'CTO', 'CIO', 'CAO'].filter(e => !votedExecutives.includes(e));
+            const missingExecutives = ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].filter(e => !votedExecutives.includes(e));
 
             if (missingExecutives.length > 0) {
               console.log(`📋 ${proposal.function_name}: Missing votes from ${missingExecutives.join(', ')}`);
@@ -230,9 +230,9 @@ serve(async (req) => {
               .from('executive_votes')
               .select('executive_name')
               .eq('proposal_id', proposal.id)
-              .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO']);
+              .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO', 'COO']);
 
-            if (votes && votes.length >= 4) {
+            if (votes && votes.length >= 5) {
               await supabase
                 .from('edge_function_proposals')
                 .update({ voting_phase: 'community', updated_at: new Date().toISOString() })
@@ -275,7 +275,7 @@ serve(async (req) => {
               .select('executive_name, vote')
               .eq('proposal_id', proposal.id);
 
-            const execVotes = votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name)) || [];
+            const execVotes = votes?.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name)) || [];
             const communityVotes = votes?.filter(v => v.executive_name === 'COMMUNITY') || [];
 
             const execApprovals = execVotes.filter(v => v.vote === 'approve').length;
@@ -284,7 +284,7 @@ serve(async (req) => {
             const weightedApprove = (execApprovals * 10) + (communityApprovals * 1);
             const weightedReject = ((execVotes.length - execApprovals) * 10) + ((communityVotes.length - communityApprovals) * 1);
             
-            const approved = weightedApprove > weightedReject || execApprovals >= 3;
+            const approved = weightedApprove > weightedReject || execApprovals >= 4;
             const newStatus = approved ? 'approved' : 'rejected';
 
             await supabase
