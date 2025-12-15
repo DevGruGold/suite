@@ -61,35 +61,30 @@ export const HeroSection = () => {
     return () => clearInterval(interval);
   }, [isPaused]);
 
-  // Fetch stats including REAL health score
+  // Fetch stats including REAL-TIME health score from system-status
   useEffect(() => {
     const fetchStats = async () => {
-      // Fetch basic counts and health from activity log
-      const [executions, agents, tasks, healthLog] = await Promise.all([
+      // Fetch basic counts AND real-time health from system-status edge function
+      const [executions, agents, tasks, healthResponse] = await Promise.all([
         supabase.from('eliza_activity_log').select('*', { count: 'estimated', head: true }),
         supabase.from('agents').select('*', { count: 'exact', head: true }).in('status', ['IDLE', 'BUSY']),
         supabase.from('tasks').select('*', { count: 'exact', head: true }).in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED']),
-        // Get most recent health check from activity log
-        supabase.from('eliza_activity_log')
-          .select('metadata, description')
-          .eq('activity_type', 'system_health_check')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .single()
+        // Get REAL-TIME health from system-status edge function
+        supabase.functions.invoke('system-status', { body: {} })
       ]);
 
-      // Extract health score from latest health check
+      // Extract real-time health score from system-status response
       let healthScore = 100;
       let healthStatus: 'healthy' | 'degraded' | 'critical' = 'healthy';
       let healthIssues: string[] = [];
       
-      if (healthLog.data?.metadata) {
-        const metadata = healthLog.data.metadata as { health_score?: number; status?: string; issues_count?: number };
-        healthScore = metadata.health_score ?? 100;
-        healthStatus = metadata.status === 'critical' ? 'critical' : 
-                       metadata.status === 'degraded' ? 'degraded' : 'healthy';
-        if (metadata.issues_count && metadata.issues_count > 0) {
-          healthIssues = [`${metadata.issues_count} issue(s) detected`];
+      if (healthResponse.data?.status) {
+        const statusData = healthResponse.data.status;
+        healthScore = statusData.health_score ?? 100;
+        healthStatus = statusData.overall_status === 'critical' ? 'critical' : 
+                       statusData.overall_status === 'degraded' || statusData.overall_status === 'warning' ? 'degraded' : 'healthy';
+        if (statusData.health_issues?.length > 0) {
+          healthIssues = statusData.health_issues.map((i: { message?: string }) => i.message || 'Issue detected');
         }
       }
 
