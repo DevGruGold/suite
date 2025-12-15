@@ -159,22 +159,22 @@ serve(async (req) => {
 
       case 'execute_template': {
         // ROBUST PAYLOAD HANDLING: Support both wrapped and flat structures
+        // Body already parsed at line 106 - no need to re-read
         // Wrapped: { action, data: { template_name, params } }
         // Flat:    { action, template_name, params/context }
-        const rawBody = await req.clone().json();
         
-        // Extract template_name from data if present, otherwise from top-level
-        const template_name = data?.template_name || rawBody.template_name;
-        const params = data?.params || data?.context || rawBody.params || rawBody.context || {};
+        // Extract template_name from data if present (data is from the parsed body)
+        const template_name = data?.template_name;
+        const params = data?.params || data?.context || {};
         
         if (!template_name) {
-          console.error('[Workflow Template Manager] Missing template_name. Received:', JSON.stringify(rawBody));
+          console.error('[Workflow Template Manager] Missing template_name. Received data:', JSON.stringify(data));
           return new Response(
             JSON.stringify({ 
               success: false, 
               error: 'Missing required parameter: template_name',
-              hint: 'Provide template_name in body.data.template_name or body.template_name',
-              received: { action: rawBody.action, hasData: !!rawBody.data, keys: Object.keys(rawBody) }
+              hint: 'Provide template_name in body.data.template_name',
+              received: { action, hasData: !!data, dataKeys: data ? Object.keys(data) : [] }
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
           );
