@@ -1,13 +1,14 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Send, Loader2 } from 'lucide-react';
+import { Send, Loader2, Volume2, VolumeX, Square } from 'lucide-react';
 import { ExecutiveName, EXECUTIVE_PROFILES } from '@/components/ExecutiveBio';
 import { UnifiedElizaService } from '@/services/unifiedElizaService';
 import { QuickResponseButtons } from './QuickResponseButtons';
+import { executiveTTSService } from '@/services/executiveTTSService';
 
 interface Message {
   id: string;
@@ -26,8 +27,34 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [voiceEnabled, setVoiceEnabled] = useState(() => {
+    return localStorage.getItem(`executive-voice-${executive}`) === 'true';
+  });
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+
+  // Set up speaking state callback
+  useEffect(() => {
+    executiveTTSService.setOnSpeakingChange(setIsSpeaking);
+    return () => executiveTTSService.setOnSpeakingChange(() => {});
+  }, []);
+
+  // Save voice preference
+  useEffect(() => {
+    localStorage.setItem(`executive-voice-${executive}`, voiceEnabled.toString());
+  }, [voiceEnabled, executive]);
+
+  const toggleVoice = useCallback(() => {
+    if (isSpeaking) {
+      executiveTTSService.stop();
+    }
+    setVoiceEnabled(prev => !prev);
+  }, [isSpeaking]);
+
+  const stopSpeaking = useCallback(() => {
+    executiveTTSService.stop();
+  }, []);
 
   // Load messages from localStorage on mount
   useEffect(() => {
@@ -91,6 +118,11 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Speak the response if voice is enabled
+      if (voiceEnabled) {
+        executiveTTSService.speak(responseText, executive);
+      }
     } catch (error) {
       console.error('Error generating response:', error);
       const errorMessage: Message = {
@@ -129,11 +161,37 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
               <p className="text-xs text-muted-foreground">{profile.specialty}</p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5">
+            {/* Voice toggle button */}
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={toggleVoice}
+              className="h-6 w-6 p-0"
+              title={voiceEnabled ? 'Disable voice' : 'Enable voice'}
+            >
+              {voiceEnabled ? (
+                <Volume2 className={`w-3.5 h-3.5 ${isSpeaking ? 'text-primary animate-pulse' : ''}`} />
+              ) : (
+                <VolumeX className="w-3.5 h-3.5 text-muted-foreground" />
+              )}
+            </Button>
+            {/* Stop speaking button */}
+            {isSpeaking && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={stopSpeaking}
+                className="h-6 w-6 p-0"
+                title="Stop speaking"
+              >
+                <Square className="w-3 h-3 text-destructive" />
+              </Button>
+            )}
             <Badge variant="outline" className="text-[10px] px-1.5 py-0">
               {profile.model}
             </Badge>
-            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" title="Online" />
+            <div className={`w-2 h-2 rounded-full ${isSpeaking ? 'bg-primary animate-pulse' : 'bg-green-500 animate-pulse'}`} title={isSpeaking ? 'Speaking' : 'Online'} />
           </div>
         </div>
       </CardHeader>
