@@ -51,7 +51,7 @@ async function findSessionByIdOrKey(supabase: any, idOrKey: string): Promise<{ i
   if (isValidUUID(idOrKey)) {
     try {
       const { data, error } = await withTimeout(
-        supabase.from('device_connection_sessions').select('id, device_id').eq('id', idOrKey).eq('is_active', true).single(),
+        supabase.from('device_connection_sessions').select('id, device_id').eq('id', idOrKey).eq('is_active', true).maybeSingle(),
         QUERY_TIMEOUT_MS,
         'findSessionByUUID'
       );
@@ -69,7 +69,7 @@ async function findSessionByIdOrKey(supabase: any, idOrKey: string): Promise<{ i
   // Fallback: try as session_key
   try {
     const { data, error } = await withTimeout(
-      supabase.from('device_connection_sessions').select('id, device_id').eq('session_key', idOrKey).eq('is_active', true).order('connected_at', { ascending: false }).limit(1).single(),
+      supabase.from('device_connection_sessions').select('id, device_id').eq('session_key', idOrKey).eq('is_active', true).order('connected_at', { ascending: false }).limit(1).maybeSingle(),
       QUERY_TIMEOUT_MS,
       'findSessionByKey'
     );
@@ -288,7 +288,7 @@ async function handleConnect(supabase: any, payload: any, req: Request) {
   const location = await locationPromise;
   
   // Update or create device record
-  await supabase.from('devices').upsert({
+  const { error: upsertError } = await supabase.from('devices').upsert({
     id: normalized_device_id,
     device_fingerprint,
     device_type,
@@ -297,7 +297,11 @@ async function handleConnect(supabase: any, payload: any, req: Request) {
     last_known_location: location || {},
     ip_addresses: [ip_address],
     updated_at: new Date().toISOString()
-  }, { onConflict: 'id' }).catch((e: any) => console.warn('Device upsert failed:', e.message));
+  }, { onConflict: 'id' });
+  
+  if (upsertError) {
+    console.warn('Device upsert failed:', upsertError.message);
+  }
 
   // Insert new connection session with location
   const { data: session, error } = await supabase
@@ -330,7 +334,9 @@ async function handleConnect(supabase: any, payload: any, req: Request) {
     category: 'connection',
     description: `Device connected: ${device_type}`,
     details: { device_type, battery_level, ip_address, location, original_fingerprint: device_fingerprint }
-  }).then(() => {}).catch((e: any) => console.warn('Activity log insert failed:', e.message));
+  }).then(({ error: logError }: any) => {
+    if (logError) console.warn('Activity log insert failed:', logError.message);
+  });
 
   console.log(`✅ Device connected: ${device_fingerprint}, Session: ${session.id}`);
 
@@ -394,7 +400,9 @@ async function handleDisconnect(supabase: any, payload: any) {
     category: 'connection',
     description: 'Device disconnected',
     details: { battery_level_end }
-  }).then(() => {}).catch((e: any) => console.warn('Activity log insert failed:', e.message));
+  }).then(({ error: logError }: any) => {
+    if (logError) console.warn('Activity log insert failed:', logError.message);
+  });
 
   console.log(`✅ Device disconnected: Session ${session_id}`);
 
@@ -472,8 +480,9 @@ async function handleHeartbeat(supabase: any, payload: any) {
       })
       .in('id', commandIds)
       .eq('status', 'pending')
-      .then(() => {})
-      .catch((e: any) => console.warn('Command status update failed:', e.message));
+      .then(({ error: cmdError }: any) => {
+        if (cmdError) console.warn('Command status update failed:', cmdError.message);
+      });
   }
 
   console.log(`💓 Heartbeat recorded for session: ${session_id}`);
