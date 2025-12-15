@@ -88,7 +88,8 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
   const [performance, setPerformance] = useState<AgentPerformance | null>(null);
   const [loading, setLoading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [isMetricsOpen, setIsMetricsOpen] = useState(true);
+  const [isMetricsOpen, setIsMetricsOpen] = useState(false);
+  const [isAboutOpen, setIsAboutOpen] = useState(false);
   const isMobile = useIsMobile();
 
   useEffect(() => {
@@ -210,88 +211,39 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
           </div>
         )}
         
-        <SheetHeader className={`space-y-3 ${isMobile ? 'px-1' : ''}`}>
+        {/* Compact Header - Single Row */}
+        <SheetHeader className={`${isMobile ? 'px-1' : ''}`}>
           <div className="flex items-center gap-3">
-            <div className="p-2.5 rounded-xl bg-primary/10 flex-shrink-0">
-              <User className="h-5 w-5 text-primary" />
+            <div className="p-2 rounded-lg bg-primary/10 flex-shrink-0">
+              <User className="h-4 w-4 text-primary" />
             </div>
-            <div className="flex-1 min-w-0">
-              <SheetTitle className="text-foreground text-lg">{agent.name}</SheetTitle>
-              <SheetDescription className="text-muted-foreground truncate">
-                {agent.role}
-              </SheetDescription>
-            </div>
+            <SheetTitle className="text-foreground text-base flex-1 min-w-0 truncate">{agent.name}</SheetTitle>
             <Badge className={`${STATUS_COLORS[agent.status] || STATUS_COLORS.IDLE} text-xs`}>
               {agent.status}
             </Badge>
-          </div>
-
-          {/* Workload Bar */}
-          <div className="space-y-1.5">
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Workload</span>
-              <span>
-                {agent.current_workload} / {agent.max_concurrent_tasks || 5} tasks
-              </span>
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground bg-muted/50 px-2 py-1 rounded-full">
+              <Briefcase className="h-3 w-3" />
+              <span className="font-medium">{agent.current_workload}/{agent.max_concurrent_tasks || 5}</span>
             </div>
-            <Progress
-              value={
-                ((agent.current_workload || 0) / (agent.max_concurrent_tasks || 5)) * 100
-              }
-              className="h-2"
-            />
           </div>
+          <SheetDescription className="sr-only">{agent.role}</SheetDescription>
         </SheetHeader>
 
-        <ScrollArea className={`flex-1 ${isMobile ? '-mx-4 px-4' : '-mx-6 px-6'} mt-4`}>
-          <div className="space-y-5 pb-4">
-            {/* Performance Metrics - Collapsible on mobile */}
-            {performance && (
-              <Collapsible open={isMetricsOpen} onOpenChange={setIsMetricsOpen}>
-                <CollapsibleTrigger className="flex items-center justify-between w-full py-2">
-                  <span className="text-sm font-medium text-foreground">Performance Metrics</span>
-                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isMetricsOpen ? 'rotate-180' : ''}`} />
-                </CollapsibleTrigger>
-                <CollapsibleContent className="pt-2">
-                  <div className="grid grid-cols-2 gap-3">
-                    <div className="p-3 rounded-xl bg-muted/50 border border-border">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                        <CheckCircle className="h-3 w-3" />
-                        Completed
-                      </div>
-                      <div className="text-lg font-semibold text-foreground">
-                        {performance.tasks_completed}
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl bg-muted/50 border border-border">
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground mb-1">
-                        <TrendingUp className="h-3 w-3" />
-                        Success Rate
-                      </div>
-                      <div className="text-lg font-semibold text-foreground">
-                        {performance.success_rate.toFixed(0)}%
-                      </div>
-                    </div>
-                  </div>
-                </CollapsibleContent>
-              </Collapsible>
-            )}
-
-            {/* Assigned Tasks */}
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
-                  <Briefcase className="h-4 w-4" />
-                  Assigned Tasks ({tasks.length})
-                </h3>
-              </div>
+        <ScrollArea className={`flex-1 ${isMobile ? '-mx-4 px-4' : '-mx-6 px-6'} mt-3`}>
+          <div className="space-y-4 pb-4">
+            {/* Assigned Tasks - VISIBLE FIRST */}
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium text-foreground flex items-center gap-2">
+                <Briefcase className="h-4 w-4" />
+                Assigned Tasks ({tasks.length})
+              </h3>
 
               <div className={`space-y-2 ${isMobile ? '' : 'max-h-[280px] overflow-y-auto pr-1'}`}>
                 {loading ? (
-                  <div className="text-center py-8 text-muted-foreground">Loading...</div>
+                  <div className="text-center py-6 text-muted-foreground text-sm">Loading...</div>
                 ) : tasks.length === 0 ? (
-                  <div className="text-center py-8 text-muted-foreground">
-                    No active tasks assigned
+                  <div className="text-center py-6 text-muted-foreground text-sm">
+                    No active tasks
                   </div>
                 ) : (
                   tasks.map((task) => (
@@ -299,35 +251,31 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
                       key={task.id}
                       draggable
                       onDragStart={(e) => handleDragStart(e, task.id)}
-                      className="p-3.5 rounded-xl bg-card border border-border hover:border-primary/50 cursor-grab active:cursor-grabbing transition-colors group touch-manipulation"
+                      className="p-3 rounded-lg bg-card border border-border hover:border-primary/50 cursor-grab active:cursor-grabbing transition-colors group touch-manipulation"
                     >
                       <div className="flex items-start gap-2">
                         <GripVertical className="h-4 w-4 text-muted-foreground mt-0.5 opacity-50 group-hover:opacity-100 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <div className="font-medium text-sm text-foreground line-clamp-2">
+                          <div className="font-medium text-sm text-foreground line-clamp-1">
                             {task.title}
                           </div>
-                          <div className="flex items-center gap-2 mt-1.5 flex-wrap">
-                            <Badge variant="outline" className="text-xs">
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs py-0">
                               {task.stage}
                             </Badge>
                             <span className="flex items-center gap-1 text-xs text-muted-foreground">
                               {getStatusIcon(task.status)}
-                              {task.status}
+                              {task.progress_percentage || 0}%
                             </span>
                           </div>
-                          <Progress
-                            value={task.progress_percentage || 0}
-                            className="h-1.5 mt-2"
-                          />
                         </div>
                         <Button
                           size="sm"
                           variant="ghost"
-                          className={`h-10 w-10 p-0 ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex-shrink-0`}
+                          className={`h-8 w-8 p-0 ${isMobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'} flex-shrink-0`}
                           onClick={() => handleUnassignTask(task.id)}
                         >
-                          <XCircle className="h-5 w-5 text-muted-foreground hover:text-destructive" />
+                          <XCircle className="h-4 w-4 text-muted-foreground hover:text-destructive" />
                         </Button>
                       </div>
                     </div>
@@ -336,26 +284,65 @@ export const AgentDetailSheet: React.FC<AgentDetailSheetProps> = ({
               </div>
             </div>
 
-            {/* Drop Zone for Reassignment */}
+            {/* Drop Zone */}
             <div
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
               className={`
-                p-5 rounded-xl border-2 border-dashed transition-all text-center
-                ${
-                  isDragOver
-                    ? 'border-primary bg-primary/10 text-primary scale-[1.02]'
-                    : 'border-muted text-muted-foreground'
-                }
-                ${draggedTaskId ? 'opacity-100' : 'opacity-50'}
+                p-4 rounded-lg border-2 border-dashed transition-all text-center
+                ${isDragOver ? 'border-primary bg-primary/10 text-primary' : 'border-muted text-muted-foreground'}
+                ${draggedTaskId ? 'opacity-100' : 'opacity-40'}
               `}
             >
-              <Target className="h-7 w-7 mx-auto mb-2" />
-              <p className="text-sm font-medium">
-                {isDragOver ? 'Release to assign task' : 'Drop task here to assign'}
+              <Target className="h-5 w-5 mx-auto mb-1" />
+              <p className="text-xs font-medium">
+                {isDragOver ? 'Release to assign' : 'Drop task here'}
               </p>
             </div>
+
+            {/* Collapsible About Agent */}
+            <Collapsible open={isAboutOpen} onOpenChange={setIsAboutOpen}>
+              <CollapsibleTrigger className="flex items-center justify-between w-full py-2 border-t border-border">
+                <span className="text-sm font-medium text-foreground">About Agent</span>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isAboutOpen ? 'rotate-180' : ''}`} />
+              </CollapsibleTrigger>
+              <CollapsibleContent className="pt-2">
+                <p className="text-sm text-muted-foreground leading-relaxed">{agent.role}</p>
+              </CollapsibleContent>
+            </Collapsible>
+
+            {/* Collapsible Performance Metrics */}
+            {performance && (
+              <Collapsible open={isMetricsOpen} onOpenChange={setIsMetricsOpen}>
+                <CollapsibleTrigger className="flex items-center justify-between w-full py-2 border-t border-border">
+                  <span className="text-sm font-medium text-foreground">Performance</span>
+                  <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isMetricsOpen ? 'rotate-180' : ''}`} />
+                </CollapsibleTrigger>
+                <CollapsibleContent className="pt-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                        <CheckCircle className="h-3 w-3" />
+                        Completed
+                      </div>
+                      <div className="text-base font-semibold text-foreground">
+                        {performance.tasks_completed}
+                      </div>
+                    </div>
+                    <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+                      <div className="flex items-center gap-1.5 text-xs text-muted-foreground mb-0.5">
+                        <TrendingUp className="h-3 w-3" />
+                        Success
+                      </div>
+                      <div className="text-base font-semibold text-foreground">
+                        {performance.success_rate.toFixed(0)}%
+                      </div>
+                    </div>
+                  </div>
+                </CollapsibleContent>
+              </Collapsible>
+            )}
 
             {/* Last Seen */}
             {agent.last_seen && (
