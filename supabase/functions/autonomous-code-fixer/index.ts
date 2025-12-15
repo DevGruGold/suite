@@ -60,13 +60,13 @@ CORRECTED CODE:`;
   
   try {
     console.log('🔄 Generating fix with AI fallback cascade...');
-    const result = await generateTextWithFallback(prompt, undefined, {
+    const { content: aiResult } = await generateTextWithFallback(prompt, undefined, {
       temperature: 0.3,
       maxTokens: 4000,
       useFullElizaContext: false
     });
     
-    fixedCode = result
+    fixedCode = aiResult
       .replace(/```python\s*/g, "")
       .replace(/```\s*/g, "")
       .trim();
@@ -171,13 +171,13 @@ Provide a JSON response with:
 
   try {
     console.log('🔄 Generating learning metadata with AI fallback cascade...');
-    const result = await generateTextWithFallback(prompt, undefined, {
+    const { content: learningResult } = await generateTextWithFallback(prompt, undefined, {
       temperature: 0.3,
       maxTokens: 1000,
       useFullElizaContext: false
     });
     
-    const jsonMatch = result.match(/\{[\s\S]*\}/);
+    const jsonMatch = learningResult.match(/\{[\s\S]*\}/);
     if (jsonMatch) {
       return JSON.parse(jsonMatch[0]);
     }
