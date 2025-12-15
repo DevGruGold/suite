@@ -28,32 +28,18 @@ const SERVICE_INFO: Record<string, {
   icon: React.ElementType;
   docsUrl?: string;
 }> = {
-  xai: {
-    displayName: 'xAI (Grok)',
-    description: 'Lead AI provider',
-    powers: 'Eliza primary intelligence, reasoning tasks',
-    icon: Bot,
-    docsUrl: 'https://x.ai/api'
-  },
   lovable_ai: {
     displayName: 'Lovable AI Gateway',
     description: 'Primary AI gateway',
     powers: 'All executives, tool calling, chat completions',
     icon: Zap,
   },
-  deepseek: {
-    displayName: 'DeepSeek',
-    description: 'CTO fallback AI',
-    powers: 'CTO persona, code analysis, technical decisions',
-    icon: Code,
-    docsUrl: 'https://deepseek.com'
-  },
-  vercel_ai: {
-    displayName: 'Vercel AI SDK',
-    description: 'Streaming fallback',
-    powers: 'AI streaming, model routing',
-    icon: Zap,
-    docsUrl: 'https://sdk.vercel.ai'
+  vertex_ai: {
+    displayName: 'Vertex AI (Gemini)',
+    description: 'ai-chat primary',
+    powers: 'ai-chat function, Gemini Express Mode access',
+    icon: Bot,
+    docsUrl: 'https://cloud.google.com/vertex-ai'
   },
   gemini: {
     displayName: 'Google Gemini',
@@ -62,12 +48,33 @@ const SERVICE_INFO: Record<string, {
     icon: Eye,
     docsUrl: 'https://ai.google.dev'
   },
+  deepseek: {
+    displayName: 'DeepSeek',
+    description: 'CTO fallback AI',
+    powers: 'CTO persona, code analysis, technical decisions',
+    icon: Code,
+    docsUrl: 'https://deepseek.com'
+  },
+  openrouter: {
+    displayName: 'OpenRouter (Kimi K2)',
+    description: 'Kimi K2 fallback',
+    powers: 'Kimi K2 access, multi-model routing',
+    icon: Zap,
+    docsUrl: 'https://openrouter.ai'
+  },
   openai: {
     displayName: 'OpenAI',
     description: 'GPT-5 & TTS',
     powers: 'Text-to-speech, complex reasoning, GPT models',
     icon: MessageSquare,
     docsUrl: 'https://platform.openai.com'
+  },
+  vercel_ai: {
+    displayName: 'Vercel AI SDK',
+    description: 'Streaming fallback',
+    powers: 'AI streaming, model routing',
+    icon: Zap,
+    docsUrl: 'https://sdk.vercel.ai'
   },
   github: {
     displayName: 'GitHub',

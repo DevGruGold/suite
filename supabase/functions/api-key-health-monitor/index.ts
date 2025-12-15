@@ -80,6 +80,16 @@ serve(async (req) => {
     healthResults.push(humeHealth);
     await supabase.from('api_key_health').upsert(humeHealth, { onConflict: 'service_name' });
 
+    // Check Vertex AI
+    const vertexHealth = await checkVertexAIHealth();
+    healthResults.push(vertexHealth);
+    await supabase.from('api_key_health').upsert(vertexHealth, { onConflict: 'service_name' });
+
+    // Check OpenRouter (Kimi K2)
+    const openrouterHealth = await checkOpenRouterHealth();
+    healthResults.push(openrouterHealth);
+    await supabase.from('api_key_health').upsert(openrouterHealth, { onConflict: 'service_name' });
+
     const healthyServices = healthResults.filter(h => h.is_healthy).length;
     console.log(`✅ Health check complete: ${healthyServices}/${healthResults.length} services healthy`);
 
@@ -506,6 +516,48 @@ async function checkHumeHealth() {
   }
 }
 
+async function checkVertexAIHealth() {
+  const apiKey = Deno.env.get('VERTEX_AI_API_KEY');
+  if (!apiKey) {
+    return {
+      service_name: 'vertex_ai',
+      key_type: 'api_key',
+      is_healthy: false,
+      error_message: 'API key not configured',
+      expiry_warning: false,
+      days_until_expiry: null,
+      metadata: {}
+    };
+  }
+
+  try {
+    // Test with models list endpoint
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`
+    );
+
+    return {
+      service_name: 'vertex_ai',
+      key_type: 'api_key',
+      is_healthy: response.ok,
+      error_message: response.ok ? null : `HTTP ${response.status}`,
+      expiry_warning: false,
+      days_until_expiry: null,
+      metadata: { note: 'Gemini via Vertex AI Express Mode' }
+    };
+  } catch (error: any) {
+    return {
+      service_name: 'vertex_ai',
+      key_type: 'api_key',
+      is_healthy: false,
+      error_message: error.message,
+      expiry_warning: false,
+      days_until_expiry: null,
+      metadata: {}
+    };
+  }
+}
+
 async function checkSessionGitHubPAT(token: string) {
   try {
     const response = await fetch('https://api.github.com/user', {
@@ -560,10 +612,10 @@ async function checkSessionGitHubPAT(token: string) {
       days_until_expiry: null,
       metadata: {}
     };
-  } catch (error) {
+  } catch (error: any) {
     return {
       service_name: 'github_session',
-      key_type: 'user_pat',
+      key_type: 'api_key',
       is_healthy: false,
       error_message: error.message,
       expiry_warning: false,

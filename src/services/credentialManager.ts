@@ -39,10 +39,12 @@ export async function getAPIKeyHealth(): Promise<APIKeyHealth[]> {
     return [];
   }
 
-  // Sort to ensure xAI appears first (lead AI)
+  // Sort to show most important AI services first
   const sorted = (data || []).sort((a, b) => {
-    const order = ['xai', 'vercel_ai', 'deepseek', 'lovable_ai', 'gemini', 'openai'];
-    return order.indexOf(a.service_name) - order.indexOf(b.service_name);
+    const order = ['lovable_ai', 'vertex_ai', 'gemini', 'deepseek', 'openrouter', 'openai', 'github', 'elevenlabs', 'hume'];
+    const aIndex = order.indexOf(a.service_name);
+    const bIndex = order.indexOf(b.service_name);
+    return (aIndex === -1 ? 99 : aIndex) - (bIndex === -1 ? 99 : bIndex);
   });
 
   return sorted;
