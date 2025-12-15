@@ -58,7 +58,7 @@ serve(async (req) => {
     const cutoffTime = new Date(Date.now() - time_window_hours * 60 * 60 * 1000).toISOString();
     
     const { data: executionLogs, error: logsError } = await supabase
-      .from('workflow_execution_logs')
+      .from('workflow_template_executions')
       .select('*')
       .eq('template_name', template_name)
       .gte('started_at', cutoffTime)

@@ -74,7 +74,7 @@ serve(async (req) => {
     // Get current workflow executions
     const { data: runningWorkflows } = await supabase
       .from('workflow_executions')
-      .select('workflow_template_id, status, started_at')
+      .select('workflow_template_id, status, start_time')
       .eq('status', 'running');
 
     // Get Python executions in last hour
