@@ -1,4 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'hume-expression-measurement';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -21,18 +24,25 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let body: ExpressionRequest = { image: '' };
+  try {
+    body = await req.json();
+  } catch { body = { image: '' }; }
+
+  const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, { models: body.models });
+
   const startTime = Date.now();
   console.log('🎭 Hume Expression Measurement request received');
 
   try {
     const HUME_API_KEY = Deno.env.get('HUME_API_KEY');
     if (!HUME_API_KEY) {
+      await usageTracker.failure('HUME_API_KEY not configured', 500);
       throw new Error('HUME_API_KEY not configured');
     }
-
-    const body: ExpressionRequest = await req.json();
     
     if (!body.image) {
+      await usageTracker.failure('Missing image data', 400);
       return new Response(
         JSON.stringify({ error: 'Missing image data' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -123,6 +133,7 @@ serve(async (req) => {
         console.log(`   Top emotion: ${emotions[0].name} (${(emotions[0].score * 100).toFixed(1)}%)`);
       }
 
+      await usageTracker.success({ result_summary: `Emotions detected: ${emotions.length}` });
       return new Response(
         JSON.stringify({
           success: true,
@@ -206,6 +217,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Expression measurement error:', error);
+    await usageTracker.failure(error instanceof Error ? error.message : 'Expression analysis failed', 500);
     
     return new Response(
       JSON.stringify({ 

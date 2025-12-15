@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'create-suite-quote';
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,6 +29,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let body: QuoteRequest = { company_name: '', contact_email: '' };
+  try {
+    body = await req.json();
+  } catch { body = { company_name: '', contact_email: '' }; }
+
+  const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, { 
+    company_name: body.company_name, 
+    tier: body.tier 
+  });
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -33,7 +46,6 @@ serve(async (req) => {
       { auth: { autoRefreshToken: false, persistSession: false } }
     );
 
-    const body: QuoteRequest = await req.json();
     const { 
       company_name, 
       contact_email, 
@@ -46,6 +58,7 @@ serve(async (req) => {
 
     // Validate required fields
     if (!company_name || !contact_email) {
+      await usageTracker.failure('company_name and contact_email are required', 400);
       return new Response(JSON.stringify({
         success: false,
         error: "company_name and contact_email are required"
@@ -228,6 +241,7 @@ ${savingsInfo}
 
     console.log(`🎉 Quote workflow complete! Táve automation will send email.`);
 
+    await usageTracker.success({ result_summary: `Quote created for ${company_name}` });
     return new Response(JSON.stringify({
       success: true,
       message: `Quote created for ${company_name}! The quote email will be sent automatically to ${contact_email} from pfpattendants@gmail.com.`,
@@ -245,6 +259,7 @@ ${savingsInfo}
 
   } catch (error) {
     console.error("Create suite quote error:", error);
+    await usageTracker.failure(error instanceof Error ? error.message : "Unknown error creating quote", 500);
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : "Unknown error creating quote"

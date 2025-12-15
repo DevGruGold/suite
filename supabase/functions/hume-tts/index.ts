@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
+import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'hume-tts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -12,10 +15,17 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let body: any = {};
   try {
-    const { text, voiceId } = await req.json();
+    body = await req.json();
+  } catch { body = {}; }
 
+  const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, body);
+
+  try {
+    const { text, voiceId } = body;
     if (!text) {
+      await usageTracker.failure('Text is required', 400);
       return new Response(
         JSON.stringify({ error: 'Text is required' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -31,6 +41,7 @@ serve(async (req) => {
     const humeApiKey = Deno.env.get('HUME_API_KEY');
     if (!humeApiKey) {
       console.error('HUME_API_KEY not configured');
+      await usageTracker.failure('Hume API key not configured', 500);
       return new Response(
         JSON.stringify({ error: 'Hume API key not configured' }),
         { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -68,6 +79,7 @@ serve(async (req) => {
     if (!response.ok) {
       const errorText = await response.text();
       console.error('❌ Hume TTS API error:', response.status, errorText);
+      await usageTracker.failure(`Hume TTS API error: ${response.status}`, response.status);
       return new Response(
         JSON.stringify({ 
           error: 'Hume TTS API error', 
@@ -124,6 +136,7 @@ serve(async (req) => {
     console.log('🎵 Audio header bytes:', headerBytes.map(b => '0x' + b.toString(16).toUpperCase().padStart(2, '0')).join(' '));
     console.log('✅ Hume TTS success, audio size:', audioSize, 'bytes, base64 length:', base64Audio.length);
 
+    await usageTracker.success({ result_summary: `TTS generated: ${audioSize} bytes` });
     return new Response(
       JSON.stringify({ 
         audio: base64Audio,
@@ -136,6 +149,7 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('❌ Hume TTS error:', error);
+    await usageTracker.failure(error.message || 'Unknown error', 500);
     return new Response(
       JSON.stringify({ error: error.message || 'Unknown error' }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

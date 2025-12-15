@@ -1,5 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { getGoogleAccessToken, isGoogleConfigured, corsHeaders } from "../_shared/googleAuthHelper.ts";
+import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
+
+const FUNCTION_NAME = 'google-drive';
 
 const DRIVE_API_URL = 'https://www.googleapis.com/drive/v3';
 
@@ -108,8 +111,16 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  let body: any = {};
+  try {
+    body = await req.json();
+  } catch { body = {}; }
+
+  const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, body);
+
   try {
     if (!isGoogleConfigured()) {
+      await usageTracker.failure('Google Cloud not configured', 401);
       return new Response(JSON.stringify({
         success: false,
         error: 'Google Cloud not configured',
@@ -118,13 +129,13 @@ serve(async (req) => {
       }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const body = await req.json();
     const action = body.action;
 
     console.log(`📁 google-drive: action=${action}`);
 
     const accessToken = await getGoogleAccessToken();
     if (!accessToken) {
+      await usageTracker.failure('Failed to get access token', 401);
       return new Response(JSON.stringify({
         success: false,
         error: 'Failed to get access token',
@@ -175,6 +186,7 @@ serve(async (req) => {
         break;
 
       default:
+        await usageTracker.failure(`Unknown action: ${action}`, 400);
         return new Response(JSON.stringify({
           success: false,
           error: `Unknown action: ${action}`,
@@ -182,12 +194,14 @@ serve(async (req) => {
         }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
+    await usageTracker.success({ result_summary: `${action} completed` });
     return new Response(JSON.stringify({ success: true, result }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
   } catch (error) {
     console.error('google-drive error:', error);
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({
       success: false,
       error: error.message
