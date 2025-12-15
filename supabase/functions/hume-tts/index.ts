@@ -22,8 +22,8 @@ serve(async (req) => {
       );
     }
 
-    // Truncate text to prevent memory issues (max 1000 chars)
-    const MAX_TEXT_LENGTH = 1000;
+    // Truncate text to prevent memory issues (max 5000 chars)
+    const MAX_TEXT_LENGTH = 5000;
     const truncatedText = text.length > MAX_TEXT_LENGTH 
       ? text.substring(0, MAX_TEXT_LENGTH) + '...' 
       : text;

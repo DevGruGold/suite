@@ -75,6 +75,11 @@ serve(async (req) => {
     healthResults.push(elevenlabsHealth);
     await supabase.from('api_key_health').upsert(elevenlabsHealth, { onConflict: 'service_name' });
 
+    // Check Hume AI
+    const humeHealth = await checkHumeHealth();
+    healthResults.push(humeHealth);
+    await supabase.from('api_key_health').upsert(humeHealth, { onConflict: 'service_name' });
+
     const healthyServices = healthResults.filter(h => h.is_healthy).length;
     console.log(`✅ Health check complete: ${healthyServices}/${healthResults.length} services healthy`);
 
@@ -449,6 +454,48 @@ async function checkGeminiHealth() {
   } catch (error) {
     return {
       service_name: 'gemini',
+      key_type: 'api_key',
+      is_healthy: false,
+      error_message: error.message,
+      expiry_warning: false,
+      days_until_expiry: null,
+      metadata: {}
+    };
+  }
+}
+
+async function checkHumeHealth() {
+  const apiKey = Deno.env.get('HUME_API_KEY');
+  if (!apiKey) {
+    return {
+      service_name: 'hume',
+      key_type: 'api_key',
+      is_healthy: false,
+      error_message: 'API key not configured',
+      expiry_warning: false,
+      days_until_expiry: null,
+      metadata: {}
+    };
+  }
+
+  try {
+    // Validate by checking EVI configs endpoint
+    const response = await fetch('https://api.hume.ai/v0/evi/configs', {
+      headers: { 'X-Hume-Api-Key': apiKey }
+    });
+
+    return {
+      service_name: 'hume',
+      key_type: 'api_key',
+      is_healthy: response.ok || response.status === 403,
+      error_message: response.ok ? null : `HTTP ${response.status}`,
+      expiry_warning: false,
+      days_until_expiry: null,
+      metadata: { note: 'Empathic Voice Interface (EVI) API' }
+    };
+  } catch (error) {
+    return {
+      service_name: 'hume',
       key_type: 'api_key',
       is_healthy: false,
       error_message: error.message,
