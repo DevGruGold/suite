@@ -1963,6 +1963,7 @@ export type Database = {
           ip_address: unknown
           is_active: boolean | null
           last_heartbeat: string
+          location_data: Json | null
           metadata: Json | null
           session_key: string
           total_duration_seconds: number | null
@@ -1985,6 +1986,7 @@ export type Database = {
           ip_address?: unknown
           is_active?: boolean | null
           last_heartbeat?: string
+          location_data?: Json | null
           metadata?: Json | null
           session_key: string
           total_duration_seconds?: number | null
@@ -2007,6 +2009,7 @@ export type Database = {
           ip_address?: unknown
           is_active?: boolean | null
           last_heartbeat?: string
+          location_data?: Json | null
           metadata?: Json | null
           session_key?: string
           total_duration_seconds?: number | null
@@ -2216,6 +2219,10 @@ export type Database = {
       devices: {
         Row: {
           browser: string | null
+          claim_code_expires_at: string | null
+          claim_verification_code: string | null
+          claimed_at: string | null
+          claimed_by: string | null
           created_at: string
           device_fingerprint: string
           device_type: string | null
@@ -2223,6 +2230,7 @@ export type Database = {
           id: string
           ip_addresses: Json | null
           is_active: boolean | null
+          last_known_location: Json | null
           last_seen_at: string
           metadata: Json | null
           os: string | null
@@ -2233,6 +2241,10 @@ export type Database = {
         }
         Insert: {
           browser?: string | null
+          claim_code_expires_at?: string | null
+          claim_verification_code?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
           created_at?: string
           device_fingerprint: string
           device_type?: string | null
@@ -2240,6 +2252,7 @@ export type Database = {
           id?: string
           ip_addresses?: Json | null
           is_active?: boolean | null
+          last_known_location?: Json | null
           last_seen_at?: string
           metadata?: Json | null
           os?: string | null
@@ -2250,6 +2263,10 @@ export type Database = {
         }
         Update: {
           browser?: string | null
+          claim_code_expires_at?: string | null
+          claim_verification_code?: string | null
+          claimed_at?: string | null
+          claimed_by?: string | null
           created_at?: string
           device_fingerprint?: string
           device_type?: string | null
@@ -2257,6 +2274,7 @@ export type Database = {
           id?: string
           ip_addresses?: Json | null
           is_active?: boolean | null
+          last_known_location?: Json | null
           last_seen_at?: string
           metadata?: Json | null
           os?: string | null
@@ -2265,7 +2283,15 @@ export type Database = {
           wallet_address?: string | null
           worker_id?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "devices_claimed_by_fkey"
+            columns: ["claimed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       edge_function_logs: {
         Row: {
@@ -4511,6 +4537,7 @@ export type Database = {
           id: string
           is_active: boolean | null
           last_login_at: string | null
+          linked_device_ids: string[] | null
           linked_worker_ids: string[] | null
           timezone: string | null
           total_mining_shares: number | null
@@ -4533,6 +4560,7 @@ export type Database = {
           id: string
           is_active?: boolean | null
           last_login_at?: string | null
+          linked_device_ids?: string[] | null
           linked_worker_ids?: string[] | null
           timezone?: string | null
           total_mining_shares?: number | null
@@ -4555,6 +4583,7 @@ export type Database = {
           id?: string
           is_active?: boolean | null
           last_login_at?: string | null
+          linked_device_ids?: string[] | null
           linked_worker_ids?: string[] | null
           timezone?: string | null
           total_mining_shares?: number | null

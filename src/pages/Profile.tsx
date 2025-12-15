@@ -17,6 +17,7 @@ import {
 import { Navigate } from "react-router-dom";
 import { MiningSessionsList } from "@/components/MiningSessionsList";
 import { ChargerSessionsList } from "@/components/ChargerSessionsList";
+import { ClaimedDevicesSection } from "@/components/ClaimedDevicesSection";
 
 interface UserEarnings {
   github_xmrt: number;
@@ -324,6 +325,11 @@ const Profile = () => {
               linkedWorkerIds={linkedWorkerIds}
               onWorkersUpdated={setLinkedWorkerIds}
             />
+          )}
+
+          {/* Claimed Devices Section */}
+          {user?.id && (
+            <ClaimedDevicesSection userId={user.id} />
           )}
 
           {/* Charger Sessions Section */}
