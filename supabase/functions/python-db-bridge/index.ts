@@ -150,6 +150,20 @@ serve(async (req) => {
       return await handleSystemOperation(supabase, operation, body);
     }
 
+    // Intercept cron schema requests and redirect to RPC
+    if (table?.startsWith('cron.')) {
+      console.log(`🕐 Redirecting cron table query to RPC: ${table}`);
+      
+      if (table === 'cron.job') {
+        return await handleSystemOperation(supabase, 'list_cron_jobs', body);
+      }
+      if (table === 'cron.job_run_details') {
+        return await handleSystemOperation(supabase, 'get_cron_status', body);
+      }
+      
+      throw new Error(`Cron table '${table}' not directly accessible. Use operations 'list_cron_jobs' or 'get_cron_status' instead.`);
+    }
+
     // Validate table for data operations
     if (!table) {
       throw new Error('Table name required for data operations');
