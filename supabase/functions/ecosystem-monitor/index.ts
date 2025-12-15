@@ -472,10 +472,16 @@ async function generateAutonomousTasks(supabase: any, context: any) {
         title: `Learn: ${gap.identified_skill}`,
         description: `Address skill gap: ${gap.identified_skill}. Blocked tasks: ${gap.blocked_tasks?.join(', ')}`,
         category: 'LEARNING',
-        stage: 'PLANNING',
+        stage: 'PLAN',
         status: 'PENDING',
         priority: gap.priority,
-        repo: 'XMRT-Ecosystem'
+        repo: 'XMRT-Ecosystem',
+        metadata: {
+          checklist: ['Research skill requirements', 'Study documentation/resources', 'Practice implementation', 'Document learnings'],
+          source: 'ecosystem_monitor',
+          skill_gap_id: gap.id
+        },
+        completed_checklist_items: []
       }).then(() => tasksCreated++);
     }
 
@@ -494,10 +500,16 @@ async function generateAutonomousTasks(supabase: any, context: any) {
         title: `Fix failed Python execution`,
         description: `Error: ${exec.error?.substring(0, 200)}`,
         category: 'CODE',
-        stage: 'EXECUTION',
+        stage: 'EXECUTE',
         status: 'PENDING',
         priority: 7,
-        repo: 'XMRT-Ecosystem'
+        repo: 'XMRT-Ecosystem',
+        metadata: {
+          checklist: ['Analyze error logs', 'Identify root cause', 'Implement fix', 'Test solution'],
+          source: 'ecosystem_monitor',
+          execution_id: exec.id
+        },
+        completed_checklist_items: []
       }).then(() => tasksCreated++);
     }
 
@@ -520,7 +532,13 @@ async function generateAutonomousTasks(supabase: any, context: any) {
         stage: 'DISCUSS',
         status: 'PENDING',
         priority: 5,
-        repo: 'XMRT-Ecosystem'
+        repo: 'XMRT-Ecosystem',
+        metadata: {
+          checklist: ['Review message context', 'Draft response', 'Send response', 'Mark as processed'],
+          source: 'ecosystem_monitor',
+          message_id: msg.id
+        },
+        completed_checklist_items: []
       }).then(() => tasksCreated++);
     }
 
@@ -563,8 +581,10 @@ async function generateAutonomousTasks(supabase: any, context: any) {
                 github_issue_number: issue.number,
                 github_issue_url: issue.html_url,
                 labels: issue.labels?.map((l: any) => l.name),
-                source: 'ecosystem_monitor'
-              }
+                source: 'ecosystem_monitor',
+                checklist: ['Analyze requirements', 'Plan implementation', 'Implement solution', 'Create PR', 'Review and merge']
+              },
+              completed_checklist_items: []
             }).then(() => tasksCreated++).catch(() => {});
           }
         }

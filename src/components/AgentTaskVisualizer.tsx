@@ -208,8 +208,14 @@ function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging, onTaskC
         isDragging ? 'opacity-50 scale-95 cursor-grabbing' : 'hover:scale-[1.02] hover:shadow-lg hover:ring-2 hover:ring-primary/30'
       } ${isUrgent ? 'ring-1 ring-red-500/50' : ''}`}
     >
-      {/* Progress bar at top */}
+      {/* Progress bar at top with missing checklist warning */}
       <TaskProgressBar percentage={progressPercentage} className="mb-2" />
+      {(!task.completed_checklist_items || task.completed_checklist_items.length === 0) && progressPercentage === 0 && (
+        <div className="flex items-center gap-1 text-[9px] text-amber-400 mb-1">
+          <AlertTriangle className="w-2.5 h-2.5" />
+          <span>No work documented</span>
+        </div>
+      )}
       
       <div className="flex items-start justify-between gap-2 mb-2">
         <div className="flex items-center gap-1.5 flex-1">
