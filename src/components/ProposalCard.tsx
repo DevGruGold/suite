@@ -84,6 +84,7 @@ const executiveColors: Record<string, string> = {
   CTO: 'text-blue-500',
   CIO: 'text-green-500',
   CAO: 'text-orange-500',
+  COO: 'text-red-500',
   COMMUNITY: 'text-pink-500',
 };
 
@@ -141,7 +142,7 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
     }
   }, [votes]);
 
-  const executiveVotes = votes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO'].includes(v.executive_name));
+  const executiveVotes = votes.filter(v => ['CSO', 'CTO', 'CIO', 'CAO', 'COO'].includes(v.executive_name));
   const communityVotes = votes.filter(v => v.executive_name === 'COMMUNITY');
   
   const executiveApprovals = executiveVotes.filter(v => v.vote === 'approve').length;
@@ -212,8 +213,8 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
 
   // Determine outcome summary
   const getOutcomeSummary = () => {
-    if (executiveApprovals >= 3) return `${executiveApprovals}/4 executives approved`;
-    if (executiveRejections >= 2) return `${executiveRejections}/4 executives rejected`;
+    if (executiveApprovals >= 4) return `${executiveApprovals}/5 executives approved`;
+    if (executiveRejections >= 3) return `${executiveRejections}/5 executives rejected`;
     return `${executiveApprovals} approve, ${executiveRejections} reject, ${executiveAbstentions} abstain`;
   };
 
@@ -339,12 +340,12 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
           <>
             {/* Executive Vote Progress - detailed view for active voting */}
             <div>
-              <p className="text-xs text-muted-foreground mb-2 font-medium">Executive Council (3/4 needed)</p>
+              <p className="text-xs text-muted-foreground mb-2 font-medium">Executive Council (4/5 needed)</p>
               <VoteProgress 
                 approvals={executiveApprovals} 
                 rejections={executiveRejections} 
                 abstentions={executiveAbstentions}
-                required={3}
+                required={4}
               />
             </div>
 
@@ -388,10 +389,10 @@ export const ProposalCard: React.FC<ProposalCardProps> = ({
                   {hasNotVoted ? '🗳️ Cast Your Vote' : '✓ You Voted'}
                 </span>
               </div>
-              {proposal.voting_phase === 'executive' && executiveVotes.length < 4 && (
+              {proposal.voting_phase === 'executive' && executiveVotes.length < 5 && (
                 <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-600 border-amber-500/30">
                   <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                  Executives: {executiveVotes.length}/4
+                  Executives: {executiveVotes.length}/5
                 </Badge>
               )}
               {proposal.voting_phase === 'community' && (

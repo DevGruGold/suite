@@ -370,7 +370,7 @@ export default function Governance() {
       <div className="mb-4 sm:mb-8 p-3 sm:p-4 rounded-lg bg-muted/30 border border-border/60">
         <p className="text-xs sm:text-sm text-muted-foreground">
           <strong className="text-foreground">Timed Voting:</strong> Executives have 1 hour to vote, then community has 24 hours. 
-          3/4 executive approvals needed to pass.
+          4/5 executive approvals needed to pass.
         </p>
       </div>
 

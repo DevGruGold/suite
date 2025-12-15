@@ -41,10 +41,10 @@ serve(async (req) => {
     }
 
     // Allow executives and community votes
-    const validExecutives = ['CSO', 'CTO', 'CIO', 'CAO', 'COMMUNITY'];
+    const validExecutives = ['CSO', 'CTO', 'CIO', 'CAO', 'COO', 'COMMUNITY'];
     if (!validExecutives.includes(executive_name)) {
       return new Response(
-        JSON.stringify({ error: 'Invalid voter name. Use CSO, CTO, CIO, CAO, or COMMUNITY.' }),
+        JSON.stringify({ error: 'Invalid voter name. Use CSO, CTO, CIO, CAO, COO, or COMMUNITY.' }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 400 }
       );
     }
@@ -214,7 +214,7 @@ serve(async (req) => {
       .from('executive_votes')
       .select('*')
       .eq('proposal_id', proposal_id)
-      .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO']);
+      .in('executive_name', ['CSO', 'CTO', 'CIO', 'CAO', 'COO']);
 
     if (votesError) throw votesError;
 
@@ -238,11 +238,11 @@ serve(async (req) => {
     console.log(`📊 Executive votes: ${executiveApprovals} approvals, ${executiveRejections} rejections (${totalExecutiveVotes} total)`);
     console.log(`📊 Community votes: ${communityApprovals} approvals, ${communityRejections} rejections (${totalCommunityVotes} total)`);
 
-    // Check for consensus (3/4 executive approval required)
+    // Check for consensus (4/5 executive approval required)
     let consensusReached = false;
     let newStatus = 'voting';
 
-    if (executiveApprovals >= 3) {
+    if (executiveApprovals >= 4) {
       // Consensus reached - approve
       consensusReached = true;
       newStatus = 'approved';
@@ -258,7 +258,7 @@ serve(async (req) => {
         .insert({
           type: 'function_approved',
           title: `Edge Function Approved: ${proposal.function_name}`,
-          description: `Consensus reached (${executiveApprovals}/4 executive approvals, ${communityApprovals} community approvals). Ready for deployment.`,
+          description: `Consensus reached (${executiveApprovals}/5 executive approvals, ${communityApprovals} community approvals). Ready for deployment.`,
           data: {
             proposal_id,
             function_name: proposal.function_name,
@@ -285,8 +285,8 @@ serve(async (req) => {
         console.error('⚠️ Post-approval workflow error:', wfErr);
       }
 
-    } else if (executiveRejections >= 2) {
-      // Explicit rejection threshold - 2+ executives actively rejected
+    } else if (executiveRejections >= 3) {
+      // Explicit rejection threshold - 3+ executives actively rejected
       consensusReached = true;
       newStatus = 'rejected';
       
@@ -309,7 +309,7 @@ serve(async (req) => {
           }
         });
 
-      console.log('❌ Proposal rejected (2+ explicit rejections)');
+      console.log('❌ Proposal rejected (3+ explicit rejections)');
 
       // Trigger post-rejection workflow
       try {
@@ -318,8 +318,15 @@ serve(async (req) => {
         console.error('⚠️ Post-rejection workflow error:', rejErr);
       }
 
-    } else if (totalExecutiveVotes === 4) {
-      // All 4 executives have voted - evaluate based on ACTUAL decisions (not abstentions)
+      // Trigger post-rejection workflow
+      try {
+        await supabase.functions.invoke('handle-rejected-proposal', { body: { proposal_id } });
+      } catch (rejErr) {
+        console.error('⚠️ Post-rejection workflow error:', rejErr);
+      }
+
+    } else if (totalExecutiveVotes === 5) {
+      // All 5 executives have voted - evaluate based on ACTUAL decisions (not abstentions)
       const abstentions = totalExecutiveVotes - (executiveApprovals + executiveRejections);
       const actualDecisions = executiveApprovals + executiveRejections;
       
@@ -419,7 +426,7 @@ serve(async (req) => {
             approvals: executiveApprovals,
             rejections: executiveRejections,
             total: totalExecutiveVotes,
-            votes_needed: Math.max(0, 3 - executiveApprovals)
+            votes_needed: Math.max(0, 4 - executiveApprovals)
           },
           community: {
             approvals: communityApprovals,

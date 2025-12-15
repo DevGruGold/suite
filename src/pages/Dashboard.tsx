@@ -21,7 +21,7 @@ const Index = () => {
     <>
       <SEOHead
         title="AI Council of Executives at Your Fingertips | Suite"
-        description="120+ functions, 4 AI executives, real-time orchestration. Chat with CSO, CTO, CIO, CAO - get multi-angle analysis on any decision instantly."
+        description="120+ functions, 5 AI executives, real-time orchestration. Chat with CSO, CTO, CIO, CAO, COO - get multi-angle analysis on any decision instantly."
         image="/og-image-home.svg"
         url="/"
         keywords="AI executives, AI council, autonomous AI, real-time orchestration, multi-agent system"

@@ -17,7 +17,7 @@ const BASE_URL = 'https://suite-beta.vercel.app';
 
 export const SEOHead = ({ 
   title = "Replace Your C-Suite, Not Your Workers | Suite",
-  description = "AI executives save companies $12.4M in executive costs - redistributed as 41% raises to every employee. Ethical AI that empowers workers, not replaces them.",
+  description = "5 AI executives save companies $12.4M in executive costs - redistributed as 41% raises to every employee. Ethical AI that empowers workers, not replaces them.",
   image = "/suite-social-card.svg",
   url = "/licensing",
   type = "website",

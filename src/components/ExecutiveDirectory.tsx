@@ -31,7 +31,8 @@ export const ExecutiveDirectory: React.FC<ExecutiveDirectoryProps> = ({
       'vercel-ai-chat': 'vercel_ai',
       'deepseek-chat': 'deepseek',
       'gemini-chat': 'gemini',
-      'openai-chat': 'openai'
+      'openai-chat': 'openai',
+      'coo-chat': 'lovable'
     };
     
     const mappedService = serviceMap[serviceName];
@@ -59,7 +60,7 @@ export const ExecutiveDirectory: React.FC<ExecutiveDirectoryProps> = ({
       </div>
 
       {/* Executive Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
         {executives.map(([key, exec]) => {
           const { status, color } = getExecutiveStatus(key);
           
@@ -206,7 +207,7 @@ export const ExecutiveDirectory: React.FC<ExecutiveDirectoryProps> = ({
             <div>
               <h3 className="font-semibold text-foreground">Full Council Deliberation</h3>
               <p className="text-sm text-muted-foreground">
-                Engage all 4 executives for comprehensive analysis and synthesis
+                Engage all 5 executives for comprehensive analysis and synthesis
               </p>
             </div>
           </div>

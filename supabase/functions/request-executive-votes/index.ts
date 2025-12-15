@@ -27,6 +27,11 @@ const executivePerspectives = {
     title: 'Chief Analytics Officer',
     focus: 'ROI assessment, metrics, data-driven value, measurable outcomes',
     prompt: 'Analyze this proposal from an analytics perspective. Consider: What is the expected ROI? Can we measure its success? Does the data support this approach?'
+  },
+  COO: {
+    title: 'Chief Operations Officer',
+    focus: 'Operational efficiency, task pipeline impact, agent workload, execution feasibility',
+    prompt: 'Analyze this proposal from an operations perspective. Consider: How will this impact the task pipeline? What is the execution complexity? Does it integrate well with existing agents and workflows?'
   }
 };
 
@@ -92,7 +97,7 @@ serve(async (req) => {
         data: { proposal_id, function_name: proposal.function_name }
       });
 
-    const executives = ['CSO', 'CTO', 'CIO', 'CAO'];
+    const executives = ['CSO', 'CTO', 'CIO', 'CAO', 'COO'];
     const voteResults: any[] = [];
     const errors: any[] = [];
 
