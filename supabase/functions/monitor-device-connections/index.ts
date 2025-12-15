@@ -165,7 +165,7 @@ serve(async (req) => {
 
     switch (action) {
       case 'connect':
-        result = await handleConnect(supabase, payload);
+        result = await handleConnect(supabase, payload, req);
         break;
       case 'disconnect':
         result = await handleDisconnect(supabase, payload);
@@ -179,10 +179,25 @@ serve(async (req) => {
       case 'list_active':
         result = await handleListActive(supabase);
         break;
+      case 'generate_claim_code':
+        result = await handleGenerateClaimCode(supabase, payload);
+        break;
+      case 'verify_claim_code':
+        result = await handleVerifyClaimCode(supabase, payload);
+        break;
+      case 'auto_pair_by_ip':
+        result = await handleAutoPairByIP(supabase, payload);
+        break;
+      case 'list_user_devices':
+        result = await handleListUserDevices(supabase, payload);
+        break;
+      case 'unclaim_device':
+        result = await handleUnclaimDevice(supabase, payload);
+        break;
       default:
         return new Response(JSON.stringify({ 
           error: `Unknown action: "${action}"`,
-          valid_actions: ['connect', 'disconnect', 'heartbeat', 'status', 'list_active']
+          valid_actions: ['connect', 'disconnect', 'heartbeat', 'status', 'list_active', 'generate_claim_code', 'verify_claim_code', 'auto_pair_by_ip', 'list_user_devices', 'unclaim_device']
         }), {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -213,27 +228,78 @@ serve(async (req) => {
   }
 });
 
-async function handleConnect(supabase: any, payload: any) {
-  // Extract with defaults and flexible field names
+// Helper: Get real client IP from request headers
+function getClientIP(req: Request): string {
+  return req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() 
+    || req.headers.get('cf-connecting-ip')  
+    || req.headers.get('x-real-ip')
+    || '0.0.0.0';
+}
+
+// Helper: Get IP geolocation
+async function getIPLocation(ip: string): Promise<{ city?: string; region?: string; country?: string; lat?: number; lon?: number } | null> {
+  if (!ip || ip === '0.0.0.0' || ip.startsWith('192.168.') || ip.startsWith('10.') || ip === '127.0.0.1') {
+    return null;
+  }
+  try {
+    const response = await fetch(`http://ip-api.com/json/${ip}?fields=status,city,regionName,country,lat,lon`);
+    const data = await response.json();
+    if (data.status === 'success') {
+      return { city: data.city, region: data.regionName, country: data.country, lat: data.lat, lon: data.lon };
+    }
+  } catch (e) {
+    console.warn('IP geolocation failed:', e);
+  }
+  return null;
+}
+
+// Helper: Generate 6-char alphanumeric claim code
+function generateClaimCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars (I,O,0,1)
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+}
+
+async function handleConnect(supabase: any, payload: any, req: Request) {
   const device_fingerprint = payload.device_fingerprint || payload.device_id || payload.deviceId;
   const battery_level = payload.battery_level ?? payload.batteryLevel ?? null;
   const device_type = payload.device_type || payload.deviceType || 'unknown';
-  const ip_address = payload.ip_address || payload.ipAddress || '0.0.0.0';
   const user_agent = payload.user_agent || payload.userAgent || 'unknown';
+  
+  // Get real client IP from request headers
+  const ip_address = getClientIP(req);
 
   if (!device_fingerprint) {
     throw new Error('device_fingerprint or device_id is required for connect action');
   }
 
-  // Normalize device_id to UUID format
   const normalized_device_id = fingerprintToUUID(device_fingerprint);
-  
-  // Generate session key for authentication
   const session_key = `session_${Date.now()}_${crypto.randomUUID().slice(0, 8)}`;
 
-  console.log(`🔗 Connecting device: ${device_fingerprint} -> normalized: ${normalized_device_id}`);
+  console.log(`🔗 Connecting device: ${device_fingerprint} -> normalized: ${normalized_device_id}, IP: ${ip_address}`);
 
-  // Insert new connection session
+  // Get IP geolocation (non-blocking)
+  const locationPromise = getIPLocation(ip_address);
+
+  // Upsert device record with location
+  const location = await locationPromise;
+  
+  // Update or create device record
+  await supabase.from('devices').upsert({
+    id: normalized_device_id,
+    device_fingerprint,
+    device_type,
+    browser: payload.browser || null,
+    os: payload.os || null,
+    last_known_location: location || {},
+    ip_addresses: [ip_address],
+    updated_at: new Date().toISOString()
+  }, { onConflict: 'id' }).catch((e: any) => console.warn('Device upsert failed:', e.message));
+
+  // Insert new connection session with location
   const { data: session, error } = await supabase
     .from('device_connection_sessions')
     .insert({
@@ -243,6 +309,7 @@ async function handleConnect(supabase: any, payload: any) {
       battery_level_current: battery_level,
       ip_address,
       user_agent,
+      location_data: location || {},
       is_active: true,
       connected_at: new Date().toISOString(),
       last_heartbeat: new Date().toISOString()
@@ -262,12 +329,7 @@ async function handleConnect(supabase: any, payload: any) {
     activity_type: 'device_connect',
     category: 'connection',
     description: `Device connected: ${device_type}`,
-    details: { 
-      device_type, 
-      battery_level,
-      ip_address,
-      original_fingerprint: device_fingerprint
-    }
+    details: { device_type, battery_level, ip_address, location, original_fingerprint: device_fingerprint }
   }).then(() => {}).catch((e: any) => console.warn('Activity log insert failed:', e.message));
 
   console.log(`✅ Device connected: ${device_fingerprint}, Session: ${session.id}`);
@@ -279,7 +341,8 @@ async function handleConnect(supabase: any, payload: any) {
     device_id: normalized_device_id,
     original_fingerprint: device_fingerprint,
     connected_at: session.connected_at,
-    // Heartbeat guidance for client
+    ip_address,
+    location,
     heartbeat_interval_recommended_ms: 60000,
     heartbeat_required: true,
     heartbeat_hint: 'Send heartbeat action every 30-60 seconds to maintain active status and receive commands'
@@ -518,5 +581,280 @@ async function handleStatus(supabase: any, payload: any) {
     session,
     resolved_session_id: sessionRef.id,
     recent_commands: commands || []
+  };
+}
+
+// ===== Device Claiming Actions =====
+
+async function handleGenerateClaimCode(supabase: any, payload: any) {
+  const device_id = payload.device_id;
+  
+  if (!device_id) {
+    throw new Error('device_id is required for generate_claim_code action');
+  }
+
+  const claim_code = generateClaimCode();
+  const expires_at = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 minutes
+
+  const { error } = await supabase
+    .from('devices')
+    .update({
+      claim_verification_code: claim_code,
+      claim_code_expires_at: expires_at
+    })
+    .eq('id', device_id);
+
+  if (error) {
+    logError('handleGenerateClaimCode update failed', error, { device_id });
+    throw error;
+  }
+
+  console.log(`🔐 Claim code generated for device: ${device_id}`);
+
+  return {
+    success: true,
+    device_id,
+    claim_code,
+    expires_at,
+    expires_in_seconds: 600
+  };
+}
+
+async function handleVerifyClaimCode(supabase: any, payload: any) {
+  const { claim_code, device_id, user_id } = payload;
+
+  if (!claim_code) {
+    throw new Error('claim_code is required for verify_claim_code action');
+  }
+
+  // Find device with matching claim code
+  let query = supabase
+    .from('devices')
+    .select('id, device_fingerprint, claimed_by, claim_code_expires_at')
+    .eq('claim_verification_code', claim_code.toUpperCase())
+    .is('claimed_by', null);
+
+  if (device_id) {
+    query = query.eq('id', device_id);
+  }
+
+  const { data: device, error } = await query.single();
+
+  if (error || !device) {
+    return { success: false, error: 'Invalid or expired claim code' };
+  }
+
+  // Check expiration
+  if (device.claim_code_expires_at && new Date(device.claim_code_expires_at) < new Date()) {
+    return { success: false, error: 'Claim code has expired' };
+  }
+
+  // Claim the device
+  const { error: updateError } = await supabase
+    .from('devices')
+    .update({
+      claimed_by: user_id,
+      claimed_at: new Date().toISOString(),
+      claim_verification_code: null,
+      claim_code_expires_at: null
+    })
+    .eq('id', device.id);
+
+  if (updateError) {
+    logError('handleVerifyClaimCode update failed', updateError, { device_id: device.id });
+    throw updateError;
+  }
+
+  // Update user's linked_device_ids
+  if (user_id) {
+    await supabase.rpc('array_append_unique', {
+      table_name: 'profiles',
+      column_name: 'linked_device_ids',
+      id: user_id,
+      value: device.id
+    }).catch(() => {});
+  }
+
+  console.log(`✅ Device ${device.id} claimed by user ${user_id}`);
+
+  return {
+    success: true,
+    device_id: device.id,
+    device_fingerprint: device.device_fingerprint,
+    claimed_at: new Date().toISOString()
+  };
+}
+
+async function handleAutoPairByIP(supabase: any, payload: any) {
+  const { device_id, user_ip, user_id } = payload;
+
+  if (!device_id || !user_id) {
+    throw new Error('device_id and user_id are required for auto_pair_by_ip action');
+  }
+
+  // Get device's last known IP
+  const { data: sessions, error: sessionError } = await supabase
+    .from('device_connection_sessions')
+    .select('ip_address')
+    .eq('device_id', device_id)
+    .eq('is_active', true)
+    .order('connected_at', { ascending: false })
+    .limit(1);
+
+  if (sessionError || !sessions || sessions.length === 0) {
+    return { success: false, error: 'Device not found or not connected' };
+  }
+
+  const deviceIP = sessions[0].ip_address;
+
+  // Compare IPs (exact match or same /24 subnet)
+  const userParts = (user_ip || '').split('.');
+  const deviceParts = (deviceIP || '').split('.');
+  
+  const ipMatches = user_ip === deviceIP || 
+    (userParts.length === 4 && deviceParts.length === 4 &&
+     userParts[0] === deviceParts[0] && userParts[1] === deviceParts[1] && userParts[2] === deviceParts[2]);
+
+  if (!ipMatches) {
+    return { success: false, error: 'IP addresses do not match. Use QR code or manual code entry.' };
+  }
+
+  // Claim the device
+  const { error: updateError } = await supabase
+    .from('devices')
+    .update({
+      claimed_by: user_id,
+      claimed_at: new Date().toISOString()
+    })
+    .eq('id', device_id)
+    .is('claimed_by', null);
+
+  if (updateError) {
+    logError('handleAutoPairByIP update failed', updateError, { device_id });
+    throw updateError;
+  }
+
+  console.log(`✅ Device ${device_id} auto-paired by IP match`);
+
+  return {
+    success: true,
+    device_id,
+    paired_at: new Date().toISOString(),
+    method: 'ip_match'
+  };
+}
+
+async function handleListUserDevices(supabase: any, payload: any) {
+  const { user_id } = payload;
+
+  if (!user_id) {
+    throw new Error('user_id is required for list_user_devices action');
+  }
+
+  const { data: devices, error } = await supabase
+    .from('devices')
+    .select(`
+      id,
+      device_fingerprint,
+      device_type,
+      browser,
+      os,
+      last_known_location,
+      claimed_at,
+      device_connection_sessions (
+        id,
+        is_active,
+        last_heartbeat,
+        connected_at
+      )
+    `)
+    .eq('claimed_by', user_id)
+    .order('claimed_at', { ascending: false });
+
+  if (error) {
+    logError('handleListUserDevices query failed', error, { user_id });
+    throw error;
+  }
+
+  // Get PoP points per device
+  const deviceIds = devices?.map((d: any) => d.id) || [];
+  const { data: popData } = await supabase
+    .from('pop_events_ledger')
+    .select('device_id, pop_points')
+    .in('device_id', deviceIds);
+
+  const popByDevice: Record<string, number> = {};
+  popData?.forEach((p: any) => {
+    popByDevice[p.device_id] = (popByDevice[p.device_id] || 0) + (p.pop_points || 0);
+  });
+
+  const formattedDevices = devices?.map((d: any) => {
+    const sessions = d.device_connection_sessions || [];
+    const activeSession = sessions.find((s: any) => s.is_active);
+    const lastSession = sessions[0];
+
+    return {
+      id: d.id,
+      deviceFingerprint: d.device_fingerprint?.slice(0, 6) + '...' + d.device_fingerprint?.slice(-4) || 'Unknown',
+      deviceType: d.device_type || 'Device',
+      os: d.os,
+      browser: d.browser,
+      location: d.last_known_location,
+      claimedAt: d.claimed_at,
+      lastActive: activeSession?.last_heartbeat || lastSession?.last_heartbeat || d.claimed_at,
+      isOnline: !!activeSession,
+      totalPopPoints: popByDevice[d.id] || 0
+    };
+  }) || [];
+
+  return {
+    success: true,
+    devices: formattedDevices,
+    count: formattedDevices.length
+  };
+}
+
+async function handleUnclaimDevice(supabase: any, payload: any) {
+  const { device_id, user_id } = payload;
+
+  if (!device_id || !user_id) {
+    throw new Error('device_id and user_id are required for unclaim_device action');
+  }
+
+  // Verify ownership
+  const { data: device, error: fetchError } = await supabase
+    .from('devices')
+    .select('claimed_by')
+    .eq('id', device_id)
+    .single();
+
+  if (fetchError || !device) {
+    return { success: false, error: 'Device not found' };
+  }
+
+  if (device.claimed_by !== user_id) {
+    return { success: false, error: 'You do not own this device' };
+  }
+
+  // Unclaim
+  const { error: updateError } = await supabase
+    .from('devices')
+    .update({
+      claimed_by: null,
+      claimed_at: null
+    })
+    .eq('id', device_id);
+
+  if (updateError) {
+    logError('handleUnclaimDevice update failed', updateError, { device_id });
+    throw updateError;
+  }
+
+  console.log(`✅ Device ${device_id} unclaimed by user ${user_id}`);
+
+  return {
+    success: true,
+    device_id,
+    unclaimed_at: new Date().toISOString()
   };
 }
