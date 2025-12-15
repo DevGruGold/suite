@@ -16,6 +16,7 @@ interface DeviceClaimModalProps {
   deviceFingerprint: string;
   deviceIP: string;
   userIP: string;
+  userId: string;
   onClaimed: () => void;
 }
 
@@ -26,6 +27,7 @@ export const DeviceClaimModal = ({
   deviceFingerprint,
   deviceIP,
   userIP,
+  userId,
   onClaimed
 }: DeviceClaimModalProps) => {
   const [claimCode, setClaimCode] = useState('');
@@ -92,6 +94,7 @@ export const DeviceClaimModal = ({
         body: {
           action: 'auto_pair_by_ip',
           device_id: deviceId,
+          user_id: userId,
           user_ip: userIP
         }
       });
@@ -125,6 +128,7 @@ export const DeviceClaimModal = ({
         body: {
           action: 'verify_claim_code',
           device_id: deviceId,
+          user_id: userId,
           claim_code: codeInput.toUpperCase()
         }
       });

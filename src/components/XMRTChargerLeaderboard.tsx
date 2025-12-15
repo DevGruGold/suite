@@ -461,6 +461,7 @@ const XMRTChargerLeaderboard = () => {
           deviceFingerprint={anonymizeFingerprint(selectedDevice.deviceFingerprint)}
           deviceIP={selectedDevice.ipAddress || ''}
           userIP={userIP}
+          userId={user?.id || ''}
           onClaimed={() => {
             fetchConnectedDevices();
             toast.success('Device claimed! PoP points will now be linked to your profile.');
