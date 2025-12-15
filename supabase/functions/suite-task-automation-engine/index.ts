@@ -1148,13 +1148,26 @@ async function smartAssignTask(
     };
   }
 
-  // Assign task to best agent
+  // First fetch existing task to preserve its metadata (especially checklist!)
+  const { data: existingTask } = await supabase
+    .from('tasks')
+    .select('metadata')
+    .eq('id', taskId)
+    .single();
+
+  const existingMetadata = existingTask?.metadata || {};
+
+  // Assign task to best agent - MERGE with existing metadata to preserve checklist
   const { error: assignError } = await supabase
     .from('tasks')
     .update({ 
       assignee_agent_id: bestMatch.agent.id,
       status: 'CLAIMED',
-      metadata: { auto_assigned: true, assignment_score: bestMatch.totalScore }
+      metadata: { 
+        ...existingMetadata,  // Preserve existing metadata (checklist, etc.)
+        auto_assigned: true, 
+        assignment_score: bestMatch.totalScore 
+      }
     })
     .eq('id', taskId);
 
