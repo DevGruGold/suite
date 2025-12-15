@@ -8528,6 +8528,7 @@ export type Database = {
         Args: { request_metadata: Json; session_uuid: string }
         Returns: boolean
       }
+      cleanup_stale_device_sessions: { Args: never; Returns: Json }
       complete_job: {
         Args: { p_job_id: number; p_lease_token: string; p_logs?: string }
         Returns: undefined

@@ -788,21 +788,61 @@ serve(async (req) => {
         : `Using ${primaryProvider} with ${configuredProviders.length - 1} fallback(s)`
     };
 
-    // 9H. XMRT CHARGER DEVICES
+    // 9H. XMRT CHARGER DEVICES - Enhanced detection with multiple metrics
     console.log('🔋 Checking XMRT Charger devices...');
     try {
+      const now = Date.now();
+      const fifteenMinAgo = new Date(now - 15 * 60 * 1000).toISOString();
+      const fiveMinAgo = new Date(now - 5 * 60 * 1000).toISOString();
+      const oneHourAgo = new Date(now - 60 * 60 * 1000).toISOString();
+
+      // Get registered devices
       const { data: devices, error: devError } = await supabase
         .from('devices')
         .select('id, device_type, is_active, last_seen_at')
         .eq('is_active', true);
 
+      // Get PoP events for 24h
       const { data: popEvents, error: popError } = await supabase
         .from('pop_events')
         .select('id, pop_points, event_type')
         .gte('created_at', last24h);
 
+      // ENHANCED: Get device connection sessions with multiple metrics
+      // 1. Sessions with recent heartbeats (original method)
+      const { data: heartbeatActiveSessions } = await supabase
+        .from('device_connection_sessions')
+        .select('id, device_id, connected_at, last_heartbeat')
+        .eq('is_active', true)
+        .gte('last_heartbeat', fifteenMinAgo);
+
+      // 2. Sessions connected in last 5 minutes (regardless of heartbeat)
+      const { data: recentlyConnectedSessions } = await supabase
+        .from('device_connection_sessions')
+        .select('id, device_id, connected_at, last_heartbeat')
+        .eq('is_active', true)
+        .gte('connected_at', fiveMinAgo);
+
+      // 3. Sessions connected in last hour (shows activity)
+      const { data: hourlyConnectionSessions } = await supabase
+        .from('device_connection_sessions')
+        .select('id, device_id, connected_at')
+        .gte('connected_at', oneHourAgo);
+
+      // Calculate metrics
+      const heartbeatActiveCount = heartbeatActiveSessions?.length || 0;
+      const recentlyConnectedCount = recentlyConnectedSessions?.length || 0;
+      const connectionsLastHour = hourlyConnectionSessions?.length || 0;
+      
+      // Combined active = devices with heartbeat OR recently connected
+      const combinedActiveDeviceIds = new Set([
+        ...(heartbeatActiveSessions || []).map((s: any) => s.device_id),
+        ...(recentlyConnectedSessions || []).map((s: any) => s.device_id)
+      ]);
+      const combinedActiveCount = combinedActiveDeviceIds.size;
+
       const activeDevices = devices?.filter((d: any) => 
-        d.last_seen_at && new Date(d.last_seen_at) > new Date(Date.now() - 15 * 60 * 1000)
+        d.last_seen_at && new Date(d.last_seen_at) > new Date(now - 15 * 60 * 1000)
       ).length || 0;
 
       const deviceTypeBreakdown: Record<string, number> = {};
@@ -812,10 +852,33 @@ serve(async (req) => {
 
       const totalPopPoints = popEvents?.reduce((sum: number, p: any) => sum + (p.pop_points || 0), 0) || 0;
 
+      // Determine status based on combined metrics
+      const hasActivity = combinedActiveCount > 0 || connectionsLastHour > 0;
+      const xmrtChargerStatus = hasActivity ? 'healthy' : (connectionsLastHour === 0 ? 'warning' : 'healthy');
+
       statusReport.components.xmrt_charger = {
-        status: 'healthy',
+        status: xmrtChargerStatus,
         total_registered_devices: devices?.length || 0,
-        active_devices_15min: activeDevices,
+        // Original metric (heartbeat-based)
+        active_devices_15min: heartbeatActiveCount,
+        // NEW: Recently connected devices (catches devices without heartbeat)
+        recently_connected_5min: recentlyConnectedCount,
+        // NEW: Combined active (heartbeat OR recently connected)
+        combined_active_devices: combinedActiveCount,
+        // NEW: Connections in last hour (shows overall activity)
+        connections_last_hour: connectionsLastHour,
+        // NEW: Diagnostic info
+        detection_breakdown: {
+          heartbeat_active: heartbeatActiveCount,
+          recently_connected: recentlyConnectedCount,
+          unique_active_devices: combinedActiveCount,
+          hourly_connections: connectionsLastHour,
+          message: heartbeatActiveCount === 0 && recentlyConnectedCount > 0
+            ? 'Devices connected but not sending heartbeats - client may need to implement heartbeat calls'
+            : (heartbeatActiveCount > 0 
+              ? `${heartbeatActiveCount} device(s) actively sending heartbeats`
+              : 'No active device connections detected')
+        },
         by_type: deviceTypeBreakdown,
         pop_events_24h: popEvents?.length || 0,
         pop_points_earned_24h: Math.round(totalPopPoints * 100) / 100
