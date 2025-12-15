@@ -111,14 +111,14 @@ serve(async (req) => {
   const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, body);
 
   try {
-    // Check if Google is configured
-    if (!isGoogleConfigured()) {
+    // Check if Google is configured (async - checks env and database)
+    if (!(await isGoogleConfigured())) {
       await usageTracker.failure('Google Cloud not configured', 401);
       return new Response(JSON.stringify({
         success: false,
         error: 'Google Cloud not configured',
         credential_required: true,
-        message: 'Please configure Google OAuth credentials (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, GOOGLE_REFRESH_TOKEN)'
+        message: 'Please configure Google OAuth credentials (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET) and authorize via OAuth flow'
       }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
