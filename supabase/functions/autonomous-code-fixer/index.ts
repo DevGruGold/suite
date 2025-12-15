@@ -25,6 +25,27 @@ async function logActivity(
 }
 
 async function generateFix(code: string, error: string, description: string) {
+  // ========== INFINITE LOOP PREVENTION ==========
+  // Detect if code has already been auto-fixed to prevent recursive wrapping
+  const autoFixMarkers = (code.match(/# AUTO-FIX FALLBACK/g) || []).length;
+  const alreadyWrapped = code.includes('# AUTO-FIX FALLBACK') || code.includes('# AUTO-FIX FAILED');
+  
+  if (autoFixMarkers >= 1 || alreadyWrapped) {
+    console.log(`🛑 INFINITE LOOP PREVENTION: Code already auto-fixed ${autoFixMarkers} time(s) - refusing to wrap again`);
+    await logActivity(
+      "auto_fix_skipped",
+      `⚠️ Skipped auto-fix: code already wrapped ${autoFixMarkers} time(s)`,
+      {
+        code_length: code.length,
+        nesting_level: autoFixMarkers,
+        reason: 'infinite_loop_prevention'
+      },
+      "skipped"
+    );
+    // Return original code unchanged to break the recursion
+    return code;
+  }
+
   await logActivity(
     "auto_fix_analysis",
     "🔬 Analyzing code failure to generate fix...",
@@ -54,6 +75,8 @@ Provide ONLY the corrected Python code, no explanations. The code should:
 3. Add error handling if needed
 4. Be production-ready
 
+IMPORTANT: Do NOT wrap the entire code in try/except. Fix the actual error.
+
 CORRECTED CODE:`;
 
   let fixedCode: string;
@@ -74,13 +97,12 @@ CORRECTED CODE:`;
     console.log('✅ Fix generated via AI cascade');
   } catch (aiError) {
     console.error('❌ All AI providers failed for fix generation:', aiError);
-    // Return original code with basic error handling wrapper as last resort
-    fixedCode = `# AUTO-FIX FALLBACK: AI providers unavailable
+    // DO NOT wrap in try/except - just mark as failed and preserve original
+    fixedCode = `# AUTO-FIX FAILED: AI providers unavailable - manual review required
 # Original error: ${error?.substring(0, 100)}
-try:
-${code.split('\n').map(line => '    ' + line).join('\n')}
-except Exception as e:
-    print(f"Error: {e}")`;
+# This code was NOT modified. Please fix manually.
+
+${code}`;
   }
 
   await logActivity(
