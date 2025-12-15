@@ -596,7 +596,7 @@ export type Database = {
           id: string
           is_charging: boolean
           metadata: Json | null
-          session_id: string
+          session_id: string | null
           temperature_impact: string | null
           timestamp: string
         }
@@ -610,7 +610,7 @@ export type Database = {
           id?: string
           is_charging?: boolean
           metadata?: Json | null
-          session_id: string
+          session_id?: string | null
           temperature_impact?: string | null
           timestamp?: string
         }
@@ -624,7 +624,7 @@ export type Database = {
           id?: string
           is_charging?: boolean
           metadata?: Json | null
-          session_id?: string
+          session_id?: string | null
           temperature_impact?: string | null
           timestamp?: string
         }
