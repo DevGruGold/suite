@@ -83,8 +83,8 @@ export const SystemStatusMonitor = () => {
   useEffect(() => {
     fetchSystemStatus();
     
-    // Refresh every 30 seconds
-    const interval = setInterval(fetchSystemStatus, 30000);
+    // Refresh every 5 minutes (300000ms) - matches cron job schedule
+    const interval = setInterval(fetchSystemStatus, 300000);
     return () => clearInterval(interval);
   }, []);
 
