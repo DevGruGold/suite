@@ -27,6 +27,53 @@ const numberEmojis: Record<number, string> = {
   9: '9️⃣',
 };
 
+// Patterns indicating the list is USER CHOICES (show numbered buttons)
+const userChoicePatterns = [
+  /which (one|option|would you)/i,
+  /choose (from|one|an option)/i,
+  /select (one|an option|from)/i,
+  /options( are)?:/i,
+  /you (can|could|might) (choose|pick|select)/i,
+  /would you (like|prefer|want)/i,
+  /what would you like/i,
+  /here are (your|the|some) (options|choices)/i,
+  /pick (one|an option)/i,
+  /which (do you|should we)/i,
+];
+
+// Patterns indicating ELIZA'S PLANNED STEPS (show "Ok, do it!" instead)
+const plannedStepPatterns = [
+  /i('ll| will| am going to| 'm going to)/i,
+  /let me/i,
+  /here('s| is) (my|the) plan/i,
+  /i('m| am) going to/i,
+  /(the |my )?steps (are|will be|i'll take)/i,
+  /first,? i('ll| will)/i,
+  /this is (how|what) i('ll| will)/i,
+  /i can do this by/i,
+  /here's what i'll do/i,
+  /my approach (will be|is)/i,
+  /i('ll| will) (start|begin) by/i,
+  /to (fix|solve|address) this,? i('ll| will)/i,
+];
+
+// Check if numbered list represents user choices vs Eliza's planned steps
+const isUserChoiceList = (content: string): boolean => {
+  if (!content) return false;
+  
+  // Check for explicit user choice patterns first
+  const hasUserChoiceSignal = userChoicePatterns.some(p => p.test(content));
+  if (hasUserChoiceSignal) return true;
+  
+  // Check for planned step patterns - if found, NOT a user choice list
+  const hasPlannedStepSignal = plannedStepPatterns.some(p => p.test(content));
+  if (hasPlannedStepSignal) return false;
+  
+  // Default: if no clear signal, assume it's NOT a user choice
+  // This prevents false positives on step descriptions
+  return false;
+};
+
 // Extract numbered options from AI response (e.g., "1. Option" "2) Choice" "(3) Action")
 const extractNumberedOptions = (content: string): ButtonConfig[] | null => {
   if (!content) return null;
@@ -244,9 +291,9 @@ const getContextualButtons = (
     return afterUserResponses;
   }
   
-  // NEW: Check for numbered options FIRST (e.g., "1. Option 2. Choice 3. Action")
+  // Check for numbered options, but ONLY if it's a user choice list (not planned steps)
   const numberedOptions = extractNumberedOptions(lastMessageContent || '');
-  if (numberedOptions) {
+  if (numberedOptions && isUserChoiceList(lastMessageContent || '')) {
     return numberedOptions;
   }
   
