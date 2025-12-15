@@ -1,13 +1,14 @@
 import { supabase } from '@/integrations/supabase/client';
 
-export type ExecutiveName = 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat';
+export type ExecutiveName = 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat';
 
 // Hume AI voice IDs for each executive
 const EXECUTIVE_HUME_VOICES: Record<ExecutiveName, string> = {
   'vercel-ai-chat': '445d65ed-f002-4059-8a1b-05eb8ce2c3b4', // CSO - warm, strategic
   'deepseek-chat': '5cad536a-66bc-4f89-8d20-2a2622fe1c78',   // CTO - technical, precise
   'gemini-chat': '5bb7de05-b1f0-4b4d-9fc6-c47b0547e3a0',     // CIO - analytical, clear
-  'openai-chat': '5ac595dd-d5e9-4f48-8e83-be4b2c29b46a'      // CAO - authoritative, deep
+  'openai-chat': '5ac595dd-d5e9-4f48-8e83-be4b2c29b46a',     // CAO - authoritative, deep
+  'coo-chat': '3b554273-4299-48b9-9aaf-eefd438e3941'          // COO - operational, clear
 };
 
 // OpenAI TTS voice IDs for each executive (fallback)
@@ -15,7 +16,8 @@ const EXECUTIVE_OPENAI_VOICES: Record<ExecutiveName, string> = {
   'vercel-ai-chat': 'alloy',   // CSO - balanced, versatile
   'deepseek-chat': 'echo',     // CTO - crisp, technical
   'gemini-chat': 'fable',      // CIO - expressive, clear
-  'openai-chat': 'onyx'        // CAO - deep, authoritative
+  'openai-chat': 'onyx',       // CAO - deep, authoritative
+  'coo-chat': 'nova'           // COO - clear, operational
 };
 
 // Browser TTS pitch variations for each executive
@@ -23,7 +25,8 @@ const EXECUTIVE_BROWSER_PITCH: Record<ExecutiveName, number> = {
   'vercel-ai-chat': 1.0,  // CSO - normal pitch
   'deepseek-chat': 0.9,   // CTO - slightly lower
   'gemini-chat': 1.1,     // CIO - slightly higher
-  'openai-chat': 0.8      // CAO - deeper voice
+  'openai-chat': 0.8,     // CAO - deeper voice
+  'coo-chat': 0.95        // COO - slightly lower, authoritative
 };
 
 class ExecutiveTTSService {

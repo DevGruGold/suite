@@ -586,6 +586,12 @@ verify_jwt = false
 # AI MODEL INTEGRATIONS
 # ====================================================================
 
+[functions.coo-chat]
+verify_jwt = false
+
+[functions.agent-work-executor]
+verify_jwt = false
+
 [functions.kimi-chat]
 verify_jwt = false
 

@@ -9,21 +9,21 @@ import { Users, Zap, ArrowLeft } from 'lucide-react';
 import { ExecutiveName, EXECUTIVE_PROFILES } from '@/components/ExecutiveBio';
 import { SEOHead } from '@/components/SEOHead';
 
-const EXECUTIVES: ExecutiveName[] = ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat'];
+const EXECUTIVES: ExecutiveName[] = ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
 
 const Council = () => {
   const [isCouncilMode, setIsCouncilMode] = useState(false);
 
   return (
     <>
-      <SEOHead
+        <SEOHead
         title="Convene Your AI Executive Board | Suite Council"
-        description="CSO, CTO, CIO, CAO - multi-angle analysis on any decision. Chat individually or convene the full council for consensus-driven insights."
+        description="CSO, CTO, CIO, CAO, COO - multi-angle analysis on any decision. Chat individually or convene the full council for consensus-driven insights."
         image="/og-image-council.svg"
         url="/council"
-        keywords="AI executives, executive board, CSO, CTO, CIO, CAO, multi-agent AI, consensus"
+        keywords="AI executives, executive board, CSO, CTO, CIO, CAO, COO, multi-agent AI, consensus"
         twitterLabel1="👔 Executives"
-        twitterData1="4"
+        twitterData1="5"
         twitterLabel2="🧠 Perspectives"
         twitterData2="Unlimited"
       />
@@ -49,7 +49,7 @@ const Council = () => {
           <div className="flex flex-wrap items-center justify-center gap-2 pt-2">
             <Badge variant="secondary" className="text-xs">
               <Users className="w-3 h-3 mr-1" />
-              4 Executives
+              5 Executives
             </Badge>
             <Badge variant="secondary" className="text-xs">
               <Zap className="w-3 h-3 mr-1" />
@@ -78,7 +78,7 @@ const Council = () => {
             </div>
             <div>
               <h3 className="font-medium text-foreground">Executive Council</h3>
-              <p className="text-sm text-muted-foreground">All 4 executives providing perspectives</p>
+              <p className="text-sm text-muted-foreground">All 5 executives providing perspectives</p>
             </div>
             <div className="ml-auto flex gap-1">
               {EXECUTIVES.map((exec) => (
