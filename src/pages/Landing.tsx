@@ -155,7 +155,7 @@ export default function Landing() {
       </section>
 
       {/* AI Executives Section */}
-      <section id="executives" className="py-12 px-4 relative">
+      <section id="executives" className="py-12 px-4 relative scroll-mt-20">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/20 to-transparent" />
         
         <div className="container mx-auto max-w-6xl relative">
@@ -191,7 +191,7 @@ export default function Landing() {
       </section>
 
       {/* Why Section */}
-      <section id="benefits" className="py-12 px-4">
+      <section id="benefits" className="py-12 px-4 scroll-mt-20">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Why Choose Suite AI?</h2>
@@ -239,7 +239,7 @@ export default function Landing() {
       </section>
 
       {/* How It Works */}
-      <section id="how-it-works" className="py-12 px-4 relative">
+      <section id="how-it-works" className="py-12 px-4 relative scroll-mt-20">
         <div className="absolute inset-0 bg-gradient-to-b from-transparent via-muted/20 to-transparent" />
         
         <div className="container mx-auto max-w-4xl relative">

@@ -972,8 +972,9 @@ If unsure which tool, call invoke_edge_function with function_name: "system-stat
                   const actionDirective = 'CRITICAL: Be CONCISE. Never explain what you will do - just do it. Present results naturally. 1-3 sentences max.';
                   contentParts[0].text = `${actionDirective}\n\n${contentParts[0].text}`;
                   
-                  // Include tools for OpenRouter vision fallback
-                  const openRouterTools = ELIZA_TOOLS.slice(0, 30).map(tool => ({
+                  // Include ALL tools for OpenRouter vision fallback - no artificial limits
+                  console.log(`📊 OpenRouter vision fallback: Passing ${ELIZA_TOOLS.length} tools (full array)`);
+                  const openRouterTools = ELIZA_TOOLS.map(tool => ({
                     type: 'function',
                     function: tool.function
                   }));
