@@ -66,13 +66,29 @@ serve(async (req) => {
       console.log('🔍 Starting opportunity scan...');
       const opportunities: any[] = [];
 
-      // 1. Detect slow-running tasks (fast query)
-      const slowTasksResult = await withTimeout(
-        supabase.from('tasks').select('id, title').eq('status', 'in_progress').gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()).limit(5),
-        QUERY_TIMEOUT_MS,
-        'slowTasks'
-      );
+      // Run all detection queries in PARALLEL for faster execution
+      const [slowTasksResult, errorsResult, patternsResult] = await Promise.all([
+        // 1. Detect slow-running tasks
+        withTimeout(
+          supabase.from('tasks').select('id, title').eq('status', 'in_progress').gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString()).limit(5),
+          QUERY_TIMEOUT_MS,
+          'slowTasks'
+        ),
+        // 2. Detect error patterns in logs
+        withTimeout(
+          supabase.from('eliza_activity_log').select('id, activity_type').eq('status', 'failed').gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString()).limit(5),
+          QUERY_TIMEOUT_MS,
+          'recentErrors'
+        ),
+        // 3. Detect high-potential patterns
+        withTimeout(
+          supabase.from('eliza_work_patterns').select('pattern_type, times_applied, lesson_learned').eq('outcome', 'success').gte('confidence_score', 0.8).order('times_applied', { ascending: false }).limit(2),
+          QUERY_TIMEOUT_MS,
+          'successPatterns'
+        )
+      ]);
 
+      // Process slow tasks
       if (slowTasksResult?.data && slowTasksResult.data.length > 0) {
         opportunities.push({
           opportunity_type: 'performance',
@@ -84,13 +100,7 @@ serve(async (req) => {
         });
       }
 
-      // 2. Detect error patterns in logs (fast query)
-      const errorsResult = await withTimeout(
-        supabase.from('eliza_activity_log').select('id, activity_type').eq('status', 'failed').gte('created_at', new Date(Date.now() - 60 * 60 * 1000).toISOString()).limit(5),
-        QUERY_TIMEOUT_MS,
-        'recentErrors'
-      );
-
+      // Process errors
       if (errorsResult?.data && errorsResult.data.length >= 3) {
         opportunities.push({
           opportunity_type: 'bug_fix',
@@ -102,13 +112,7 @@ serve(async (req) => {
         });
       }
 
-      // 3. Detect high-potential patterns (fast query)
-      const patternsResult = await withTimeout(
-        supabase.from('eliza_work_patterns').select('pattern_type, times_applied, lesson_learned').eq('outcome', 'success').gte('confidence_score', 0.8).order('times_applied', { ascending: false }).limit(2),
-        QUERY_TIMEOUT_MS,
-        'successPatterns'
-      );
-
+      // Process patterns
       if (patternsResult?.data && patternsResult.data.length > 0) {
         for (const pattern of patternsResult.data) {
           opportunities.push({

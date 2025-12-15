@@ -20,9 +20,10 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, operation: string
   return Promise.race([promise, timeout]);
 }
 
-// In-memory cache for health metrics (60 second TTL)
+// In-memory cache for health metrics (TTL varies by caller)
 let statusCache: { data: any; timestamp: number } | null = null;
-const CACHE_TTL_MS = 60000;
+const API_CACHE_TTL_MS = 60000;     // 1 minute for API calls
+const CRON_CACHE_TTL_MS = 300000;   // 5 minutes for cron-triggered snapshots
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -32,9 +33,18 @@ serve(async (req) => {
   const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
-    // Check cache for recent results
-    if (statusCache && Date.now() - statusCache.timestamp < CACHE_TTL_MS) {
-      console.log('📦 Returning cached system status (< 60s old)');
+    // Parse request body to check if this is a cron snapshot
+    let body: any = {};
+    try {
+      body = await req.json();
+    } catch { /* empty body is fine */ }
+    
+    const isCronSnapshot = body?.snapshot_type === 'scheduled';
+    const cacheTTL = isCronSnapshot ? CRON_CACHE_TTL_MS : API_CACHE_TTL_MS;
+    
+    // Check cache for recent results (use appropriate TTL)
+    if (statusCache && Date.now() - statusCache.timestamp < cacheTTL) {
+      console.log(`📦 Returning cached system status (< ${cacheTTL/1000}s old)`);
       await usageTracker.success({ cached: true });
       return new Response(JSON.stringify(statusCache.data), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
@@ -62,40 +72,50 @@ serve(async (req) => {
       components: {}
     };
     
-    // 1. Check Database Health (with timeout)
-    console.log('📊 Checking database health...');
-    try {
-      const dbStart = Date.now();
-      const { data: dbTest, error: dbError } = await withTimeout(
+    // ========== PARALLEL GROUP 1: Core health checks ==========
+    console.log('📊 Running parallel core health checks (db, agents, tasks)...');
+    const coreChecksStart = Date.now();
+    
+    const [dbResult, agentsResult, tasksResult] = await Promise.all([
+      // 1. Database Health
+      withTimeout(
         supabase.from('agents').select('id').limit(1),
         QUERY_TIMEOUT_MS,
         'database_health_check'
-      );
+      ).then(({ data, error }) => ({ data, error, responseTime: Date.now() - coreChecksStart }))
+       .catch(error => ({ data: null, error, responseTime: Date.now() - coreChecksStart })),
       
-      statusReport.components.database = {
-        status: dbError ? 'unhealthy' : 'healthy',
-        error: dbError?.message,
-        response_time_ms: Date.now() - dbStart
-      };
-    } catch (error) {
-      statusReport.components.database = {
-        status: 'error',
-        error: error.message
-      };
-      statusReport.overall_status = 'degraded';
-    }
-    
-    // 2. Check Agents Status (with timeout)
-    console.log('🤖 Checking agents status...');
-    try {
-      const { data: agents, error: agentsError } = await withTimeout(
-        supabase.from('agents').select('id, name, role, status, created_at').order('created_at', { ascending: false }).limit(50),
+      // 2. Agents Status
+      withTimeout(
+        supabase.from('agents').select('id, name, role, status').order('created_at', { ascending: false }).limit(50),
         QUERY_TIMEOUT_MS,
         'agents_status_check'
-      );
+      ).catch(error => ({ data: null, error })),
       
-      if (agentsError) throw agentsError;
-      
+      // 3. Tasks Status
+      withTimeout(
+        supabase.from('tasks').select('id, title, status, stage, priority').order('updated_at', { ascending: false }).limit(100),
+        QUERY_TIMEOUT_MS,
+        'tasks_status_check'
+      ).catch(error => ({ data: null, error }))
+    ]);
+    
+    console.log(`✅ Core checks completed in ${Date.now() - coreChecksStart}ms`);
+    
+    // Process database result
+    statusReport.components.database = {
+      status: dbResult.error ? 'unhealthy' : 'healthy',
+      error: dbResult.error?.message,
+      response_time_ms: dbResult.responseTime
+    };
+    if (dbResult.error) statusReport.overall_status = 'degraded';
+    
+    // Process agents result
+    const agents = agentsResult?.data;
+    if (agentsResult?.error) {
+      statusReport.components.agents = { status: 'error', error: agentsResult.error.message };
+      statusReport.overall_status = 'degraded';
+    } else {
       const agentStats = {
         total: agents?.length || 0,
         idle: agents?.filter((a: any) => a.status === 'IDLE').length || 0,
@@ -104,42 +124,20 @@ serve(async (req) => {
         completed: agents?.filter((a: any) => a.status === 'COMPLETED').length || 0,
         error: agents?.filter((a: any) => a.status === 'ERROR').length || 0
       };
-      
       statusReport.components.agents = {
-        status: 'healthy',
+        status: agentStats.error > 3 ? 'degraded' : 'healthy',
         stats: agentStats,
-        recent_agents: agents?.slice(0, 5).map((a: any) => ({
-          id: a.id,
-          name: a.name,
-          role: a.role,
-          status: a.status
-        }))
+        recent_agents: agents?.slice(0, 5).map((a: any) => ({ id: a.id, name: a.name, role: a.role, status: a.status }))
       };
-      
-      // Flag if too many errors
-      if (agentStats.error > 3) {
-        statusReport.components.agents.status = 'degraded';
-        statusReport.overall_status = 'degraded';
-      }
-    } catch (error) {
-      statusReport.components.agents = {
-        status: 'error',
-        error: error.message
-      };
-      statusReport.overall_status = 'degraded';
+      if (agentStats.error > 3) statusReport.overall_status = 'degraded';
     }
     
-    // 3. Check Tasks Status (with timeout, limited fields)
-    console.log('📋 Checking tasks status...');
-    try {
-      const { data: tasks, error: tasksError } = await withTimeout(
-        supabase.from('tasks').select('id, title, status, stage, priority, updated_at').order('updated_at', { ascending: false }).limit(100),
-        QUERY_TIMEOUT_MS,
-        'tasks_status_check'
-      );
-      
-      if (tasksError) throw tasksError;
-      
+    // Process tasks result
+    const tasks = tasksResult?.data;
+    if (tasksResult?.error) {
+      statusReport.components.tasks = { status: 'error', error: tasksResult.error.message };
+      statusReport.overall_status = 'degraded';
+    } else {
       const taskStats = {
         total: tasks?.length || 0,
         pending: tasks?.filter((t: any) => t.status === 'PENDING').length || 0,
@@ -148,33 +146,14 @@ serve(async (req) => {
         blocked: tasks?.filter((t: any) => t.status === 'BLOCKED').length || 0,
         completed: tasks?.filter((t: any) => t.status === 'COMPLETED').length || 0,
         failed: tasks?.filter((t: any) => t.status === 'FAILED').length || 0,
-        // Active = anything in the pipeline (not completed/cancelled/failed)
         active: tasks?.filter((t: any) => ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED'].includes(t.status)).length || 0
       };
-      
       statusReport.components.tasks = {
-        status: 'healthy',
+        status: (taskStats.blocked > 5 || taskStats.failed > 5) ? 'degraded' : 'healthy',
         stats: taskStats,
-        recent_tasks: tasks?.slice(0, 5).map((t: any) => ({
-          id: t.id,
-          title: t.title,
-          status: t.status,
-          stage: t.stage,
-          priority: t.priority
-        }))
+        recent_tasks: tasks?.slice(0, 5).map((t: any) => ({ id: t.id, title: t.title, status: t.status, stage: t.stage, priority: t.priority }))
       };
-      
-      // Flag if too many blocked or failed
-      if (taskStats.blocked > 5 || taskStats.failed > 5) {
-        statusReport.components.tasks.status = 'degraded';
-        statusReport.overall_status = 'degraded';
-      }
-    } catch (error) {
-      statusReport.components.tasks = {
-        status: 'error',
-        error: error.message
-      };
-      statusReport.overall_status = 'degraded';
+      if (taskStats.blocked > 5 || taskStats.failed > 5) statusReport.overall_status = 'degraded';
     }
     
     // 4. Check Mining Proxy
@@ -266,12 +245,17 @@ serve(async (req) => {
       
       console.log(`📊 Total deployed functions in registry: ${totalDeployedFunctions}`);
       
-      // Get recent usage data (last 24h) for active functions
-      const { data: functionUsage, error: usageError } = await supabase
-        .from('eliza_function_usage')
-        .select('*')
-        .gte('invoked_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
-        .order('invoked_at', { ascending: false });
+      // Get recent usage data (last 24h) for active functions - LIMITED to prevent timeout
+      const { data: functionUsage, error: usageError } = await withTimeout(
+        supabase
+          .from('eliza_function_usage')
+          .select('function_name, status, duration_ms, invoked_at')  // Only needed columns
+          .gte('invoked_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+          .order('invoked_at', { ascending: false })
+          .limit(2000),  // Cap at 2000 most recent entries
+        QUERY_TIMEOUT_MS,
+        'function_usage_check'
+      );
       
       if (usageError) throw usageError;
       
@@ -590,9 +574,14 @@ serve(async (req) => {
     // 9B. KNOWLEDGE BASE HEALTH
     console.log('🧠 Checking knowledge base...');
     try {
-      const { data: knowledge, error: kbError } = await supabase
-        .from('knowledge_entities')
-        .select('id, entity_type, confidence_score, created_at');
+      const { data: knowledge, error: kbError } = await withTimeout(
+        supabase
+          .from('knowledge_entities')
+          .select('id, entity_type, confidence_score')  // Only needed columns
+          .limit(500),  // Cap at 500 entities for status check
+        QUERY_TIMEOUT_MS,
+        'knowledge_base_check'
+      );
 
       if (kbError) throw kbError;
 
