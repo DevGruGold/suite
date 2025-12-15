@@ -10,7 +10,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 // Configuration
 const CODE_SCAN_WINDOW_HOURS = parseInt(Deno.env.get("CODE_SCAN_WINDOW_HOURS") || "1");
 const CODE_SCAN_BATCH_SIZE = parseInt(Deno.env.get("CODE_SCAN_BATCH_SIZE") || "50");
-const MAX_AUTO_FIX_ATTEMPTS = 3; // Max fixes per scan to avoid overwhelming the system
+const MAX_AUTO_FIX_ATTEMPTS = 1; // Reduced to 1 to prevent cascade timeout floods
 
 const supabase = createClient(SUPABASE_URL!, SUPABASE_SERVICE_ROLE_KEY!);
 
@@ -128,6 +128,25 @@ function generateLearningPoint(execution: any, fixResult: any): string {
 Deno.serve(async (req) => {
   const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const scanStartTime = new Date();
+  
+  // Check if another scan is already running (prevent parallel cascade)
+  const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+  const { data: recentScan } = await supabase
+    .from("eliza_activity_log")
+    .select("created_at")
+    .eq("activity_type", "daemon_scan")
+    .eq("status", "in_progress")
+    .gte("created_at", fiveMinutesAgo)
+    .limit(1);
+
+  if (recentScan && recentScan.length > 0) {
+    console.log('⏭️ Skipping - another scan is already in progress');
+    await usageTracker.success({ skipped: true, reason: 'scan_in_progress' });
+    return new Response(
+      JSON.stringify({ skipped: true, reason: 'scan_in_progress', recent_scan: recentScan[0].created_at }),
+      { headers: { "Content-Type": "application/json" } }
+    );
+  }
   
   await logActivity(
     "daemon_scan",
