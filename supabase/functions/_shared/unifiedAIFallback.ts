@@ -179,9 +179,10 @@ async function callDeepSeek(
       max_tokens: maxTokens,
     };
     
-    // Include tools for full capability
+    // Include ALL tools for full capability - no artificial limits
     if (effectiveTools.length > 0) {
-      requestBody.tools = effectiveTools.slice(0, 50); // DeepSeek limit
+      console.log(`📊 DeepSeek: Passing ${effectiveTools.length} tools (full array)`);
+      requestBody.tools = effectiveTools;
       requestBody.tool_choice = 'auto';
     }
 
@@ -264,8 +265,10 @@ async function callLovable(
       max_tokens: maxTokens,
     };
 
+    // Include ALL tools - Lovable AI Gateway supports 100+ tools
     if (effectiveTools.length > 0) {
-      requestBody.tools = effectiveTools.slice(0, 39); // Lovable limit
+      console.log(`📊 Lovable Gateway: Passing ${effectiveTools.length} tools (full array)`);
+      requestBody.tools = effectiveTools;
       requestBody.tool_choice = 'auto';
     }
 
@@ -348,9 +351,10 @@ async function callKimi(
       max_tokens: maxTokens, // Reduced for credit limits
     };
     
-    // Include tools for Kimi
+    // Include ALL tools for Kimi
     if (effectiveTools.length > 0) {
-      requestBody.tools = effectiveTools.slice(0, 40);
+      console.log(`📊 Kimi K2: Passing ${effectiveTools.length} tools (full array)`);
+      requestBody.tools = effectiveTools;
       requestBody.tool_choice = 'auto';
     }
 
@@ -439,10 +443,11 @@ async function callGemini(
       },
     };
     
-    // Add tool definitions for Gemini (convert to Gemini format)
+    // Add ALL tool definitions for Gemini (convert to Gemini format)
     if (effectiveTools.length > 0) {
+      console.log(`📊 Gemini: Passing ${effectiveTools.length} tools (full array)`);
       requestBody.tools = [{
-        functionDeclarations: effectiveTools.slice(0, 30).map(tool => ({
+        functionDeclarations: effectiveTools.map(tool => ({
           name: tool.function.name,
           description: tool.function.description,
           parameters: tool.function.parameters
@@ -550,10 +555,11 @@ async function callVertexAI(
       },
     };
     
-    // Add tool definitions (Vertex AI uses same format as Gemini)
+    // Add ALL tool definitions (Vertex AI uses same format as Gemini)
     if (effectiveTools.length > 0) {
+      console.log(`📊 Vertex AI: Passing ${effectiveTools.length} tools (full array)`);
       requestBody.tools = [{
-        functionDeclarations: effectiveTools.slice(0, 30).map(tool => ({
+        functionDeclarations: effectiveTools.map(tool => ({
           name: tool.function.name,
           description: tool.function.description,
           parameters: tool.function.parameters

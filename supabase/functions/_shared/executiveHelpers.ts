@@ -351,14 +351,15 @@ export async function callGeminiFallback(
       }
     }
     
-    // Convert tools to Gemini format
+    // Convert ALL tools to Gemini format - no artificial limits
     const geminiTools = tools && tools.length > 0 ? [{
-      functionDeclarations: tools.slice(0, 40).map(t => ({
+      functionDeclarations: tools.map(t => ({
         name: t.function.name,
         description: t.function.description,
         parameters: t.function.parameters
       }))
     }] : undefined;
+    console.log(`📊 Gemini fallback: Passing ${tools?.length || 0} tools (full array)`);
     
     const response = await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,

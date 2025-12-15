@@ -849,8 +849,9 @@ If unsure which tool, call invoke_edge_function with function_name: "system-stat
                 const actionDirective = 'CRITICAL: Be CONCISE. Never explain what you will do - just do it. Present results naturally. 1-3 sentences max for simple queries.';
                 parts[0].text = `${actionDirective}\n\n${parts[0].text}`;
                 
-                // Include tools for vision fallback (converted to Gemini format)
-                const visionTools = ELIZA_TOOLS.slice(0, 20).map(tool => ({
+                // Include ALL tools for vision fallback (converted to Gemini format)
+                console.log(`📊 Vision fallback: Passing ${ELIZA_TOOLS.length} tools (full array)`);
+                const visionTools = ELIZA_TOOLS.map(tool => ({
                   name: tool.function.name,
                   description: tool.function.description,
                   parameters: tool.function.parameters
