@@ -3,10 +3,12 @@ import React, { createContext, useContext, useRef, useState, useCallback, useEff
 interface AudioContextType {
   isPlaying: boolean;
   isMuted: boolean;
+  hasPlayedWelcome: boolean;
   playAudio: () => void;
   pauseAudio: () => void;
   toggleMute: () => void;
   initializeAudio: () => void;
+  playWelcomeOnce: () => void;
 }
 
 const AudioContext = createContext<AudioContextType | undefined>(undefined);
@@ -23,7 +25,7 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
-  const [hasInitialized, setHasInitialized] = useState(false);
+  const [hasPlayedWelcome, setHasPlayedWelcome] = useState(false);
 
   // Initialize audio element once
   useEffect(() => {
@@ -47,13 +49,12 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   const initializeAudio = useCallback(() => {
-    if (hasInitialized || !audioRef.current) return;
+    if (!audioRef.current) return;
     
     const audio = audioRef.current;
     
     const tryPlay = () => {
       audio.play().then(() => {
-        setHasInitialized(true);
         document.removeEventListener('click', tryPlay);
       }).catch(() => {
         // Will retry on click
@@ -62,11 +63,9 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     tryPlay();
     
-    // Fallback: play on first user interaction
-    if (!hasInitialized) {
-      document.addEventListener('click', tryPlay, { once: true });
-    }
-  }, [hasInitialized]);
+    // Fallback: play on first user interaction if autoplay blocked
+    document.addEventListener('click', tryPlay, { once: true });
+  }, []);
 
   const playAudio = useCallback(() => {
     if (audioRef.current) {
@@ -87,14 +86,24 @@ export const AudioProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     }
   }, []);
 
+  // Play welcome audio only once per session
+  const playWelcomeOnce = useCallback(() => {
+    if (hasPlayedWelcome) return;
+    
+    setHasPlayedWelcome(true);
+    initializeAudio();
+  }, [hasPlayedWelcome, initializeAudio]);
+
   return (
     <AudioContext.Provider value={{ 
       isPlaying, 
-      isMuted, 
+      isMuted,
+      hasPlayedWelcome,
       playAudio, 
       pauseAudio, 
       toggleMute,
-      initializeAudio 
+      initializeAudio,
+      playWelcomeOnce
     }}>
       {children}
     </AudioContext.Provider>

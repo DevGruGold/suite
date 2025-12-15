@@ -10,12 +10,12 @@ import { SEOHead } from "@/components/SEOHead";
 import { useAudio } from "@/contexts/AudioContext";
 
 const Index = () => {
-  const { playAudio } = useAudio();
+  const { playWelcomeOnce } = useAudio();
 
-  // Play audio once when dashboard loads
+  // Play welcome audio once per session when dashboard loads (handles post-login)
   useEffect(() => {
-    playAudio();
-  }, [playAudio]);
+    playWelcomeOnce();
+  }, [playWelcomeOnce]);
 
   return (
     <>
