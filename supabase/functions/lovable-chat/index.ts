@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Using Deno.serve instead of importing
 
 // EMERGENCY MINIMAL lovable-chat - STOP THE BLEEDING
 const corsHeaders = {
@@ -86,4 +86,4 @@ async function handleRequest(request: Request): Promise<Response> {
   }
 }
 
-serve(handleRequest);
+Deno.serve(handleRequest);
