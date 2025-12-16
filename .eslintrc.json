@@ -1,35 +1,27 @@
 {
+  "env": {
+    "browser": true,
+    "es2021": true,
+    "node": true
+  },
   "extends": [
-    "@typescript-eslint/recommended",
-    "prettier"
+    "eslint:recommended",
+    "@typescript-eslint/recommended"
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
-    "ecmaVersion": 2022,
+    "ecmaVersion": "latest",
     "sourceType": "module"
   },
-  "plugins": ["@typescript-eslint"],
+  "plugins": [
+    "@typescript-eslint"
+  ],
   "rules": {
-    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-    "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/ban-ts-comment": "warn",
-    "prefer-const": "warn",
-    "no-var": "error",
-    "no-console": "off",
-    "@typescript-eslint/no-non-null-assertion": "off"
-  },
-  "env": {
-    "es2022": true,
-    "node": true
-  },
-  "globals": {
-    "Deno": "readonly"
+    "@typescript-eslint/no-unused-vars": "error",
+    "@typescript-eslint/no-explicit-any": "warn"
   },
   "ignorePatterns": [
-    "node_modules/",
-    "dist/",
-    "build/",
-    "*.js",
-    "*.d.ts"
+    "dist",
+    "node_modules"
   ]
 }
