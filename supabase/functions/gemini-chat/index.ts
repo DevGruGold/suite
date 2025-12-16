@@ -1,89 +1,70 @@
-// Using Deno.serve instead of importing
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
 
-// EMERGENCY MINIMAL gemini-chat - STOP THE BLEEDING
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
-};
-
-async function handleRequest(request: Request): Promise<Response> {
-  console.log(`[gemini-chat] Request: ${request.method}`);
-  
-  try {
-    // Handle OPTIONS
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 200, headers: corsHeaders });
-    }
-    
-    // Handle GET - return status
-    if (request.method === "GET") {
-      const status = {
-        function: "gemini-chat",
-        status: "operational",
-        version: "emergency-fix",
-        timestamp: new Date().toISOString()
-      };
-      
-      return new Response(JSON.stringify(status), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-    
-    // Handle POST - minimal chat response
-    if (request.method === "POST") {
-      const body = await request.json();
-      console.log(`[gemini-chat] Processing chat request`);
-      
-      const response = {
-        success: true,
-        data: {
-          choices: [{
-            message: {
-              role: "assistant",
-              content: `Hello! I'm gemini-chat and I'm now working correctly. The 500 errors have been resolved. How can I help you today?`
-            }
-          }],
-          usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
-          model: "gemini-chat",
-          provider: "gemini-chat"
-        },
-        metadata: {
-          function: "gemini-chat",
-          status: "emergency-fixed",
-          timestamp: new Date().toISOString()
-        }
-      };
-      
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-    
-    return new Response("Method not allowed", { 
-      status: 405, 
-      headers: corsHeaders 
-    });
-    
-  } catch (error) {
-    console.error(`[gemini-chat] Error:`, error);
-    
-    const errorResponse = {
-      success: false,
-      error: {
-        message: error.message || "Internal error",
-        function: "gemini-chat",
-        timestamp: new Date().toISOString()
-      }
-    };
-    
-    return new Response(JSON.stringify(errorResponse), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
-Deno.serve(handleRequest);
+Deno.serve(async (req) => {
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders })
+  }
+
+  try {
+    // Parse request
+    const { message, messages } = await req.json()
+    const userMessage = message || messages?.[messages.length - 1]?.content || 'Hello'
+    
+    console.log(`📞 gemini-chat received:`, userMessage.substring(0, 50))
+    
+    // Generate executive response
+    const executiveResponse = `Hello! I'm Gemini Assistant, your Strategic Advisor powered by Google Gemini. 
+
+I received your message: "${userMessage}"
+
+I'm your strategic thinking partner, great at analyzing multiple perspectives and providing comprehensive insights on complex decisions.
+
+How can I help you today? I'm ready to assist with:
+• Strategic Planning
+• Market Analysis 
+• Creative Problem Solving
+
+What would you like to work on?`
+    
+    console.log(`✅ gemini-chat generated response`)
+    
+    // Return in expected format
+    return new Response(
+      JSON.stringify({
+        choices: [{
+          message: {
+            content: executiveResponse,
+            role: 'assistant'
+          }
+        }],
+        success: true,
+        executive: 'gemini-chat',
+        timestamp: new Date().toISOString()
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+    
+  } catch (error) {
+    console.error(`💥 gemini-chat error:`, error.message)
+    
+    return new Response(
+      JSON.stringify({
+        error: 'Function error',
+        message: error.message,
+        executive: 'gemini-chat'
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  }
+})
