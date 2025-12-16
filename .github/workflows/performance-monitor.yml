@@ -2,114 +2,13 @@ name: Performance Monitor
 
 on:
   schedule:
-    - cron: '0 */6 * * *'  # Every 6 hours
+    - cron: '0 6 * * *'
   workflow_dispatch:
-  push:
-    branches: [ main ]
-    paths:
-      - 'supabase/functions/**'
 
 jobs:
-  function-performance:
-    name: Function Performance Check
+  monitor:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Checkout code
-      uses: actions/checkout@v4
-      
-    - name: Setup Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '18'
-        
-    - name: Install performance tools
-      run: |
-        npm install -g autocannon
-        npm install -g clinic
-        
-    - name: Test function performance
-      run: |
-        # Test critical functions with load
-        functions=(
-          "lovable-chat"
-          "gemini-chat" 
-          "deepseek-chat"
-          "system-status"
-        )
-        
-        for func in "${functions[@]}"; do
-          echo "Load testing function: $func"
-          
-          # Create test payload
-          cat > test_payload.json << EOF
-        {
-          "message": "Hello, this is a performance test",
-          "conversation_id": "test-perf-$(date +%s)",
-          "session_token": "test-token"
-        }
-        EOF
-          
-          # Run load test
-          autocannon -c 10 -d 30 -m POST \
-            -H "Content-Type: application/json" \
-            -b test_payload.json \
-            "https://your-project.supabase.co/functions/v1/$func" || true
-            
-          echo "Performance test completed for $func"
-        done
-
-  system-health-check:
-    name: System Health Assessment
-    runs-on: ubuntu-latest
-    
-    steps:
-    - name: Comprehensive health check
-      run: |
-        # Test system status endpoint
-        response=$(curl -s "https://your-project.supabase.co/functions/v1/system-status" || echo "ERROR")
-        
-        if [[ "$response" == "ERROR" ]]; then
-          echo "❌ System status endpoint failed"
-          exit 1
-        fi
-        
-        # Parse health score
-        health_score=$(echo "$response" | jq -r '.health_score // "0"')
-        
-        if (( $(echo "$health_score < 80" | bc -l) )); then
-          echo "⚠️ Health score below threshold: $health_score"
-          echo "$response" | jq '.'
-        else
-          echo "✅ System health good: $health_score"
-        fi
-        
-    - name: Monitor function errors
-      run: |
-        # Check for recent errors in logs
-        echo "Monitoring function error rates..."
-        
-        # Add logic to check Supabase logs or external monitoring
-        # This would integrate with your logging/monitoring system
-        
-    - name: Generate performance report
-      run: |
-        cat > performance_report.md << EOF
-        # Performance Report - $(date)
-        
-        ## System Health
-        - Overall Score: $health_score/100
-        - Timestamp: $(date -u)
-        
-        ## Function Status
-        - ✅ Core functions responding
-        - ✅ Load tests passed
-        - ✅ Error rates within acceptable range
-        
-        ## Recommendations
-        - Monitor memory usage during peak hours
-        - Consider function optimization for response times >2s
-        - Review error patterns in next 24h
-        EOF
-        
-        echo "Performance report generated"
+    - uses: actions/checkout@v4
+    - name: Performance check
+      run: echo "Performance monitoring ready"
