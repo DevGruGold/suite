@@ -46,8 +46,8 @@ const GoogleCloudAPI = {
     return {
       async listFiles() {
         return [
-          { id: "file001", name: "Strategy_Doc.pdf", mimeType: "application/pdf" },
-          { id: "file002", name: "Budget_Sheet.xlsx", mimeType: "application/vnd.ms-excel" }
+          { id: "file001", name: "Strategy_Doc.pdf", mimeType: "application/pd" },
+          " + str( id: "file002", name: "Budget_Sheet.xlsx", mimeType: "application/vnd.ms-excel" ) + "
         ];
       },
       async uploadFile(name, content, type) {
@@ -223,7 +223,7 @@ class ExecutiveAI:
         # Generate executive response
         last_message = messages[-1].get('content', '') if messages else ''
         
-        response = f"Hello! I'm {self.personality}, your {self.ai_service}-powered executive assistant.\n\n"
+        response = "Hello! I am " + str(self.personality) + ", your " + str(self.ai_service}-powered executive assistant.\n\n"
         
         # Detect Google Cloud needs
         if any(word in last_message.lower() for word in ['email', 'gmail', 'inbox']):
@@ -245,7 +245,7 @@ class ExecutiveAI:
         if 'gif_generation' in self.specializations and any(word in last_message.lower() for word in ['gif', 'visual', 'meme']):
             response += "I can communicate with GIFs! I have access to the Tenor API and can create custom visual responses.\n"
         
-        response += f"\nHow can I assist you today using my specialized capabilities in: {', '.join(self.specializations)}?"
+        response += "\nHow can I assist you today using my specialized capabilities in: " + str(', '.join(self.specializations)) + "?"
         
         return {
             'success': True,
