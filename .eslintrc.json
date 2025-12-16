@@ -1,32 +1,35 @@
 {
   "extends": [
     "@typescript-eslint/recommended",
-    "plugin:react/recommended",
-    "plugin:react-hooks/recommended"
+    "prettier"
   ],
   "parser": "@typescript-eslint/parser",
   "parserOptions": {
     "ecmaVersion": 2022,
-    "sourceType": "module",
-    "ecmaFeatures": {
-      "jsx": true
-    }
+    "sourceType": "module"
   },
-  "plugins": [
-    "@typescript-eslint",
-    "react",
-    "react-hooks"
-  ],
+  "plugins": ["@typescript-eslint"],
   "rules": {
-    "no-console": "warn",
+    "@typescript-eslint/no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
     "@typescript-eslint/no-explicit-any": "warn",
-    "@typescript-eslint/no-unused-vars": "warn",
-    "react/react-in-jsx-scope": "off",
-    "react-hooks/exhaustive-deps": "warn"
+    "@typescript-eslint/ban-ts-comment": "warn",
+    "prefer-const": "warn",
+    "no-var": "error",
+    "no-console": "off",
+    "@typescript-eslint/no-non-null-assertion": "off"
   },
-  "settings": {
-    "react": {
-      "version": "detect"
-    }
-  }
+  "env": {
+    "es2022": true,
+    "node": true
+  },
+  "globals": {
+    "Deno": "readonly"
+  },
+  "ignorePatterns": [
+    "node_modules/",
+    "dist/",
+    "build/",
+    "*.js",
+    "*.d.ts"
+  ]
 }
