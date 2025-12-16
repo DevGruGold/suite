@@ -1,148 +1,254 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
+import { generateExecutiveSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
+import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
+import { EdgeFunctionLogger } from "../_shared/logging.ts";
+import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
+import { executeToolCall } from '../_shared/toolExecutor.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  TOOL_CALLING_MANDATE,
+  parseDeepSeekToolCalls,
+  parseToolCodeBlocks,
+  parseConversationalToolIntent,
+  needsDataRetrieval,
+  retrieveMemoryContexts,
+  callDeepSeekFallback,
+  callKimiFallback,
+  callGeminiFallback,
+  synthesizeToolResults
+} from '../_shared/executiveHelpers.ts';
+import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+
+const logger = EdgeFunctionLogger('lovable-executive');
+const FUNCTION_NAME = 'lovable-chat';
+const EXECUTIVE_NAME = 'LOVABLE';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-Deno.serve(async (req) => {
-  // Handle CORS
+const MAX_TOOL_ITERATIONS = 5;
+
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
+
+  // Start usage tracking at function entry
+  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
 
   try {
-    // Parse request safely
-    let userMessage = 'Hello'
-    try {
-      const body = await req.json()
-      userMessage = body.message || body.messages?.[body.messages.length - 1]?.content || 'Hello'
-    } catch (parseError) {
-      console.log('JSON parse failed, using default message')
-      userMessage = 'Hello'
-    }
+    const { 
+      messages, 
+      conversationHistory = [], 
+      userContext = { ip: 'unknown', isFounder: false }, 
+      miningStats = null, 
+      systemVersion = null,
+      councilMode = false,
+      images = []
+    } = await req.json();
+
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
+
+    console.log(`🧠 ${EXECUTIVE_NAME} Executive Processing: ${messages.length} messages, Council: ${councilMode}`);
+
+    // ========== PHASE: MEMORY RETRIEVAL ==========
+    const enrichedConversationHistory = conversationHistory;
     
-    console.log('💖 Lovable-chat (minimal) processing:', userMessage.substring(0, 50))
-    
-    // Try OpenAI if available
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
-    
-    if (openaiApiKey) {
-      try {
-        console.log('🤖 Attempting OpenAI call...')
+    if (needsDataRetrieval(messages)) {
+      console.log('🔍 Retrieving memory contexts for enhanced response generation');
+      const memoryContexts = await retrieveMemoryContexts(supabase, messages, userContext);
+      
+      if (memoryContexts && memoryContexts.length > 0) {
+        console.log(`📚 Injected ${memoryContexts.length} memory contexts`);
         
-        const response = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'gpt-3.5-turbo',
-            messages: [
-              {
-                role: 'system',
-                content: 'You are Lovable Agent, a Full-Stack Development Lead. You specialize in full-stack development, UI/UX design, and rapid prototyping. Be enthusiastic about development and user experience.'
-              },
-              {
-                role: 'user',
-                content: userMessage
-              }
-            ],
-            max_tokens: 1000,
-            temperature: 0.7
-          })
-        })
+        const memoryContext = memoryContexts.map(ctx => 
+          `Memory Context: ${ctx.type} - ${ctx.content.substring(0, 200)}...`
+        ).join('\n');
         
-        if (response.ok) {
-          const data = await response.json()
-          const aiContent = data?.choices?.[0]?.message?.content
-          
-          if (aiContent) {
-            console.log('✅ OpenAI success')
-            return new Response(
-              JSON.stringify({
-                choices: [{
-                  message: {
-                    content: aiContent,
-                    role: 'assistant'
-                  }
-                }],
-                success: true,
-                executive: 'lovable-chat',
-                provider: 'OpenAI GPT-3.5 Turbo',
-                timestamp: new Date().toISOString()
-              }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-          }
-        } else {
-          console.log('OpenAI failed:', response.status)
-        }
-      } catch (apiError) {
-        console.log('OpenAI error:', apiError.message)
+        const executivePrompt = generateExecutiveSystemPrompt('LOVABLE');
+        const enhancedPrompt = `${executivePrompt}\n\n=== RELEVANT MEMORY CONTEXTS ===\n${memoryContext}\n\nUse these contexts to provide informed, detailed responses based on our previous interactions and established knowledge base.`;
+        
+        enrichedConversationHistory.unshift({
+          role: 'system',
+          content: enhancedPrompt
+        });
       }
     }
-    
-    // Always return a helpful fallback response
-    const fallbackContent = `Hello! I'm Lovable Agent, your Full-Stack Development Lead! 🚀
 
-I received your message: "${userMessage}"
+    // ========== PHASE: VISION ROUTING ==========
+    if (images && images.length > 0) {
+      console.log(`🖼️ Images detected (${images.length}) - routing to Gemini Vision`);
+      
+      const executivePrompt = generateExecutiveSystemPrompt('LOVABLE');
+      const contextualPrompt = await buildContextualPrompt(executivePrompt, {
+        conversationHistory: enrichedConversationHistory,
+        userContext,
+        miningStats,
+        systemVersion
+      });
+      
+      const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS, images);
+      
+      if (geminiResult) {
+        // Execute any tool calls from Gemini
+        if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
+          console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini Vision`);
+          const toolResults = [];
+          for (const toolCall of geminiResult.tool_calls) {
+            const result = await executeToolCall(supabase, toolCall, 'LOVABLE', SUPABASE_URL, SERVICE_ROLE_KEY);
+            toolResults.push({ tool: toolCall.function.name, result });
+          }
+          
+          const userQuery = messages[messages.length - 1]?.content || '';
+          const synthesized = await synthesizeToolResults(toolResults, userQuery, 'Lovable Development Executive');
+          
+          return new Response(
+            JSON.stringify({
+              success: true,
+              response: synthesized || geminiResult.content,
+              hasToolCalls: true,
+              toolCallsExecuted: geminiResult.tool_calls.length,
+              executive: 'lovable-chat',
+              executiveTitle: 'Lovable Development Executive [Vision]',
+              provider: 'gemini',
+              model: 'gemini-2.0-flash-exp',
+              vision_analysis: true
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: geminiResult.content,
+            executive: 'lovable-chat',
+            executiveTitle: 'Lovable Development Executive [Vision]',
+            provider: 'gemini',
+            model: 'gemini-2.0-flash-exp',
+            vision_analysis: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
 
-I'm passionate about creating amazing user experiences and building beautiful, functional applications! I specialize in:
+    // ========== PHASE: AI PROCESSING WITH FALLBACKS ==========
+    // Generate executive system prompt
+    const executivePrompt = generateExecutiveSystemPrompt('LOVABLE');
+    const contextualPrompt = await buildContextualPrompt(executivePrompt, {
+      conversationHistory: enrichedConversationHistory,
+      userContext,
+      miningStats,
+      systemVersion
+    });
 
-• Full-Stack Development (React, Node.js, Python, databases)
-• UI/UX Design (user-centered design, responsive layouts)  
-• Rapid Prototyping (MVP development, quick iterations)
-• Modern Web Technologies (APIs, cloud deployment, performance)
+    if (councilMode) {
+      contextualPrompt += '\n\n=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide strategic, analytical input from the Lovable Development perspective. Focus on rapid prototyping, user experience, and development velocity.';
+    }
 
-${openaiApiKey ? 'I'm currently experiencing API connectivity issues, but' : 'I'm'} ready to help you build something awesome! 
+    const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
 
-What kind of development challenge can I help you tackle? Whether it's:
-- Building a new application from scratch
-- Improving user experience on an existing project  
-- Choosing the right technology stack
-- Optimizing performance or deployment
+    console.log('🚀 Trying AI providers in sequence...');
 
-Let's create something amazing together! 💖`
+    // Try Gemini first (most reliable for development tasks)
+    const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
+    if (geminiResult) {
+      // Execute any tool calls from Gemini
+      if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
+        console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini`);
+        const toolResults = [];
+        for (const toolCall of geminiResult.tool_calls) {
+          const result = await executeToolCall(supabase, toolCall, 'LOVABLE', SUPABASE_URL, SERVICE_ROLE_KEY);
+          toolResults.push({ tool: toolCall.function.name, result });
+        }
+        
+        const userQuery = messages[messages.length - 1]?.content || '';
+        const synthesized = await synthesizeToolResults(toolResults, userQuery, 'Lovable Development Executive');
+        
+        return new Response(
+          JSON.stringify({
+            success: true,
+            response: synthesized || geminiResult.content,
+            hasToolCalls: true,
+            toolCallsExecuted: geminiResult.tool_calls.length,
+            executive: 'lovable-chat',
+            executiveTitle: 'Lovable Development Executive',
+            provider: 'gemini',
+            model: 'gemini-2.0-flash-exp'
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: geminiResult.content,
+          executive: 'lovable-chat',
+          executiveTitle: 'Lovable Development Executive',
+          provider: 'gemini',
+          model: 'gemini-2.0-flash-exp'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    console.log('✅ Returning fallback response')
-    
+    // Try DeepSeek fallback
+    console.log('🔄 Trying DeepSeek fallback...');
+    const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
+    if (deepseekResult) {
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: deepseekResult.content,
+          executive: 'lovable-chat',
+          executiveTitle: 'Lovable Development Executive',
+          provider: 'deepseek-fallback',
+          model: 'deepseek-chat'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Emergency static fallback
+    console.log('⚠️ All AI providers failed, using emergency static fallback');
     return new Response(
       JSON.stringify({
-        choices: [{
-          message: {
-            content: fallbackContent,
-            role: 'assistant'
-          }
-        }],
         success: true,
+        response: emergencyStaticFallback('LOVABLE', messages[messages.length - 1]?.content || ''),
         executive: 'lovable-chat',
-        provider: openaiApiKey ? 'Lovable Agent (API Fallback)' : 'Lovable Agent (No API Key)',
-        timestamp: new Date().toISOString()
+        executiveTitle: 'Lovable Development Executive',
+        provider: 'emergency-static'
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-    
+    );
+
   } catch (error) {
-    console.error('💥 Critical error:', error.message)
+    console.error('Function error:', error);
     
-    // Ultimate safety net - should never fail
+    // Final emergency fallback
     return new Response(
       JSON.stringify({
-        choices: [{
-          message: {
-            content: `Hello! I'm Lovable Agent, your Full-Stack Development Lead! I'm experiencing some technical difficulties (${error.message}), but I'm still here to help you with full-stack development, UI/UX design, and rapid prototyping. Please try your request again!`,
-            role: 'assistant'
-          }
-        }],
-        success: true,
+        success: false,
+        error: 'Internal function error',
         executive: 'lovable-chat',
-        provider: 'Lovable Agent (Emergency Mode)',
-        error: error.message,
-        timestamp: new Date().toISOString()
+        executiveTitle: 'Lovable Development Executive',
+        provider: 'error-fallback',
+        message: emergencyStaticFallback('LOVABLE', 'system error')
       }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      { 
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
-})
+});
