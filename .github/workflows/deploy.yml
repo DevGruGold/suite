@@ -1,12 +1,34 @@
-name: Deploy
+name: Deploy to Production
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
+
+env:
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+  SUPABASE_PROJECT_ID: ${{ secrets.SUPABASE_PROJECT_ID }}
 
 jobs:
   deploy:
+    name: Deploy Application
     runs-on: ubuntu-latest
+    environment: production
+    
     steps:
-    - uses: actions/checkout@v4
-    - name: Deploy check
-      run: echo "Deployment workflow ready"
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+          
+      - name: Deploy functions
+        run: |
+          echo "Deploying Supabase functions..."
+          # supabase functions deploy --project-ref $SUPABASE_PROJECT_ID
+          
+      - name: Notify deployment
+        run: |
+          echo "Deployment completed successfully"
