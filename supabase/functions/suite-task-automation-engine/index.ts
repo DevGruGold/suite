@@ -716,7 +716,7 @@ serve(async (req) => {
         const checklist = task.metadata?.checklist || [];
         
         // Add newly completed items
-        const newlyCompleted = items_completed.filter((item: string) => !existingCompleted.includes(item));
+        const newlyCompleted = (items_completed || []).filter((item: string) => !existingCompleted.includes(item));
         const updatedCompleted = [...existingCompleted, ...newlyCompleted];
         
         // Calculate progress percentage

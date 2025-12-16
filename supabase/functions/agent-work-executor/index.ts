@@ -199,7 +199,7 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
   }
   
   // Find next uncompleted checklist item
-  const pendingItems = checklist.filter((item: string) => !completed.includes(item));
+  const pendingItems = checklist.filter((item: string) => !(completed || []).includes(item));
   
   if (pendingItems.length === 0) {
     console.log(`   ✅ All checklist items completed`);
