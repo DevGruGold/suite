@@ -1,351 +1,104 @@
-# Suite | Enterprise AI Platform
+# XMRT Suite 🚀
 
-[![Live Demo](https://img.shields.io/badge/demo-live-brightgreen)](https://suite.lovable.app)
-[![GitHub](https://img.shields.io/badge/github-DevGruGold/xmrtassistant-blue)](https://github.com/DevGruGold/xmrtassistant)
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-[![Built with Lovable](https://img.shields.io/badge/built%20with-Lovable-ff69b4)](https://lovable.dev)
+[![CI/CD Pipeline](https://github.com/DevGruGold/suite/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/DevGruGold/suite/actions/workflows/ci-cd.yml)
+[![Security Analysis](https://github.com/DevGruGold/suite/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/DevGruGold/suite/actions/workflows/codeql-analysis.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-> **Enterprise AI automation platform with intelligent assistants, autonomous operations, and real-time system monitoring**
-> 
-> *Powered by XMRT-DAO Ecosystem*
+AI-Powered Mining & DAO Management Platform for XMRT Ecosystem with real-time mining statistics and autonomous agent integration.
 
----
+## ✨ Features
 
-## 🌟 What is Suite?
+- 🤖 **AI-Powered Chat Functions**: Multiple AI gateways (OpenAI, DeepSeek, Gemini, etc.)
+- ⛏️ **Mining Management**: Real-time mining statistics and management
+- 🏛️ **DAO Governance**: Decentralized autonomous organization tools
+- 📊 **Analytics Dashboard**: Comprehensive mining and performance analytics
+- 🔧 **Edge Functions**: Supabase-powered serverless functions
+- 🛡️ **Security**: Comprehensive security scanning and best practices
 
-Suite is an enterprise-grade AI automation platform featuring a revolutionary multi-AI executive board system. Four specialized AI executives (CSO, CTO, CIO, CAO) work together to provide intelligent assistance, autonomous operations, and real-time monitoring for enterprise workflows.
-
-Built on the foundation of the XMRT-DAO ecosystem, Suite brings cutting-edge AI governance to enterprise environments.
-
-### Live Platform
-🚀 **Production:** [suite.lovable.app](https://suite.lovable.app)
-
----
-
-## 🏛️ The AI Executive Architecture
-
-### Revolutionary Concept: AI-Powered Executive Intelligence
-
-Suite introduces the world's first **AI Executive Board** - four specialized AI decision-makers that provide intelligent, coordinated responses for enterprise operations.
-
-#### The 4 AI Executives
-
-| Role | Engine | Specialization |
-|------|--------|----------------|
-| **Chief Strategy Officer** | Gemini 2.5 Flash | General reasoning, user relations, orchestration |
-| **Chief Technology Officer** | DeepSeek R1 | Code analysis, technical architecture, debugging |
-| **Chief Information Officer** | Gemini Multimodal | Vision, media analysis, multimodal intelligence |
-| **Chief Analytics Officer** | GPT-5 | Complex reasoning, strategic planning, precision decisions |
-
-#### How It Works
-
-Users interact with **Suite AI** - the coordination layer that intelligently routes requests to the appropriate AI executive:
-
-```
-User Request → Suite AI (Analysis) → Route to Best Executive → Execute → Unified Response
-```
-
-**Example Flow:**
-- Code debugging → CTO (`deepseek-chat`)
-- Image analysis → CIO (`gemini-chat`)
-- Complex strategy → CAO (`openai-chat`)
-- General queries → CSO (`lovable-chat`)
-
-The 4 executives coordinate **93+ specialized edge functions** that execute tactical work, providing comprehensive enterprise automation.
-
----
-
-## 🎯 Core Features
-
-### 1. 🤖 Multi-AI Chat Interface
-
-**Component:** `UnifiedChat.tsx`
-
-- **4 AI Executive Modes**: Gemini 2.5, DeepSeek R1, Gemini Multimodal, OpenAI GPT-5
-- **Intelligent Routing**: Automatic selection based on task type
-- **Voice Integration**: Push-to-talk and continuous voice modes
-- **Multimodal Input**: Text, voice, image, and camera support
-- **Conversation Memory**: Context-aware with persistent storage
-- **Code Execution**: Integrated Python shell with real-time output
-
-**Key Capabilities:**
-- Natural language interaction with emotional intelligence
-- Real-time code execution and debugging
-- Image upload and analysis via Gemini Vision
-- Live camera processing for visual tasks
-- Markdown rendering with syntax highlighting
-
-### 2. 📊 Real-Time Monitoring Dashboard
-
-- System health monitoring
-- API call tracking
-- Edge function status
-- Performance metrics
-- Error tracking and alerting
-- Database statistics
-
-### 3. 🏦 Finance Management
-
-- Multi-asset portfolio tracking
-- Transaction history
-- Automated reporting
-- Web3 wallet connections
-
-### 4. 🗳️ AI Governance
-
-- Proposal submission and voting
-- Autonomous decision tracking
-- Transparent reporting via GitHub Discussions
-- Community oversight mechanisms
-
-### 5. 🔊 Advanced Voice Interface
-
-**Voice Engines:**
-- Hume AI EVI (Emotional Voice Intelligence)
-- ElevenLabs TTS
-- OpenAI Whisper STT
-- Google Speech Recognition
-
-**Features:**
-- Push-to-talk mode
-- Continuous listening mode
-- Emotion detection
-- Natural conversation flow
-- Multi-language support
-
-### 6. 👁️ Live Camera Processing
-
-- Real-time camera feed
-- Gemini Vision API integration
-- Object detection and analysis
-- Scene understanding
-- OCR capabilities
-
----
-
-## 🏗️ Technical Architecture
-
-### Frontend Stack
-
-**Built with:**
-- **Framework:** React 18.3 + TypeScript
-- **Build Tool:** Vite 5.4
-- **Styling:** Tailwind CSS 3.4 + shadcn/ui components
-- **State Management:** TanStack Query (React Query)
-- **Routing:** React Router DOM v6
-- **Charts:** Recharts 2.12
-- **Voice:** Hume AI, ElevenLabs, Hugging Face Transformers
-- **AI:** Google Generative AI, OpenAI SDK
-
-**Deployment:** Vercel (auto-deploy from GitHub)
-
-### Backend Infrastructure
-
-**Built on Supabase:**
-- **Database:** PostgreSQL with Row Level Security
-- **Auth:** Supabase Auth with JWT
-- **Edge Functions:** 93+ Deno-based serverless functions
-- **Storage:** Blob storage for media assets
-- **Real-time:** WebSocket subscriptions
-
-### Edge Functions (Categories)
-
-**AI & Chat:**
-- `lovable-chat` - Primary AI interface
-- `deepseek-chat` - Code expert
-- `gemini-chat` - Multimodal intelligence
-- `openai-chat` - Reasoning engine
-
-**Autonomous Operations:**
-- `agent-manager` - Coordinate specialized agents
-- `autonomous-code-fixer` - Self-healing code repair
-- `task-orchestrator` - Workflow automation
-- `code-monitor-daemon` - Continuous monitoring
-
-**Integrations:**
-- `github-integration` - Repository management
-- `ecosystem-monitor` - 24/7 health checks
-- `knowledge-manager` - Vector embeddings & RAG
-
-**Monitoring & Analytics:**
-- `system-diagnostics` - Health metrics
-- `api-key-health-monitor` - API status
-- `function-usage-analytics` - Usage tracking
-
----
-
-## 🚀 Getting Started
+## 🚀 Quick Start
 
 ### Prerequisites
 
-- Node.js 18+ and npm
-- Git
-- A Supabase account (optional for local dev)
-- Lovable account (for deployment)
+- Node.js 18+ 
+- Supabase CLI
+- Docker (optional, for local development)
 
 ### Installation
 
 ```bash
 # Clone the repository
-git clone https://github.com/DevGruGold/xmrtassistant.git
-cd xmrtassistant
+git clone https://github.com/DevGruGold/suite.git
+cd suite
 
 # Install dependencies
 npm install
+
+# Set up environment variables
+cp .env.example .env.local
+
+# Start Supabase locally (optional)
+supabase start
 
 # Start development server
 npm run dev
 ```
 
-Visit `http://localhost:5173` to see the app.
-
-### Environment Variables
-
-For local development, create a `.env` file:
-
-```env
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_PUBLISHABLE_KEY=your_supabase_key
-```
-
-Most environment variables are managed through Lovable Cloud for seamless deployment.
-
----
-
-## 💻 Project Structure
+## 🏗️ Architecture
 
 ```
 suite/
-├── src/
-│   ├── components/          # React components
-│   │   ├── UnifiedChat.tsx         # Multi-AI chat interface
-│   │   ├── Dashboard.tsx           # Main dashboard
-│   │   ├── SystemStatusMonitor.tsx # Health monitoring
-│   │   └── ui/                     # shadcn/ui components
-│   ├── pages/               # Route pages
-│   │   ├── Index.tsx               # Home page
-│   │   ├── Treasury.tsx            # Finance management
-│   │   ├── Contributors.tsx        # Team
-│   │   └── Credentials.tsx         # API keys
-│   ├── services/            # API service layers
-│   ├── hooks/               # Custom React hooks
-│   ├── integrations/        # Supabase integration
-│   └── lib/                 # Utilities
-├── supabase/
-│   ├── functions/           # 93+ Edge functions
-│   │   ├── lovable-chat/
-│   │   ├── deepseek-chat/
-│   │   ├── gemini-chat/
-│   │   ├── agent-manager/
-│   │   └── ... (89+ more)
-│   └── migrations/          # Database schema
-├── docs/                    # Documentation
-│   ├── SUITE_BRAND_GUIDE.md
-│   └── diagrams/
-├── public/                  # Static assets
-└── ... 
+├── src/                    # Source code
+│   ├── components/         # React components
+│   ├── services/          # Business logic
+│   └── types/             # TypeScript types
+├── supabase/              # Supabase configuration
+│   ├── functions/         # Edge functions
+│   └── migrations/        # Database migrations
+├── .github/               # GitHub Actions workflows
+└── docs/                  # Documentation
 ```
 
----
+## 🔧 Development
 
-## 🤝 Contributing
+### Available Scripts
 
-We welcome contributions! The platform is actively developed with contributions from both humans and AI.
+- `npm run dev` - Start development server
+- `npm run build` - Build for production
+- `npm run lint` - Run ESLint
+- `npm run test` - Run tests
+- `npm run type-check` - TypeScript type checking
 
-**Ways to Contribute:**
-1. **Code:** Submit PRs for features or bug fixes
-2. **Documentation:** Improve guides and explanations
-3. **Testing:** Report bugs and suggest improvements
-4. **Community:** Engage in GitHub Discussions
+### Code Quality
 
-**Development Workflow:**
-```bash
-# Fork the repository
-# Create a feature branch
-git checkout -b feature/amazing-feature
+This project uses:
+- **ESLint** for code linting
+- **Prettier** for code formatting
+- **TypeScript** for type safety
+- **Jest** for unit testing
+- **Playwright** for E2E testing
 
-# Make your changes
-# Commit with descriptive messages
-git commit -m 'Add amazing feature'
+### Contributing
 
-# Push to your fork
-git push origin feature/amazing-feature
+Please read our [Contributing Guidelines](CONTRIBUTING.md) before submitting pull requests.
 
-# Open a Pull Request
-```
+## 🛡️ Security
 
-**Suite AI will automatically review your PR and provide feedback!**
-
----
-
-## 🌍 Ecosystem Links
-
-- **Live Platform:** [suite.lovable.app](https://suite.lovable.app)
-- **GitHub Org:** [github.com/DevGruGold](https://github.com/DevGruGold)
-- **Documentation:** [docs/SUITE_BRAND_GUIDE.md](docs/SUITE_BRAND_GUIDE.md)
-- **Creator:** [Joseph Andrew Lee](https://josephandrewlee.medium.com)
-
----
+Security is a top priority. Please see our [Security Policy](SECURITY.md) for reporting vulnerabilities.
 
 ## 📄 License
 
-This project is open source under the MIT License. See [LICENSE](LICENSE) for details.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## 🤝 Contributing
+
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+## 📞 Support
+
+- 📧 Email: support@devgrugold.com
+- 💬 Discord: [Join our community](https://discord.gg/xmrt)
+- 🐛 Issues: [GitHub Issues](https://github.com/DevGruGold/suite/issues)
 
 ---
 
-## 🙏 Acknowledgments
-
-- **Built with:** [Lovable](https://lovable.dev/) - AI-powered development platform
-- **Powered by:** Supabase, Vercel, React, TypeScript
-- **AI Engines:** Google Gemini, OpenAI, DeepSeek, Hume AI, ElevenLabs
-- **Foundation:** XMRT-DAO ecosystem and community
-- **Philosophy:** Joseph Andrew Lee's vision for ethical AI
-
----
-
-## 📞 Contact & Support
-
-- **GitHub Issues:** [Report bugs or request features](https://github.com/DevGruGold/xmrtassistant/issues)
-- **Discussions:** [GitHub Discussions](https://github.com/DevGruGold/XMRT-Ecosystem/discussions)
-- **Email:** support@suite.ai
-
----
-
-## 🔮 Roadmap
-
-### Q4 2025
-- ✅ AI Executive Board deployment
-- ✅ Voice interface optimization
-- ✅ Enterprise branding (Suite)
-- 🔄 Enhanced analytics dashboard
-- 🔄 Advanced monitoring features
-
-### Q1 2026
-- 📋 Mobile app (iOS/Android)
-- 📋 Advanced AI models (Claude, Llama)
-- 📋 Enterprise SSO integration
-- 📋 Multi-tenant architecture
-- 📋 Enhanced governance dashboard
-
-### Q2 2026
-- 📋 AI Executive Licensing Framework launch
-- 📋 Educational platform
-- 📋 Multi-language expansion
-- 📋 Enterprise partnerships
-
----
-
-## ⚡ Quick Facts
-
-- **Tech Stack:** React + TypeScript + Vite + Supabase
-- **AI Engines:** 4 (Gemini, GPT-5, DeepSeek, Kimi)
-- **Edge Functions:** 93+ autonomous services
-- **Voice Providers:** 3 (Hume AI, ElevenLabs, Hugging Face)
-- **Deployment:** Vercel + Supabase Edge
-- **Open Source:** Yes (MIT License)
-
----
-
-**"Building the future of enterprise AI, one intelligent decision at a time."**
-
-Built with ❤️ by the Suite team | Powered by XMRT-DAO | Enterprise AI Platform
+Made with ❤️ by [DevGruGold](https://github.com/DevGruGold)
