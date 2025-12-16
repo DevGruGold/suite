@@ -1,365 +1,318 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { generateElizaSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
-import { executeToolCall } from '../_shared/toolExecutor.ts';
-import { needsDataRetrieval, parseToolCodeBlocks, parseConversationalToolIntent } from '../_shared/executiveHelpers.ts';
+import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
+import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
+import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
+import { executeToolCall as sharedExecuteToolCall } from '../_shared/toolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { needsDataRetrieval } from '../_shared/executiveHelpers.ts';
 
 const FUNCTION_NAME = 'ai-chat';
-const MAX_TOOL_ITERATIONS = 5;
+const EXECUTIVE_NAME = 'Eliza';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// Convert ELIZA_TOOLS to Vertex AI format
-function convertToolsToVertexFormat(tools: typeof ELIZA_TOOLS) {
-  return tools.map(t => ({
-    name: t.function.name,
-    description: t.function.description,
-    parameters: t.function.parameters
-  }));
-}
-
-// Convert ELIZA_TOOLS to OpenAI format for Lovable Gateway
-function convertToolsToOpenAIFormat(tools: typeof ELIZA_TOOLS) {
-  return tools.map(t => ({
-    type: 'function' as const,
-    function: {
-      name: t.function.name,
-      description: t.function.description,
-      parameters: t.function.parameters
-    }
-  }));
-}
-
-async function callVertexAI(messages: any[], systemPrompt: string, forceToolUse: boolean = false) {
-  const VERTEX_API_KEY = Deno.env.get('VERTEX_AI_API_KEY');
+// Enhanced tool call parsers for different AI model formats
+function parseDeepSeekToolCalls(content: string): Array<any> | null {
+  const toolCallsMatch = content.match(/<｜tool▁calls▁begin｜>(.*?)<｜tool▁calls▁end｜>/s);
+  if (!toolCallsMatch) return null;
   
-  if (!VERTEX_API_KEY) {
-    throw new Error('VERTEX_AI_API_KEY not configured');
-  }
-
-  // Convert messages to Vertex AI format
-  const contents = messages.map(m => ({
-    role: m.role === 'assistant' ? 'model' : 'user',
-    parts: [{ text: m.content }]
-  }));
-
-  const vertexTools = convertToolsToVertexFormat(ELIZA_TOOLS);
-
-  const body: any = {
-    contents,
-    systemInstruction: { parts: [{ text: systemPrompt }] },
-    tools: [{ functionDeclarations: vertexTools }],
-    generationConfig: {
-      temperature: forceToolUse ? 0.3 : 0.7,
-      maxOutputTokens: 4096,
+  const toolCallsText = toolCallsMatch[1];
+  const toolCallPattern = /<｜tool▁call▁begin｜>(.*?)<｜tool▁sep｜>(.*?)<｜tool▁call▁end｜>/gs;
+  const toolCalls: Array<any> = [];
+  
+  let match;
+  while ((match = toolCallPattern.exec(toolCallsText)) !== null) {
+    const functionName = match[1].trim();
+    let args = match[2].trim();
+    
+    let parsedArgs = {};
+    if (args && args !== '{}') {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        console.warn(`Failed to parse DeepSeek tool args for ${functionName}:`, args);
+      }
     }
-  };
+    
+    toolCalls.push({
+      id: `deepseek_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      type: 'function',
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(parsedArgs)
+      }
+    });
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
 
-  // Force tool calling for data queries
-  if (forceToolUse) {
-    body.toolConfig = {
-      functionCallingConfig: { mode: 'ANY' }
+function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  const toolCodeRegex = /```tool_code\s*([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const codeBlock = match[1].trim();
+    
+    try {
+      const functionCallMatch = codeBlock.match(/([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/);
+      if (functionCallMatch) {
+        const functionName = functionCallMatch[1];
+        let argsString = functionCallMatch[2].trim();
+        
+        let parsedArgs = {};
+        if (argsString) {
+          try {
+            parsedArgs = JSON.parse(argsString);
+          } catch {
+            console.warn(`Failed to parse tool_code args for ${functionName}:`, argsString);
+          }
+        }
+        
+        toolCalls.push({
+          id: `toolcode_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: functionName,
+            arguments: JSON.stringify(parsedArgs)
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error parsing tool_code block:', e);
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+function parseKimiToolCalls(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  const kimiToolRegex = /```json\s*{\s*"tool_call":\s*{[^}]*"name":\s*"([^"]+)"[^}]*"parameters":\s*([^}]*{})\s*}\s*}/g;
+  let match;
+  
+  while ((match = kimiToolRegex.exec(content)) !== null) {
+    const functionName = match[1];
+    let parametersString = match[2];
+    
+    try {
+      const parameters = JSON.parse(parametersString);
+      
+      toolCalls.push({
+        id: `kimi_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        type: 'function',
+        function: {
+          name: functionName,
+          arguments: JSON.stringify(parameters)
+        }
+      });
+    } catch (e) {
+      console.warn(`Failed to parse Kimi tool parameters for ${functionName}:`, parametersString);
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// Enhanced executeToolCall function with proper error handling
+async function executeToolCall(toolCall: any, supabase: any, sessionInfo: any): Promise<any> {
+  try {
+    console.log(`Executing tool call:`, JSON.stringify(toolCall, null, 2));
+    
+    // Use the shared tool executor with proper error handling
+    const result = await sharedExecuteToolCall(toolCall, supabase, sessionInfo);
+    
+    if (result.success) {
+      return {
+        tool_call_id: toolCall.id,
+        role: "tool",
+        content: JSON.stringify(result.data)
+      };
+    } else {
+      console.error(`Tool execution failed:`, result.error);
+      return {
+        tool_call_id: toolCall.id,
+        role: "tool", 
+        content: JSON.stringify({
+          error: result.error,
+          message: "Tool execution failed. Please try again or use a different approach."
+        })
+      };
+    }
+  } catch (error) {
+    console.error(`Tool execution error:`, error);
+    return {
+      tool_call_id: toolCall.id,
+      role: "tool",
+      content: JSON.stringify({
+        error: error.message,
+        message: "Unexpected error during tool execution."
+      })
     };
   }
-
-  const response = await fetch(
-    `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${VERTEX_API_KEY}`,
-    {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
-    }
-  );
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Vertex AI error: ${response.status} - ${errorText}`);
-  }
-
-  return await response.json();
-}
-
-async function callLovableGateway(messages: any[], systemPrompt: string, forceToolUse: boolean = false) {
-  const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
-  
-  if (!LOVABLE_API_KEY) {
-    throw new Error('LOVABLE_API_KEY not configured');
-  }
-
-  const openaiTools = convertToolsToOpenAIFormat(ELIZA_TOOLS);
-
-  const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'google/gemini-2.5-flash',
-      messages: [
-        { role: 'system', content: systemPrompt },
-        ...messages
-      ],
-      tools: openaiTools,
-      tool_choice: forceToolUse ? 'required' : 'auto',
-      max_tokens: 4096,
-      temperature: forceToolUse ? 0.3 : 0.7
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Lovable Gateway error: ${response.status} - ${errorText}`);
-  }
-
-  return await response.json();
 }
 
 serve(async (req) => {
+  // Start usage tracking
+  const trackingId = startUsageTracking(FUNCTION_NAME);
+  
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
-
-  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
-
-  // Health check
-  if (req.method === 'GET') {
-    return new Response(JSON.stringify({
-      status: 'ok',
-      version: 'full-eliza-tools',
-      tools_count: ELIZA_TOOLS.length,
-      primary_provider: 'vertex_ai',
-      fallback_provider: 'lovable_gateway'
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
-  }
-
-  const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-  const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-  const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
 
   try {
-    const body = await req.json().catch(() => ({}));
-    const { text, url, messages: inputMessages, context } = body;
+    const { message, conversation_id, session_token } = await req.json();
+    
+    // Initialize Supabase client
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
 
-    // Extract user content
-    let userContent = text || '';
-    if (url && !userContent) {
-      try {
-        const urlResponse = await fetch(url);
-        userContent = await urlResponse.text();
-        if (userContent.length > 50000) {
-          userContent = userContent.substring(0, 50000) + '... [truncated]';
-        }
-      } catch (e) {
-        userContent = `Failed to fetch URL: ${url}`;
-      }
+    // Get AI credentials with proper cascade
+    const credential = await getAICredential(supabase, 'openai', session_token);
+    if (!credential) {
+      return createCredentialRequiredResponse(corsHeaders, 'openai');
     }
 
-    if (!userContent && (!inputMessages || inputMessages.length === 0)) {
-      await usageTracker.failure('No content provided', 400);
-      return new Response(JSON.stringify({ error: 'No content provided' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+    // Build contextual system prompt
+    const systemPrompt = await buildContextualPrompt({
+      basePrompt: generateElizaSystemPrompt(),
+      conversationId: conversation_id,
+      sessionToken: session_token,
+      supabase
+    });
+
+    // Prepare session info for tool execution
+    const sessionInfo = {
+      conversation_id,
+      session_token,
+      executive_name: EXECUTIVE_NAME,
+      function_name: FUNCTION_NAME
+    };
+
+    // Call AI Gateway with enhanced tool support
+    const aiResponse = await callLovableAIGateway({
+      model: 'openai',
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message }
+      ],
+      tools: ELIZA_TOOLS,
+      tool_choice: "auto",
+      credential: credential,
+      session_info: sessionInfo
+    });
+
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI Gateway call failed');
     }
 
-    // Generate the full Eliza system prompt
-    const systemPrompt = generateElizaSystemPrompt();
-    
-    const messages = inputMessages || [{ role: 'user', content: userContent }];
-    const lastUserMessage = messages.filter((m: any) => m.role === 'user').pop()?.content || userContent;
-    
-    // Detect if this is a data-seeking query that should force tool use
-    const shouldForceTool = needsDataRetrieval(lastUserMessage);
-    
-    let aiProvider = 'vertex_ai';
-    let aiResponse: any;
-    let allToolCalls: any[] = [];
-    let allToolResults: any[] = [];
-    let finalResponse = '';
-    let iteration = 0;
+    let responseContent = aiResponse.data.content || '';
+    const toolCalls = aiResponse.data.tool_calls || [];
 
-    // Try Vertex AI first, fallback to Lovable Gateway
-    try {
-      console.log(`🔷 ai-chat: Attempting Vertex AI (force_tools=${shouldForceTool})...`);
-      aiResponse = await callVertexAI(messages, systemPrompt, shouldForceTool);
-      console.log('✅ Vertex AI responded');
-    } catch (vertexError: any) {
-      console.warn('⚠️ Vertex AI failed:', vertexError.message);
+    // Parse tool calls from different model formats if not already present
+    if (!toolCalls || toolCalls.length === 0) {
+      let parsedToolCalls = null;
       
-      try {
-        console.log('🔶 Falling back to Lovable Gateway...');
-        aiProvider = 'lovable_gateway';
-        aiResponse = await callLovableGateway(messages, systemPrompt, shouldForceTool);
-        console.log('✅ Lovable Gateway responded');
-      } catch (lovableError: any) {
-        console.error('❌ All AI providers failed');
-        await usageTracker.failure(`All providers failed: ${lovableError.message}`, 503);
-        return new Response(JSON.stringify({
-          error: 'All AI providers unavailable',
-          vertex_error: vertexError.message,
-          lovable_error: lovableError.message
-        }), {
-          status: 503,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      // Try different parsing strategies based on model type
+      if ('openai' === 'deepseek') {
+        parsedToolCalls = parseDeepSeekToolCalls(responseContent);
+      } else if ('openai' === 'gemini' || 'openai' === 'kimi') {
+        parsedToolCalls = parseToolCodeBlocks(responseContent) || parseKimiToolCalls(responseContent);
+      }
+      
+      if (parsedToolCalls) {
+        console.log(`Parsed ${parsedToolCalls.length} tool calls from response content`);
+        
+        // Execute tool calls
+        const toolMessages = [];
+        for (const toolCall of parsedToolCalls) {
+          const toolResult = await executeToolCall(toolCall, supabase, sessionInfo);
+          toolMessages.push(toolResult);
+        }
+        
+        // Get follow-up response with tool results
+        const followUpResponse = await callLovableAIGateway({
+          model: 'openai',
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message },
+            { role: "assistant", content: responseContent, tool_calls: parsedToolCalls },
+            ...toolMessages
+          ],
+          credential: credential,
+          session_info: sessionInfo
         });
-      }
-    }
-
-    // Tool execution loop
-    let currentMessages = [...messages];
-    
-    while (iteration < MAX_TOOL_ITERATIONS) {
-      iteration++;
-      let toolCalls: any[] = [];
-      let responseText = '';
-
-      // Parse response based on provider
-      if (aiProvider === 'vertex_ai') {
-        const candidate = aiResponse.candidates?.[0];
-        if (candidate?.content?.parts) {
-          for (const part of candidate.content.parts) {
-            if (part.text) {
-              responseText = part.text;
-            }
-            if (part.functionCall) {
-              toolCalls.push({
-                name: part.functionCall.name,
-                arguments: part.functionCall.args || {}
-              });
-            }
-          }
-        }
-      } else {
-        // OpenAI format (Lovable Gateway)
-        const choice = aiResponse.choices?.[0];
-        if (choice?.message?.content) {
-          responseText = choice.message.content;
-        }
-        if (choice?.message?.tool_calls) {
-          toolCalls = choice.message.tool_calls.map((tc: any) => ({
-            name: tc.function.name,
-            arguments: typeof tc.function.arguments === 'string' 
-              ? JSON.parse(tc.function.arguments) 
-              : tc.function.arguments
-          }));
+        
+        if (followUpResponse.success) {
+          responseContent = followUpResponse.data.content || responseContent;
         }
       }
-
-      // Try to parse tool calls from text if none found natively
-      if (toolCalls.length === 0 && responseText) {
-        const textToolCalls = parseToolCodeBlocks(responseText);
-        if (textToolCalls && textToolCalls.length > 0) {
-          toolCalls = textToolCalls;
-          console.log(`📝 Parsed ${toolCalls.length} tool calls from text`);
-        } else {
-          // Try conversational intent parsing
-          const intentTools = parseConversationalToolIntent(responseText);
-          if (intentTools && intentTools.length > 0) {
-            toolCalls = intentTools;
-            console.log(`🎯 Detected ${toolCalls.length} tools from conversational intent`);
-          }
-        }
+    } else {
+      // Handle native tool calls
+      console.log(`Processing ${toolCalls.length} native tool calls`);
+      
+      const toolMessages = [];
+      for (const toolCall of toolCalls) {
+        const toolResult = await executeToolCall(toolCall, supabase, sessionInfo);
+        toolMessages.push(toolResult);
       }
-
-      // If no tool calls, we're done
-      if (toolCalls.length === 0) {
-        finalResponse = responseText;
-        break;
-      }
-
-      console.log(`🔧 Iteration ${iteration}: Executing ${toolCalls.length} tool calls...`);
-
-      // Execute tool calls
-      for (const tool of toolCalls) {
-        try {
-          console.log(`  → Executing: ${tool.name}`);
-          const result = await executeToolCall(
-            supabase,
-            { function: { name: tool.name, arguments: JSON.stringify(tool.arguments) } },
-            'Eliza',
-            SUPABASE_URL,
-            SERVICE_ROLE_KEY
-          );
-          
-          allToolCalls.push(tool);
-          allToolResults.push({ tool: tool.name, result, success: true });
-          
-          // Add tool result to messages for next iteration
-          currentMessages.push({
-            role: 'assistant',
-            content: `Called ${tool.name} with result: ${JSON.stringify(result).substring(0, 2000)}`
-          });
-        } catch (toolError: any) {
-          console.error(`  ✗ Tool ${tool.name} failed:`, toolError.message);
-          allToolCalls.push(tool);
-          allToolResults.push({ tool: tool.name, error: toolError.message, success: false });
-          
-          currentMessages.push({
-            role: 'assistant', 
-            content: `Tool ${tool.name} failed: ${toolError.message}`
-          });
-        }
-      }
-
-      // If this was the last iteration, synthesize results
-      if (iteration >= MAX_TOOL_ITERATIONS) {
-        finalResponse = `Executed ${allToolCalls.length} tools. Results: ${JSON.stringify(allToolResults.slice(-3))}`;
-        break;
-      }
-
-      // Make follow-up call to synthesize results
-      currentMessages.push({
-        role: 'user',
-        content: 'Based on the tool results above, provide a helpful response to the original question.'
+      
+      // Get follow-up response with tool results
+      const followUpResponse = await callLovableAIGateway({
+        model: 'openai',
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message },
+          { role: "assistant", content: responseContent, tool_calls: toolCalls },
+          ...toolMessages
+        ],
+        credential: credential,
+        session_info: sessionInfo
       });
-
-      try {
-        if (aiProvider === 'vertex_ai') {
-          aiResponse = await callVertexAI(currentMessages, systemPrompt, false);
-        } else {
-          aiResponse = await callLovableGateway(currentMessages, systemPrompt, false);
-        }
-      } catch (e: any) {
-        console.warn('Follow-up call failed:', e.message);
-        finalResponse = `Tool execution completed. Results: ${JSON.stringify(allToolResults.slice(-3))}`;
-        break;
+      
+      if (followUpResponse.success) {
+        responseContent = followUpResponse.data.content || responseContent;
       }
     }
 
-    await usageTracker.success({ 
-      provider: aiProvider, 
-      tools_called: allToolCalls.length,
-      iterations: iteration,
-      force_tools: shouldForceTool
-    });
-    
-    return new Response(JSON.stringify({
-      ok: true,
-      ai_response: finalResponse,
-      provider: aiProvider,
-      model: aiProvider === 'vertex_ai' ? 'gemini-2.0-flash' : 'gemini-2.5-flash',
-      tool_calls: allToolCalls,
-      tool_results: allToolResults,
-      iterations: iteration,
-      tools_available: ELIZA_TOOLS.length
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+    return new Response(
+      JSON.stringify({
+        content: responseContent,
+        executive: EXECUTIVE_NAME,
+        function_used: FUNCTION_NAME,
+        tool_calls_processed: toolCalls?.length || 0
+      }),
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
 
-  } catch (error: any) {
-    console.error('ai-chat error:', error);
-    await usageTracker.failure(error.message, 500);
-    return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-    });
+  } catch (error) {
+    console.error(`${FUNCTION_NAME} error:`, error);
+    
+    return new Response(
+      JSON.stringify({
+        error: error.message,
+        executive: EXECUTIVE_NAME,
+        function_used: FUNCTION_NAME,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    );
   }
 });
