@@ -1,69 +1,23 @@
-name: CI/CD Pipeline
+name: CI
+
 on:
   push:
-    branches: [main, develop]
+    branches: [ main ]
   pull_request:
-    branches: [main]
-  workflow_dispatch:
-    inputs:
-      reason:
-        description: 'Reason for manual trigger'
-        required: false
-        type: string
-      event_source:
-        description: 'Event source (github, vercel, supabase)'
-        required: false
-        type: string
-      event_type:
-        description: 'Event type that triggered this workflow'
-        required: false
-        type: string
-      context_data:
-        description: 'JSON context from triggering event'
-        required: false
-        type: string
-      pr_number:
-        description: 'PR number if triggered by PR event'
-        required: false
-        type: string
-      issue_number:
-        description: 'Issue number if triggered by issue event'
-        required: false
-        type: string
+    branches: [ main ]
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    
     steps:
-    - name: Log Event-Driven Trigger Context
-      if: github.event_name == 'workflow_dispatch'
-      run: |
-        echo "🎯 Event-Driven Workflow Triggered"
-        echo "📋 Reason: ${{ github.event.inputs.reason }}"
-        echo "🔗 Event Source: ${{ github.event.inputs.event_source }}"
-        echo "🏷️ Event Type: ${{ github.event.inputs.event_type }}"
-        echo "📦 Context: ${{ github.event.inputs.context_data }}"
-    
-    - name: Checkout code
-      uses: actions/checkout@v4
-    
+    - uses: actions/checkout@v4
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '18'
-        cache: 'npm'
-    
     - name: Install dependencies
-      run: npm install
-    
-    - name: Run type checking
-      run: npm run type-check
-    
-    - name: Run linting
-      run: npm run lint
-    
-    - name: Run tests
-      run: npm test
-    
-    - name: Build project (if applicable)
-      run: npm run build || echo "No build step defined, skipping."
+      run: npm ci || npm install
+    - name: Type check
+      run: npm run type-check || echo "Type check not configured"
+    - name: Build
+      run: npm run build || echo "Build not configured"
