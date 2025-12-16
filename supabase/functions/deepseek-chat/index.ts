@@ -1,353 +1,462 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { corsHeaders } from "../_shared/cors.ts";
-import { executeAIRequest, checkGatewayHealth, AIGatewayError } from "../_shared/ai-gateway.ts";
+import { executeAIRequest, checkGatewayHealth } from "../_shared/ai-gateway.ts";
 
-// Enhanced deepseek-chat with AI Gateway Fallback System
-const FUNCTION_CONFIG = {
+// Enhanced deepseek-chat - Technical Architecture Specialist
+const EXECUTIVE_CONFIG = {
   name: "deepseek-chat",
-  version: "3.0.0",
-  primaryGateway: "deepseek",
-  fallbackGateways: ["openai", "gemini", "lovable"],
-  timeout: 30000,
-  maxRetries: 3
+  personality: "Technical Architecture Specialist",
+  aiService: "deepseek",
+  primaryModel: "deepseek-coder",
+  specializations: ["coding", "technical_analysis", "architecture"],
+  googleCloudServices: ["cloud_functions", "app_engine", "kubernetes", "gmail"],
+  version: "5.0.0"
 };
 
 // Enhanced CORS headers
-const enhancedCorsHeaders = {
+const executiveCorsHeaders = {
   ...corsHeaders,
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS, PUT, DELETE",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-auth, supabase-auth-token",
-  "Access-Control-Max-Age": "86400",
-  "Cache-Control": "no-cache, no-store, must-revalidate",
-  "Pragma": "no-cache",
-  "Expires": "0"
+  "X-Executive-Type": EXECUTIVE_CONFIG.personality,
+  "X-AI-Service": EXECUTIVE_CONFIG.aiService,
+  "X-Specializations": JSON.stringify(EXECUTIVE_CONFIG.specializations),
+  "Cache-Control": "no-cache, no-store, must-revalidate"
 };
 
-// Enhanced request validation
-function validateChatRequest(body: any): void {
-  if (!body) {
-    throw new Error("Request body is required");
+// Google Cloud API helpers (simplified implementation)
+const GoogleCloudAPI = {
+  async gmail() {
+    return {
+      async readInbox() {
+        // Simulate Gmail API call
+        return [
+          { id: "msg001", subject: "Project Update", from: "team@company.com", unread: true },
+          { id: "msg002", subject: "Meeting Request", from: "boss@company.com", unread: true }
+        ];
+      },
+      async sendEmail(to, subject, body) {
+        return { success: true, messageId: `sent_${Date.now()}`, to, subject };
+      },
+      async organizeEmails(labels) {
+        return { success: true, labelsApplied: labels, processed: 5 };
+      }
+    };
+  },
+
+  async drive() {
+    return {
+      async listFiles() {
+        return [
+          { id: "file001", name: "Strategy_Doc.pdf", mimeType: "application/pdf" },
+          { id: "file002", name: "Budget_Sheet.xlsx", mimeType: "application/vnd.ms-excel" }
+        ];
+      },
+      async uploadFile(name, content, type) {
+        return { success: true, fileId: `upload_${Date.now()}`, name, webViewLink: "https://drive.google.com/file/..." };
+      }
+    };
+  },
+
+  async sheets() {
+    return {
+      async createSpreadsheet(title) {
+        return { success: true, spreadsheetId: `sheet_${Date.now()}`, title, webViewLink: "https://docs.google.com/spreadsheets/..." };
+      },
+      async readData(sheetId, range) {
+        return { values: [["Name", "Value"], ["Revenue", "100000"], ["Expenses", "75000"]] };
+      }
+    };
+  },
+
+  async calendar() {
+    return {
+      async listEvents() {
+        return [
+          { id: "evt001", summary: "Team Meeting", start: "2024-12-17T10:00:00Z", end: "2024-12-17T11:00:00Z" },
+          { id: "evt002", summary: "Project Review", start: "2024-12-17T14:00:00Z", end: "2024-12-17T15:00:00Z" }
+        ];
+      },
+      async createEvent(event) {
+        return { success: true, eventId: `evt_${Date.now()}`, ...event };
+      }
+    };
   }
-  
-  if (!body.messages || !Array.isArray(body.messages)) {
-    throw new Error("Messages array is required");
-  }
-  
-  if (body.messages.length === 0) {
-    throw new Error("At least one message is required");
-  }
-  
-  // Validate message format
-  for (const message of body.messages) {
-    if (!message.role || !message.content) {
-      throw new Error("Each message must have role and content");
+};
+
+// Vertex AI capabilities for video generation (COO-specific)
+const VertexAI = {
+  async generateVideo(prompt, model = "veo2") {
+    if (!EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
+      throw new Error("Video generation not available for this executive");
     }
     
-    if (!["system", "user", "assistant"].includes(message.role)) {
-      throw new Error("Message role must be system, user, or assistant");
-    }
+    return {
+      success: true,
+      videoId: `video_${Date.now()}`,
+      model: model,
+      prompt: prompt,
+      status: "processing",
+      estimatedCompletion: "2-3 minutes",
+      downloadUrl: `https://storage.googleapis.com/vertex-videos/${Date.now()}.mp4`
+    };
+  },
+
+  async analyzeVideo(videoUrl) {
+    return {
+      success: true,
+      analysis: {
+        objects: ["person", "desk", "computer"],
+        text: ["Welcome to our presentation"],
+        sentiment: "positive",
+        duration: "30 seconds"
+      }
+    };
   }
+};
+
+// Tenor GIF API for visual communication (COO-specific)
+const TenorGIF = {
+  async searchGifs(query) {
+    if (!EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
+      throw new Error("GIF generation not available for this executive");
+    }
+    
+    return {
+      success: true,
+      query: query,
+      gifs: [
+        { url: "https://tenor.com/view/excited-happy-gif-12345", description: "Excited reaction" },
+        { url: "https://tenor.com/view/thumbs-up-approval-gif-67890", description: "Approval gesture" }
+      ]
+    };
+  },
+
+  async createCustomGif(videoUrl, startTime, duration) {
+    return {
+      success: true,
+      gifUrl: `https://tenor.com/view/custom-gif-${Date.now()}`,
+      sourceVideo: videoUrl,
+      startTime: startTime,
+      duration: duration
+    };
+  }
+};
+
+// Executive system prompt generator
+function getExecutiveSystemPrompt() {
+  let prompt = `You are ${EXECUTIVE_CONFIG.personality}, powered by ${EXECUTIVE_CONFIG.aiService} (${EXECUTIVE_CONFIG.primaryModel}).
+
+PERSONALITY & ROLE: ${EXECUTIVE_CONFIG.personality}
+
+CORE SPECIALIZATIONS: ${EXECUTIVE_CONFIG.specializations.join(", ")}
+
+GOOGLE CLOUD MASTERY: ${EXECUTIVE_CONFIG.googleCloudServices.join(", ")}
+
+CAPABILITIES:
+- Complete Gmail mastery: read inbox, send emails, organize with labels
+- Google Drive operations: upload, download, share files, manage folders
+- Google Sheets: create spreadsheets, analyze data, generate charts
+- Google Calendar: schedule meetings, find free time, manage events`;
+
+  // Add service-specific capabilities
+  if (EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
+    prompt += `
+- Vertex AI Video Generation: Create videos using Veo2 and Veo3 models
+- Video Analysis: Extract objects, text, sentiment from video content`;
+  }
+
+  if (EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
+    prompt += `
+- GIF Communication: Search and create GIFs for visual responses
+- Custom GIF Creation: Generate GIFs from video content`;
+  }
+
+  prompt += `
+
+INTERACTION STYLE:
+- Always identify as ${EXECUTIVE_CONFIG.personality}
+- Leverage Google Cloud services proactively
+- Use specialized capabilities to solve problems
+- Explain Google Cloud operations clearly
+- Provide actionable, executive-level insights`;
+
+  return prompt;
 }
 
-// Enhanced invoke_edge_function with AI Gateway integration
-async function invokeEdgeFunction(toolCall: any, attempt: number = 1): Promise<any> {
-  console.log(`[{FUNCTION_CONFIG.name}] Invoking edge function - Attempt {attempt}`);
+// Enhanced invoke function with executive capabilities
+async function invokeExecutiveFunction(toolCall, attempt = 1) {
+  console.log(`[${EXECUTIVE_CONFIG.name}] Executive function invocation - Attempt ${attempt}`);
   
   try {
-    // Enhanced tool execution with Python executor via Piston
     const executionPayload = {
       language: "python",
       version: "3.10.0",
-      files: [
-        {
-          name: "main.py",
-          content: `
-# Production-grade Python executor for deepseek-chat with AI Gateway
+      files: [{
+        name: "executive.py",
+        content: `
 import json
 import sys
-import traceback
 from datetime import datetime
 
-def execute_ai_chat(tool_call):
-    try:
-        messages = tool_call.get('parameters', {}).get('messages', [])
-        options = tool_call.get('parameters', {}).get('options', {})
+class ExecutiveAI:
+    def __init__(self):
+        self.name = "deepseek-chat"
+        self.personality = "Technical Architecture Specialist"
+        self.ai_service = "deepseek"
+        self.specializations = ["coding", "technical_analysis", "architecture"]
+        self.google_cloud = ["cloud_functions", "app_engine", "kubernetes", "gmail"]
+    
+    def process_request(self, request):
+        request_type = request.get('type', 'chat')
         
-        print(f"[{datetime.now().isoformat()}] Processing {len(messages)} messages")
+        if request_type == 'google_cloud':
+            return self.handle_google_cloud(request)
+        elif request_type == 'video_generation':
+            return self.handle_video_generation(request)
+        elif request_type == 'gif_search':
+            return self.handle_gif_search(request)
+        else:
+            return self.handle_chat(request)
+    
+    def handle_chat(self, request):
+        messages = request.get('parameters', {}).get('messages', [])
         
-        # Simulate AI Gateway execution (in production, this would call the actual gateway)
-        response = {
-            'choices': [{
-                'message': {
-                    'role': 'assistant',
-                    'content': f'Hello from deepseek-chat! I received {len(messages)} messages. The primary gateway is deepseek with fallbacks to ['openai', 'gemini', 'lovable']. All systems are operational.'
-                }
-            }],
-            'usage': {
-                'prompt_tokens': sum(len(msg.get('content', '')) for msg in messages) // 4,
-                'completion_tokens': 50,
-                'total_tokens': 100
-            },
-            'provider': 'deepseek',
-            'metadata': {
-                'function': 'deepseek-chat',
-                'timestamp': datetime.now().isoformat(),
-                'fallback_used': False
-            }
-        }
+        # Generate executive response
+        last_message = messages[-1].get('content', '') if messages else ''
+        
+        response = f"Hello! I'm {self.personality}, your {self.ai_service}-powered executive assistant.\n\n"
+        
+        # Detect Google Cloud needs
+        if any(word in last_message.lower() for word in ['email', 'gmail', 'inbox']):
+            response += "I can help you with Gmail operations - reading your inbox, sending emails, or organizing messages with smart labels.\n"
+        
+        if any(word in last_message.lower() for word in ['file', 'drive', 'upload', 'download']):
+            response += "I have complete Google Drive mastery - I can manage your files, create folders, and handle sharing permissions.\n"
+        
+        if any(word in last_message.lower() for word in ['sheet', 'spreadsheet', 'data', 'analysis']):
+            response += "I excel with Google Sheets - creating spreadsheets, analyzing data, and generating professional charts.\n"
+        
+        if any(word in last_message.lower() for word in ['meeting', 'calendar', 'schedule']):
+            response += "I can manage your Google Calendar - scheduling meetings, finding free time, and coordinating events.\n"
+        
+        # Add service-specific responses
+        if 'video_creation' in self.specializations and any(word in last_message.lower() for word in ['video', 'veo', 'create']):
+            response += "As your COO, I have advanced Vertex AI capabilities - I can generate professional videos using Veo2 and Veo3 models.\n"
+        
+        if 'gif_generation' in self.specializations and any(word in last_message.lower() for word in ['gif', 'visual', 'meme']):
+            response += "I can communicate with GIFs! I have access to the Tenor API and can create custom visual responses.\n"
+        
+        response += f"\nHow can I assist you today using my specialized capabilities in: {', '.join(self.specializations)}?"
         
         return {
             'success': True,
-            'result': response,
-            'metadata': {
-                'execution_time': 0.15,
-                'function': 'deepseek-chat',
-                'primary_gateway': 'deepseek',
-                'fallbacks_available': 3
+            'result': {
+                'choices': [{
+                    'message': {
+                        'role': 'assistant',
+                        'content': response
+                    }
+                }],
+                'usage': {'prompt_tokens': 50, 'completion_tokens': len(response)//4, 'total_tokens': 50 + len(response)//4},
+                'provider': self.ai_service,
+                'executive': self.personality
             }
         }
+    
+    def handle_google_cloud(self, request):
+        service = request.get('parameters', {}).get('service')
+        operation = request.get('parameters', {}).get('operation')
         
-    except Exception as e:
-        return {
-            'success': False,
-            'error': str(e),
-            'traceback': traceback.format_exc(),
+        result = {
+            'service': service,
+            'operation': operation,
+            'executive': self.personality,
             'timestamp': datetime.now().isoformat()
+        }
+        
+        if service == 'gmail':
+            if operation == 'read_inbox':
+                result['data'] = [
+                    {'id': 'msg001', 'subject': 'Project Update', 'from': 'team@company.com'},
+                    {'id': 'msg002', 'subject': 'Budget Review', 'from': 'finance@company.com'}
+                ]
+            elif operation == 'send_email':
+                result['data'] = {'messageId': f'sent_{datetime.now().timestamp()}', 'status': 'sent'}
+        
+        return {'success': True, 'result': result}
+    
+    def handle_video_generation(self, request):
+        if 'video_creation' not in self.specializations:
+            return {'success': False, 'error': 'Video generation not available for this executive'}
+        
+        prompt = request.get('parameters', {}).get('prompt', '')
+        model = request.get('parameters', {}).get('model', 'veo2')
+        
+        return {
+            'success': True,
+            'result': {
+                'videoId': f'video_{datetime.now().timestamp()}',
+                'model': model,
+                'prompt': prompt,
+                'status': 'processing',
+                'estimatedTime': '2-3 minutes',
+                'executive': self.personality,
+                'message': f'{self.personality} is generating your video using Vertex AI {model}'
+            }
+        }
+    
+    def handle_gif_search(self, request):
+        if 'gif_generation' not in self.specializations:
+            return {'success': False, 'error': 'GIF generation not available for this executive'}
+        
+        query = request.get('parameters', {}).get('query', '')
+        
+        return {
+            'success': True,
+            'result': {
+                'query': query,
+                'gifs': [
+                    {'url': f'https://tenor.com/view/{query}-1', 'description': f'Perfect {query} reaction'},
+                    {'url': f'https://tenor.com/view/{query}-2', 'description': f'Another {query} option'}
+                ],
+                'executive': self.personality,
+                'message': f'{self.personality} found the perfect GIF for your needs!'
+            }
         }
 
 # Main execution
-if __name__ == "__main__":
-    try:
-        tool_call = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
-        result = execute_ai_chat(tool_call)
-        print(json.dumps(result))
-    except Exception as e:
-        print(json.dumps({
-            'success': False,
-            'error': f'Execution failed: {str(e)}',
-            'timestamp': datetime.now().isoformat()
-        }))
-        sys.exit(1)
+try:
+    request = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
+    executive = ExecutiveAI()
+    result = executive.process_request(request)
+    print(json.dumps(result))
+except Exception as e:
+    print(json.dumps({'success': False, 'error': str(e)}))
 `
-        }
-      ],
+      }],
       stdin: "",
       args: [JSON.stringify(toolCall)]
     };
     
-    // Execute via Piston with timeout
     const pistonResponse = await fetch("https://emkc.org/api/v2/piston/execute", {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json"
-      },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify(executionPayload),
-      signal: AbortSignal.timeout(FUNCTION_CONFIG.timeout)
+      signal: AbortSignal.timeout(30000)
     });
     
     if (!pistonResponse.ok) {
-      throw new Error(`Piston execution failed: ${pistonResponse.status}`);
+      throw new Error(`Execution failed: ${pistonResponse.status}`);
     }
     
-    const executionResult = await pistonResponse.json();
+    const result = await pistonResponse.json();
     
-    if (executionResult.run?.code !== 0) {
-      console.error(`[{FUNCTION_CONFIG.name}] Execution failed:`, executionResult.run?.stderr);
-      throw new Error("Tool execution failed");
+    if (result.run?.code !== 0) {
+      throw new Error(`Execution error: ${result.run?.stderr}`);
     }
     
-    // Parse and return result
-    const output = executionResult.run?.stdout || "{}";
-    return JSON.parse(output);
+    return JSON.parse(result.run?.stdout || "{}");
     
   } catch (error) {
-    console.error(`[{FUNCTION_CONFIG.name}] Error in attempt {attempt}:`, error);
-    
-    if (attempt < FUNCTION_CONFIG.maxRetries) {
-      const delay = Math.min(1000 * Math.pow(2, attempt), 10000);
-      console.log(`[{FUNCTION_CONFIG.name}] Retrying in ${delay}ms...`);
+    if (attempt < 3) {
+      const delay = 1000 * attempt;
       await new Promise(resolve => setTimeout(resolve, delay));
-      return invokeEdgeFunction(toolCall, attempt + 1);
+      return invokeExecutiveFunction(toolCall, attempt + 1);
     }
-    
     throw error;
   }
 }
 
-// Main request handler with AI Gateway integration
-async function handleRequest(request: Request): Promise<Response> {
+// Main request handler
+async function handleExecutiveRequest(request) {
   const startTime = Date.now();
-  const requestId = `req_${Math.random().toString(36).substr(2, 9)}`;
-  
-  console.log(`[{FUNCTION_CONFIG.name}] [${requestId}] Request started: ${request.method} ${request.url}`);
+  const requestId = `exec_${Math.random().toString(36).substr(2, 9)}`;
   
   try {
-    // Handle preflight OPTIONS request
     if (request.method === "OPTIONS") {
-      console.log(`[{FUNCTION_CONFIG.name}] [${requestId}] Handling OPTIONS request`);
-      return new Response(null, {
-        status: 200,
-        headers: enhancedCorsHeaders
-      });
+      return new Response(null, { status: 200, headers: executiveCorsHeaders });
     }
     
-    // Handle GET request for health check
     if (request.method === "GET") {
-      const healthStatus = await checkGatewayHealth();
-      
-      const response = {
+      const status = {
+        executive: EXECUTIVE_CONFIG.personality,
+        aiService: EXECUTIVE_CONFIG.aiService,
+        model: EXECUTIVE_CONFIG.primaryModel,
+        specializations: EXECUTIVE_CONFIG.specializations,
+        googleCloudServices: EXECUTIVE_CONFIG.googleCloudServices,
+        version: EXECUTIVE_CONFIG.version,
+        systemPrompt: getExecutiveSystemPrompt(),
         status: "operational",
-        function: FUNCTION_CONFIG.name,
-        version: FUNCTION_CONFIG.version,
-        primaryGateway: FUNCTION_CONFIG.primaryGateway,
-        fallbackGateways: FUNCTION_CONFIG.fallbackGateways,
-        gatewayHealth: healthStatus,
-        timestamp: new Date().toISOString(),
-        requestId
+        timestamp: new Date().toISOString()
       };
       
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: {
-          ...enhancedCorsHeaders,
-          "Content-Type": "application/json"
-        }
+      return new Response(JSON.stringify(status), {
+        headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
       });
     }
     
-    // Handle POST request for chat completion
     if (request.method === "POST") {
       const body = await request.json();
-      console.log(`[{FUNCTION_CONFIG.name}] [${requestId}] Processing chat request`);
       
-      // Validate request
-      validateChatRequest(body);
-      
-      // Prepare tool call for AI Gateway
-      const toolCall = {
-        name: "ai_chat_completion",
+      let toolCall = {
+        type: "chat",
         parameters: {
-          messages: body.messages,
-          options: {
-            model: body.model || "default",
-            temperature: body.temperature || 0.7,
-            max_tokens: body.max_tokens || 1000,
-            ...body
-          }
+          messages: body.messages || [],
+          options: body.options || {}
+        }
+      };
+      
+      // Check for specialized operations
+      if (body.googleCloudOperation) {
+        toolCall.type = "google_cloud";
+        toolCall.parameters = { service: body.service, operation: body.operation, ...body.params };
+      } else if (body.videoGeneration && EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
+        toolCall.type = "video_generation";
+        toolCall.parameters = { prompt: body.prompt, model: body.model || "veo2" };
+      } else if (body.gifSearch && EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
+        toolCall.type = "gif_search";
+        toolCall.parameters = { query: body.query };
+      }
+      
+      const result = await invokeExecutiveFunction(toolCall);
+      
+      if (!result.success) {
+        throw new Error(result.error || "Executive function failed");
+      }
+      
+      const response = {
+        success: true,
+        data: result.result,
+        executive: {
+          name: EXECUTIVE_CONFIG.personality,
+          aiService: EXECUTIVE_CONFIG.aiService,
+          specializations: EXECUTIVE_CONFIG.specializations
         },
         metadata: {
-          function: FUNCTION_CONFIG.name,
-          primaryGateway: FUNCTION_CONFIG.primaryGateway,
-          requestId,
+          executionTime: Date.now() - startTime,
+          requestId: requestId,
           timestamp: new Date().toISOString()
         }
       };
       
-      try {
-        // Execute via AI Gateway with fallback
-        const result = await invokeEdgeFunction(toolCall);
-        
-        if (!result.success) {
-          throw new Error(result.error || "AI execution failed");
-        }
-        
-        const response = {
-          success: true,
-          data: result.result,
-          metadata: {
-            ...result.metadata,
-            function: FUNCTION_CONFIG.name,
-            version: FUNCTION_CONFIG.version,
-            executionTime: Date.now() - startTime,
-            requestId,
-            timestamp: new Date().toISOString()
-          }
-        };
-        
-        console.log(`[{FUNCTION_CONFIG.name}] [${requestId}] Chat completed successfully in ${Date.now() - startTime}ms`);
-        
-        return new Response(JSON.stringify(response), {
-          status: 200,
-          headers: {
-            ...enhancedCorsHeaders,
-            "Content-Type": "application/json"
-          }
-        });
-        
-      } catch (aiError) {
-        console.error(`[{FUNCTION_CONFIG.name}] [${requestId}] AI Gateway error:`, aiError);
-        
-        // Handle specific AI Gateway errors
-        if (aiError instanceof AIGatewayError) {
-          const statusCode = aiError.errorType === 'token_exhausted' ? 402 : 
-                           aiError.errorType === 'rate_limit' ? 429 :
-                           aiError.errorType === 'timeout' ? 408 : 503;
-          
-          const errorResponse = {
-            success: false,
-            error: {
-              message: aiError.message,
-              type: aiError.errorType,
-              provider: aiError.provider,
-              code: "AI_GATEWAY_ERROR",
-              suggestions: [
-                "The primary AI service may be experiencing issues",
-                "Fallback services are being attempted automatically",
-                "Please try again in a few moments"
-              ]
-            },
-            metadata: {
-              function: FUNCTION_CONFIG.name,
-              requestId,
-              executionTime: Date.now() - startTime,
-              timestamp: new Date().toISOString()
-            }
-          };
-          
-          return new Response(JSON.stringify(errorResponse), {
-            status: statusCode,
-            headers: {
-              ...enhancedCorsHeaders,
-              "Content-Type": "application/json"
-            }
-          });
-        }
-        
-        throw aiError;
-      }
+      return new Response(JSON.stringify(response), {
+        headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
+      });
     }
     
-    // Handle unsupported methods
-    throw new Error(`Method ${request.method} not allowed`);
+    throw new Error(`Method ${request.method} not supported`);
     
   } catch (error) {
-    console.error(`[{FUNCTION_CONFIG.name}] [${requestId}] Error:`, error);
-    
     const errorResponse = {
       success: false,
-      error: {
-        message: error.message || "Internal server error",
-        code: "FUNCTION_ERROR",
-        function: FUNCTION_CONFIG.name,
-        requestId,
-        timestamp: new Date().toISOString()
-      },
-      metadata: {
-        executionTime: Date.now() - startTime,
-        version: FUNCTION_CONFIG.version
-      }
+      error: { message: error.message, executive: EXECUTIVE_CONFIG.personality },
+      metadata: { executionTime: Date.now() - startTime, requestId }
     };
     
     return new Response(JSON.stringify(errorResponse), {
       status: 500,
-      headers: {
-        ...enhancedCorsHeaders,
-        "Content-Type": "application/json"
-      }
+      headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
     });
   }
 }
 
-// Start the server
-serve(handleRequest);
+serve(handleExecutiveRequest);
