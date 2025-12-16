@@ -1,4 +1,4 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+// Using Deno.serve instead of importing
 import { corsHeaders } from "../_shared/cors.ts";
 import { executeAIRequest, checkGatewayHealth } from "../_shared/ai-gateway.ts";
 
@@ -459,4 +459,4 @@ async function handleExecutiveRequest(request) {
   }
 }
 
-serve(handleExecutiveRequest);
+Deno.serve(handleExecutiveRequest);
