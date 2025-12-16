@@ -1,70 +1,44 @@
-# Contributing to XMRT Assistant
+# Contributing to XMRT Suite
 
-Thank you for your interest in contributing to XMRT Assistant! This document provides guidelines and information for contributors.
+Thank you for your interest in contributing! Please follow these guidelines.
+
+## Quick Start
+
+1. Fork the repository
+2. Create a feature branch: `git checkout -b feature/your-feature`
+3. Make changes and test
+4. Submit a pull request
 
 ## Development Setup
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/DevGruGold/xmrtassistant.git
-   cd xmrtassistant
-   ```
+```bash
+# Clone your fork
+git clone https://github.com/yourusername/suite.git
+cd suite
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+# Install dependencies
+npm install
 
-3. **Set up environment variables**
-   ```bash
-   cp .env.example .env
-   # Edit .env with your API keys
-   ```
+# Set up environment
+cp .env.example .env.local
 
-4. **Start development server**
-   ```bash
-   npm run dev
-   ```
+# Start development
+npm run dev
+```
 
-## Code Quality
+## Code Standards
 
-We maintain high code quality standards:
-
-- **Linting**: Run `npm run lint` to check for issues
-- **Formatting**: Run `npm run format` to format code
-- **Type Checking**: Run `npm run type-check` to verify types
-- **Pre-commit Hooks**: Automatically run checks before commits
-
-## Commit Message Format
-
-We follow conventional commits:
-
-- `feat:` New features
-- `fix:` Bug fixes
-- `docs:` Documentation updates
-- `style:` Code style changes
-- `refactor:` Code refactoring
-- `test:` Test additions/updates
-- `chore:` Maintenance tasks
+- Use TypeScript for type safety
+- Follow ESLint configuration  
+- Use Prettier for formatting
+- Add tests for new features
+- Update documentation
 
 ## Pull Request Process
 
-1. Create a feature branch from `main`
-2. Make your changes
-3. Ensure all checks pass
-4. Submit a pull request with clear description
-5. Address any review feedback
+1. Ensure CI checks pass
+2. Update documentation
+3. Add/update tests
+4. Request review
 
-## AI Integration Guidelines
-
-When working with AI features:
-
-- Maintain context awareness
-- Implement proper error handling
-- Consider rate limiting and costs
-- Test with various inputs
-- Document API usage patterns
-
-## Questions?
-
-Feel free to open an issue for any questions or suggestions!
+For detailed guidelines, see our full documentation.
