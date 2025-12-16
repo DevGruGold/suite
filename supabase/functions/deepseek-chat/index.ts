@@ -1,462 +1,424 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { generateExecutiveSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
-import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
-import { EdgeFunctionLogger } from "../_shared/logging.ts";
-import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
-import { executeToolCall } from '../_shared/toolExecutor.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import {
-  TOOL_CALLING_MANDATE,
-  parseDeepSeekToolCalls,
-  parseToolCodeBlocks,
-  needsDataRetrieval,
-  retrieveMemoryContexts,
-  callKimiFallback,
-  callGeminiFallback
-} from '../_shared/executiveHelpers.ts';
-import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
-import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateElizaSystemPrompt } from "../_shared/elizaSystemPrompt.ts";
+import { ELIZA_TOOLS } from "../_shared/elizaTools.ts";
+import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
+import { callLovableAIGateway } from "../_shared/unifiedAIFallback.ts";
+import { buildContextualPrompt } from "../_shared/contextBuilder.ts";
+import { executeToolCall as sharedExecuteToolCall } from "../_shared/toolExecutor.ts";
+import { startUsageTracking, logUsageMetrics } from "../_shared/edgeFunctionUsageLogger.ts";
+import { needsDataRetrieval } from "../_shared/executiveHelpers.ts";
 
-const logger = EdgeFunctionLogger('cto-executive');
 const FUNCTION_NAME = 'deepseek-chat';
-const EXECUTIVE_NAME = 'CTO';
+const EXECUTIVE_NAME = 'Eliza';
+const MODEL_TYPE = 'deepseek';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-auth-token',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+// Performance monitoring interface
+interface PerformanceMetrics {
+  startTime: number;
+  endTime?: number;
+  toolCalls: number;
+  errors: number;
+  modelType: string;
+  functionName: string;
+}
+
+// Enhanced tool call parsers for different AI model formats
+function parseDeepSeekToolCalls(content: string): Array<any> | null {
+  const toolCallsMatch = content.match(/<｜tool▁calls▁begin｜>(.*?)<｜tool▁calls▁end｜>/s);
+  if (!toolCallsMatch) return null;
+  
+  const toolCallsText = toolCallsMatch[1];
+  const toolCallPattern = /<｜tool▁call▁begin｜>(.*?)<｜tool▁sep｜>(.*?)<｜tool▁call▁end｜>/gs;
+  const toolCalls: Array<any> = [];
+  
+  let match;
+  while ((match = toolCallPattern.exec(toolCallsText)) !== null) {
+    const functionName = match[1].trim();
+    let args = match[2].trim();
+    
+    let parsedArgs = {};
+    if (args && args !== '{}') {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        console.warn(`Failed to parse DeepSeek tool args for ${functionName}:`, args);
+      }
+    }
+    
+    toolCalls.push({
+      id: `deepseek_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      type: 'function',
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(parsedArgs)
+      }
+    });
   }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
 
-  // Start usage tracking at function entry
-  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
-
-  try {
-    let requestBody;
+function parseGeminiToolCalls(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  // Pattern for ```tool_code blocks
+  const toolCodeRegex = /```tool_code\s*([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const codeBlock = match[1].trim();
+    
     try {
-      requestBody = await req.json();
-    } catch (parseError) {
-      console.error('❌ Failed to parse request body:', parseError);
-      await logger.error('Body parsing failed', parseError, 'request_parsing');
-      await usageTracker.failure('Invalid JSON in request body', 400);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: { type: 'validation_error', code: 400, message: 'Invalid JSON in request body' }
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    const { 
-      messages, 
-      conversationHistory = [], 
-      userContext = { ip: 'unknown', isFounder: false }, 
-      miningStats = null, 
-      systemVersion = null,
-      councilMode = false,
-      images = []
-    } = requestBody;
-
-    usageTracker['parameters'] = { messagesCount: messages?.length, councilMode, hasImages: images?.length > 0 };
-    
-    await logger.info('Request received', 'ai_interaction', { 
-      messagesCount: messages?.length,
-      hasHistory: conversationHistory?.length > 0,
-      userContext,
-      executive: EXECUTIVE_NAME,
-      councilMode,
-      hasImages: images?.length > 0
-    });
-
-    if (!messages || !Array.isArray(messages)) {
-      console.error('❌ Invalid messages parameter');
-      await logger.error('Invalid request format', new Error('Messages must be an array'), 'validation');
-      await usageTracker.failure('Invalid request: messages must be an array', 400);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: { type: 'validation_error', code: 400, message: 'Invalid request: messages must be an array' }
-        }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log('💻 CTO Executive (DeepSeek) - Processing with full capabilities');
-
-    // Initialize Supabase client
-    const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
-    const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY);
-
-    // ========== PHASE: MEMORY RETRIEVAL ==========
-    let memoryContexts: any[] = [];
-    if (userContext?.sessionKey) {
-      memoryContexts = await retrieveMemoryContexts(supabase, userContext.sessionKey);
-      if (memoryContexts.length > 0) {
-        console.log(`📚 Retrieved ${memoryContexts.length} memory contexts for CTO`);
-      }
-    }
-
-    // Build system prompt with memory injection
-    const executivePrompt = generateExecutiveSystemPrompt('CTO');
-    let contextualPrompt = await buildContextualPrompt(executivePrompt, {
-      conversationHistory,
-      userContext,
-      miningStats,
-      systemVersion
-    });
-    
-    // Inject memory contexts
-    if (memoryContexts.length > 0) {
-      contextualPrompt += `\n\nRelevant Memories:\n${memoryContexts.slice(0, 5).map(m => `- [${m.type}] ${m.content}`).join('\n')}`;
-    }
-
-    if (councilMode) {
-      contextualPrompt += `\n\n🏛️ COUNCIL MODE: Provide concise 2-4 paragraph response. Full tool access retained.`;
-    }
-
-    const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
-    const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-    
-    // ========== PRIORITY VISION ROUTING ==========
-    if (images && images.length > 0) {
-      console.log(`🖼️ Images detected (${images.length}) - routing to vision-capable model`);
-      
-      const geminiResult = await callGeminiFallback(aiMessages, images, supabase, SUPABASE_URL, SERVICE_ROLE_KEY, ELIZA_TOOLS);
-      if (geminiResult) {
-        return new Response(
-          JSON.stringify({
-            success: true,
-            response: geminiResult.content,
-            hasToolCalls: false,
-            executive: 'deepseek-chat',
-            executiveTitle: 'Chief Technology Officer (CTO) [Vision via Gemini]',
-            provider: geminiResult.provider,
-            model: geminiResult.model,
-            vision_analysis: true
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-    
-    if (!DEEPSEEK_API_KEY) {
-      console.warn('⚠️ DEEPSEEK_API_KEY not configured, trying fallbacks with tool execution...');
-      const userQuery = messages[messages.length - 1]?.content || '';
-      
-      // Try Kimi K2 fallback with tool execution
-      const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
-      if (kimiResult) {
-        const processed = await processFallbackWithToolExecution(
-          kimiResult, supabase, 'Chief Technology Officer (CTO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
-        );
-        return new Response(
-          JSON.stringify({
-            success: true,
-            response: processed.content,
-            hasToolCalls: processed.hasToolCalls,
-            toolCallsExecuted: processed.toolCallsExecuted,
-            executive: 'deepseek-chat',
-            executiveTitle: 'Chief Technology Officer (CTO) [Kimi K2 Fallback]',
-            provider: processed.provider,
-            model: processed.model,
-            fallback: 'kimi'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      // Try Gemini fallback with tool execution
-      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
-      if (geminiResult) {
-        const processed = await processFallbackWithToolExecution(
-          geminiResult, supabase, 'Chief Technology Officer (CTO)', SUPABASE_URL, SERVICE_ROLE_KEY, userQuery
-        );
-        return new Response(
-          JSON.stringify({
-            success: true,
-            response: processed.content,
-            hasToolCalls: processed.hasToolCalls,
-            toolCallsExecuted: processed.toolCallsExecuted,
-            executive: 'deepseek-chat',
-            executiveTitle: 'Chief Technology Officer (CTO) [Gemini Fallback]',
-            provider: processed.provider,
-            model: processed.model,
-            fallback: 'gemini'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-      
-      // EMERGENCY: All AI providers failed - use static fallback
-      console.log('🚨 All AI providers failed, using emergency static fallback');
-      const emergencyResult = await emergencyStaticFallback(
-        userQuery, supabase, 'Chief Technology Officer (CTO)', SUPABASE_URL, SERVICE_ROLE_KEY
-      );
-      return new Response(
-        JSON.stringify({
-          success: true,
-          response: emergencyResult.content,
-          hasToolCalls: emergencyResult.hasToolCalls,
-          toolCallsExecuted: emergencyResult.toolCallsExecuted,
-          executive: 'deepseek-chat',
-          executiveTitle: 'Chief Technology Officer (CTO) [Emergency Static]',
-          provider: emergencyResult.provider,
-          model: emergencyResult.model,
-          fallback: 'emergency_static'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-    
-    console.log('📤 Calling DeepSeek API with tools...');
-    const apiStartTime = Date.now();
-    
-    // Force tool execution for data-seeking queries
-    const forceToolExecution = needsDataRetrieval(messages);
-    console.log(`📊 DeepSeek - Data retrieval detected: ${forceToolExecution}, using tool_choice: ${forceToolExecution ? 'required' : 'auto'}`);
-    
-    // Call DeepSeek API with tools
-    let deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: aiMessages,
-        tools: ELIZA_TOOLS,
-        tool_choice: forceToolExecution ? 'required' : 'auto',
-        temperature: forceToolExecution ? 0.3 : 0.7, // Lower temp for data queries
-        max_tokens: councilMode ? 800 : 2000
-      })
-    });
-    
-    // ========== HANDLE API ERRORS WITH FALLBACK CASCADE ==========
-    if (!deepseekResponse.ok) {
-      const errorText = await deepseekResponse.text();
-      console.error('❌ DeepSeek API error:', deepseekResponse.status, errorText);
-      
-      if (deepseekResponse.status === 402 || deepseekResponse.status === 429 || deepseekResponse.status >= 500) {
-        console.log(`⚠️ DeepSeek returned ${deepseekResponse.status}, trying fallback cascade...`);
+      const functionCallMatch = codeBlock.match(/([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/);
+      if (functionCallMatch) {
+        const functionName = functionCallMatch[1];
+        let argsString = functionCallMatch[2].trim();
         
-        // Try Kimi K2 fallback
-        const kimiResult = await callKimiFallback(aiMessages, ELIZA_TOOLS);
-        if (kimiResult) {
-          // Process tool calls if any
-          if (kimiResult.tool_calls && kimiResult.tool_calls.length > 0) {
-            console.log(`🔧 Executing ${kimiResult.tool_calls.length} tool(s) from Kimi K2`);
-            const toolResults = [];
-            for (const toolCall of kimiResult.tool_calls) {
-              const result = await executeToolCall(supabase, toolCall, 'CTO', SUPABASE_URL, SERVICE_ROLE_KEY);
-              toolResults.push({ tool_call_id: toolCall.id, role: 'tool', content: JSON.stringify(result) });
+        let parsedArgs = {};
+        if (argsString) {
+          try {
+            // Handle both JSON and simple parameter formats
+            if (argsString.startsWith('{')) {
+              parsedArgs = JSON.parse(argsString);
+            } else {
+              // Simple parameter parsing for non-JSON formats
+              parsedArgs = { query: argsString.replace(/['"]/g, '') };
             }
-            
-            const secondResult = await callKimiFallback([
-              ...aiMessages,
-              { role: 'assistant', content: kimiResult.content, tool_calls: kimiResult.tool_calls },
-              ...toolResults
-            ]);
-            
-            if (secondResult) {
-              return new Response(
-                JSON.stringify({
-                  success: true,
-                  response: secondResult.content,
-                  hasToolCalls: true,
-                  toolCallsExecuted: kimiResult.tool_calls.length,
-                  executive: 'deepseek-chat',
-                  executiveTitle: 'Chief Technology Officer (CTO) [Kimi K2 Fallback]',
-                  provider: 'openrouter',
-                  model: 'moonshotai/kimi-k2',
-                  fallback: 'kimi'
-                }),
-                { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-              );
-            }
+          } catch {
+            console.warn(`Failed to parse Gemini tool args for ${functionName}:`, argsString);
           }
-          
-          return new Response(
-            JSON.stringify({
-              success: true,
-              response: kimiResult.content,
-              hasToolCalls: false,
-              executive: 'deepseek-chat',
-              executiveTitle: 'Chief Technology Officer (CTO) [Kimi K2 Fallback]',
-              provider: kimiResult.provider,
-              model: kimiResult.model,
-              fallback: 'kimi'
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
         }
         
-        // Try Gemini fallback
-        const geminiResult = await callGeminiFallback(aiMessages, [], supabase, SUPABASE_URL, SERVICE_ROLE_KEY, ELIZA_TOOLS);
-        if (geminiResult) {
-          return new Response(
-            JSON.stringify({
-              success: true,
-              response: geminiResult.content,
-              hasToolCalls: false,
-              executive: 'deepseek-chat',
-              executiveTitle: 'Chief Technology Officer (CTO) [Gemini Fallback]',
-              provider: geminiResult.provider,
-              model: geminiResult.model,
-              fallback: 'gemini'
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-      }
-      
-      throw new Error(`DeepSeek API error: ${deepseekResponse.status} - ${errorText}`);
-    }
-    
-    const deepseekData = await deepseekResponse.json();
-    let content = deepseekData.choices?.[0]?.message?.content || '';
-    let toolCalls = deepseekData.choices?.[0]?.message?.tool_calls || [];
-    
-    // Check for text-embedded tool calls
-    if (!toolCalls.length && content) {
-      const textToolCalls = parseDeepSeekToolCalls(content);
-      if (textToolCalls) {
-        toolCalls = textToolCalls;
-        content = content.replace(/<｜tool▁calls▁begin｜>.*?<｜tool▁calls▁end｜>/s, '').trim();
-      }
-    }
-    
-    // ========== EXECUTE TOOL CALLS ==========
-    if (toolCalls && toolCalls.length > 0) {
-      console.log(`🔧 CTO executing ${toolCalls.length} tool(s)`);
-      
-      const toolResults = [];
-      for (const toolCall of toolCalls) {
-        const toolName = toolCall.function?.name;
-        
-        // Validate tool exists
-        const validTools = ELIZA_TOOLS.map(t => t.function?.name);
-        if (!validTools.includes(toolName)) {
-          console.warn(`⚠️ Unknown tool attempted: ${toolName}`);
-          toolResults.push({
-            tool_call_id: toolCall.id,
-            role: 'tool',
-            name: toolName,
-            content: JSON.stringify({ 
-              error: `Unknown tool: ${toolName}. Use invoke_edge_function or check tool registry.`
-            })
-          });
-          continue;
-        }
-        
-        const result = await executeToolCall(supabase, toolCall, 'CTO', SUPABASE_URL, SERVICE_ROLE_KEY);
-        toolResults.push({
-          tool_call_id: toolCall.id,
-          role: 'tool',
-          name: toolName,
-          content: JSON.stringify(result)
+        toolCalls.push({
+          id: `gemini_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: functionName,
+            arguments: JSON.stringify(parsedArgs)
+          }
         });
       }
+    } catch (e) {
+      console.warn('Error parsing Gemini tool_code block:', e);
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+function parseKimiToolCalls(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  // Pattern for Kimi's JSON tool format
+  const kimiToolRegex = /```json\s*{\s*"tool_call":\s*{[^}]*"name":\s*"([^"]+)"[^}]*"parameters":\s*([^}]*{})\s*}\s*}/g;
+  let match;
+  
+  while ((match = kimiToolRegex.exec(content)) !== null) {
+    const functionName = match[1];
+    let parametersString = match[2];
+    
+    try {
+      const parameters = JSON.parse(parametersString);
       
-      // Get final response after tool execution
-      const secondResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            ...aiMessages,
-            { role: 'assistant', content: content, tool_calls: toolCalls },
-            ...toolResults
-          ],
-          temperature: 0.7,
-          max_tokens: 4096
-        })
+      toolCalls.push({
+        id: `kimi_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        type: 'function',
+        function: {
+          name: functionName,
+          arguments: JSON.stringify(parameters)
+        }
       });
+    } catch (e) {
+      console.warn(`Failed to parse Kimi tool parameters for ${functionName}:`, parametersString);
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// Enhanced executeToolCall with retry logic and performance monitoring
+async function executeToolCall(
+  toolCall: any, 
+  supabase: any, 
+  sessionInfo: any,
+  metrics: PerformanceMetrics,
+  maxRetries: number = 3
+): Promise<any> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Executing tool call (attempt ${attempt}/${maxRetries}):`, JSON.stringify(toolCall, null, 2));
       
-      if (secondResponse.ok) {
-        const secondData = await secondResponse.json();
-        content = secondData.choices?.[0]?.message?.content || content;
+      const result = await sharedExecuteToolCall(toolCall, supabase, sessionInfo);
+      
+      if (result.success) {
+        metrics.toolCalls++;
+        return {
+          tool_call_id: toolCall.id,
+          role: "tool",
+          content: JSON.stringify(result.data)
+        };
+      } else {
+        if (attempt === maxRetries) {
+          throw new Error(result.error || 'Tool execution failed after all retries');
+        }
+        
+        console.warn(`Tool execution attempt ${attempt} failed:`, result.error);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+      }
+    } catch (error) {
+      metrics.errors++;
+      
+      if (attempt === maxRetries) {
+        console.error(`Tool execution failed after ${maxRetries} attempts:`, error);
+        return {
+          tool_call_id: toolCall.id,
+          role: "tool",
+          content: JSON.stringify({
+            error: error.message,
+            message: `Tool execution failed after ${maxRetries} attempts. Please try again or use a different approach.`,
+            attempt_number: attempt,
+            max_retries: maxRetries
+          })
+        };
+      }
+      
+      console.warn(`Tool execution attempt ${attempt} failed with error:`, error.message);
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
+}
+
+// Main serve function with comprehensive error handling and monitoring
+serve(async (req) => {
+  const metrics: PerformanceMetrics = {
+    startTime: Date.now(),
+    toolCalls: 0,
+    errors: 0,
+    modelType: MODEL_TYPE,
+    functionName: FUNCTION_NAME
+  };
+  
+  // Start usage tracking
+  const trackingId = startUsageTracking(FUNCTION_NAME);
+  
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
+
+  try {
+    const { message, conversation_id, session_token, context } = await req.json();
+    
+    if (!message) {
+      throw new Error('Message is required');
+    }
+    
+    console.log(`${FUNCTION_NAME} processing request for model: ${MODEL_TYPE}`);
+    
+    // Initialize Supabase client
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    // Get AI credentials with proper cascade
+    const credential = await getAICredential(supabase, MODEL_TYPE, session_token);
+    if (!credential) {
+      return createCredentialRequiredResponse(corsHeaders, MODEL_TYPE);
+    }
+
+    // Build contextual system prompt
+    const systemPrompt = await buildContextualPrompt({
+      basePrompt: generateElizaSystemPrompt(),
+      conversationId: conversation_id,
+      sessionToken: session_token,
+      supabase,
+      context: context || {}
+    });
+
+    // Prepare session info for tool execution
+    const sessionInfo = {
+      conversation_id,
+      session_token,
+      executive_name: EXECUTIVE_NAME,
+      function_name: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      tracking_id: trackingId
+    };
+
+    // Prepare messages array
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: message }
+    ];
+
+    // Add context messages if provided
+    if (context && context.previous_messages) {
+      messages.splice(1, 0, ...context.previous_messages);
+    }
+
+    console.log(`Calling AI Gateway for ${MODEL_TYPE} with ${messages.length} messages`);
+
+    // Call AI Gateway with enhanced tool support
+    const aiResponse = await callLovableAIGateway({
+      model: MODEL_TYPE,
+      messages: messages,
+      tools: ELIZA_TOOLS,
+      tool_choice: "auto",
+      credential: credential,
+      session_info: sessionInfo,
+      max_tokens: 4000,
+      temperature: 0.7
+    });
+
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI Gateway call failed');
+    }
+
+    let responseContent = aiResponse.data.content || '';
+    let toolCalls = aiResponse.data.tool_calls || [];
+
+    // Parse tool calls from different model formats if not already present
+    if (!toolCalls || toolCalls.length === 0) {
+      let parsedToolCalls = null;
+      
+      console.log(`Attempting to parse tool calls from ${MODEL_TYPE} response format`);
+      
+      // Try different parsing strategies based on model type
+      switch (MODEL_TYPE) {
+        case 'deepseek':
+          parsedToolCalls = parseDeepSeekToolCalls(responseContent);
+          break;
+        case 'gemini':
+          parsedToolCalls = parseGeminiToolCalls(responseContent);
+          break;
+        case 'kimi':
+          parsedToolCalls = parseKimiToolCalls(responseContent) || parseGeminiToolCalls(responseContent);
+          break;
+        case 'openai':
+        case 'anthropic':
+        default:
+          // These models typically return native tool calls
+          break;
+      }
+      
+      if (parsedToolCalls) {
+        console.log(`Parsed ${parsedToolCalls.length} tool calls from ${MODEL_TYPE} response`);
+        toolCalls = parsedToolCalls;
       }
     }
+
+    // Execute tool calls if present
+    if (toolCalls && toolCalls.length > 0) {
+      console.log(`Processing ${toolCalls.length} tool calls`);
+      
+      const toolMessages = [];
+      
+      for (const toolCall of toolCalls) {
+        const toolResult = await executeToolCall(toolCall, supabase, sessionInfo, metrics);
+        toolMessages.push(toolResult);
+      }
+      
+      // Get follow-up response with tool results
+      console.log(`Getting follow-up response with ${toolMessages.length} tool results`);
+      
+      const followUpMessages = [
+        ...messages,
+        { role: "assistant", content: responseContent, tool_calls: toolCalls },
+        ...toolMessages
+      ];
+      
+      const followUpResponse = await callLovableAIGateway({
+        model: MODEL_TYPE,
+        messages: followUpMessages,
+        credential: credential,
+        session_info: sessionInfo,
+        max_tokens: 4000,
+        temperature: 0.7
+      });
+      
+      if (followUpResponse.success) {
+        responseContent = followUpResponse.data.content || responseContent;
+      } else {
+        console.warn('Follow-up response failed, using original response');
+      }
+    }
+
+    // Complete metrics
+    metrics.endTime = Date.now();
     
-    const apiDuration = Date.now() - apiStartTime;
-    
-    console.log(`✅ CTO Executive responded in ${apiDuration}ms`);
-    await logger.apiCall('deepseek_api', 200, apiDuration, { 
+    // Log usage metrics
+    await logUsageMetrics(trackingId, {
+      function_name: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      execution_time: metrics.endTime - metrics.startTime,
+      tool_calls_executed: metrics.toolCalls,
+      errors_encountered: metrics.errors,
+      success: true
+    });
+
+    const response = {
+      content: responseContent,
       executive: EXECUTIVE_NAME,
-      responseLength: content?.length || 0,
-      toolCalls: toolCalls?.length || 0,
-      usage: deepseekData.usage
-    });
+      function_used: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      tool_calls_processed: toolCalls?.length || 0,
+      execution_time_ms: metrics.endTime - metrics.startTime,
+      performance_metrics: {
+        tool_calls: metrics.toolCalls,
+        errors: metrics.errors,
+        success_rate: metrics.toolCalls > 0 ? ((metrics.toolCalls - metrics.errors) / metrics.toolCalls * 100).toFixed(2) : 100
+      },
+      timestamp: new Date().toISOString()
+    };
 
-    // Log successful completion
-    await usageTracker.success({
-      provider: 'deepseek',
-      model: 'deepseek-chat',
-      tool_calls: toolCalls?.length || 0
-    });
+    console.log(`${FUNCTION_NAME} completed successfully in ${metrics.endTime - metrics.startTime}ms`);
 
-    return new Response(
-      JSON.stringify({ 
-        success: true, 
-        response: content,
-        hasToolCalls: toolCalls?.length > 0,
-        toolCallsExecuted: toolCalls?.length || 0,
-        executive: 'deepseek-chat',
-        executiveTitle: 'Chief Technology Officer (CTO)',
-        provider: 'deepseek',
-        model: 'deepseek-chat',
-        confidence: 85,
-        usage: deepseekData.usage
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
-    console.error('❌ CTO Executive error:', error);
-    await logger.error('Function execution failed', error, 'error');
+    metrics.endTime = Date.now();
+    metrics.errors++;
     
-    // Log failure
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    await usageTracker.failure(errorMessage, 500);
+    console.error(`${FUNCTION_NAME} error:`, error);
     
-    let statusCode = 500;
+    // Log error metrics
+    await logUsageMetrics(trackingId, {
+      function_name: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      execution_time: metrics.endTime - metrics.startTime,
+      tool_calls_executed: metrics.toolCalls,
+      errors_encountered: metrics.errors,
+      success: false,
+      error_message: error.message
+    }).catch(e => console.error('Failed to log error metrics:', e));
     
-    if (errorMessage.includes('402') || errorMessage.includes('Payment Required')) {
-      statusCode = 402;
-    } else if (errorMessage.includes('429') || errorMessage.includes('Rate limit')) {
-      statusCode = 429;
-    }
-    
-    return new Response(
-      JSON.stringify({ 
-        success: false, 
-        error: {
-          type: statusCode === 402 ? 'payment_required' : 
-                statusCode === 429 ? 'rate_limit' : 'service_unavailable',
-          code: statusCode,
-          message: errorMessage,
-          service: 'deepseek-chat',
-          details: {
-            timestamp: new Date().toISOString(),
-            executive: 'CTO',
-            model: 'deepseek-chat'
-          },
-          canRetry: statusCode !== 402,
-          suggestedAction: statusCode === 402 ? 'add_credits' : 'try_alternative'
-        }
-      }),
-      { status: statusCode, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    const errorResponse = {
+      error: error.message,
+      executive: EXECUTIVE_NAME,
+      function_used: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      execution_time_ms: metrics.endTime - metrics.startTime,
+      error_details: {
+        tool_calls_attempted: metrics.toolCalls,
+        errors_encountered: metrics.errors,
+        error_type: error.constructor.name
+      },
+      timestamp: new Date().toISOString(),
+      retry_suggestion: "Please try again with a simpler request or check your input format"
+    };
+
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });

@@ -1,478 +1,424 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { generateElizaSystemPrompt } from "../_shared/elizaSystemPrompt.ts";
 import { ELIZA_TOOLS } from "../_shared/elizaTools.ts";
-import { executeToolCall } from "../_shared/toolExecutor.ts";
-import { getEnrichedElizaContext } from "../_shared/unifiedAIContext.ts";
-import { UsageTracker } from "../_shared/edgeFunctionUsageLogger.ts";
+import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
+import { callLovableAIGateway } from "../_shared/unifiedAIFallback.ts";
+import { buildContextualPrompt } from "../_shared/contextBuilder.ts";
+import { executeToolCall as sharedExecuteToolCall } from "../_shared/toolExecutor.ts";
+import { startUsageTracking, logUsageMetrics } from "../_shared/edgeFunctionUsageLogger.ts";
+import { needsDataRetrieval } from "../_shared/executiveHelpers.ts";
+
+const FUNCTION_NAME = 'vertex-ai-chat';
+const EXECUTIVE_NAME = 'Eliza';
+const MODEL_TYPE = 'vertex';
 
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-auth-token',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const VERTEX_AI_API_KEY = Deno.env.get("VERTEX_AI_API_KEY");
-const GCP_PROJECT_ID = Deno.env.get("GCP_PROJECT_ID") || "xmrt-suite";
-const GCP_LOCATION = Deno.env.get("GCP_LOCATION") || "us-central1";
-
-interface Message {
-  role: "system" | "user" | "assistant";
-  content: string;
+// Performance monitoring interface
+interface PerformanceMetrics {
+  startTime: number;
+  endTime?: number;
+  toolCalls: number;
+  errors: number;
+  modelType: string;
+  functionName: string;
 }
 
-interface VertexContent {
-  role: "user" | "model";
-  parts: { text: string }[];
-}
-
-// ═══════════════════════════════════════════════════════════════
-// IMAGE GENERATION
-// ═══════════════════════════════════════════════════════════════
-async function generateImage(prompt: string, options: {
-  model?: string;
-  aspectRatio?: string;
-  count?: number;
-}): Promise<{ images: string[]; text?: string }> {
-  const model = options.model || "gemini-2.5-flash-preview-05-20";
-  const count = Math.min(options.count || 1, 4);
+// Enhanced tool call parsers for different AI model formats
+function parseDeepSeekToolCalls(content: string): Array<any> | null {
+  const toolCallsMatch = content.match(/<｜tool▁calls▁begin｜>(.*?)<｜tool▁calls▁end｜>/s);
+  if (!toolCallsMatch) return null;
   
-  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${VERTEX_AI_API_KEY}`;
+  const toolCallsText = toolCallsMatch[1];
+  const toolCallPattern = /<｜tool▁call▁begin｜>(.*?)<｜tool▁sep｜>(.*?)<｜tool▁call▁end｜>/gs;
+  const toolCalls: Array<any> = [];
   
-  const aspectHint = options.aspectRatio ? ` The image should be in ${options.aspectRatio} aspect ratio.` : "";
-  const countHint = count > 1 ? ` Generate ${count} different variations.` : "";
-  
-  console.log(`[vertex-ai-chat] Image generation with model: ${model}`);
-  
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      contents: [{
-        role: "user",
-        parts: [{ text: `Generate an image: ${prompt}${aspectHint}${countHint}` }]
-      }],
-      generationConfig: {
-        responseModalities: ["TEXT", "IMAGE"],
-        temperature: 1.0,
+  let match;
+  while ((match = toolCallPattern.exec(toolCallsText)) !== null) {
+    const functionName = match[1].trim();
+    let args = match[2].trim();
+    
+    let parsedArgs = {};
+    if (args && args !== '{}') {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        console.warn(`Failed to parse DeepSeek tool args for ${functionName}:`, args);
       }
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[vertex-ai-chat] Image generation error: ${response.status}`, errorText);
-    throw new Error(`Image generation failed: ${response.status} - ${errorText}`);
-  }
-
-  const data = await response.json();
-  const parts = data.candidates?.[0]?.content?.parts || [];
-  
-  const images: string[] = [];
-  let text = "";
-  
-  for (const part of parts) {
-    if (part.inlineData?.mimeType?.startsWith("image/")) {
-      const dataUri = `data:${part.inlineData.mimeType};base64,${part.inlineData.data}`;
-      images.push(dataUri);
-    } else if (part.text) {
-      text += part.text;
     }
-  }
-
-  console.log(`[vertex-ai-chat] Generated ${images.length} images`);
-  return { images, text };
-}
-
-// ═══════════════════════════════════════════════════════════════
-// VIDEO GENERATION (Veo)
-// ═══════════════════════════════════════════════════════════════
-async function generateVideo(prompt: string, options: {
-  model?: string;
-  aspectRatio?: string;
-  durationSeconds?: number;
-}): Promise<{ operationId: string; operationName: string }> {
-  const model = options.model || "veo-2.0-generate-001";
-  const aspectRatio = options.aspectRatio || "16:9";
-  const durationSeconds = options.durationSeconds || 5;
-  
-  // Veo uses predictLongRunning endpoint
-  const endpoint = `https://${GCP_LOCATION}-aiplatform.googleapis.com/v1/projects/${GCP_PROJECT_ID}/locations/${GCP_LOCATION}/publishers/google/models/${model}:predictLongRunning`;
-  
-  console.log(`[vertex-ai-chat] Starting video generation with model: ${model}`);
-  
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: { 
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${VERTEX_AI_API_KEY}`
-    },
-    body: JSON.stringify({
-      instances: [{
-        prompt: prompt
-      }],
-      parameters: {
-        aspectRatio: aspectRatio,
-        durationSeconds: durationSeconds,
-        sampleCount: 1
+    
+    toolCalls.push({
+      id: `deepseek_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      type: 'function',
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(parsedArgs)
       }
-    })
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[vertex-ai-chat] Video generation error: ${response.status}`, errorText);
-    throw new Error(`Video generation failed: ${response.status} - ${errorText}`);
+    });
   }
-
-  const data = await response.json();
-  const operationName = data.name;
-  const operationId = operationName?.split("/").pop() || "unknown";
   
-  console.log(`[vertex-ai-chat] Video operation started: ${operationId}`);
-  return { operationId, operationName };
+  return toolCalls.length > 0 ? toolCalls : null;
 }
 
-async function checkVideoStatus(operationName: string): Promise<{
-  done: boolean;
-  videoUrl?: string;
-  error?: string;
-}> {
-  const endpoint = `https://${GCP_LOCATION}-aiplatform.googleapis.com/v1/${operationName}`;
+function parseGeminiToolCalls(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
   
-  console.log(`[vertex-ai-chat] Checking video status: ${operationName}`);
+  // Pattern for ```tool_code blocks
+  const toolCodeRegex = /```tool_code\s*([\s\S]*?)```/g;
+  let match;
   
-  const response = await fetch(endpoint, {
-    method: "GET",
-    headers: { 
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${VERTEX_AI_API_KEY}`
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const codeBlock = match[1].trim();
+    
+    try {
+      const functionCallMatch = codeBlock.match(/([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/);
+      if (functionCallMatch) {
+        const functionName = functionCallMatch[1];
+        let argsString = functionCallMatch[2].trim();
+        
+        let parsedArgs = {};
+        if (argsString) {
+          try {
+            // Handle both JSON and simple parameter formats
+            if (argsString.startsWith('{')) {
+              parsedArgs = JSON.parse(argsString);
+            } else {
+              // Simple parameter parsing for non-JSON formats
+              parsedArgs = { query: argsString.replace(/['"]/g, '') };
+            }
+          } catch {
+            console.warn(`Failed to parse Gemini tool args for ${functionName}:`, argsString);
+          }
+        }
+        
+        toolCalls.push({
+          id: `gemini_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: functionName,
+            arguments: JSON.stringify(parsedArgs)
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error parsing Gemini tool_code block:', e);
     }
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`Status check failed: ${response.status} - ${errorText}`);
   }
-
-  const data = await response.json();
   
-  if (data.done) {
-    if (data.error) {
-      return { done: true, error: data.error.message };
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+function parseKimiToolCalls(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  // Pattern for Kimi's JSON tool format
+  const kimiToolRegex = /```json\s*{\s*"tool_call":\s*{[^}]*"name":\s*"([^"]+)"[^}]*"parameters":\s*([^}]*{})\s*}\s*}/g;
+  let match;
+  
+  while ((match = kimiToolRegex.exec(content)) !== null) {
+    const functionName = match[1];
+    let parametersString = match[2];
+    
+    try {
+      const parameters = JSON.parse(parametersString);
+      
+      toolCalls.push({
+        id: `kimi_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        type: 'function',
+        function: {
+          name: functionName,
+          arguments: JSON.stringify(parameters)
+        }
+      });
+    } catch (e) {
+      console.warn(`Failed to parse Kimi tool parameters for ${functionName}:`, parametersString);
     }
-    const videoUrl = data.response?.predictions?.[0]?.videoUri;
-    return { done: true, videoUrl };
   }
   
-  return { done: false };
+  return toolCalls.length > 0 ? toolCalls : null;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CHAT HELPERS
-// ═══════════════════════════════════════════════════════════════
-function convertToVertexFormat(messages: Message[]): { contents: VertexContent[]; systemInstruction?: { parts: { text: string }[] } } {
-  const systemMessages = messages.filter(m => m.role === "system");
-  const nonSystemMessages = messages.filter(m => m.role !== "system");
-
-  const systemInstruction = systemMessages.length > 0 
-    ? { parts: [{ text: systemMessages.map(m => m.content).join("\n\n") }] }
-    : undefined;
-
-  const contents: VertexContent[] = nonSystemMessages.map(m => ({
-    role: m.role === "assistant" ? "model" : "user",
-    parts: [{ text: m.content }]
-  }));
-
-  return { contents, systemInstruction };
+// Enhanced executeToolCall with retry logic and performance monitoring
+async function executeToolCall(
+  toolCall: any, 
+  supabase: any, 
+  sessionInfo: any,
+  metrics: PerformanceMetrics,
+  maxRetries: number = 3
+): Promise<any> {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      console.log(`Executing tool call (attempt ${attempt}/${maxRetries}):`, JSON.stringify(toolCall, null, 2));
+      
+      const result = await sharedExecuteToolCall(toolCall, supabase, sessionInfo);
+      
+      if (result.success) {
+        metrics.toolCalls++;
+        return {
+          tool_call_id: toolCall.id,
+          role: "tool",
+          content: JSON.stringify(result.data)
+        };
+      } else {
+        if (attempt === maxRetries) {
+          throw new Error(result.error || 'Tool execution failed after all retries');
+        }
+        
+        console.warn(`Tool execution attempt ${attempt} failed:`, result.error);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt)); // Exponential backoff
+      }
+    } catch (error) {
+      metrics.errors++;
+      
+      if (attempt === maxRetries) {
+        console.error(`Tool execution failed after ${maxRetries} attempts:`, error);
+        return {
+          tool_call_id: toolCall.id,
+          role: "tool",
+          content: JSON.stringify({
+            error: error.message,
+            message: `Tool execution failed after ${maxRetries} attempts. Please try again or use a different approach.`,
+            attempt_number: attempt,
+            max_retries: maxRetries
+          })
+        };
+      }
+      
+      console.warn(`Tool execution attempt ${attempt} failed with error:`, error.message);
+      await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+    }
+  }
 }
 
-function convertToolsToVertexFormat(tools: typeof ELIZA_TOOLS) {
-  return {
-    functionDeclarations: tools.map(tool => ({
-      name: tool.function.name,
-      description: tool.function.description,
-      parameters: tool.function.parameters
-    }))
+// Main serve function with comprehensive error handling and monitoring
+serve(async (req) => {
+  const metrics: PerformanceMetrics = {
+    startTime: Date.now(),
+    toolCalls: 0,
+    errors: 0,
+    modelType: MODEL_TYPE,
+    functionName: FUNCTION_NAME
   };
-}
-
-async function synthesizeToolResults(toolName: string, toolResult: any): Promise<string> {
-  const synthesisPrompt = `You executed the tool "${toolName}" and got this result:
-${JSON.stringify(toolResult, null, 2)}
-
-Provide a natural, conversational response summarizing this data for the user. Be concise but informative.`;
+  
+  // Start usage tracking
+  const trackingId = startUsageTracking(FUNCTION_NAME);
+  
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
+  }
 
   try {
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${VERTEX_AI_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contents: [{ role: "user", parts: [{ text: synthesisPrompt }] }],
-          generationConfig: { temperature: 0.7, maxOutputTokens: 1024 }
-        })
-      }
+    const { message, conversation_id, session_token, context } = await req.json();
+    
+    if (!message) {
+      throw new Error('Message is required');
+    }
+    
+    console.log(`${FUNCTION_NAME} processing request for model: ${MODEL_TYPE}`);
+    
+    // Initialize Supabase client
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
     );
 
-    if (response.ok) {
-      const data = await response.json();
-      return data.candidates?.[0]?.content?.parts?.[0]?.text || JSON.stringify(toolResult);
-    }
-  } catch (e) {
-    console.error("Synthesis call failed:", e);
-  }
-  
-  return JSON.stringify(toolResult);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MAIN HANDLER
-// ═══════════════════════════════════════════════════════════════
-serve(async (req) => {
-  const tracker = new UsageTracker("vertex-ai-chat", req);
-
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  try {
-    if (!VERTEX_AI_API_KEY) {
-      throw new Error("VERTEX_AI_API_KEY is not configured");
+    // Get AI credentials with proper cascade
+    const credential = await getAICredential(supabase, MODEL_TYPE, session_token);
+    if (!credential) {
+      return createCredentialRequiredResponse(corsHeaders, MODEL_TYPE);
     }
 
-    const body = await req.json();
-    const { 
-      action = "chat",
-      messages, 
-      model = "gemini-2.5-flash", 
-      temperature = 0.7, 
-      maxTokens = 4096, 
-      stream = false, 
-      includeTools = true,
-      // Image generation params
-      prompt,
-      aspect_ratio,
-      count,
-      image_model,
-      // Video generation params
-      video_model,
-      duration_seconds,
-      operation_name
-    } = body;
-
-    // ═══════════════════════════════════════════════════════════════
-    // ACTION: GENERATE IMAGE
-    // ═══════════════════════════════════════════════════════════════
-    if (action === "generate_image") {
-      if (!prompt) {
-        throw new Error("prompt is required for image generation");
-      }
-      
-      console.log(`[vertex-ai-chat] Generating image: ${prompt.substring(0, 50)}...`);
-      
-      const result = await generateImage(prompt, {
-        model: image_model,
-        aspectRatio: aspect_ratio,
-        count: count
-      });
-      
-      tracker.succeed({ action: "generate_image", imageCount: result.images.length });
-      return new Response(
-        JSON.stringify({
-          success: true,
-          images: result.images,
-          text: result.text,
-          count: result.images.length,
-          provider: "vertex-ai-express"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ACTION: GENERATE VIDEO
-    // ═══════════════════════════════════════════════════════════════
-    if (action === "generate_video") {
-      if (!prompt) {
-        throw new Error("prompt is required for video generation");
-      }
-      
-      console.log(`[vertex-ai-chat] Starting video generation: ${prompt.substring(0, 50)}...`);
-      
-      const result = await generateVideo(prompt, {
-        model: video_model,
-        aspectRatio: aspect_ratio,
-        durationSeconds: duration_seconds
-      });
-      
-      tracker.succeed({ action: "generate_video", operationId: result.operationId });
-      return new Response(
-        JSON.stringify({
-          success: true,
-          operationId: result.operationId,
-          operationName: result.operationName,
-          message: "Video generation started. Use vertex_check_video_status to poll for completion.",
-          provider: "vertex-ai-express"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ACTION: CHECK VIDEO STATUS
-    // ═══════════════════════════════════════════════════════════════
-    if (action === "check_video_status") {
-      if (!operation_name) {
-        throw new Error("operation_name is required to check video status");
-      }
-      
-      console.log(`[vertex-ai-chat] Checking video status: ${operation_name}`);
-      
-      const result = await checkVideoStatus(operation_name);
-      
-      tracker.succeed({ action: "check_video_status", done: result.done });
-      return new Response(
-        JSON.stringify({
-          success: true,
-          ...result,
-          provider: "vertex-ai-express"
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // ═══════════════════════════════════════════════════════════════
-    // ACTION: CHAT (default)
-    // ═══════════════════════════════════════════════════════════════
-    if (!messages || !Array.isArray(messages)) {
-      throw new Error("Messages array is required for chat action");
-    }
-
-    // Enrich with Eliza context
-    const enrichedContext = await getEnrichedElizaContext();
-    const enrichedMessages: Message[] = [
-      { role: "system", content: enrichedContext.systemPrompt },
-      ...messages
-    ];
-
-    // Convert to Vertex AI format
-    const { contents, systemInstruction } = convertToVertexFormat(enrichedMessages);
-
-    // Build request body
-    const requestBody: any = {
-      contents,
-      generationConfig: {
-        temperature,
-        maxOutputTokens: maxTokens,
-      }
-    };
-
-    if (systemInstruction) {
-      requestBody.systemInstruction = systemInstruction;
-    }
-
-    // Add tools if requested
-    if (includeTools) {
-      requestBody.tools = [convertToolsToVertexFormat(ELIZA_TOOLS)];
-    }
-
-    // Determine endpoint
-    const endpoint = stream 
-      ? `https://generativelanguage.googleapis.com/v1beta/models/${model}:streamGenerateContent?key=${VERTEX_AI_API_KEY}`
-      : `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${VERTEX_AI_API_KEY}`;
-
-    console.log(`[vertex-ai-chat] Calling ${model} with ${contents.length} content parts`);
-
-    const response = await fetch(endpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(requestBody)
+    // Build contextual system prompt
+    const systemPrompt = await buildContextualPrompt({
+      basePrompt: generateElizaSystemPrompt(),
+      conversationId: conversation_id,
+      sessionToken: session_token,
+      supabase,
+      context: context || {}
     });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error(`[vertex-ai-chat] API error ${response.status}:`, errorText);
-      
-      // Handle rate limiting
-      if (response.status === 429) {
-        tracker.fail(new Error("Rate limit exceeded"));
-        return new Response(
-          JSON.stringify({ error: "Vertex AI rate limit exceeded. Free tier allows 10 requests per minute per model." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-      
-      throw new Error(`Vertex AI API error: ${response.status} - ${errorText}`);
+    // Prepare session info for tool execution
+    const sessionInfo = {
+      conversation_id,
+      session_token,
+      executive_name: EXECUTIVE_NAME,
+      function_name: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      tracking_id: trackingId
+    };
+
+    // Prepare messages array
+    const messages = [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: message }
+    ];
+
+    // Add context messages if provided
+    if (context && context.previous_messages) {
+      messages.splice(1, 0, ...context.previous_messages);
     }
 
-    // Handle streaming response
-    if (stream) {
-      tracker.succeed({ stream: true });
-      return new Response(response.body, {
-        headers: { ...corsHeaders, "Content-Type": "text/event-stream" }
+    console.log(`Calling AI Gateway for ${MODEL_TYPE} with ${messages.length} messages`);
+
+    // Call AI Gateway with enhanced tool support
+    const aiResponse = await callLovableAIGateway({
+      model: MODEL_TYPE,
+      messages: messages,
+      tools: ELIZA_TOOLS,
+      tool_choice: "auto",
+      credential: credential,
+      session_info: sessionInfo,
+      max_tokens: 4000,
+      temperature: 0.7
+    });
+
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI Gateway call failed');
+    }
+
+    let responseContent = aiResponse.data.content || '';
+    let toolCalls = aiResponse.data.tool_calls || [];
+
+    // Parse tool calls from different model formats if not already present
+    if (!toolCalls || toolCalls.length === 0) {
+      let parsedToolCalls = null;
+      
+      console.log(`Attempting to parse tool calls from ${MODEL_TYPE} response format`);
+      
+      // Try different parsing strategies based on model type
+      switch (MODEL_TYPE) {
+        case 'deepseek':
+          parsedToolCalls = parseDeepSeekToolCalls(responseContent);
+          break;
+        case 'gemini':
+          parsedToolCalls = parseGeminiToolCalls(responseContent);
+          break;
+        case 'kimi':
+          parsedToolCalls = parseKimiToolCalls(responseContent) || parseGeminiToolCalls(responseContent);
+          break;
+        case 'openai':
+        case 'anthropic':
+        default:
+          // These models typically return native tool calls
+          break;
+      }
+      
+      if (parsedToolCalls) {
+        console.log(`Parsed ${parsedToolCalls.length} tool calls from ${MODEL_TYPE} response`);
+        toolCalls = parsedToolCalls;
+      }
+    }
+
+    // Execute tool calls if present
+    if (toolCalls && toolCalls.length > 0) {
+      console.log(`Processing ${toolCalls.length} tool calls`);
+      
+      const toolMessages = [];
+      
+      for (const toolCall of toolCalls) {
+        const toolResult = await executeToolCall(toolCall, supabase, sessionInfo, metrics);
+        toolMessages.push(toolResult);
+      }
+      
+      // Get follow-up response with tool results
+      console.log(`Getting follow-up response with ${toolMessages.length} tool results`);
+      
+      const followUpMessages = [
+        ...messages,
+        { role: "assistant", content: responseContent, tool_calls: toolCalls },
+        ...toolMessages
+      ];
+      
+      const followUpResponse = await callLovableAIGateway({
+        model: MODEL_TYPE,
+        messages: followUpMessages,
+        credential: credential,
+        session_info: sessionInfo,
+        max_tokens: 4000,
+        temperature: 0.7
       });
-    }
-
-    // Handle regular response
-    const data = await response.json();
-    
-    // Check for function calls
-    const candidate = data.candidates?.[0];
-    const functionCall = candidate?.content?.parts?.find((p: any) => p.functionCall);
-
-    if (functionCall) {
-      const { name, args } = functionCall.functionCall;
-      console.log(`[vertex-ai-chat] Tool call detected: ${name}`);
-
-      try {
-        const toolResult = await executeToolCall(name, args);
-        const synthesizedResponse = await synthesizeToolResults(name, toolResult);
-        
-        tracker.succeed({ toolCalled: name });
-        return new Response(
-          JSON.stringify({
-            response: synthesizedResponse,
-            model,
-            provider: "vertex-ai-express",
-            toolCalled: name,
-            toolResult
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      } catch (toolError) {
-        console.error(`[vertex-ai-chat] Tool execution failed:`, toolError);
-        tracker.fail(toolError as Error);
-        return new Response(
-          JSON.stringify({
-            response: `I tried to use the ${name} tool but encountered an error: ${toolError}`,
-            model,
-            provider: "vertex-ai-express",
-            error: String(toolError)
-          }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      
+      if (followUpResponse.success) {
+        responseContent = followUpResponse.data.content || responseContent;
+      } else {
+        console.warn('Follow-up response failed, using original response');
       }
     }
 
-    // Regular text response
-    const textContent = candidate?.content?.parts?.[0]?.text || "";
+    // Complete metrics
+    metrics.endTime = Date.now();
     
-    tracker.succeed({ model, tokensUsed: data.usageMetadata?.totalTokenCount });
-    return new Response(
-      JSON.stringify({
-        response: textContent,
-        model,
-        provider: "vertex-ai-express",
-        usage: data.usageMetadata
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    // Log usage metrics
+    await logUsageMetrics(trackingId, {
+      function_name: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      execution_time: metrics.endTime - metrics.startTime,
+      tool_calls_executed: metrics.toolCalls,
+      errors_encountered: metrics.errors,
+      success: true
+    });
+
+    const response = {
+      content: responseContent,
+      executive: EXECUTIVE_NAME,
+      function_used: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      tool_calls_processed: toolCalls?.length || 0,
+      execution_time_ms: metrics.endTime - metrics.startTime,
+      performance_metrics: {
+        tool_calls: metrics.toolCalls,
+        errors: metrics.errors,
+        success_rate: metrics.toolCalls > 0 ? ((metrics.toolCalls - metrics.errors) / metrics.toolCalls * 100).toFixed(2) : 100
+      },
+      timestamp: new Date().toISOString()
+    };
+
+    console.log(`${FUNCTION_NAME} completed successfully in ${metrics.endTime - metrics.startTime}ms`);
+
+    return new Response(JSON.stringify(response), {
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
 
   } catch (error) {
-    console.error("[vertex-ai-chat] Error:", error);
-    tracker.fail(error as Error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    metrics.endTime = Date.now();
+    metrics.errors++;
+    
+    console.error(`${FUNCTION_NAME} error:`, error);
+    
+    // Log error metrics
+    await logUsageMetrics(trackingId, {
+      function_name: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      execution_time: metrics.endTime - metrics.startTime,
+      tool_calls_executed: metrics.toolCalls,
+      errors_encountered: metrics.errors,
+      success: false,
+      error_message: error.message
+    }).catch(e => console.error('Failed to log error metrics:', e));
+    
+    const errorResponse = {
+      error: error.message,
+      executive: EXECUTIVE_NAME,
+      function_used: FUNCTION_NAME,
+      model_type: MODEL_TYPE,
+      execution_time_ms: metrics.endTime - metrics.startTime,
+      error_details: {
+        tool_calls_attempted: metrics.toolCalls,
+        errors_encountered: metrics.errors,
+        error_type: error.constructor.name
+      },
+      timestamp: new Date().toISOString(),
+      retry_suggestion: "Please try again with a simpler request or check your input format"
+    };
+
+    return new Response(JSON.stringify(errorResponse), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
