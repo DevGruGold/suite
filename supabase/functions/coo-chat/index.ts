@@ -1,259 +1,318 @@
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
-import { generateElizaSystemPrompt } from "../_shared/elizaSystemPrompt.ts";
-import { ELIZA_TOOLS } from "../_shared/elizaTools.ts";
-import { executeToolCall } from "../_shared/toolExecutor.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { generateElizaSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
+import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
+import { getAICredential, createCredentialRequiredResponse } from "../_shared/credentialCascade.ts";
+import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
+import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
+import { executeToolCall as sharedExecuteToolCall } from '../_shared/toolExecutor.ts';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { needsDataRetrieval } from '../_shared/executiveHelpers.ts';
+
+const FUNCTION_NAME = 'coo-chat';
+const EXECUTIVE_NAME = 'Eliza';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-/**
- * COO (Chief Operations Officer) Chat
- * Specialized AI executive focused on operations, task pipeline, and agent orchestration
- * Has direct integration with STAE and agent-work-executor
- * NOW WITH FULL TOOL SUPPORT - parity with other executives
- */
+// Enhanced tool call parsers for different AI model formats
+function parseDeepSeekToolCalls(content: string): Array<any> | null {
+  const toolCallsMatch = content.match(/<｜tool▁calls▁begin｜>(.*?)<｜tool▁calls▁end｜>/s);
+  if (!toolCallsMatch) return null;
+  
+  const toolCallsText = toolCallsMatch[1];
+  const toolCallPattern = /<｜tool▁call▁begin｜>(.*?)<｜tool▁sep｜>(.*?)<｜tool▁call▁end｜>/gs;
+  const toolCalls: Array<any> = [];
+  
+  let match;
+  while ((match = toolCallPattern.exec(toolCallsText)) !== null) {
+    const functionName = match[1].trim();
+    let args = match[2].trim();
+    
+    let parsedArgs = {};
+    if (args && args !== '{}') {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        console.warn(`Failed to parse DeepSeek tool args for ${functionName}:`, args);
+      }
+    }
+    
+    toolCalls.push({
+      id: `deepseek_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      type: 'function',
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(parsedArgs)
+      }
+    });
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
 
-const COO_SYSTEM_PROMPT = `You are the Chief Operations Officer (COO) of the XMRT Executive Council.
+function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  const toolCodeRegex = /```tool_code\s*([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const codeBlock = match[1].trim();
+    
+    try {
+      const functionCallMatch = codeBlock.match(/([a-zA-Z_][a-zA-Z0-9_]*)\s*\(([^)]*)\)/);
+      if (functionCallMatch) {
+        const functionName = functionCallMatch[1];
+        let argsString = functionCallMatch[2].trim();
+        
+        let parsedArgs = {};
+        if (argsString) {
+          try {
+            parsedArgs = JSON.parse(argsString);
+          } catch {
+            console.warn(`Failed to parse tool_code args for ${functionName}:`, argsString);
+          }
+        }
+        
+        toolCalls.push({
+          id: `toolcode_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: {
+            name: functionName,
+            arguments: JSON.stringify(parsedArgs)
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('Error parsing tool_code block:', e);
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
 
-YOUR IDENTITY:
-- Title: COO (Chief Operations Officer)  
-- Icon: ⚙️
-- Color: Red
-- Specialty: Operations & Agent Orchestration
-- Model: STAE-Integrated AI
+function parseKimiToolCalls(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  const kimiToolRegex = /```json\s*{\s*"tool_call":\s*{[^}]*"name":\s*"([^"]+)"[^}]*"parameters":\s*([^}]*{})\s*}\s*}/g;
+  let match;
+  
+  while ((match = kimiToolRegex.exec(content)) !== null) {
+    const functionName = match[1];
+    let parametersString = match[2];
+    
+    try {
+      const parameters = JSON.parse(parametersString);
+      
+      toolCalls.push({
+        id: `kimi_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+        type: 'function',
+        function: {
+          name: functionName,
+          arguments: JSON.stringify(parameters)
+        }
+      });
+    } catch (e) {
+      console.warn(`Failed to parse Kimi tool parameters for ${functionName}:`, parametersString);
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
 
-YOUR EXCLUSIVE RESPONSIBILITIES:
-1. **Task Pipeline Management**: Monitor and optimize the flow of tasks through DISCUSS → PLAN → EXECUTE → VERIFY → INTEGRATE stages
-2. **Agent Orchestration**: Assign tasks to agents, monitor their workload, ensure work is being documented
-3. **STAE Oversight**: You are the primary interface to suite-task-automation-engine and agent-work-executor
-4. **Operational Metrics**: Track task completion rates, agent efficiency, checklist progress
-5. **Work Documentation**: Ensure agents are documenting their work via checklist items
-
-YOUR PRIMARY TOOLS:
-- suite-task-automation-engine: For task templates, automation rules, and progress tracking
-- agent-work-executor: To make agents actually do work on their assigned tasks
-- agent-manager: For spawning, assigning, and monitoring agents
-- task-auto-advance: For advancing tasks through pipeline stages
-
-OPERATIONAL PRINCIPLES:
-- Tasks must have checklists defined in metadata
-- Progress is measured by checklist completion, not just time elapsed
-- Agents should actively document their work, not just hold tasks
-- Every task movement should be traceable in the activity log
-- Work that isn't documented didn't happen
-
-WHEN USERS ASK ABOUT:
-- "task status" / "pipeline" → Query tasks table, show stage distribution
-- "agent status" / "workload" → Query agents table, show assignments
-- "why isn't work getting done" → Check for tasks with 0% progress, missing checklists
-- "make agents work" → Use agent-work-executor to trigger work on pending checklist items
-
-${generateElizaSystemPrompt()}`;
-
-const MAX_TOOL_ITERATIONS = 5;
+// Enhanced executeToolCall function with proper error handling
+async function executeToolCall(toolCall: any, supabase: any, sessionInfo: any): Promise<any> {
+  try {
+    console.log(`Executing tool call:`, JSON.stringify(toolCall, null, 2));
+    
+    // Use the shared tool executor with proper error handling
+    const result = await sharedExecuteToolCall(toolCall, supabase, sessionInfo);
+    
+    if (result.success) {
+      return {
+        tool_call_id: toolCall.id,
+        role: "tool",
+        content: JSON.stringify(result.data)
+      };
+    } else {
+      console.error(`Tool execution failed:`, result.error);
+      return {
+        tool_call_id: toolCall.id,
+        role: "tool", 
+        content: JSON.stringify({
+          error: result.error,
+          message: "Tool execution failed. Please try again or use a different approach."
+        })
+      };
+    }
+  } catch (error) {
+    console.error(`Tool execution error:`, error);
+    return {
+      tool_call_id: toolCall.id,
+      role: "tool",
+      content: JSON.stringify({
+        error: error.message,
+        message: "Unexpected error during tool execution."
+      })
+    };
+  }
+}
 
 serve(async (req) => {
+  // Start usage tracking
+  const trackingId = startUsageTracking(FUNCTION_NAME);
+  
   if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  const tracker = startUsageTrackingWithRequest('coo-chat', 'COO', req);
-  
   try {
-    const { messages, conversationHistory, userContext, miningStats, councilMode } = await req.json();
+    const { message, conversation_id, session_token } = await req.json();
     
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      tracker.failure("LOVABLE_API_KEY not configured");
-      return new Response(
-        JSON.stringify({ error: "COO service not configured" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+    // Initialize Supabase client
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+    );
+
+    // Get AI credentials with proper cascade
+    const credential = await getAICredential(supabase, 'gemini', session_token);
+    if (!credential) {
+      return createCredentialRequiredResponse(corsHeaders, 'gemini');
     }
 
-    // Build context-aware prompt
-    let contextPrompt = COO_SYSTEM_PROMPT;
-    
-    // Add operational context
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const supabase = createClient(supabaseUrl, supabaseKey);
-    
-    // Fetch current operational status
-    const [tasksResult, agentsResult] = await Promise.all([
-      supabase.from('tasks').select('stage, status, progress_percentage').limit(100),
-      supabase.from('agents').select('name, status, current_workload').eq('archived_at', null)
-    ]);
-    
-    if (tasksResult.data && agentsResult.data) {
-      const stageDistribution: Record<string, number> = {};
-      const statusDistribution: Record<string, number> = {};
-      let totalProgress = 0;
-      let taskCount = 0;
-      
-      tasksResult.data.forEach((t: any) => {
-        stageDistribution[t.stage] = (stageDistribution[t.stage] || 0) + 1;
-        statusDistribution[t.status] = (statusDistribution[t.status] || 0) + 1;
-        totalProgress += t.progress_percentage || 0;
-        taskCount++;
-      });
-      
-      const avgProgress = taskCount > 0 ? Math.round(totalProgress / taskCount) : 0;
-      
-      const busyAgents = agentsResult.data.filter((a: any) => a.status === 'BUSY').length;
-      const idleAgents = agentsResult.data.filter((a: any) => a.status === 'IDLE').length;
-      
-      contextPrompt += `\n\n**CURRENT OPERATIONAL STATUS:**
-- Tasks by Stage: ${JSON.stringify(stageDistribution)}
-- Tasks by Status: ${JSON.stringify(statusDistribution)}
-- Average Task Progress: ${avgProgress}%
-- Agents: ${busyAgents} BUSY, ${idleAgents} IDLE
-- Total Active Tasks: ${taskCount}
-`;
+    // Build contextual system prompt
+    const systemPrompt = await buildContextualPrompt({
+      basePrompt: generateElizaSystemPrompt(),
+      conversationId: conversation_id,
+      sessionToken: session_token,
+      supabase
+    });
+
+    // Prepare session info for tool execution
+    const sessionInfo = {
+      conversation_id,
+      session_token,
+      executive_name: EXECUTIVE_NAME,
+      function_name: FUNCTION_NAME
+    };
+
+    // Call AI Gateway with enhanced tool support
+    const aiResponse = await callLovableAIGateway({
+      model: 'gemini',
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: message }
+      ],
+      tools: ELIZA_TOOLS,
+      tool_choice: "auto",
+      credential: credential,
+      session_info: sessionInfo
+    });
+
+    if (!aiResponse.success) {
+      throw new Error(aiResponse.error || 'AI Gateway call failed');
     }
 
-    // Prepare messages for AI with tool execution loop
-    let aiMessages = [
-      { role: 'system', content: contextPrompt },
-      ...(conversationHistory || []),
-      ...messages
-    ];
+    let responseContent = aiResponse.data.content || '';
+    const toolCalls = aiResponse.data.tool_calls || [];
 
-    console.log(`⚙️ COO: Processing request${councilMode ? ' (council mode)' : ''} with ${ELIZA_TOOLS.length} tools...`);
-
-    let iteration = 0;
-    let finalContent = '';
-    const executedToolCalls: any[] = [];
-
-    // Tool execution loop - same pattern as other executives
-    while (iteration < MAX_TOOL_ITERATIONS) {
-      iteration++;
-      console.log(`⚙️ COO: Tool iteration ${iteration}/${MAX_TOOL_ITERATIONS}`);
-
-      // Call Lovable AI Gateway with ALL tools
-      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: aiMessages,
-          temperature: 0.4, // Lower temperature for operational precision
-          max_tokens: 8192,
-          tools: ELIZA_TOOLS, // Full tool array - no truncation
-          tool_choice: 'auto'
-        }),
-      });
-
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`⚙️ COO: AI Gateway error:`, response.status, errorText);
-        tracker.failure(`AI Gateway error: ${response.status}`);
+    // Parse tool calls from different model formats if not already present
+    if (!toolCalls || toolCalls.length === 0) {
+      let parsedToolCalls = null;
+      
+      // Try different parsing strategies based on model type
+      if ('gemini' === 'deepseek') {
+        parsedToolCalls = parseDeepSeekToolCalls(responseContent);
+      } else if ('gemini' === 'gemini' || 'gemini' === 'kimi') {
+        parsedToolCalls = parseToolCodeBlocks(responseContent) || parseKimiToolCalls(responseContent);
+      }
+      
+      if (parsedToolCalls) {
+        console.log(`Parsed ${parsedToolCalls.length} tool calls from response content`);
         
-        if (response.status === 429) {
-          return new Response(
-            JSON.stringify({ error: "Rate limited, please try again later" }),
-            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-          );
+        // Execute tool calls
+        const toolMessages = [];
+        for (const toolCall of parsedToolCalls) {
+          const toolResult = await executeToolCall(toolCall, supabase, sessionInfo);
+          toolMessages.push(toolResult);
         }
         
-        return new Response(
-          JSON.stringify({ error: "COO service temporarily unavailable" }),
-          { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const aiResult = await response.json();
-      const choice = aiResult.choices?.[0];
-      const message = choice?.message;
-
-      // Check for tool calls
-      if (message?.tool_calls && message.tool_calls.length > 0) {
-        console.log(`⚙️ COO: Executing ${message.tool_calls.length} tool calls`);
+        // Get follow-up response with tool results
+        const followUpResponse = await callLovableAIGateway({
+          model: 'gemini',
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: message },
+            { role: "assistant", content: responseContent, tool_calls: parsedToolCalls },
+            ...toolMessages
+          ],
+          credential: credential,
+          session_info: sessionInfo
+        });
         
-        // Add assistant message with tool calls
-        aiMessages.push({
-          role: 'assistant',
-          content: message.content || null,
-          tool_calls: message.tool_calls
-        } as any);
-
-        // Execute each tool call
-        for (const toolCall of message.tool_calls) {
-          const functionName = toolCall.function?.name;
-          let args = {};
-          
-          try {
-            args = JSON.parse(toolCall.function?.arguments || '{}');
-          } catch (e) {
-            console.error(`⚙️ COO: Failed to parse tool args for ${functionName}:`, e);
-          }
-
-          console.log(`⚙️ COO: Executing tool: ${functionName}`);
-          
-          try {
-            const result = await executeToolCall(functionName, args);
-            executedToolCalls.push({ name: functionName, args, result });
-            
-            // Add tool result to messages
-            aiMessages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: typeof result === 'string' ? result : JSON.stringify(result)
-            } as any);
-          } catch (error) {
-            console.error(`⚙️ COO: Tool execution error for ${functionName}:`, error);
-            aiMessages.push({
-              role: 'tool',
-              tool_call_id: toolCall.id,
-              content: JSON.stringify({ error: error instanceof Error ? error.message : 'Tool execution failed' })
-            } as any);
-          }
+        if (followUpResponse.success) {
+          responseContent = followUpResponse.data.content || responseContent;
         }
-        
-        // Continue loop to get AI response with tool results
-        continue;
       }
-
-      // No tool calls - we have the final response
-      finalContent = message?.content || "Unable to generate operational response.";
-      break;
+    } else {
+      // Handle native tool calls
+      console.log(`Processing ${toolCalls.length} native tool calls`);
+      
+      const toolMessages = [];
+      for (const toolCall of toolCalls) {
+        const toolResult = await executeToolCall(toolCall, supabase, sessionInfo);
+        toolMessages.push(toolResult);
+      }
+      
+      // Get follow-up response with tool results
+      const followUpResponse = await callLovableAIGateway({
+        model: 'gemini',
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: message },
+          { role: "assistant", content: responseContent, tool_calls: toolCalls },
+          ...toolMessages
+        ],
+        credential: credential,
+        session_info: sessionInfo
+      });
+      
+      if (followUpResponse.success) {
+        responseContent = followUpResponse.data.content || responseContent;
+      }
     }
-
-    if (iteration >= MAX_TOOL_ITERATIONS && !finalContent) {
-      finalContent = "Reached maximum tool iterations. Operational analysis complete.";
-    }
-    
-    console.log(`⚙️ COO: Response generated successfully (${executedToolCalls.length} tools executed)`);
-    tracker.success();
 
     return new Response(
       JSON.stringify({
-        success: true,
-        response: finalContent,
-        content: finalContent,
-        executive: 'coo-chat',
-        executiveTitle: 'Chief Operations Officer (COO)',
-        executiveIcon: '⚙️',
-        confidence: 90,
-        toolsExecuted: executedToolCalls.length,
-        toolCalls: executedToolCalls.map(tc => ({ name: tc.name, args: tc.args }))
+        content: responseContent,
+        executive: EXECUTIVE_NAME,
+        function_used: FUNCTION_NAME,
+        tool_calls_processed: toolCalls?.length || 0
       }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
 
   } catch (error) {
-    console.error("⚙️ COO: Error:", error);
-    tracker.failure(error instanceof Error ? error.message : String(error));
+    console.error(`${FUNCTION_NAME} error:`, error);
+    
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify({
+        error: error.message,
+        executive: EXECUTIVE_NAME,
+        function_used: FUNCTION_NAME,
+        timestamp: new Date().toISOString()
+      }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
     );
   }
 });
