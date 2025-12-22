@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "npx vite build",
     "build:dev": "vite build --mode development",
     "lint": "eslint . --max-warnings 1000",
     "preview": "vite preview",
@@ -16,8 +16,8 @@
     "format": "prettier --write 'src/**/*.{ts,tsx,js,jsx,json,css,md}'",
     "format:check": "prettier --check 'src/**/*.{ts,tsx,js,jsx,json,css,md}'",
     "analyze": "npm run build && npx vite-bundle-analyzer dist/stats.html",
-    "clean": "rm -rf dist node_modules/.cache",
-    "prepare": "husky install || true"
+    "clean": "rm -rf dist node_modules/.cache"
+    
   },
   "dependencies": {
     "@11labs/react": "^0.2.0",
