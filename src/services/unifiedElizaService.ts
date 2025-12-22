@@ -158,9 +158,10 @@ export class UnifiedElizaService {
       }
     }
     
-    // All executives failed - return helpful fallback
-    console.log('🚨 All executives failed, using emergency fallback');
-    return `Hello! I'm experiencing some technical difficulties but I'm here to help. You said: "${userInput}". Please try refreshing the page or try again in a moment.`;
+    // All executives failed - use FallbackAIService (Office Clerk)
+    console.log('🚨 All executives failed, falling back to Office Clerk...');
+    const fallbackResult = await FallbackAIService.generateResponse(userInput, context);
+        return fallbackResult.text;
   }
 
   // MAIN METHOD: Returns STRING as expected by frontend
@@ -204,8 +205,7 @@ export class UnifiedElizaService {
     } catch (error: any) {
       console.error('💥 Critical error in generateResponse:', error?.message || error);
       
-      // Ultimate safety net - return string
-      return `I apologize for the technical difficulty. You said: "${userInput}". I'm working to resolve this issue. Please refresh the page and try again.`;
+throw error;
     }
   }
   
