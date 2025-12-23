@@ -131,17 +131,19 @@ export class UnifiedElizaService {
           timestamp: new Date().toISOString()
         };
         
-        const { data, error } = await supabase.functions.invoke(executive, {
+        const result = await supabase.functions.invoke(executive, {
           body: payload
         });
         
-        if (error) {
-          console.error(`❌ ${executive} error:`, error);
+        if (result.error) {
+          console.error(`❌ ${executive} error:`, result.error);
           continue;
         }
         
         // CRITICAL FIX: Extract content properly
-        const content = this.extractResponseContent(data);
+        // The result object from supabase.functions.invoke is { data: { ...function_response... }, error: null }
+        // We need to pass result.data (which is the function's JSON body) to the extractor.
+        const content = this.extractResponseContent(result.data);
         
         if (content && content.length > 0) {
           console.log(`✅ ${executive} SUCCESS! Extracted content:`, content.substring(0, 100) + '...');
