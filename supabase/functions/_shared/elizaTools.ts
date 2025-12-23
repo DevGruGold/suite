@@ -3224,7 +3224,7 @@ Response includes ecosystem_summary with one-line stats for each component.`,
           },
           duration_seconds: { 
             type: 'number', 
-            enum: [4, 5, 6, 7, 8],
+            enum: ["4", "5", "6", "7", "8"],
             description: 'Video duration in seconds (4-8, default: 5)' 
           }
         },
