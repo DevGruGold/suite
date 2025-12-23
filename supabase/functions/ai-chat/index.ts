@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
+import { callAIWithFallback } from '../_shared/unifiedAIFallback.ts';
 import { generateExecutiveSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
 import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
@@ -9,14 +9,8 @@ import { executeToolCall } from '../_shared/toolExecutor.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import {
   TOOL_CALLING_MANDATE,
-  parseDeepSeekToolCalls,
-  parseToolCodeBlocks,
-  parseConversationalToolIntent,
   needsDataRetrieval,
   retrieveMemoryContexts,
-  callDeepSeekFallback,
-  callKimiFallback,
-  callGeminiFallback,
   synthesizeToolResults
 } from '../_shared/executiveHelpers.ts';
 import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
@@ -84,7 +78,7 @@ serve(async (req) => {
 
     // ========== PHASE: VISION ROUTING ==========
     if (images && images.length > 0) {
-      console.log(`🖼️ Images detected (${images.length}) - routing to Gemini Vision`);
+      console.log(`🖼️ Images detected (${images.length}) - routing to Vision-enabled AI`);
       
       const executivePrompt = generateExecutiveSystemPrompt('AI');
       const contextualPrompt = await buildContextualPrompt(executivePrompt, {
@@ -95,14 +89,24 @@ serve(async (req) => {
       });
       
       const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
-      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS, images);
       
-      if (geminiResult) {
-        // Execute any tool calls from Gemini
-        if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
-          console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini Vision`);
+      // Use the unified fallback function, prioritizing Gemini/Vertex for vision
+      const visionResult = await callAIWithFallback(aiMessages, {
+        tools: ELIZA_TOOLS,
+        userContext,
+        miningStats,
+        executiveName: EXECUTIVE_NAME,
+        useFullElizaContext: false, // Context is already built into aiMessages
+        preferProvider: 'gemini', // Prefer Gemini for vision
+        images: images
+      });
+      
+      if (visionResult.content || (visionResult.message && visionResult.message.tool_calls)) {
+        // Handle tool calls from vision model
+        if (visionResult.message && visionResult.message.tool_calls && visionResult.message.tool_calls.length > 0) {
+          console.log(`🔧 Executing ${visionResult.message.tool_calls.length} tool(s) from Vision AI: ${visionResult.provider}`);
           const toolResults = [];
-          for (const toolCall of geminiResult.tool_calls) {
+          for (const toolCall of visionResult.message.tool_calls) {
             const result = await executeToolCall(supabase, toolCall, 'AI', SUPABASE_URL, SERVICE_ROLE_KEY);
             toolResults.push({ tool: toolCall.function.name, result });
           }
@@ -113,27 +117,28 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({
               success: true,
-              response: synthesized || geminiResult.content,
+              response: synthesized || visionResult.message.content,
               hasToolCalls: true,
-              toolCallsExecuted: geminiResult.tool_calls.length,
+              toolCallsExecuted: visionResult.message.tool_calls.length,
               executive: 'ai-chat',
-              executiveTitle: 'AI Assistant [Vision]',
-              provider: 'gemini',
-              model: 'gemini-2.0-flash-exp',
+              executiveTitle: `AI Assistant [Vision - ${visionResult.provider}]`,
+              provider: visionResult.provider,
+              model: visionResult.model || 'auto',
               vision_analysis: true
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
         
+        // Handle conversational response from vision model
         return new Response(
           JSON.stringify({
             success: true,
-            response: geminiResult.content,
+            response: visionResult.content,
             executive: 'ai-chat',
-            executiveTitle: 'AI Assistant [Vision]',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash-exp',
+            executiveTitle: `AI Assistant [Vision - ${visionResult.provider}]`,
+            provider: visionResult.provider,
+            model: visionResult.model || 'auto',
             vision_analysis: true
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -144,7 +149,7 @@ serve(async (req) => {
     // ========== PHASE: AI PROCESSING WITH FALLBACKS ==========
     // Generate executive system prompt
     const executivePrompt = generateExecutiveSystemPrompt('AI');
-    const contextualPrompt = await buildContextualPrompt(executivePrompt, {
+    let contextualPrompt = await buildContextualPrompt(executivePrompt, {
       conversationHistory: enrichedConversationHistory,
       userContext,
       miningStats,
@@ -157,70 +162,61 @@ serve(async (req) => {
 
     const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
 
-    console.log('🚀 Trying AI providers in sequence...');
+    console.log('🚀 Trying AI providers in sequence with full fallback cascade...');
 
-    // Try Gemini first (most reliable for general AI)
-    const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
-    if (geminiResult) {
-      // Execute any tool calls from Gemini
-      if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
-        console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini`);
-        const toolResults = [];
-        for (const toolCall of geminiResult.tool_calls) {
-          const result = await executeToolCall(supabase, toolCall, 'AI', SUPABASE_URL, SERVICE_ROLE_KEY);
-          toolResults.push({ tool: toolCall.function.name, result });
-        }
-        
-        const userQuery = messages[messages.length - 1]?.content || '';
-        const synthesized = await synthesizeToolResults(toolResults, userQuery, 'AI General Assistant');
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            response: synthesized || geminiResult.content,
-            hasToolCalls: true,
-            toolCallsExecuted: geminiResult.tool_calls.length,
-            executive: 'ai-chat',
-            executiveTitle: 'AI Assistant',
-            provider: 'gemini',
-            model: 'gemini-2.0-flash-exp'
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+    // Use the unified fallback function for the full cascade (Lovable -> DeepSeek -> Kimi -> Vertex AI -> Gemini)
+    const aiResult = await callAIWithFallback(aiMessages, {
+      tools: ELIZA_TOOLS,
+      userContext,
+      miningStats,
+      executiveName: EXECUTIVE_NAME,
+      useFullElizaContext: false // Context is already built into aiMessages
+    });
+
+    // Check for tool calls first
+    if (aiResult.message && aiResult.message.tool_calls && aiResult.message.tool_calls.length > 0) {
+      console.log(`🔧 Executing ${aiResult.message.tool_calls.length} tool(s) from ${aiResult.provider}`);
+      const toolResults = [];
+      for (const toolCall of aiResult.message.tool_calls) {
+        const result = await executeToolCall(supabase, toolCall, 'AI', SUPABASE_URL, SERVICE_ROLE_KEY);
+        toolResults.push({ tool: toolCall.function.name, result });
       }
+      
+      const userQuery = messages[messages.length - 1]?.content || '';
+      const synthesized = await synthesizeToolResults(toolResults, userQuery, 'AI General Assistant');
       
       return new Response(
         JSON.stringify({
           success: true,
-          response: geminiResult.content,
+          response: synthesized || aiResult.message.content,
+          hasToolCalls: true,
+          toolCallsExecuted: aiResult.message.tool_calls.length,
           executive: 'ai-chat',
-          executiveTitle: 'AI Assistant',
-          provider: 'gemini',
-          model: 'gemini-2.0-flash-exp'
+          executiveTitle: `AI Assistant [${aiResult.provider}]`,
+          provider: aiResult.provider,
+          model: aiResult.model || 'auto'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Try DeepSeek fallback
-    console.log('🔄 Trying DeepSeek fallback...');
-    const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
-    if (deepseekResult) {
+    
+    // Return conversational response
+    if (aiResult.content) {
       return new Response(
         JSON.stringify({
           success: true,
-          response: deepseekResult.content,
+          response: aiResult.content,
           executive: 'ai-chat',
-          executiveTitle: 'AI Assistant',
-          provider: 'deepseek-fallback',
-          model: 'deepseek-chat'
+          executiveTitle: `AI Assistant [${aiResult.provider}]`,
+          provider: aiResult.provider,
+          model: aiResult.model || 'auto'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Emergency static fallback
-    console.log('⚠️ All AI providers failed, using emergency static fallback');
+    // Emergency static fallback (should be caught by callAIWithFallback, but for safety)
+    console.log('⚠️ AI provider failed to return content, using emergency static fallback');
     return new Response(
       JSON.stringify({
         success: true,
