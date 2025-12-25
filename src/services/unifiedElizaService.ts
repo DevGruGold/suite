@@ -110,9 +110,12 @@ export class UnifiedElizaService {
     console.log('📝 Input preview:', (userInput || '').substring(0, 30) + '...');
     
     // Ensure we have a valid array
+    // Prioritize executive-specific functions, then the general ai-chat as a last resort
+    const defaultExecutives = ['deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat', 'ai-chat'];
+    
     const safeExecutives = Array.isArray(healthyExecutives) && healthyExecutives.length > 0 
-      ? healthyExecutives 
-      : ['ai-chat', 'deepseek-chat', 'gemini-chat'];
+      ? healthyExecutives.filter(exec => exec !== 'ai-chat').concat('ai-chat') // Ensure ai-chat is last
+      : defaultExecutives;
     
     console.log('🔒 Safe executives:', safeExecutives.length, 'available');
     
