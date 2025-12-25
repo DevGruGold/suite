@@ -136,7 +136,7 @@ export class UnifiedElizaService {
         });
         
         if (error) {
-          console.error(`❌ ${executive} error:`, error);
+          console.error(`❌ ${executive} error:`, JSON.stringify(error, null, 2));
           continue;
         }
         
@@ -150,10 +150,10 @@ export class UnifiedElizaService {
           return content;
         }
         
-        console.log(`⚠️ ${executive} no valid content extracted`);
+        console.log(`⚠️ ${executive} no valid content extracted. Raw data:`, JSON.stringify(data, null, 2));
         
       } catch (err: any) {
-        console.error(`💥 ${executive} crashed:`, err?.message || 'Unknown error');
+        console.error(`💥 ${executive} crashed:`, JSON.stringify(err, null, 2));
         continue;
       }
     }
