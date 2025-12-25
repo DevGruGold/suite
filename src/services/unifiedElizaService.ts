@@ -99,14 +99,14 @@ export class UnifiedElizaService {
     return null;
   }
 
-  // SAFE: Enhanced routing with proper response extraction
+  // ENHANCED: Routing with 402/503 error handling and executive cycling
   private static async routeToExecutive(
     userInput: string, 
     context: ElizaContext, 
     healthyExecutives: string[], 
     language = 'en'
   ) {
-    console.log('🎯 SAFE routing with response extraction');
+    console.log('🎯 Enhanced routing with 402/503 error handling and executive cycling');
     console.log('📝 Input preview:', (userInput || '').substring(0, 30) + '...');
     
     // Ensure we have a valid array
@@ -119,18 +119,25 @@ export class UnifiedElizaService {
     
     console.log('🔒 Safe executives:', safeExecutives.length, 'available');
     
+    const failedExecutives: Array<{name: string, reason: string}> = [];
+    
     // Try executives in priority order
     for (const executive of safeExecutives) {
       try {
         console.log(`📞 Calling ${executive}...`);
         
-        // Simple payload construction
+        // Build comprehensive payload with all context
         const payload = {
           message: userInput || 'Hello',
           messages: [{ 
             role: 'user', 
             content: userInput || 'Hello' 
           }],
+          conversationHistory: context.conversationContext,
+          userContext: context.userContext,
+          miningStats: context.miningStats,
+          emotionalContext: context.emotionalContext,
+          images: context.images,
           timestamp: new Date().toISOString()
         };
         
@@ -138,35 +145,88 @@ export class UnifiedElizaService {
           body: payload
         });
         
+        // Check for 402 Payment Required or 503 Service Unavailable errors
         if (result.error) {
+          const errorMessage = typeof result.error === 'object' ? JSON.stringify(result.error) : String(result.error);
+          
+          // Check if error indicates depleted credits/tokens or service unavailable
+          if (errorMessage.includes('402') || 
+              errorMessage.includes('503') ||
+              errorMessage.includes('quota') || 
+              errorMessage.includes('credit') ||
+              errorMessage.includes('insufficient') ||
+              errorMessage.includes('payment required') ||
+              errorMessage.includes('service unavailable') ||
+              errorMessage.includes('non-2xx status code')) {
+            console.warn(`💳 ${executive} unavailable (402/503), trying next executive...`);
+            failedExecutives.push({name: executive, reason: 'service_unavailable_or_depleted_credits'});
+            continue;
+          }
+          
           console.error(`❌ ${executive} error:`, result.error);
+          failedExecutives.push({name: executive, reason: 'error'});
+          continue;
+        }
+        
+        // Check response status for 402 or 503
+        if (result.data?.status === 402 || result.data?.statusCode === 402 ||
+            result.data?.status === 503 || result.data?.statusCode === 503) {
+          console.warn(`💳 ${executive} returned ${result.data?.status || result.data?.statusCode} status, trying next executive...`);
+          failedExecutives.push({name: executive, reason: 'service_unavailable_or_depleted_credits'});
           continue;
         }
         
         // CRITICAL FIX: Extract content properly
-        // The result object from supabase.functions.invoke is { data: { ...function_response... }, error: null }
-        // We need to pass result.data (which is the function's JSON body) to the extractor.
         const content = this.extractResponseContent(result.data);
         
         if (content && content.length > 0) {
           console.log(`✅ ${executive} SUCCESS! Extracted content:`, content.substring(0, 100) + '...');
+          
+          // Log which executives were skipped due to depleted credits or unavailability
+          if (failedExecutives.length > 0) {
+            const unavailableExecs = failedExecutives.filter(e => e.reason === 'service_unavailable_or_depleted_credits').map(e => e.name);
+            if (unavailableExecs.length > 0) {
+              console.log(`ℹ️ Skipped executives (depleted credits or unavailable): ${unavailableExecs.join(', ')}`);
+            }
+          }
           
           // Return as STRING (what frontend expects)
           return content;
         }
         
         console.log(`⚠️ ${executive} no valid content extracted`);
+        failedExecutives.push({name: executive, reason: 'no_content'});
         
       } catch (err: any) {
-        console.error(`💥 ${executive} crashed:`, err?.message || 'Unknown error');
+        const errorMessage = err?.message || 'Unknown error';
+        
+        // Check if the error is related to depleted credits or service unavailable
+        if (errorMessage.includes('402') || 
+            errorMessage.includes('503') ||
+            errorMessage.includes('quota') || 
+            errorMessage.includes('credit') ||
+            errorMessage.includes('insufficient') ||
+            errorMessage.includes('service unavailable') ||
+            errorMessage.includes('non-2xx status code')) {
+          console.warn(`💳 ${executive} threw unavailability error, trying next executive...`);
+          failedExecutives.push({name: executive, reason: 'service_unavailable_or_depleted_credits'});
+        } else {
+          console.error(`💥 ${executive} crashed:`, errorMessage);
+          failedExecutives.push({name: executive, reason: 'crashed'});
+        }
         continue;
       }
     }
     
-    // All executives failed - use FallbackAIService (Office Clerk)
-    console.log('🚨 All executives failed, falling back to Office Clerk...');
+    // All executives failed - log summary and use FallbackAIService (Office Clerk)
+    console.log('🚨 All executives failed:');
+    failedExecutives.forEach(exec => {
+      console.log(`  - ${exec.name}: ${exec.reason}`);
+    });
+    
+    console.log('🤖 Falling back to Office Clerk (local AI)...');
     const fallbackResult = await FallbackAIService.generateResponse(userInput, context);
-        return fallbackResult.text;
+    return fallbackResult.text;
   }
 
   // MAIN METHOD: Returns STRING as expected by frontend
