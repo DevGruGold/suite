@@ -95,7 +95,7 @@ Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for gui
 
 ## 📞 Support
 
-- 📧 Email: support@devgrugold.com
+- 📧 Email: xmrtsolutions@gmail.com
 - 💬 Discord: [Join our community](https://discord.gg/xmrt)
 - 🐛 Issues: [GitHub Issues](https://github.com/DevGruGold/suite/issues)
 
