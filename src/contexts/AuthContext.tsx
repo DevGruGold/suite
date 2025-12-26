@@ -186,7 +186,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Basic scopes for normal sign-in (no Google Cloud access)
   const BASIC_SCOPES = 'openid email profile';
 
-  // Extended Google OAuth scopes for superadmins with full Google Cloud access
+  // Extended Google OAuth scopes for superadmins with full Google Cloud access (Vertex AI requires a specific scope, e.g., cloud-platform or a custom one)
   const GOOGLE_CLOUD_SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
@@ -194,6 +194,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     'https://www.googleapis.com/auth/drive',
     'https://www.googleapis.com/auth/spreadsheets',
     'https://www.googleapis.com/auth/calendar',
+    'https://www.googleapis.com/auth/cloud-platform', // Broad scope for Google Cloud services like Vertex AI
     'openid',
     'email',
     'profile'
