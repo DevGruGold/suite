@@ -646,16 +646,16 @@ export async function callAIWithFallback(
   console.log('🧠 callAIWithFallback: Using full Eliza intelligence context for all providers');
   
   // Define provider order based on preference
-  // Default cascade: Lovable → DeepSeek → Kimi → Vertex AI → Gemini
+  // Default cascade: Vertex AI → Lovable → DeepSeek → Kimi → Gemini
   const providers = options.preferProvider === 'deepseek'
-    ? [callDeepSeek, callLovable, callKimi, callVertexAI, callGemini]
+    ? [callDeepSeek, callVertexAI, callLovable, callKimi, callGemini]
     : options.preferProvider === 'kimi'
-    ? [callKimi, callLovable, callDeepSeek, callVertexAI, callGemini]
+    ? [callKimi, callVertexAI, callLovable, callDeepSeek, callGemini]
     : options.preferProvider === 'gemini'
-    ? [callGemini, callLovable, callDeepSeek, callKimi, callVertexAI]
+    ? [callGemini, callVertexAI, callLovable, callDeepSeek, callKimi]
     : options.preferProvider === 'vertexai'
     ? [callVertexAI, callLovable, callDeepSeek, callKimi, callGemini]
-    : [callLovable, callDeepSeek, callKimi, callVertexAI, callGemini]; // Default: Lovable first
+    : [callVertexAI, callLovable, callDeepSeek, callKimi, callGemini]; // Default: Vertex AI first
 
   for (const providerFn of providers) {
     const result = await providerFn(messages, options);

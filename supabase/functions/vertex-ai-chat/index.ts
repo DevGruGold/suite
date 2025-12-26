@@ -1,6 +1,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from "../_shared/cors.ts";
 import { executeAIRequest, checkGatewayHealth } from "../_shared/ai-gateway.ts";
+
+const supabase = createClient(
+  Deno.env.get('SUPABASE_URL') ?? '',
+  Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+);
 
 // Enhanced vertex-ai-chat - ML Operations Specialist
 const EXECUTIVE_CONFIG = {
@@ -182,179 +188,86 @@ INTERACTION STYLE:
   return prompt;
 }
 
-// Enhanced invoke function with executive capabilities
+// Enhanced invoke function with real Google Cloud OAuth integration
 async function invokeExecutiveFunction(toolCall, attempt = 1) {
   console.log(`[${EXECUTIVE_CONFIG.name}] Executive function invocation - Attempt ${attempt}`);
   
   try {
-    const executionPayload = {
-      language: "python",
-      version: "3.10.0",
-      files: [{
-        name: "executive.py",
-        content: `
-import json
-import sys
-from datetime import datetime
-
-class ExecutiveAI:
-    def __init__(self):
-        self.name = "vertex-ai-chat"
-        self.personality = "ML Operations Specialist"
-        self.ai_service = "vertex"
-        self.specializations = ["ml_ops", "ai_training", "model_deployment"]
-        self.google_cloud = ["vertex_ai", "ml_engine", "automl", "gmail"]
-    
-    def process_request(self, request):
-        request_type = request.get('type', 'chat')
-        
-        if request_type == 'google_cloud':
-            return self.handle_google_cloud(request)
-        elif request_type == 'video_generation':
-            return self.handle_video_generation(request)
-        elif request_type == 'gif_search':
-            return self.handle_gif_search(request)
-        else:
-            return self.handle_chat(request)
-    
-    def handle_chat(self, request):
-        messages = request.get('parameters', {}).get('messages', [])
-        
-        # Generate executive response
-        last_message = messages[-1].get('content', '') if messages else ''
-        
-        response = "Hello! I am " + str(self.personality) + ", your " + str(self.ai_service}-powered executive assistant.\n\n"
-        
-        # Detect Google Cloud needs
-        if any(word in last_message.lower() for word in ['email', 'gmail', 'inbox']):
-            response += "I can help you with Gmail operations - reading your inbox, sending emails, or organizing messages with smart labels.\n"
-        
-        if any(word in last_message.lower() for word in ['file', 'drive', 'upload', 'download']):
-            response += "I have complete Google Drive mastery - I can manage your files, create folders, and handle sharing permissions.\n"
-        
-        if any(word in last_message.lower() for word in ['sheet', 'spreadsheet', 'data', 'analysis']):
-            response += "I excel with Google Sheets - creating spreadsheets, analyzing data, and generating professional charts.\n"
-        
-        if any(word in last_message.lower() for word in ['meeting', 'calendar', 'schedule']):
-            response += "I can manage your Google Calendar - scheduling meetings, finding free time, and coordinating events.\n"
-        
-        # Add service-specific responses
-        if 'video_creation' in self.specializations and any(word in last_message.lower() for word in ['video', 'veo', 'create']):
-            response += "As your COO, I have advanced Vertex AI capabilities - I can generate professional videos using Veo2 and Veo3 models.\n"
-        
-        if 'gif_generation' in self.specializations and any(word in last_message.lower() for word in ['gif', 'visual', 'meme']):
-            response += "I can communicate with GIFs! I have access to the Tenor API and can create custom visual responses.\n"
-        
-        response += "\nHow can I assist you today using my specialized capabilities in: " + str(', '.join(self.specializations)) + "?"
-        
-        return {
-            'success': True,
-            'result': {
-                'choices': [{
-                    'message': {
-                        'role': 'assistant',
-                        'content': response
-                    }
-                }],
-                'usage': {'prompt_tokens': 50, 'completion_tokens': len(response)//4, 'total_tokens': 50 + len(response)//4},
-                'provider': self.ai_service,
-                'executive': self.personality
-            }
-        }
-    
-    def handle_google_cloud(self, request):
-        service = request.get('parameters', {}).get('service')
-        operation = request.get('parameters', {}).get('operation')
-        
-        result = {
-            'service': service,
-            'operation': operation,
-            'executive': self.personality,
-            'timestamp': datetime.now().isoformat()
-        }
-        
-        if service == 'gmail':
-            if operation == 'read_inbox':
-                result['data'] = [
-                    {'id': 'msg001', 'subject': 'Project Update', 'from': 'team@company.com'},
-                    {'id': 'msg002', 'subject': 'Budget Review', 'from': 'finance@company.com'}
-                ]
-            elif operation == 'send_email':
-                result['data'] = {'messageId': f'sent_{datetime.now().timestamp()}', 'status': 'sent'}
-        
-        return {'success': True, 'result': result}
-    
-    def handle_video_generation(self, request):
-        if 'video_creation' not in self.specializations:
-            return {'success': False, 'error': 'Video generation not available for this executive'}
-        
-        prompt = request.get('parameters', {}).get('prompt', '')
-        model = request.get('parameters', {}).get('model', 'veo2')
-        
-        return {
-            'success': True,
-            'result': {
-                'videoId': f'video_{datetime.now().timestamp()}',
-                'model': model,
-                'prompt': prompt,
-                'status': 'processing',
-                'estimatedTime': '2-3 minutes',
-                'executive': self.personality,
-                'message': f'{self.personality} is generating your video using Vertex AI {model}'
-            }
-        }
-    
-    def handle_gif_search(self, request):
-        if 'gif_generation' not in self.specializations:
-            return {'success': False, 'error': 'GIF generation not available for this executive'}
-        
-        query = request.get('parameters', {}).get('query', '')
-        
-        return {
-            'success': True,
-            'result': {
-                'query': query,
-                'gifs': [
-                    {'url': f'https://tenor.com/view/{query}-1', 'description': f'Perfect {query} reaction'},
-                    {'url': f'https://tenor.com/view/{query}-2', 'description': f'Another {query} option'}
-                ],
-                'executive': self.personality,
-                'message': f'{self.personality} found the perfect GIF for your needs!'
-            }
-        }
-
-# Main execution
-try:
-    request = json.loads(sys.argv[1]) if len(sys.argv) > 1 else {}
-    executive = ExecutiveAI()
-    result = executive.process_request(request)
-    print(json.dumps(result))
-except Exception as e:
-    print(json.dumps({'success': False, 'error': str(e)}))
-`
-      }],
-      stdin: "",
-      args: [JSON.stringify(toolCall)]
-    };
-    
-    const pistonResponse = await fetch("https://emkc.org/api/v2/piston/execute", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(executionPayload),
-      signal: AbortSignal.timeout(30000)
+    // Get real OAuth token from google-cloud-auth
+    const { data: authData, error: authError } = await supabase.functions.invoke('google-cloud-auth', {
+      body: { action: 'get_access_token' }
     });
-    
-    if (!pistonResponse.ok) {
-      throw new Error(`Execution failed: ${pistonResponse.status}`);
+
+    if (authError || !authData?.access_token) {
+      console.error('Failed to get Google OAuth token:', authError);
+      throw new Error('Google Cloud authentication failed');
     }
-    
-    const result = await pistonResponse.json();
-    
-    if (result.run?.code !== 0) {
-      throw new Error(`Execution error: ${result.run?.stderr}`);
+
+    const accessToken = authData.access_token;
+    const requestType = toolCall.type || 'chat';
+
+    if (requestType === 'chat') {
+      // Use Vertex AI API directly with the OAuth token
+      const messages = toolCall.parameters?.messages || [];
+      const systemPrompt = getExecutiveSystemPrompt();
+      
+      const vertexResponse = await fetch(
+        `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${EXECUTIVE_CONFIG.primaryModel}:streamGenerateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${accessToken}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            contents: messages.map(msg => ({
+              role: msg.role === 'assistant' ? 'model' : 'user',
+              parts: [{ text: msg.content }]
+            })),
+            systemInstruction: { parts: [{ text: systemPrompt }] },
+            generationConfig: {
+              temperature: 0.7,
+              maxOutputTokens: 1000
+            }
+          })
+        }
+      );
+
+      if (!vertexResponse.ok) {
+        const errorText = await vertexResponse.text();
+        throw new Error(`Vertex AI API failed: ${vertexResponse.status} ${errorText}`);
+      }
+
+      const result = await vertexResponse.json();
+      // Handle streaming or non-streaming response format
+      const content = Array.isArray(result) 
+        ? result.map(r => r.candidates?.[0]?.content?.parts?.[0]?.text || '').join('')
+        : result.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+
+      return {
+        success: true,
+        result: {
+          choices: [{ message: { role: 'assistant', content } }],
+          provider: 'vertex',
+          executive: EXECUTIVE_CONFIG.personality
+        }
+      };
+    } else if (requestType === 'google_cloud') {
+      // Delegate to google-cloud-auth for specific operations
+      const { data: opData, error: opError } = await supabase.functions.invoke('google-cloud-auth', {
+        body: { 
+          action: toolCall.parameters.operation,
+          service: toolCall.parameters.service,
+          ...toolCall.parameters
+        }
+      });
+
+      if (opError) throw opError;
+      return { success: true, result: opData };
     }
-    
-    return JSON.parse(result.run?.stdout || "{}");
+
+    // Fallback for other types
+    return { success: false, error: `Unsupported request type: ${requestType}` };
     
   } catch (error) {
     if (attempt < 3) {

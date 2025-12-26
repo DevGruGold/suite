@@ -23,10 +23,19 @@ export interface GatewayConfig {
 const GATEWAY_CONFIG: GatewayConfig = {
   providers: [
     {
+      name: 'vertex',
+      endpoint: 'https://us-central1-aiplatform.googleapis.com/v1/projects/{project}/locations/us-central1/publishers/google/models/gemini-1.5-flash:streamGenerateContent',
+      model: 'gemini-1.5-flash',
+      priority: 1,
+      rateLimit: 2000,
+      timeout: 30000,
+      available: true
+    },
+    {
       name: 'openai',
       endpoint: 'https://api.openai.com/v1/chat/completions',
       model: 'gpt-4o-mini',
-      priority: 1,
+      priority: 2,
       rateLimit: 3000,
       timeout: 30000,
       available: true
@@ -35,7 +44,7 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'gemini',
       endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent',
       model: 'gemini-1.5-flash',
-      priority: 2,
+      priority: 3,
       rateLimit: 1500,
       timeout: 30000,
       available: true
@@ -44,7 +53,7 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'deepseek',
       endpoint: 'https://api.deepseek.com/v1/chat/completions',
       model: 'deepseek-chat',
-      priority: 3,
+      priority: 4,
       rateLimit: 1000,
       timeout: 30000,
       available: true
@@ -53,19 +62,10 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'lovable',
       endpoint: 'https://api.lovable.dev/v1/chat/completions',
       model: 'claude-3.5-sonnet',
-      priority: 4,
+      priority: 5,
       rateLimit: 500,
       timeout: 30000,
       available: false  // Currently out of tokens
-    },
-    {
-      name: 'vertex',
-      endpoint: 'https://us-central1-aiplatform.googleapis.com/v1/projects/{project}/locations/us-central1/publishers/google/models/gemini-1.5-flash:streamGenerateContent',
-      model: 'gemini-1.5-flash',
-      priority: 5,
-      rateLimit: 1000,
-      timeout: 30000,
-      available: true
     }
   ],
   fallbackStrategy: 'sequential',
