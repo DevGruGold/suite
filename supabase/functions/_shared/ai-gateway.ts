@@ -259,8 +259,30 @@ async function getAPIKey(providerName: string): Promise<string> {
     gemini: Deno.env.get('GEMINI_API_KEY') || 'placeholder',
     deepseek: Deno.env.get('DEEPSEEK_API_KEY') || 'placeholder',
     lovable: Deno.env.get('LOVABLE_API_KEY') || 'placeholder',
-    vertex: Deno.env.get('GOOGLE_CLOUD_API_KEY') || 'placeholder'
+    vertex: Deno.env.get('VERTEX_AI_API_KEY') || 'placeholder' // Fallback to dedicated key
   };
+  
+  if (providerName === 'vertex' || providerName === 'gemini') {
+    // For Google services, try to get a fresh access token from google-cloud-auth
+    try {
+      const response = await fetch('https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/google-cloud-auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'get_access_token' })
+      });
+      
+      if (response.ok) {
+        const data = await response.json();
+        if (data.success && data.access_token) {
+          console.log(`[Gateway] Successfully retrieved fresh access token for ${providerName}`);
+          return data.access_token;
+        }
+      }
+      console.warn(`[Gateway] Failed to get fresh access token for ${providerName}. Falling back to environment variable.`);
+    } catch (e) {
+      console.error(`[Gateway] Error calling google-cloud-auth for ${providerName}: ${e.message}`);
+    }
+  }
   
   return apiKeys[providerName] || 'placeholder';
 }
