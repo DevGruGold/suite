@@ -129,6 +129,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
               setHasGoogleCloudConnection(true);
             }, 100);
           }
+
+          // Auto-redirect to dashboard if on landing page after sign in
+          if (event === 'SIGNED_IN' && (window.location.pathname === '/' || window.location.pathname === '')) {
+            console.log('User signed in, redirecting to dashboard...');
+            window.location.href = '/dashboard';
+          }
         } else {
           setProfile(null);
           setRoles([]);
@@ -153,10 +159,19 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getRedirectUrl = () => {
     // Always redirect to dashboard after auth
-    if (window.location.hostname.includes('lovable') || 
-        window.location.hostname.includes('lovableproject')) {
+    const hostname = window.location.hostname;
+    
+    // Handle Lovable preview environments
+    if (hostname.includes('lovable') || hostname.includes('lovableproject')) {
       return 'https://suite-beta.vercel.app/dashboard';
     }
+    
+    // Handle production and other environments
+    if (hostname === 'suite-beta.vercel.app') {
+      return 'https://suite-beta.vercel.app/dashboard';
+    }
+    
+    // Fallback for local development or other domains
     return `${window.location.origin}/dashboard`;
   };
 
