@@ -92,22 +92,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .maybeSingle();
       
       setHasGoogleCloudConnection(!!oauthData);
-    } catch (error) {
-      console.error('Error in fetchProfile:', error);
-    }
-  }, []);
-
-  // Process hash fragment tokens from OAuth redirects
+    } catch// Process hash fragment tokens from OAuth redirects
   useEffect(() => {
     if (window.location.hash.includes('access_token')) {
       supabase.auth.getSession().then(({ data: { session } }) => {
         if (session) {
+          // Clear the hash fragment from the URL
           window.history.replaceState(null, '', window.location.pathname);
+          
+          // Force a redirect to the dashboard after successful session processing
+          // This ensures the app doesn't just sit on the root path (/)
+          if (window.location.pathname !== '/dashboard') {
+            window.location.replace('/dashboard');
+          }
         }
       });
     }
   }, []);
-
   useEffect(() => {
     // Set up auth state listener FIRST
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
