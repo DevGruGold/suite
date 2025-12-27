@@ -131,9 +131,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }
 
           // Auto-redirect to dashboard if on landing page after sign in
-          if (event === 'SIGNED_IN' && (window.location.pathname === '/' || window.location.pathname === '')) {
+          if (event === 'SIGNED_IN' && (window.location.pathname === '/' || window.location.pathname === '' || window.location.pathname === '/index.html')) {
             console.log('User signed in, redirecting to dashboard...');
-            window.location.href = '/dashboard';
+            // Use replace to avoid back button loop
+            window.location.replace('/dashboard');
           }
         } else {
           setProfile(null);
@@ -150,6 +151,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       
       if (session?.user) {
         fetchProfile(session.user.id);
+        
+        // If user is already logged in and on landing page, redirect to dashboard
+        if (window.location.pathname === '/' || window.location.pathname === '' || window.location.pathname === '/index.html') {
+          console.log('Existing session found, redirecting to dashboard...');
+          window.location.replace('/dashboard');
+        }
       }
       setIsLoading(false);
     });
@@ -161,13 +168,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     // Always redirect to dashboard after auth
     const hostname = window.location.hostname;
     
-    // Handle Lovable preview environments
-    if (hostname.includes('lovable') || hostname.includes('lovableproject')) {
-      return 'https://suite-beta.vercel.app/dashboard';
-    }
-    
-    // Handle production and other environments
-    if (hostname === 'suite-beta.vercel.app') {
+    // Handle Lovable preview environments and production
+    if (hostname.includes('lovable') || 
+        hostname.includes('lovableproject') || 
+        hostname === 'suite-beta.vercel.app' ||
+        hostname === 'xmrt-ecosystem-devgru-projects.vercel.app') {
       return 'https://suite-beta.vercel.app/dashboard';
     }
     
