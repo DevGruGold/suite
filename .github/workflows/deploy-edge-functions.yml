@@ -1,0 +1,62 @@
+name: Deploy Edge Functions
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/**'
+  workflow_dispatch:
+
+env:
+  SUPABASE_PROJECT_ID: vawouugtzwmejxqkeqqj
+
+jobs:
+  deploy-functions:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        function:
+          - broadcast-state-change
+          - subscribe-to-updates
+          - sync-dashboard-data
+          - get-global-state
+          - update-treasury-state
+          - sync-mining-stats
+          - agent-coordination-hub
+          - validate-cross-repo-data
+          - reconcile-treasuries
+          - sync-user-profiles
+          - propagate-governance-decisions
+          - ecosystem-health-check
+          - cross-repo-latency-monitor
+          - alert-on-desync
+          - spawn-cross-repo-workflow
+          - coordinate-agent-tasks
+          - aggregate-analytics
+    
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz
+          sudo mv supabase /usr/local/bin/
+      
+      - name: Deploy ${{ matrix.function }}
+        run: |
+          if [ -d "supabase/functions/${{ matrix.function }}" ]; then
+            echo "Deploying ${{ matrix.function }}..."
+            supabase functions deploy ${{ matrix.function }}               --project-ref ${{ env.SUPABASE_PROJECT_ID }}               --token ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          else
+            echo "⚠️  Function ${{ matrix.function }} not found, skipping..."
+          fi
+      
+      - name: Test function
+        run: |
+          echo "Testing ${{ matrix.function }}..."
+          # Add function-specific tests here
