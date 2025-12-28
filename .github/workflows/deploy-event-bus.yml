@@ -1,0 +1,57 @@
+name: Deploy Event Bus Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/functions/broadcast-state-change/**'
+      - 'supabase/functions/subscribe-to-updates/**'
+      - 'supabase/functions/sync-dashboard-data/**'
+      - '.github/workflows/deploy-event-bus.yml'
+  workflow_dispatch:
+
+env:
+  SUPABASE_PROJECT_ID: vawouugtzwmejxqkeqqj
+  SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+
+jobs:
+  deploy-event-bus:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Setup Deno
+        uses: denoland/setup-deno@v1
+        with:
+          deno-version: v1.x
+      
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz
+          sudo mv supabase /usr/local/bin/
+      
+      - name: Deploy broadcast-state-change function
+        run: |
+          supabase functions deploy broadcast-state-change             --project-ref ${{ env.SUPABASE_PROJECT_ID }}             --token ${{ env.SUPABASE_ACCESS_TOKEN }}
+      
+      - name: Deploy subscribe-to-updates function
+        run: |
+          supabase functions deploy subscribe-to-updates             --project-ref ${{ env.SUPABASE_PROJECT_ID }}             --token ${{ env.SUPABASE_ACCESS_TOKEN }}
+      
+      - name: Deploy sync-dashboard-data function
+        run: |
+          supabase functions deploy sync-dashboard-data             --project-ref ${{ env.SUPABASE_PROJECT_ID }}             --token ${{ env.SUPABASE_ACCESS_TOKEN }}
+      
+      - name: Test event bus
+        run: |
+          echo "Testing event bus functionality..."
+          # Add integration tests here
+      
+      - name: Notify deployment
+        if: success()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: '🚀 Event Bus deployed successfully to ${{ github.repository }}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
