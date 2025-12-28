@@ -159,7 +159,43 @@ serve(async (req) => {
 
     console.log('🚀 Trying AI providers in sequence...');
 
-    // Try Gemini first (most reliable for general AI)
+    // ========== TRY VERTEX AI FIRST (Google Cloud OAuth) ==========
+    try {
+      console.log('🔵 Attempting Vertex AI (Google Cloud OAuth)...');
+      const { data: vertexData, error: vertexError } = await supabase.functions.invoke('vertex-ai-chat', {
+        body: { 
+          messages: aiMessages,
+          options: { temperature: 0.7, max_tokens: 1000 }
+        }
+      });
+
+      if (!vertexError && vertexData?.success) {
+        console.log('✅ Vertex AI succeeded');
+        const vertexContent = vertexData.data?.choices?.[0]?.message?.content || vertexData.data?.content;
+        
+        if (vertexContent) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              response: vertexContent,
+              executive: 'ai-chat',
+              executiveTitle: 'AI Assistant [Vertex AI]',
+              provider: 'vertex-ai',
+              model: 'gemini-1.5-pro',
+              oauth_authenticated: true
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+      
+      console.log('⚠️ Vertex AI unavailable or failed, falling back to Gemini API', vertexError?.message || 'No error');
+    } catch (vertexException) {
+      console.log('⚠️ Vertex AI exception, falling back:', vertexException.message);
+    }
+
+    // ========== FALLBACK: TRY GEMINI API DIRECTLY ==========
+    console.log('🟢 Attempting Gemini API (direct)...');
     const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
     if (geminiResult) {
       // Execute any tool calls from Gemini
@@ -181,8 +217,8 @@ serve(async (req) => {
             hasToolCalls: true,
             toolCallsExecuted: geminiResult.tool_calls.length,
             executive: 'ai-chat',
-            executiveTitle: 'AI Assistant',
-            provider: 'gemini',
+            executiveTitle: 'AI Assistant [Gemini API]',
+            provider: 'gemini-api',
             model: 'gemini-2.0-flash-exp'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -194,15 +230,15 @@ serve(async (req) => {
           success: true,
           response: geminiResult.content,
           executive: 'ai-chat',
-          executiveTitle: 'AI Assistant',
-          provider: 'gemini',
+          executiveTitle: 'AI Assistant [Gemini API]',
+          provider: 'gemini-api',
           model: 'gemini-2.0-flash-exp'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Try DeepSeek fallback
+    // ========== FALLBACK: TRY DEEPSEEK ==========
     console.log('🔄 Trying DeepSeek fallback...');
     const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
     if (deepseekResult) {
@@ -211,8 +247,8 @@ serve(async (req) => {
           success: true,
           response: deepseekResult.content,
           executive: 'ai-chat',
-          executiveTitle: 'AI Assistant',
-          provider: 'deepseek-fallback',
+          executiveTitle: 'AI Assistant [DeepSeek]',
+          provider: 'deepseek',
           model: 'deepseek-chat'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
