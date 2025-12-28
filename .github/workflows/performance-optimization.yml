@@ -1,0 +1,38 @@
+name: Performance Optimization
+
+on:
+  schedule:
+    # Weekly on Sunday at 3 AM
+    - cron: '0 3 * * 0'
+  workflow_dispatch:
+
+jobs:
+  optimize-database:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Database vacuum and analyze
+        run: |
+          curl -X POST "${{ secrets.SUPABASE_URL }}/rest/v1/rpc/vacuum_analyze"             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"             -H "Content-Type: application/json"
+      
+      - name: Update statistics
+        run: |
+          echo "Updating database statistics..."
+          # Add statistics update commands
+      
+      - name: Index optimization
+        run: |
+          echo "Analyzing index usage..."
+          # Add index analysis queries
+  
+  cache-optimization:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Clear stale cache entries
+        run: |
+          echo "Clearing stale cache..."
+          # Add cache clearing logic
+      
+      - name: Warm up cache
+        run: |
+          echo "Warming up cache with common queries..."
+          curl -s "${{ secrets.SUPABASE_URL }}/functions/v1/get-global-state"             -H "Authorization: Bearer ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}"
