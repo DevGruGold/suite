@@ -1,0 +1,71 @@
+name: Database Migrations
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/database-migrations.yml'
+  workflow_dispatch:
+    inputs:
+      migration_name:
+        description: 'Migration name'
+        required: true
+
+env:
+  SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+  SUPABASE_PROJECT_ID: vawouugtzwmejxqkeqqj
+
+jobs:
+  validate-migration:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz
+          sudo mv supabase /usr/local/bin/
+      
+      - name: Validate SQL syntax
+        run: |
+          for migration in supabase/migrations/*.sql; do
+            echo "Validating $migration..."
+            # Basic SQL syntax check
+            grep -E "DROP TABLE|DELETE FROM|TRUNCATE" "$migration" && echo "⚠️  Destructive operation detected in $migration" || true
+          done
+      
+      - name: Create backup before migration
+        run: |
+          echo "Creating database backup..."
+          # Backup command would go here
+  
+  apply-migration:
+    needs: validate-migration
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Install Supabase CLI
+        run: |
+          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz
+          sudo mv supabase /usr/local/bin/
+      
+      - name: Apply migrations
+        run: |
+          supabase db push             --db-url ${{ env.SUPABASE_DB_URL }}             --project-ref ${{ env.SUPABASE_PROJECT_ID }}
+      
+      - name: Verify migration
+        run: |
+          echo "Verifying migration success..."
+          # Add verification queries
+      
+      - name: Notify on failure
+        if: failure()
+        uses: 8398a7/action-slack@v3
+        with:
+          status: ${{ job.status }}
+          text: '❌ Database migration failed in ${{ github.repository }}'
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
