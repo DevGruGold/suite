@@ -1,265 +1,341 @@
-import { useEffect, useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Lock, TrendingUp, Users, Coins, Shield } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { useEffect, useState } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { supabase } from '@/integrations/supabase/client';
+import { Loader2, TrendingUp, Lock, Users, Activity } from 'lucide-react';
 
-interface TreasuryStats {
-  totalXMRMined: number;
-  totalValueUSD: number;
-  lockedXMR: number;
-  lockedValueUSD: number;
-  activeMobileMiners: number;
-  totalContributors: number;
-  xmrPriceUSD: number;
-  lockThreshold: number;
-  lockProgress: number;
+interface TreasuryData {
+  total_xmr: number;
+  total_value_usd: number;
+  locked_xmr: number;
+  locked_value_usd: number;
+  active_miners: number;
+  total_contributors: number;
+  lock_progress: number;
 }
 
-export function TreasuryStats() {
-  const [stats, setStats] = useState<TreasuryStats>({
-    totalXMRMined: 0,
-    totalValueUSD: 0,
-    lockedXMR: 0,
-    lockedValueUSD: 0,
-    activeMobileMiners: 0,
-    totalContributors: 0,
-    xmrPriceUSD: 0,
-    lockThreshold: 1000000, // $1M USD threshold
-    lockProgress: 0
-  });
+interface MiningData {
+  treasury: {
+    total_xmr: number;
+    total_value_usd: number;
+    amount_due_xmr: number;
+    amount_paid_xmr: number;
+  };
+  mining: {
+    total_hashrate: number;
+    active_workers: number;
+    total_workers: number;
+  };
+  workers: Array<{
+    worker_id: string;
+    hashrate: number;
+    is_active: boolean;
+  }>;
+}
+
+export default function TreasuryStats() {
+  const [treasuryData, setTreasuryData] = useState<TreasuryData | null>(null);
+  const [miningData, setMiningData] = useState<MiningData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const LOCK_TARGET_USD = 1000000; // $1 million goal
 
   useEffect(() => {
-    loadTreasuryStats();
+    fetchTreasuryData();
     
     // Set up real-time subscription
-    const subscription = supabase
-      .channel('treasury_stats_changes')
-      .on('postgres_changes', 
-        { event: '*', schema: 'public', table: 'treasury_stats' },
+    const channel = supabase
+      .channel('treasury_changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'treasury_stats'
+        },
         () => {
-          loadTreasuryStats();
+          fetchTreasuryData();
         }
       )
       .subscribe();
 
-    // Refresh every 5 minutes
-    const interval = setInterval(loadTreasuryStats, 5 * 60 * 1000);
+    // Fetch mining data every 30 seconds
+    const interval = setInterval(fetchMiningData, 30000);
+    fetchMiningData();
 
     return () => {
-      subscription.unsubscribe();
+      channel.unsubscribe();
       clearInterval(interval);
     };
   }, []);
 
-  const loadTreasuryStats = async () => {
+  const fetchTreasuryData = async () => {
     try {
-      // Fetch current XMR price
-      const xmrPrice = await fetchXMRPrice();
+      const { data, error } = await supabase
+        .from('treasury_stats')
+        .select('*')
+        .eq('id', 1)
+        .single();
+
+      if (error) throw error;
       
-      // Fetch mining stats from database
-      const { data: miningData, error: miningError } = await supabase
-        .from('mining_sessions')
-        .select('xmr_earned, is_mobile_worker, created_at')
-        .order('created_at', { ascending: false });
+      if (data) {
+        const lockProgress = (data.locked_value_usd / LOCK_TARGET_USD) * 100;
+        setTreasuryData({
+          ...data,
+          lock_progress: Math.min(lockProgress, 100)
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching treasury data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch treasury data');
+    }
+  };
 
-      if (miningError) throw miningError;
-
-      // Calculate stats
-      const totalXMRMined = miningData?.reduce((sum, session) => sum + (session.xmr_earned || 0), 0) || 0;
-      const mobileMinersXMR = miningData?.filter(s => s.is_mobile_worker).reduce((sum, s) => sum + (s.xmr_earned || 0), 0) || 0;
-      const totalValueUSD = totalXMRMined * xmrPrice;
-      const mobileWorkersValue = mobileMinersXMR * xmrPrice;
-
-      // Determine locked XMR (first $1M from mobile workers)
-      const lockThreshold = 1000000; // $1M USD
-      const lockedXMR = Math.min(mobileMinersXMR, lockThreshold / xmrPrice);
-      const lockedValueUSD = Math.min(mobileWorkersValue, lockThreshold);
+  const fetchMiningData = async () => {
+    try {
+      setLoading(true);
       
-      // Get unique contributors
-      const { count: contributorCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true })
-        .not('github_username', 'is', null);
-
-      // Get active mobile miners (last 24 hours)
-      const oneDayAgo = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-      const { count: activeMobileMiners } = await supabase
-        .from('mining_sessions')
-        .select('*', { count: 'exact', head: true })
-        .eq('is_mobile_worker', true)
-        .gte('created_at', oneDayAgo);
-
-      setStats({
-        totalXMRMined,
-        totalValueUSD,
-        lockedXMR,
-        lockedValueUSD,
-        activeMobileMiners: activeMobileMiners || 0,
-        totalContributors: contributorCount || 0,
-        xmrPriceUSD: xmrPrice,
-        lockThreshold,
-        lockProgress: (lockedValueUSD / lockThreshold) * 100
+      // Call the enhanced supportxmr-proxy edge function
+      const { data, error } = await supabase.functions.invoke('supportxmr-proxy', {
+        body: { action: 'get_stats' }
       });
 
-    } catch (error) {
-      console.error("Error loading treasury stats:", error);
+      if (error) throw error;
+
+      if (data && data.success) {
+        setMiningData(data);
+        setError(null);
+      }
+    } catch (err) {
+      console.error('Error fetching mining data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch mining data');
     } finally {
       setLoading(false);
     }
   };
 
-  const fetchXMRPrice = async (): Promise<number> => {
-    try {
-      // Try CoinGecko first
-      const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=monero&vs_currencies=usd');
-      const data = await response.json();
-      return data.monero?.usd || 150; // Fallback price
-    } catch (error) {
-      console.error("Error fetching XMR price:", error);
-      return 150; // Fallback price
-    }
-  };
-
-  if (loading) {
+  if (loading && !treasuryData) {
     return (
-      <Card className="border-border bg-card">
+      <Card>
         <CardHeader>
-          <CardTitle className="text-foreground">Treasury Stats</CardTitle>
+          <CardTitle>Treasury Stats</CardTitle>
           <CardDescription>Loading treasury data...</CardDescription>
         </CardHeader>
-        <CardContent>
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map((i) => (
-              <div key={i} className="h-16 bg-muted/50 rounded-lg animate-pulse" />
-            ))}
-          </div>
+        <CardContent className="flex justify-center py-8">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </CardContent>
       </Card>
     );
   }
 
+  if (error && !treasuryData) {
+    return (
+      <Card>
+        <CardHeader>
+          <CardTitle>Treasury Stats</CardTitle>
+          <CardDescription className="text-destructive">
+            Error: {error}
+          </CardDescription>
+        </CardHeader>
+      </Card>
+    );
+  }
+
+  const formatCurrency = (value: number) => {
+    return new Intl.NumberFormat('en-US', {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }).format(value);
+  };
+
+  const formatXMR = (value: number) => {
+    return `${value.toFixed(6)} XMR`;
+  };
+
   return (
-    <Card className="border-border bg-card">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-foreground">
-          <DollarSign className="w-5 h-5 text-primary" />
-          Treasury Stats
-        </CardTitle>
-        <CardDescription>
-          Real-time treasury and MobileMonero mining statistics
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <div className="space-y-4">
-          {/* Total Treasury Value */}
-          <div className="flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-primary/10 to-primary/5 border border-primary/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-primary/20 flex items-center justify-center">
-                <Coins className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <p className="text-sm text-muted-foreground">Total XMR Mined</p>
-                <p className="text-lg font-bold text-foreground">
-                  {stats.totalXMRMined.toFixed(4)} XMR
-                </p>
-              </div>
-            </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-primary">
-                ${stats.totalValueUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+    <div className="space-y-6">
+      {/* Main Treasury Overview */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <TrendingUp className="h-5 w-5 text-primary" />
+            Treasury Overview
+          </CardTitle>
+          <CardDescription>
+            Real-time XMR mining statistics and treasury value
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Total Treasury Value</p>
+              <p className="text-3xl font-bold text-primary">
+                {treasuryData ? formatCurrency(treasuryData.total_value_usd) : '$0.00'}
               </p>
-              <p className="text-xs text-muted-foreground">
-                @ ${stats.xmrPriceUSD.toFixed(2)}/XMR
+              <p className="text-sm text-muted-foreground">
+                {treasuryData ? formatXMR(treasuryData.total_xmr) : '0.000000 XMR'}
+              </p>
+            </div>
+
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">Active Mining</p>
+              <p className="text-3xl font-bold">
+                {miningData ? miningData.mining.active_workers : 0}
+              </p>
+              <p className="text-sm text-muted-foreground">
+                {miningData ? `${(miningData.mining.total_hashrate / 1000).toFixed(2)} KH/s` : '0 H/s'}
               </p>
             </div>
           </div>
 
-          {/* Locked XMR (First $1M from Mobile Workers) */}
-          <div className="flex justify-between items-center p-4 rounded-lg bg-gradient-to-r from-orange-500/10 to-orange-500/5 border border-orange-500/20">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-orange-500/20 flex items-center justify-center">
-                <Lock className="w-5 h-5 text-orange-500" />
+          {/* Real-time Mining Data */}
+          {miningData && (
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t">
+              <div>
+                <p className="text-xs text-muted-foreground">Amount Due</p>
+                <p className="text-sm font-semibold">
+                  {formatXMR(miningData.treasury.amount_due_xmr)}
+                </p>
               </div>
               <div>
-                <p className="text-sm text-muted-foreground">Locked XMR (Mobile Workers)</p>
-                <p className="text-lg font-bold text-foreground">
-                  {stats.lockedXMR.toFixed(4)} XMR
+                <p className="text-xs text-muted-foreground">Amount Paid</p>
+                <p className="text-sm font-semibold">
+                  {formatXMR(miningData.treasury.amount_paid_xmr)}
                 </p>
-                <div className="mt-1">
-                  <div className="w-48 h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
-                      className="h-full bg-gradient-to-r from-orange-500 to-red-500 transition-all duration-500"
-                      style={{ width: `${Math.min(stats.lockProgress, 100)}%` }}
-                    />
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Total Workers</p>
+                <p className="text-sm font-semibold">{miningData.mining.total_workers}</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Active Workers</p>
+                <p className="text-sm font-semibold">{miningData.mining.active_workers}</p>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* MobileMonero $1M Lock */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-yellow-500" />
+            MobileMonero $1M Lock
+          </CardTitle>
+          <CardDescription>
+            First million dollars of XMR earned by global MobileMonero workers is permanently locked
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Lock Progress</span>
+              <span className="font-semibold">
+                {treasuryData ? `${treasuryData.lock_progress.toFixed(2)}%` : '0%'}
+              </span>
+            </div>
+            <Progress 
+              value={treasuryData?.lock_progress || 0} 
+              className="h-3"
+            />
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">
+                {treasuryData ? formatCurrency(treasuryData.locked_value_usd) : '$0.00'}
+              </span>
+              <span className="text-muted-foreground">
+                {formatCurrency(LOCK_TARGET_USD)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Locked XMR</p>
+              <p className="text-lg font-bold text-yellow-600">
+                {treasuryData ? formatXMR(treasuryData.locked_xmr) : '0.000000 XMR'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {treasuryData ? formatCurrency(treasuryData.locked_value_usd) : '$0.00'}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Remaining to Lock</p>
+              <p className="text-lg font-bold">
+                {treasuryData 
+                  ? formatCurrency(LOCK_TARGET_USD - treasuryData.locked_value_usd)
+                  : formatCurrency(LOCK_TARGET_USD)
+                }
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Until permanent lock
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Active Workers */}
+      {miningData && miningData.workers && miningData.workers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Activity className="h-5 w-5 text-green-500" />
+              Active Workers
+            </CardTitle>
+            <CardDescription>
+              Currently active mining workers
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {miningData.workers
+                .filter(w => w.is_active)
+                .slice(0, 10)
+                .map((worker, idx) => (
+                  <div key={worker.worker_id} className="flex justify-between items-center p-2 rounded-lg bg-secondary/50">
+                    <span className="text-sm font-mono">{worker.worker_id}</span>
+                    <span className="text-sm font-semibold">
+                      {(worker.hashrate / 1000).toFixed(2)} KH/s
+                    </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stats.lockProgress.toFixed(1)}% of $1M goal
-                  </p>
-                </div>
-              </div>
+                ))}
+              {miningData.workers.filter(w => w.is_active).length > 10 && (
+                <p className="text-xs text-muted-foreground text-center pt-2">
+                  + {miningData.workers.filter(w => w.is_active).length - 10} more active workers
+                </p>
+              )}
             </div>
-            <div className="text-right">
-              <p className="text-2xl font-bold text-orange-500">
-                ${stats.lockedValueUSD.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Locked Forever
-              </p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Stats Summary */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Users className="h-5 w-5 text-blue-500" />
+            Community Stats
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="text-center p-4 rounded-lg bg-secondary/50">
+              <p className="text-2xl font-bold">{treasuryData?.active_miners || 0}</p>
+              <p className="text-sm text-muted-foreground">Active Miners</p>
+            </div>
+            <div className="text-center p-4 rounded-lg bg-secondary/50">
+              <p className="text-2xl font-bold">{treasuryData?.total_contributors || 0}</p>
+              <p className="text-sm text-muted-foreground">Total Contributors</p>
             </div>
           </div>
-
-          {/* Active Mobile Miners */}
-          <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2">
-              <Shield className="w-4 h-4 text-green-500" />
-              <span className="text-sm text-muted-foreground">Active Mobile Miners (24h)</span>
-            </div>
-            <span className="font-medium text-foreground">{stats.activeMobileMiners}</span>
-          </div>
-
-          {/* Total Contributors */}
-          <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-            <div className="flex items-center gap-2">
-              <Users className="w-4 h-4 text-blue-500" />
-              <span className="text-sm text-muted-foreground">Total Contributors</span>
-            </div>
-            <span className="font-medium text-foreground">{stats.totalContributors}</span>
-          </div>
-
-          {/* Lock Info Banner */}
-          {stats.lockProgress < 100 && (
-            <div className="mt-4 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
-              <div className="flex items-start gap-2">
-                <Lock className="w-4 h-4 text-orange-500 mt-0.5 shrink-0" />
-                <div className="text-xs text-muted-foreground">
-                  <p className="font-medium text-foreground mb-1">MobileMonero Lock Program</p>
-                  <p>
-                    The first $1M worth of XMR earned by MobileMonero workers is automatically locked 
-                    in the treasury forever, ensuring long-term project sustainability and rewarding 
-                    early mobile miners with permanent value capture.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {stats.lockProgress >= 100 && (
-            <div className="mt-4 p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-              <div className="flex items-start gap-2">
-                <Shield className="w-4 h-4 text-green-500 mt-0.5 shrink-0" />
-                <div className="text-xs text-muted-foreground">
-                  <p className="font-medium text-green-500 mb-1">🎉 Lock Goal Achieved!</p>
-                  <p>
-                    The $1M MobileMonero lock goal has been reached! These funds are permanently 
-                    secured in the treasury, providing lasting value to the ecosystem.
-                  </p>
-                </div>
-              </div>
-            </div>
-          )}
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </div>
   );
 }
