@@ -6,11 +6,12 @@ on:
   workflow_dispatch:
   schedule:
     # Run every 5 minutes
-    - cron: '*/5 * * * *'
+    - cron: '*/30 * * * *'  # Every 30 minutes (reduced from 5)
 
 jobs:
   sync-state:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       
