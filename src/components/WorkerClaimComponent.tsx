@@ -36,7 +36,7 @@ interface ClaimedWorker {
   linked_at: string;
 }
 
-export default function WorkerClaimComponent() {
+export function WorkerClaimComponent() {
   const [claimableWorkers, setClaimableWorkers] = useState<ClaimableWorker[]>([]);
   const [myWorkers, setMyWorkers] = useState<ClaimedWorker[]>([]);
   const [loading, setLoading] = useState(true);
