@@ -234,7 +234,7 @@ const DeviceCard = ({ device }: { device: DeviceData }) => {
   );
 };
 
-export default function UserDevicesAndSessions({ userId }: { userId: string }) {
+export function UserDevicesAndSessions({ userId }: { userId: string }) {
   const [devices, setDevices] = useState<DeviceData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
