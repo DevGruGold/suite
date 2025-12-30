@@ -9,6 +9,7 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
     - uses: actions/checkout@v4
     - name: Setup Node.js
@@ -16,8 +17,8 @@ jobs:
       with:
         node-version: '18'
     - name: Install dependencies
-      run: npm ci || npm install
+      run: npm ci || npm install || npm install
     - name: Type check
-      run: npm run type-check || echo "Type check not configured"
+      run: npm run type-check || echo "Type check not configured" || echo "Type check not configured"
     - name: Build
       run: npm run build || echo "Build not configured"
