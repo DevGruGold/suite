@@ -4,7 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { SuiteLogo } from '@/components/SuiteLogo';
 import { AuthModal } from '@/components/AuthModal';
-import { Menu, X, LogIn, Sparkles } from 'lucide-react';
+import { Menu, X, LogIn, Sparkles, Shield, FileText } from 'lucide-react';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -70,6 +70,15 @@ export function LandingNav() {
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
                   How It Works
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate('/privacy')}>
+                  <Shield className="w-4 h-4 mr-2" />
+                  Privacy Policy
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate('/terms')}>
+                  <FileText className="w-4 h-4 mr-2" />
+                  Terms of Service
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {isAuthenticated ? (
