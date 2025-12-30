@@ -5,6 +5,7 @@ import { SEOHead } from "@/components/SEOHead";
 import { IdeaSubmissionForm } from "@/components/IdeaSubmissionForm";
 import { IdeaDashboard } from "@/components/IdeaDashboard";
 import { ContributorDashboard } from "@/components/ContributorDashboard";
+import { TreasuryStats } from "@/components/TreasuryStats";
 
 const Earn = () => {
   return (
@@ -56,7 +57,7 @@ const Earn = () => {
             <ContributorDashboard />
           </TabsContent>
 
-          {/* Treasury Tab */}
+          {/* Treasury Tab - NOW WITH REAL STATS */}
           <TabsContent value="treasury">
             <div className="grid gap-6 md:grid-cols-2">
               <Card className="border-border bg-card">
@@ -80,30 +81,8 @@ const Earn = () => {
                 </CardContent>
               </Card>
 
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-foreground">Treasury Stats</CardTitle>
-                  <CardDescription>
-                    Community treasury overview and allocation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-                      <span className="text-sm text-muted-foreground">Total Value Locked</span>
-                      <span className="font-medium text-primary">$0.00</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-                      <span className="text-sm text-muted-foreground">Active Contributors</span>
-                      <span className="font-medium text-primary">0</span>
-                    </div>
-                    <div className="flex justify-between items-center p-3 rounded-lg bg-muted/50">
-                      <span className="text-sm text-muted-foreground">Ideas Funded</span>
-                      <span className="font-medium text-primary">0</span>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+              {/* REPLACED STATIC TREASURY STATS WITH REAL COMPONENT */}
+              <TreasuryStats />
             </div>
           </TabsContent>
 
