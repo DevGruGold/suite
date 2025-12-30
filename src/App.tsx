@@ -16,6 +16,8 @@ import Licensing from "./pages/Licensing";
 import Admin from "./pages/Admin";
 import Earn from "./pages/Earn";
 import Profile from "./pages/Profile";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
 
 const queryClient = new QueryClient();
 
@@ -38,6 +40,8 @@ const App = () => (
               <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
+                <Route path="/privacy" element={<PrivacyPolicy />} />
+                <Route path="/terms" element={<TermsOfService />} />
                 
                 {/* Protected routes - require authentication */}
                 <Route element={<ProtectedLayout />}>
