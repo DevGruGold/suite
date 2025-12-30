@@ -33,7 +33,7 @@ interface MiningData {
   }>;
 }
 
-export default function TreasuryStats() {
+export function TreasuryStats() {
   const [treasuryData, setTreasuryData] = useState<TreasuryData | null>(null);
   const [miningData, setMiningData] = useState<MiningData | null>(null);
   const [loading, setLoading] = useState(true);
