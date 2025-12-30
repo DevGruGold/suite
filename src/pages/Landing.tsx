@@ -301,8 +301,8 @@ export default function Landing() {
               <span className="text-sm text-muted-foreground">© 2025 All rights reserved.</span>
             </div>
             <div className="flex items-center gap-6 text-sm text-muted-foreground">
-              <Link to="/licensing" className="hover:text-primary transition-colors">Enterprise</Link>
-              <Link to="/governance" className="hover:text-primary transition-colors">Governance</Link>
+              <Link to="/privacy" className="hover:text-primary transition-colors">Privacy Policy</Link>
+              <Link to="/terms" className="hover:text-primary transition-colors">Terms of Service</Link>
             </div>
           </div>
         </div>
