@@ -3,6 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, TrendingUp, Lock, Users, Activity } from 'lucide-react';
+import { useMiningStats } from '@/hooks/useMiningStats';
 
 interface TreasuryData {
   total_xmr: number;
@@ -36,6 +37,7 @@ interface MiningData {
 export function TreasuryStats() {
   const [treasuryData, setTreasuryData] = useState<TreasuryData | null>(null);
   const [miningData, setMiningData] = useState<MiningData | null>(null);
+  const { stats: unifiedStats, workers: unifiedWorkers } = useMiningStats();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -203,7 +205,7 @@ export function TreasuryStats() {
                 {treasuryData ? formatXMR(treasuryData.total_xmr) : '0.000000 XMR'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {miningData ? `⚡ ${miningData.hash || 0} H/s` : '⚡ 0 H/s'}
+                {unifiedStats ? `⚡ ${unifiedStats.hashRate} H/s` : '⚡ 0 H/s'}
               </p>
             </div>
 
@@ -213,7 +215,7 @@ export function TreasuryStats() {
                 {miningData ? miningData.mining.active_workers : 0}
               </p>
               <p className="text-sm text-muted-foreground">
-                {miningData ? `${miningData.hash || 0} H/s` : '0 H/s'}
+                {unifiedStats ? `${unifiedStats.hashRate} H/s` : '0 H/s'}
               </p>
             </div>
           </div>
