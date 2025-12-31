@@ -51,8 +51,8 @@ export const useMiningStats = () => {
       if (fetchError) throw fetchError;
 
       const miningStats: MiningStats = {
-        hashRate: data?.hashrate || 0,
-        hashrate: data?.hashrate || 0, // Deprecated alias
+        hashRate: data?.hash || 0,
+        hashrate: data?.hash || 0, // Deprecated alias
         totalHashes: data?.totalHashes || 0,
         validShares: data?.validShares || 0,
         invalidShares: data?.invalidShares || 0,
