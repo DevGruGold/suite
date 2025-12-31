@@ -805,41 +805,17 @@ body = '{"executive_name":"Eliza","limit":20,"unacknowledged_only":true}'
 
 
 
-[functions.summarize-conversation]
-verify_jwt = false
 
-[functions.extract-knowledge]
-verify_jwt = false
 
-[functions.superduper-router]
-verify_jwt = false
 
-[functions.superduper-business-growth]
-verify_jwt = false
 
-[functions.superduper-research-intelligence]
-verify_jwt = false
 
-[functions.superduper-content-media]
-verify_jwt = false
 
-[functions.superduper-communication-outreach]
-verify_jwt = false
 
-[functions.superduper-design-brand]
-verify_jwt = false
 
-[functions.superduper-finance-investment]
-verify_jwt = false
 
-[functions.superduper-domain-experts]
-verify_jwt = false
 
-[functions.superduper-development-coach]
-verify_jwt = false
 
-[functions.superduper-integration]
-verify_jwt = false
 
 [functions.get-cron-registry]
 verify_jwt = false
