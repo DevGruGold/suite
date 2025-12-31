@@ -202,6 +202,9 @@ export function TreasuryStats() {
               <p className="text-sm text-muted-foreground">
                 {treasuryData ? formatXMR(treasuryData.total_xmr) : '0.000000 XMR'}
               </p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {miningData ? `⚡ ${miningData.stats.hashrate} H/s` : '⚡ 0 H/s'}
+              </p>
             </div>
 
             <div className="space-y-2">
