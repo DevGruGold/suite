@@ -203,7 +203,7 @@ export function TreasuryStats() {
                 {treasuryData ? formatXMR(treasuryData.total_xmr) : '0.000000 XMR'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {miningData ? `⚡ ${miningData.stats.hash} H/s` : '⚡ 0 H/s'}
+                {miningData ? `⚡ ${(miningData.mining.total_hashrate / 1000).toFixed(2)} KH/s` : '⚡ 0 H/s'}
               </p>
             </div>
 
