@@ -203,7 +203,7 @@ export function TreasuryStats() {
                 {treasuryData ? formatXMR(treasuryData.total_xmr) : '0.000000 XMR'}
               </p>
               <p className="text-xs text-muted-foreground mt-1">
-                {miningData ? `⚡ ${(miningData.mining.total_hashrate / 1000).toFixed(2)} KH/s` : '⚡ 0 H/s'}
+                {miningData ? `⚡ ${miningData.hash || 0} H/s` : '⚡ 0 H/s'}
               </p>
             </div>
 
@@ -213,7 +213,7 @@ export function TreasuryStats() {
                 {miningData ? miningData.mining.active_workers : 0}
               </p>
               <p className="text-sm text-muted-foreground">
-                {miningData ? `${(miningData.mining.total_hashrate / 1000).toFixed(2)} KH/s` : '0 H/s'}
+                {miningData ? `${miningData.hash || 0} H/s` : '0 H/s'}
               </p>
             </div>
           </div>
