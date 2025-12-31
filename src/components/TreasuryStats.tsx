@@ -212,7 +212,7 @@ export function TreasuryStats() {
             <div className="space-y-2">
               <p className="text-sm text-muted-foreground">Active Mining</p>
               <p className="text-3xl font-bold">
-                {miningData ? miningData.mining.active_workers : 0}
+                {unifiedWorkers ? unifiedWorkers.length : 0}
               </p>
               <p className="text-sm text-muted-foreground">
                 {unifiedStats ? `${unifiedStats.hashRate} H/s` : '0 H/s'}
@@ -241,7 +241,7 @@ export function TreasuryStats() {
               </div>
               <div>
                 <p className="text-xs text-muted-foreground">Active Workers</p>
-                <p className="text-sm font-semibold">{miningData.mining.active_workers}</p>
+                <p className="text-sm font-semibold">{unifiedWorkers ? unifiedWorkers.length : 0}</p>
               </div>
             </div>
           )}
