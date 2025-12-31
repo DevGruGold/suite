@@ -4,30 +4,19 @@ import { serve } from "https://deno.land/std@0.177.0/http/server.ts";
 const DEFAULT_WALLET = '46UxNFuGM2E3UwmZWWJicaRPoRwqwW4byQkaTHkX8yPcVihp91qAVtSFipWUGJJUyTXgzSqxzDQtNLf2bsp2DX2qCCgC5mg';
 const POOL_API_BASE = 'https://supportxmr.com/api';
 
+// Monero atomic units: 1 XMR = 1,000,000,000,000 piconeros
+const ATOMIC_UNITS = 1000000000000;
+
 interface MinerStats {
   hash: number;
   totalHashes: number;
   lastHash: number;
   validShares: number;
   invalidShares: number;
-  amtPaid: number;
-  amtDue: number;
+  amtPaid: number;  // in atomic units
+  amtDue: number;   // in atomic units
   txnCount: number;
-  identifiers?: Array<{
-    identifier: string;
-    hash: number;
-    totalHashes: number;
-    lastHash: number;
-  }>; 
-}
-
-interface WorkerStats {
-  identifier: string;
-  hash: number;
-  totalHashes: number;
-  lastHash: number;
-  validShares: number;
-  invalidShares: number;
+  identifiers?: string[];
 }
 
 serve(async (req) => {
@@ -78,13 +67,14 @@ serve(async (req) => {
         const data: MinerStats = await response.json();
         console.log('Pool response:', JSON.stringify(data, null, 2));
         
-        // Extract worker identifiers if available
-        const workers = data.identifiers?.map(worker => ({
-          identifier: worker.identifier,
-          hashrate: worker.hash || 0,
-          totalHashes: worker.totalHashes || 0,
-          lastHash: worker.lastHash || 0,
-        })) || [];
+        // Convert atomic units to XMR
+        const amtPaidXMR = data.amtPaid / ATOMIC_UNITS;
+        const amtDueXMR = data.amtDue / ATOMIC_UNITS;
+        
+        // Get worker identifiers
+        const identifiersUrl = `${POOL_API_BASE}/miner/${walletToUse}/identifiers`;
+        const identResponse = await fetch(identifiersUrl);
+        const workers = identResponse.ok ? await identResponse.json() : [];
         
         return new Response(
           JSON.stringify({
@@ -94,11 +84,16 @@ serve(async (req) => {
             totalHashes: data.totalHashes || 0,
             validShares: data.validShares || 0,
             invalidShares: data.invalidShares || 0,
-            amountPaid: data.amtPaid || 0,
-            amountDue: data.amtDue || 0,
+            amountPaid: amtPaidXMR,
+            amountDue: amtDueXMR,
             txnCount: data.txnCount || 0,
             workers: workers,
             lastUpdate: new Date().toISOString(),
+            // Also include raw atomic units for reference
+            raw: {
+              amtPaid: data.amtPaid,
+              amtDue: data.amtDue
+            }
           }),
           {
             headers: {
@@ -133,7 +128,7 @@ serve(async (req) => {
           throw new Error(`Pool API error: ${response.status} ${response.statusText}`);
         }
         
-        const workerData: WorkerStats = await response.json();
+        const workerData = await response.json();
         
         return new Response(
           JSON.stringify({
