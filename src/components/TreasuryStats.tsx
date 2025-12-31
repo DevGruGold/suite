@@ -76,7 +76,7 @@ export function TreasuryStats() {
         .from('treasury_stats')
         .select('*')
         .eq('id', 1)
-        .single();
+        .limit(1).single();
 
       if (error) throw error;
       
