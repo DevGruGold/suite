@@ -97,8 +97,8 @@ export function TreasuryStats() {
     try {
       setLoading(true);
       
-      // Call the enhanced supportxmr-proxy edge function
-      const { data, error } = await supabase.functions.invoke('supportxmr-proxy', {
+      // Call the enhanced mining-proxy edge function
+      const { data, error } = await supabase.functions.invoke('mining-proxy', {
         body: { action: 'get_stats' }
       });
 
