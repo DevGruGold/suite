@@ -82,7 +82,7 @@ export function TreasuryStats() {
       if (data) {
         // Use amountPaid as the treasury locked value
         const lockedXMR = data.amountPaid || 0;
-        const xmrPrice = 150; // Approximate XMR price USD
+        const xmrPrice = 437.95; // Current XMR price USD
         const lockedValueUSD = lockedXMR * xmrPrice;
         
         // Calculate progress toward $10k lock target
