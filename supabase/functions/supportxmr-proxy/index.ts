@@ -13,43 +13,41 @@ interface MinerStats {
   lastHash: number;
   validShares: number;
   invalidShares: number;
-  amtPaid: number;  // in atomic units
-  amtDue: number;   // in atomic units
+  amtPaid: number;
+  amtDue: number;
   txnCount: number;
-  identifiers?: string[];
 }
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response('ok', {
       headers: {
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization, apikey',
       },
     });
   }
 
   try {
-    const { action, wallet_address, worker_id } = await req.json();
+    // Parse request body, handle empty body gracefully
+    let body: any = {};
+    try {
+      const text = await req.text();
+      if (text && text.trim()) {
+        body = JSON.parse(text);
+      }
+    } catch (parseError) {
+      console.log('Request body parse error (non-fatal):', parseError);
+      // Continue with empty body - will use defaults
+    }
+
+    const { action = 'get_stats', wallet_address, worker_id } = body;
     
     // Use provided wallet or fall back to default
     const walletToUse = wallet_address || DEFAULT_WALLET;
     
-    if (!walletToUse || !walletToUse.startsWith('4')) {
-      return new Response(
-        JSON.stringify({ error: 'Valid Monero wallet address required (starts with 4)' }),
-        { 
-          status: 400,
-          headers: { 
-            'Content-Type': 'application/json',
-            'Access-Control-Allow-Origin': '*',
-          },
-        }
-      );
-    }
-
     console.log(`Action: ${action}, Wallet: ${walletToUse.substring(0, 20)}...`);
 
     switch (action) {
@@ -89,13 +87,13 @@ serve(async (req) => {
             txnCount: data.txnCount || 0,
             workers: workers,
             lastUpdate: new Date().toISOString(),
-            // Also include raw atomic units for reference
             raw: {
               amtPaid: data.amtPaid,
               amtDue: data.amtDue
             }
           }),
           {
+            status: 200,
             headers: {
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
@@ -107,7 +105,10 @@ serve(async (req) => {
       case 'get_worker_stats': {
         if (!worker_id) {
           return new Response(
-            JSON.stringify({ error: 'worker_id required for this action' }),
+            JSON.stringify({ 
+              success: false,
+              error: 'worker_id required for this action' 
+            }),
             { 
               status: 400,
               headers: { 
@@ -118,7 +119,6 @@ serve(async (req) => {
           );
         }
 
-        // Get stats for a specific worker
         const identifiersUrl = `${POOL_API_BASE}/miner/${walletToUse}/identifiers/${worker_id}/stats`;
         console.log(`Fetching worker stats from: ${identifiersUrl}`);
         
@@ -142,6 +142,7 @@ serve(async (req) => {
             lastUpdate: new Date().toISOString(),
           }),
           {
+            status: 200,
             headers: {
               'Content-Type': 'application/json',
               'Access-Control-Allow-Origin': '*',
@@ -152,7 +153,11 @@ serve(async (req) => {
 
       default:
         return new Response(
-          JSON.stringify({ error: `Unknown action: ${action}` }),
+          JSON.stringify({ 
+            success: false,
+            error: `Unknown action: ${action}`,
+            availableActions: ['get_stats', 'get_worker_stats']
+          }),
           { 
             status: 400,
             headers: { 
@@ -166,6 +171,7 @@ serve(async (req) => {
     console.error('Error:', error);
     return new Response(
       JSON.stringify({ 
+        success: false,
         error: 'Internal server error',
         details: error instanceof Error ? error.message : String(error),
       }),
