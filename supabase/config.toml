@@ -803,8 +803,6 @@ body = '{"executive_name":"Eliza","limit":20,"unacknowledged_only":true}'
 # MEMORY & ANALYTICS FUNCTIONS (migrated from pg_cron)
 # ====================================================================
 
-[functions.vectorize-memory]
-verify_jwt = false
 
 [functions.predictive-analytics]
 verify_jwt = false
