@@ -75,7 +75,7 @@ export function TreasuryStats() {
       const { data, error } = await supabase
         .from('treasury_stats')
         .select('*')
-        .eq('id', 1)
+        .eq('wallet_address', '46UxNFuGM2E3UwmZWWJicaRPoRwqwW4byQkaTHkX8yPcVihp91qAVtSFipWUGJJUyTXgzSqxzDQtNLf2bsp2DX2qCCgC5mg')
         .limit(1).single();
 
       if (error) throw error;
