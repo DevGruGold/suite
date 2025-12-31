@@ -804,8 +804,6 @@ body = '{"executive_name":"Eliza","limit":20,"unacknowledged_only":true}'
 # ====================================================================
 
 
-[functions.predictive-analytics]
-verify_jwt = false
 
 [functions.summarize-conversation]
 verify_jwt = false
