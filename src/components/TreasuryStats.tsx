@@ -72,10 +72,38 @@ export function TreasuryStats() {
 
   const fetchTreasuryData = async () => {
     try {
-      // Treasury stats view returns NULL values, so we skip it
-      // All real data comes from mining-proxy endpoint
+      // Fetch mining data to calculate treasury values
+      const { data, error } = await supabase.functions.invoke('mining-proxy', {
+        body: {}
+      });
+
+      if (error) throw error;
+
+      if (data) {
+        // Use amountPaid as the treasury locked value
+        const lockedXMR = data.amountPaid || 0;
+        const xmrPrice = 150; // Approximate XMR price USD
+        const lockedValueUSD = lockedXMR * xmrPrice;
+        
+        // Calculate progress toward $10k lock target
+        const LOCK_TARGET_USD = 10000;
+        const lockProgress = Math.min((lockedValueUSD / LOCK_TARGET_USD) * 100, 100);
+        
+        setTreasuryData({
+          total_value_usd: lockedValueUSD,
+          total_xmr: lockedXMR,
+          locked_value_usd: lockedValueUSD,
+          locked_xmr: lockedXMR,
+          lock_progress: lockProgress,
+          active_miners: 1,
+          total_contributors: 1
+        });
+      }
+    } catch (err) {
+      console.error('Error fetching treasury data:', err);
+      setError(err instanceof Error ? err.message : 'Failed to fetch treasury data');
       
-      // Set placeholder data to prevent crashes
+      // Set safe defaults on error
       setTreasuryData({
         total_value_usd: 0,
         total_xmr: 0,
@@ -85,9 +113,6 @@ export function TreasuryStats() {
         active_miners: 0,
         total_contributors: 0
       });
-    } catch (err) {
-      console.error('Error fetching treasury data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch treasury data');
     }
   };
 
