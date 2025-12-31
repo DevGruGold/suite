@@ -96,6 +96,359 @@ double_confirm_changes = true
 enable_confirmations = false
 
 # ====================================================================
+# OPTIMIZED CRON SCHEDULES - All Scheduled Functions Restored
+# ====================================================================
+
+# Device Metrics - Hourly aggregation at :05
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "aggregate-device-metrics"
+schedule = "5 * * * *"
+body = '{"action":"aggregate"}'
+
+# Device Metrics - Daily rollup at 00:10 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "aggregate-device-metrics"
+schedule = "10 0 * * *"
+body = '{"action":"aggregate","hour":null}'
+
+# API Key Health - Every 6 hours at :15
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "api-key-health-monitor"
+schedule = "15 */6 * * *"
+
+# System Health - Every hour at :20
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "system-health"
+schedule = "20 * * * *"
+
+# Device Connection Monitoring - Every 10 min (consolidated)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "monitor-device-connections"
+schedule = "5,15,25,35,45,55 * * * *"
+body = '{"action":"list_active"}'
+
+# Code Monitor Daemon - Every 5 minutes (backup check - instant triggers from python-executor)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "code-monitor-daemon"
+schedule = "*/5 * * * *"
+body = '{"action":"monitor"}'
+
+# Function Usage Sync - Every 15 minutes at :00, :15, :30, :45
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "sync-function-logs"
+schedule = "0,15,30,45 * * * *"
+body = '{"hours_back":1}'
+
+# Scheduled Actions - Every minute for responsive execution
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "execute-scheduled-actions"
+schedule = "* * * * *"
+
+# Ecosystem Monitor - Daily at 11:35 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "ecosystem-monitor"
+schedule = "35 11 * * *"
+
+# ====================================================================
+# GITHUB COMMUNITY ENGAGEMENT CRON JOBS
+# ====================================================================
+# These functions automatically post to GitHub discussions to engage
+# the community and share autonomous agent progress
+
+# Morning Discussion Post - Daily at 8:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "morning-discussion-post"
+schedule = "0 8 * * *"
+
+# Progress Update Post - Daily at 9:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "progress-update-post"
+schedule = "0 9 * * *"
+
+# Daily Discussion Post - Daily at 15:00 UTC (3pm)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "daily-discussion-post"
+schedule = "0 15 * * *"
+
+# Evening Summary Post - Daily at 20:00 UTC (8pm)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "evening-summary-post"
+schedule = "0 20 * * *"
+
+# Weekly Retrospective Post - Fridays at 16:00 UTC (4pm)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "weekly-retrospective-post"
+schedule = "0 16 * * 5"
+
+# Community Spotlight Post - Wednesdays at 14:00 UTC (2pm)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "community-spotlight-post"
+schedule = "0 14 * * 3"
+
+# ====================================================================
+# WORKFLOW TEMPLATE AUTOMATION CRON JOBS
+# ====================================================================
+# These cron jobs automatically execute workflow templates on schedule
+# Minute offsets chosen to avoid collision with existing jobs
+
+# Performance Optimization Cycle - Every 6 hours at :30
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "30 */6 * * *"
+body = '{"action":"execute_template","data":{"template_name":"performance_optimization_cycle"}}'
+
+# Code Quality Audit - Daily at 03:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "0 3 * * *"
+body = '{"action":"execute_template","data":{"template_name":"code_quality_audit"}}'
+
+# Database Optimization - Weekly Sunday at 02:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "0 2 * * 0"
+body = '{"action":"execute_template","data":{"template_name":"database_optimization_workflow"}}'
+
+# Documentation Generation - Weekly Friday at 17:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "0 17 * * 5"
+body = '{"action":"execute_template","data":{"template_name":"documentation_generation_workflow"}}'
+
+# Knowledge Graph Expansion - Every 12 hours at :45
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "45 */12 * * *"
+body = '{"action":"execute_template","data":{"template_name":"knowledge_graph_expansion"}}'
+
+# DAO Governance Cycle - Every 30 minutes at :05 and :35
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-template-manager"
+schedule = "5,35 * * * *"
+body = '{"action":"execute_template","data":{"template_name":"dao_governance_cycle"}}'
+
+# ====================================================================
+# GOVERNANCE CRON JOBS
+# ====================================================================
+
+# Trigger executive votes for new proposals - every 5 minutes (offset :01)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "governance-phase-manager"
+schedule = "1,6,11,16,21,26,31,36,41,46,51,56 * * * *"
+body = '{"action":"trigger_executive_votes"}'
+
+# Check phase transitions - every 10 minutes (offset :04)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "governance-phase-manager"
+schedule = "4,14,24,34,44,54 * * * *"
+body = '{"action":"check_phase_transitions"}'
+
+# Finalize voting - every 15 minutes (offset :08)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "governance-phase-manager"
+schedule = "8,23,38,53 * * * *"
+body = '{"action":"finalize_voting"}'
+
+# Deploy approved functions - every 10 minutes (offset :06)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "deploy-approved-edge-function"
+schedule = "6,16,26,36,46,56 * * * *"
+body = '{"action":"process_queue"}'
+
+# ====================================================================
+# STAE - SUITE TASK AUTOMATION ENGINE
+# ====================================================================
+
+# STAE Smart Assignment Check - Every 10 minutes at :07
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "7,17,27,37,47,57 * * * *"
+body = '{"action":"smart_assign","data":{"auto_batch":true}}'
+
+# STAE Automation Metrics Collection - Every hour at :22
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "22 * * * *"
+body = '{"action":"get_metrics","data":{"time_window_hours":24,"store_metrics":true}}'
+
+# STAE Knowledge Extraction - Every 2 hours at :42
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "42 */2 * * *"
+body = '{"action":"extract_knowledge","data":{"completed_since_hours":2}}'
+
+# STAE Phase 2: Checklist-based stage advancement - Every 15 minutes at :12
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "12,27,42,57 * * * *"
+body = '{"action":"checklist_based_advance","data":{}}'
+
+# STAE Phase 2: Auto-resolve blockers - Every 30 minutes at :18
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "18,48 * * * *"
+body = '{"action":"auto_resolve_blockers","data":{}}'
+
+# STAE Phase 3: Template performance update - Daily at 4 AM
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "suite-task-automation-engine"
+schedule = "0 4 * * *"
+body = '{"action":"update_template_performance","data":{"time_window_hours":168}}'
+
+# ====================================================================
+# VSCO WORKSPACE INTEGRATION
+# ====================================================================
+
+# VSCO Data Sync - Every 6 hours at :50
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "vsco-workspace"
+schedule = "50 */6 * * *"
+body = '{"action":"sync_all","data":{}}'
+
+# ====================================================================
+# AUTONOMOUS WORKFLOW GENERATION SYSTEM
+# ====================================================================
+
+# Autonomous N8N Workflow Generation - Every 8 hours at :15
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "n8n-workflow-generator"
+schedule = "15 */8 * * *"
+body = '{"action":"generate_workflows"}'
+
+# Gemini Agent Creation - Every 12 hours at :30
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "gemini-agent-creator"
+schedule = "30 */12 * * *"
+body = '{"action":"create_agents"}'
+
+# Workflow Optimization - Every 6 hours at :45
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "workflow-optimizer"
+schedule = "45 */6 * * *"
+body = '{"action":"optimize"}'
+
+# Agent Deployment Coordination - Every 4 hours at :55
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "agent-deployment-coordinator"
+schedule = "55 */4 * * *"
+body = '{"action":"coordinate"}'
+
+# ====================================================================
+# ELIZA SELF-EVALUATION & LEARNING
+# ====================================================================
+
+# Eliza Self-Evaluation - Every 4 hours at :25 (learn from feedback)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "eliza-self-evaluation"
+schedule = "25 */4 * * *"
+body = '{"action":"self_evaluate","source":"scheduled"}'
+
+# Get My Feedback Check - Every 6 hours at :35 (retrieve and acknowledge feedback)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "get-my-feedback"
+schedule = "35 */6 * * *"
+body = '{"executive_name":"Eliza","limit":20,"unacknowledged_only":true}'
+
+# ====================================================================
+# MEMORY & ANALYTICS FUNCTIONS (migrated from pg_cron)
+# ====================================================================
+
+# Vectorize Memory - Every 10 minutes at :03 (batch pending memory vectorizations)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "vectorize-memory"
+schedule = "3,13,23,33,43,53 * * * *"
+body = '{}'
+
+# Predictive Analytics - Hourly at :09 (analyze system patterns)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "predictive-analytics"
+schedule = "9 * * * *"
+body = '{"action":"analyze_current","data_source":"tasks"}'
+
+# Summarize Conversation - Every 15 min at :08 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "summarize-conversation"
+schedule = "8,23,38,53 * * * *"
+body = '{}'
+
+# Extract Knowledge - Every 20 min at :04 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "extract-knowledge"
+schedule = "4,24,44 * * * *"
+body = '{}'
+
+# Aggregate Device Metrics - Hourly at :12 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "aggregate-device-metrics"
+schedule = "12 * * * *"
+body = '{}'
+
+# ====================================================================
+# SUPERDUPER AGENT SCHEDULES (migrated from pg_cron)
+# ====================================================================
+
+# SuperDuper Router - Daily 2am
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-router"
+schedule = "0 2 * * *"
+body = '{"action":"route"}'
+
+# SuperDuper Business Growth - Every 4 hours at :15 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-business-growth"
+schedule = "15 */4 * * *"
+body = '{"action":"analyze"}'
+
+# SuperDuper Research Intelligence - Hourly at :18 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-research-intelligence"
+schedule = "18 * * * *"
+body = '{"action":"research"}'
+
+# SuperDuper Content Media - Morning 7am & Evening 7pm
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-content-media"
+schedule = "0 7,19 * * *"
+body = '{"action":"produce"}'
+
+# SuperDuper Communication Outreach - Every 6 hours at :22 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-communication-outreach"
+schedule = "22 */6 * * *"
+body = '{"action":"outreach"}'
+
+# SuperDuper Design Brand - Daily 5am
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-design-brand"
+schedule = "0 5 * * *"
+body = '{"action":"design"}'
+
+# SuperDuper Finance Investment - Daily 6am
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-finance-investment"
+schedule = "0 6 * * *"
+body = '{"action":"analyze"}'
+
+# SuperDuper Domain Experts - Weekday mornings 8:30am
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-domain-experts"
+schedule = "30 8 * * 1-5"
+body = '{"action":"consult"}'
+
+# SuperDuper Development Coach - Work hours (9am Mon-Fri)
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-development-coach"
+schedule = "0 9 * * 1-5"
+body = '{"action":"coach"}'
+
+# SuperDuper Integration - Every 2 hours at :25 offset
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "superduper-integration"
+schedule = "25 */2 * * *"
+body = '{"action":"integrate"}'
+
+
+# ====================================================================
 # OPTIMIZED CRON SCHEDULES - Sequential Execution to Avoid Overlaps
 # ====================================================================
 # Schedule Breakdown:
