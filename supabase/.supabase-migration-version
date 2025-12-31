@@ -1,0 +1,8 @@
+# Supabase Migration Version Tracking
+# This file helps GitHub Actions track migration sync status
+# 
+# Last sync: 2025-12-31T06:36:36.200125
+# Project: vawouugtzwmejxqkeqqj
+# 
+# Note: Remote migrations should be pulled manually using:
+# supabase db pull
