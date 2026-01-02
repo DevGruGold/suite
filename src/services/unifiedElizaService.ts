@@ -183,9 +183,10 @@ export class UnifiedElizaService {
       if (safeContext.councilMode) {
         console.log('🏛️ Trying executive council...');
         try {
-          const councilResult = await executiveCouncilService.generateResponse(safeInput, safeContext, language);
-          if (councilResult && councilResult.content) {
-            return councilResult.content; // Return string content
+          const councilResult = await executiveCouncilService.deliberate(safeInput, safeContext);
+          if (councilResult && councilResult.synthesis) {
+            console.log('✅ Council deliberation successful with', councilResult.responses.length, 'executives');
+            return councilResult.synthesis; // Return synthesized council response
           }
         } catch (councilError: any) {
           console.warn('🏛️ Council failed, continuing with regular mode:', councilError?.message);
