@@ -27,20 +27,42 @@ export interface ElizaContext {
 
 export class UnifiedElizaService {
   
-  // SAFE: Always return healthy executives array
+  /**
+   * Get healthy executives by checking their status from the backend
+   * Transitioned from SAFE MODE to Production Health Checks
+   */
   private static async getHealthyExecutives(): Promise<string[]> {
-    console.log('🔧 SAFE MODE - Using all executives as healthy');
+    console.log('📡 Production Mode: Fetching healthy executives...');
     
-    const executivesList = [
-      'ai-chat',
-      'deepseek-chat', 
-      'gemini-chat',
-      'openai-chat',
-      'lovable-chat'
-    ];
-    
-    console.log('✅ Healthy executives:', executivesList.length);
-    return executivesList;
+    try {
+      // Fetch agent status from Supabase
+      const { data: agents, error } = await supabase
+        .from('agents')
+        .select('id, status')
+        .in('id', ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat']);
+
+      if (error) {
+        console.error('❌ Error fetching agent status:', error);
+        // Fallback to default list if database check fails
+        return ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat'];
+      }
+
+      // Filter for agents that are not in ERROR or OFFLINE status
+      const healthyExecutives = agents
+        ?.filter(agent => agent.status !== 'ERROR' && agent.status !== 'OFFLINE')
+        .map(agent => agent.id) || [];
+
+      if (healthyExecutives.length === 0) {
+        console.warn('⚠️ No healthy executives found in database, using defaults');
+        return ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat'];
+      }
+
+      console.log(`✅ Found ${healthyExecutives.length} healthy executives:`, healthyExecutives);
+      return healthyExecutives;
+    } catch (err) {
+      console.error('💥 Critical error in getHealthyExecutives:', err);
+      return ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat'];
+    }
   }
 
   // CRITICAL FIX: Extract content properly from backend response
@@ -99,14 +121,17 @@ export class UnifiedElizaService {
     return null;
   }
 
-  // SAFE: Enhanced routing with proper response extraction
+  /**
+   * Route request to the best available executive
+   * Production routing with response extraction
+   */
   private static async routeToExecutive(
     userInput: string, 
     context: ElizaContext, 
     healthyExecutives: string[], 
     language = 'en'
   ) {
-    console.log('🎯 SAFE routing with response extraction');
+    console.log('🎯 Production routing with response extraction');
     console.log('📝 Input preview:', (userInput || '').substring(0, 30) + '...');
     
     // Ensure we have a valid array

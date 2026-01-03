@@ -372,14 +372,41 @@ Format your response EXACTLY as:
   }
 
   /**
-   * Get healthy executives - all executives now use Lovable AI Gateway
-   * All executives are always available (no external API key dependencies)
+   * Get healthy executives by checking their status from the backend
+   * Transitioned to Production Health Checks
    */
   private async getHealthyExecutives(): Promise<string[]> {
-    console.log('💚 All executives healthy (using Lovable AI Gateway)');
+    console.log('📡 Production Mode: Fetching healthy executives for council...');
     
-    // All executives are always available since they all use Lovable AI Gateway
-    return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+    try {
+      // Fetch agent status from Supabase
+      const { data: agents, error } = await supabase
+        .from('agents')
+        .select('id, status')
+        .in('id', ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat']);
+
+      if (error) {
+        console.error('❌ Error fetching agent status for council:', error);
+        // Fallback to default list if database check fails
+        return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+      }
+
+      // Filter for agents that are not in ERROR or OFFLINE status
+      const healthyExecutives = agents
+        ?.filter(agent => agent.status !== 'ERROR' && agent.status !== 'OFFLINE')
+        .map(agent => agent.id) || [];
+
+      if (healthyExecutives.length === 0) {
+        console.warn('⚠️ No healthy executives found in database for council, using defaults');
+        return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+      }
+
+      console.log(`✅ Found ${healthyExecutives.length} healthy council members:`, healthyExecutives);
+      return healthyExecutives;
+    } catch (err) {
+      console.error('💥 Critical error in getHealthyExecutives for council:', err);
+      return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+    }
   }
 
   /**
