@@ -97,6 +97,7 @@ enable_confirmations = false
 
 # ====================================================================
 # OPTIMIZED CRON SCHEDULES - Sequential Execution to Avoid Overlaps
+# Now with expanded chat monitoring in code-monitor-daemon
 # ====================================================================
 # Schedule Breakdown:
 # - Device metrics aggregation: Every hour at :05 (hourly data)
@@ -104,7 +105,7 @@ enable_confirmations = false
 # - API key health checks: Every 6 hours at :15 (0, 6, 12, 18)
 # - System health check: Every hour at :20
 # - Device connection monitoring: Every 15 minutes at :25, :40, :55
-# - Code monitor daemon: Every minute for flowing activity
+# - Code monitor daemon (expanded): Every 5 minutes for code + chat monitoring
 # - Scheduled actions execution: Every minute for responsive execution
 # - Ecosystem monitoring: Daily at 11:35 UTC
 # - GitHub Community Posts:
@@ -144,11 +145,12 @@ function_name = "monitor-device-connections"
 schedule = "5,15,25,35,45,55 * * * *"
 body = '{"action":"list_active"}'
 
-# Code Monitor Daemon - Every 5 minutes (backup check - instant triggers from python-executor)
+# CODE MONITOR DAEMON (EXPANDED) - Now includes chat monitoring
+# Runs every 5 minutes to monitor both code execution failures AND chat response quality
 [[edge_runtime.policy.scheduled_functions]]
 function_name = "code-monitor-daemon"
 schedule = "*/5 * * * *"
-body = '{"action":"monitor"}'
+body = '{"action":"monitor","scope":"combined"}'
 
 # Function Usage Sync - Every 15 minutes at :00, :15, :30, :45
 [[edge_runtime.policy.scheduled_functions]]
@@ -774,7 +776,6 @@ schedule = "45 */6 * * *"
 body = '{"action":"optimize"}'
 
 # Agent Deployment Coordination - Every 4 hours at :55
-# Agent Deployment Coordination - Every 4 hours at :55
 [[edge_runtime.policy.scheduled_functions]]
 function_name = "agent-deployment-coordinator"
 schedule = "55 */4 * * *"
@@ -797,22 +798,8 @@ schedule = "35 */6 * * *"
 body = '{"executive_name":"Eliza","limit":20,"unacknowledged_only":true}'
 
 # ====================================================================
-# MEMORY & ANALYTICS FUNCTIONS (migrated from pg_cron)
+# MEMORY & ANALYTICS FUNCTIONS
 # ====================================================================
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 [functions.get-cron-registry]
 verify_jwt = false
@@ -841,15 +828,8 @@ function_name = "extract-knowledge"
 schedule = "4,24,44 * * * *"
 body = '{}'
 
-
-# Aggregate Device Metrics - Hourly at :12 offset
-[[edge_runtime.policy.scheduled_functions]]
-function_name = "aggregate-device-metrics"
-schedule = "12 * * * *"
-body = '{}'
-
 # ====================================================================
-# SUPERDUPER AGENT SCHEDULES (migrated from pg_cron)
+# SUPERDUPER AGENT SCHEDULES
 # ====================================================================
 
 # SuperDuper Router - Daily 2am
@@ -912,18 +892,12 @@ function_name = "superduper-integration"
 schedule = "25 */2 * * *"
 body = '{"action":"integrate"}'
 
-
-# ============================================
+# ====================================================================
 # FOCUSED ENHANCEMENT: 40 New Scheduled Functions
 # Added: 2025-12-31 UTC
+# Enhanced: 2024-01-31 UTC with expanded chat monitoring
 # Total: 93 scheduled functions (53 existing + 40 new)
 # Focus: Community Engagement, Operations, Analytics, Governance
-# ============================================
-
-# ====================================================================
-# CONFIG.TOML FOCUSED ENHANCEMENT
-# Prioritizing Community, Operations, Analytics & Governance
-# All functions verified to exist in current config.toml
 # ====================================================================
 
 # ====================================================================
@@ -1207,10 +1181,44 @@ schedule = "0 9,17 * * *"
 body = "{\"action\":\"check_and_generate\"}"
 
 # ====================================================================
+# NEW ADDITION: CHAT QUALITY MONITORING CONFIGURATION
+# Added: 2024-01-31 UTC (complements expanded code-monitor-daemon)
+# ====================================================================
+
+# Chat Response Quality Monitor - Daily deep analysis at 01:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "code-monitor-daemon"
+schedule = "0 1 * * *"
+body = '{"action":"deep_chat_analysis","scope":"chat_only","analysis_depth":"full"}'
+
+# Weekly Conversation Pattern Analysis - Sundays at 03:00 UTC
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "code-monitor-daemon"
+schedule = "0 3 * * 0"
+body = '{"action":"weekly_pattern_analysis","scope":"chat_only","time_window_days":7}'
+
+# Executive Feedback Processing - Every 4 hours at :02
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "get-my-feedback"
+schedule = "2 */4 * * *"
+body = '{"executive_name":"Eliza","limit":50,"unacknowledged_only":true,"process_feedback":true}'
+
+# Chat Session Health Check - Every 6 hours at :45
+[[edge_runtime.policy.scheduled_functions]]
+function_name = "code-monitor-daemon"
+schedule = "45 */6 * * *"
+body = '{"action":"chat_session_health","scope":"chat_only","active_hours_window":24}'
+
+# ====================================================================
 # SUMMARY
 # ====================================================================
-# New scheduled functions: 40 (all verified to exist in config.toml)
-# Total scheduled functions: 93 (53 existing + 40 new)
+# Total scheduled functions: 97 (93 existing + 4 new chat monitoring)
+# 
+# Key Improvements:
+# 1. Code Monitor Daemon expanded to include chat response quality monitoring
+# 2. Now monitors both code execution failures AND chat response issues
+# 3. Provides feedback loops for Eliza's conversational performance
+# 4. Combined health dashboard for technical and conversational metrics
 # 
 # Distribution:
 #   - GitHub Community Engagement: 6
@@ -1220,11 +1228,13 @@ body = "{\"action\":\"check_and_generate\"}"
 #   - Agent Coordination: 5
 #   - Memory & Learning: 7 (5 learning + 2 supporting)
 #   - Additional Automation: 5
+#   - Chat Quality Monitoring: 4 (new)
 #
-# Focus areas (per your requirements):
+# Focus areas:
 #   ✓ Community Engagement: ~70% reduction in manual GitHub overhead
 #   ✓ Operational Excellence: Self-healing, auto-fixing, continuous optimization
 #   ✓ Real-time Analytics: Comprehensive metrics for data-driven decisions
 #   ✓ Governance Efficiency: Automated proposal execution and monitoring
 #   ✓ Conservative Learning: 5 occasions per day (not aggressive)
-#   ✓ No Security Overload: Minimal security scanning (testing phase appropriate)
+#   ✓ Chat Quality Monitoring: Now includes Eliza's conversational performance
+#   ✓ Combined Health Dashboard: Single view of code execution + chat response quality
