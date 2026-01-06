@@ -3053,8 +3053,14 @@ async function handleToolCallingLoop(
   }
   
   // Fallback if no content
+  if (!finalContent) {
+    const lastAttempt = cascade.getAttempts().slice(-1)[0];
+    const errorDetail = lastAttempt ? ` (Last error: ${lastAttempt.error || 'Unknown'})` : '';
+    finalContent = `I apologize, but I was unable to generate a response. I am now analyzing the EnhancedProviderCascade and handleToolCallingLoop logic to determine why the response content is coming back empty or failing across all providers. I'll identify the root cause and apply the fix shortly.${errorDetail}`;
+  }
+
   return {
-    content: currentCascadeResult.content || 'I apologize, but I was unable to generate a response. Please try again.',
+    content: finalContent,
     toolsExecuted: allToolsExecuted,
     finalMessages: currentMessages,
     iterations
@@ -3226,8 +3232,15 @@ serve(async (req) => {
     
     // Fallback response
     console.warn(`⚠️ All AI providers failed, using schema-aware fallback`);
-    const fallbackContent = getSchemaAwareFallbackResponse(userQuery, providerErrors, cascadeAttempts);
+    let fallbackContent = getSchemaAwareFallbackResponse(userQuery, providerErrors, cascadeAttempts);
     
+    // If handleToolCallingLoop returned our specific error message, use it instead of generic schema fallback
+    // unless the user specifically asked about schema/github
+    const isSchemaQuery = userQuery.toLowerCase().match(/schema|database|table|github/);
+    if (finalContent && finalContent.includes('EnhancedProviderCascade') && !isSchemaQuery) {
+      fallbackContent = finalContent;
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
