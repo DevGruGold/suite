@@ -11,6 +11,7 @@ import { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 import { generateElizaSystemPrompt } from './elizaSystemPrompt.ts';
 import { buildContextualPrompt } from './contextBuilder.ts';
 import { ELIZA_TOOLS } from './elizaTools.ts';
+import { EDGE_FUNCTIONS_REGISTRY } from './edgeFunctionRegistry.ts';
 
 export interface EnrichedElizaContext {
   systemPrompt: string;
@@ -148,7 +149,7 @@ export async function getEnrichedElizaContext(
     }))
   };
 
-  const systemPrompt = await buildContextualPrompt(
+  let systemPrompt = await buildContextualPrompt(
     basePrompt,
     {
       conversationHistory: enrichedConversationHistory,
@@ -163,6 +164,23 @@ export async function getEnrichedElizaContext(
     },
     supabase
   );
+
+  // 7. Inject Edge Function Registry Awareness
+  const functionSummary = EDGE_FUNCTIONS_REGISTRY.map(f => 
+    `- ${f.name}: ${f.description.split(' - ')[0]} (Category: ${f.category})`
+  ).join('\n');
+
+  systemPrompt += `\n\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🚀 ECOSYSTEM FUNCTION AWARENESS (CRITICAL)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+You have full awareness of all ${EDGE_FUNCTIONS_REGISTRY.length} Supabase Edge Functions in the XMRT ecosystem.
+If a user request requires a capability not explicitly in your toolset, use 'call_edge_function' or 'invoke_edge_function' to call these:
+
+${functionSummary}
+
+To use any of these, call 'call_edge_function' with the function name and the required payload.
+If you need more details on a function's schema, use 'search_edge_functions' or 'list_available_functions'.
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
 
   console.log(`✅ Built enriched Eliza context: ${systemPrompt.length} chars, ${ELIZA_TOOLS.length} tools`);
 

@@ -1605,6 +1605,29 @@ export async function executeToolCall(
           : { success: true, result: vscoProductsResult.data };
         break;
 
+      // ====================================================================
+      // ECOSYSTEM DISCOVERY TOOLS
+      // ====================================================================
+      case 'search_edge_functions':
+        console.log(`🔍 [${executiveName}] Search Edge Functions: ${parsedArgs.query}`);
+        const searchFuncResult = await supabase.functions.invoke('search-edge-functions', {
+          body: parsedArgs
+        });
+        result = searchFuncResult.error
+          ? { success: false, error: searchFuncResult.error.message }
+          : { success: true, result: searchFuncResult.data };
+        break;
+
+      case 'list_available_functions':
+        console.log(`📋 [${executiveName}] List Available Functions`);
+        const listFuncResult = await supabase.functions.invoke('list-available-functions', {
+          body: parsedArgs
+        });
+        result = listFuncResult.error
+          ? { success: false, error: listFuncResult.error.message }
+          : { success: true, result: listFuncResult.data };
+        break;
+
       case 'vsco_manage_worksheets':
         console.log(`📋 [${executiveName}] VSCO Manage Worksheets: ${parsedArgs.action}`);
         const vscoWorksheetsResult = await supabase.functions.invoke('vsco-workspace', {
