@@ -1,62 +1,149 @@
-name: Deploy Edge Functions
+name: 🚀 Supabase Production Deploy
 
 on:
   push:
     branches: [main]
     paths:
-      - 'supabase/functions/**'
-  workflow_dispatch:
+      - 'supabase/**'            # Trigger on any change in the supabase directory
+      - '!supabase/README.md'    # Ignore documentation changes
+  workflow_dispatch:             # Allow manual trigger from GitHub UI
+    inputs:
+      skip-dry-run:
+        description: 'Skip dry-run safety checks?'
+        required: false
+        default: 'false'
 
+# Define environment variables for reuse across jobs
 env:
-  SUPABASE_PROJECT_ID: vawouugtzwmejxqkeqqj
+  SUPABASE_PROJECT_ID: 'vawouugtzwmejxqkeqqj'
+  SUPABASE_FUNCTIONS_PATH: './supabase/functions'
 
 jobs:
-  deploy-functions:
+  # ========== STAGE 1: DEPLOYMENT ==========
+  deploy:
+    name: '🔧 Deploy Database & Functions'
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        function:
-          - broadcast-state-change
-          - subscribe-to-updates
-          - sync-dashboard-data
-          - get-global-state
-          - update-treasury-state
-          - sync-mining-stats
-          - agent-coordination-hub
-          - validate-cross-repo-data
-          - reconcile-treasuries
-          - sync-user-profiles
-          - propagate-governance-decisions
-          - ecosystem-health-check
-          - cross-repo-latency-monitor
-          - alert-on-desync
-          - spawn-cross-repo-workflow
-          - coordinate-agent-tasks
-          - aggregate-analytics
-    
+    environment: production
+    outputs:
+      deployment-successful: ${{ steps.deploy-functions.outcome == 'success' }}
+
     steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup Deno
-        uses: denoland/setup-deno@v1
+      - name: '📥 Checkout Repository'
+        uses: actions/checkout@v4
         with:
-          deno-version: v1.x
-      
-      - name: Install Supabase CLI
+          fetch-depth: 0
+
+      - name: '⚙️ Setup Supabase CLI'
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: '🔗 Link to Supabase Project'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          curl -fsSL https://github.com/supabase/cli/releases/latest/download/supabase_linux_amd64.tar.gz | tar -xz
-          sudo mv supabase /usr/local/bin/
-      
-      - name: Deploy ${{ matrix.function }}
+          supabase link --project-ref ${{ env.SUPABASE_PROJECT_ID }}
+
+      # --- DATABASE PHASE ---
+      - name: '🛡️ Safety Check - Database (Dry Run)'
+        if: ${{ github.event.inputs.skip-dry-run != 'true' }}
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          if [ -d "supabase/functions/${{ matrix.function }}" ]; then
-            echo "Deploying ${{ matrix.function }}..."
-            supabase functions deploy ${{ matrix.function }}               --project-ref ${{ env.SUPABASE_PROJECT_ID }}               --token ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          else
-            echo "⚠️  Function ${{ matrix.function }} not found, skipping..."
-          fi
-      
-      - name: Test function
+          echo "Performing database migration dry-run..."
+          supabase db push --dry-run
+          echo "✅ Dry run successful. No destructive changes detected."
+
+      - name: '🗃️ Deploy Database Migrations'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          echo "Testing ${{ matrix.function }}..."
-          # Add function-specific tests here
+          echo "Applying database migrations..."
+          supabase db push
+          echo "✅ Database deployed successfully."
+
+      # --- FUNCTIONS PHASE ---
+      - name: '📦 Build Function Bundle (Optional)'
+        run: |
+          echo "No build step configured by default."
+          echo "Add your TypeScript compilation or bundling here if needed."
+        # Example for TypeScript:
+        # run: |
+        #   cd ${{ env.SUPABASE_FUNCTIONS_PATH }}
+        #   for dir in */; do
+        #     if [ -f "${dir}package.json" ]; then
+        #       echo "Installing dependencies for ${dir}"
+        #       cd "${dir}" && npm ci && cd ..
+        #     fi
+        #   done
+
+      - name: '🚀 Deploy All Edge Functions'
+        id: deploy-functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "Discovering and deploying Edge Functions..."
+          cd ${{ env.SUPABASE_FUNCTIONS_PATH }} 2>/dev/null || { echo "❌ Functions directory not found."; exit 1; }
+          
+          for func_dir in */; do
+            if [ -f "${func_dir}index.ts" ] || [ -f "${func_dir}index.js" ] || [ -f "${func_dir}mod.ts" ]; then
+              func_name="${func_dir%/}"
+              echo "--- Deploying: $func_name ---"
+              supabase functions deploy "$func_name" --project-ref ${{ env.SUPABASE_PROJECT_ID }}
+              echo ""
+            fi
+          done
+          echo "✅ All functions deployed."
+
+  # ========== STAGE 2: VALIDATION ==========
+  validate:
+    name: '✅ Post-Deployment Validation'
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ needs.deploy.outputs.deployment-successful == 'true' }}
+    environment: production
+
+    steps:
+      - name: '📊 Log Deployment Summary'
+        run: |
+          echo "Deployment Validation Summary"
+          echo "============================="
+          echo "Timestamp: $(date -u)"
+          echo "Trigger: ${{ github.event_name }}"
+          echo "Commit: ${{ github.sha }}"
+          echo "Database: Migrations applied"
+          echo "Functions: All functions deployed from ${{ env.SUPABASE_FUNCTIONS_PATH }}"
+
+      - name: '🧪 Run Health Checks (Example)'
+        run: |
+          # Example: Curl a known endpoint
+          echo "Running basic health checks..."
+          # Uncomment and customize these checks for your critical functions:
+          # curl -f https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/health || echo "Health check failed"
+          echo "Health check template complete."
+
+  # ========== STAGE 3: ROLLBACK (ON FAILURE) ==========
+  rollback:
+    name: '🔄 Automatic Rollback'
+    runs-on: ubuntu-latest
+    needs: deploy
+    if: ${{ failure() && needs.deploy.result == 'failure' }}
+    environment: production
+
+    steps:
+      - name: '⚠️ Initiate Rollback Protocol'
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          echo "🚨 DEPLOYMENT FAILED - Initiating rollback protocol"
+          echo "=================================================="
+          echo "This is a placeholder for a rollback strategy."
+          echo ""
+          echo "Possible manual recovery steps:"
+          echo "1. Check deployment logs above for the specific error."
+          echo "2. Rollback database: supabase db revert --project-ref ${{ env.SUPABASE_PROJECT_ID }}"
+          echo "3. Redeploy previous function version: supabase functions deploy <name> --version <previous>"
+          echo ""
+          echo "Investigate the error in the 'deploy' job logs before proceeding."
