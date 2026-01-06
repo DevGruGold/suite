@@ -94,7 +94,7 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     apiKey: GEMINI_API_KEY,
     endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent`,
     models: ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash'],
-    supportsTools: false,
+    supportsTools: true,
     timeoutMs: 30000,
     priority: 1,
     fallbackOnly: false,
@@ -120,7 +120,7 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     apiKey: ANTHROPIC_API_KEY,
     endpoint: 'https://api.anthropic.com/v1/messages',
     models: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229'],
-    supportsTools: false,
+    supportsTools: true,
     timeoutMs: 45000,
     priority: 4,
     fallbackOnly: false,
@@ -133,7 +133,7 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     apiKey: OPENROUTER_API_KEY,
     endpoint: 'https://openrouter.ai/api/v1/chat/completions',
     models: ['moonshotai/kimi-k2'],
-    supportsTools: false,
+    supportsTools: true,
     timeoutMs: 35000,
     priority: 5,
     fallbackOnly: true,
@@ -141,6 +141,211 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     retryDelayMs: 3000
   }
 };
+
+// ========== SHARED EXECUTIVE HELPER FUNCTIONS ==========
+export const TOOL_CALLING_MANDATE = `
+🚨 CRITICAL TOOL CALLING RULES:
+1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
+2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
+3. DIRECTLY invoke functions - the system will handle execution
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status
+5. If you need current data, ALWAYS use tools. Never guess or make up data.
+6. After tool execution, synthesize results into natural language - never show raw JSON to users.
+
+🖼️ IMAGE GENERATION (MANDATORY):
+- When user asks to CREATE/GENERATE/MAKE/DRAW an IMAGE → IMMEDIATELY call vertex_generate_image({prompt: "detailed description"})
+- DO NOT say "I cannot generate images" - YOU CAN via Vertex AI
+- DO NOT say "I'm just an LLM" - you have image generation capabilities
+
+🎬 VIDEO GENERATION (MANDATORY):
+- When user asks to CREATE/GENERATE/MAKE a VIDEO → IMMEDIATELY call vertex_generate_video({prompt: "description", duration_seconds: 5})
+- Returns operation_name for async status checking
+- Check status with vertex_check_video_status({operation_name: "..."})
+`;
+
+// Parser for DeepSeek's text-based tool call format
+export function parseDeepSeekToolCalls(content: string): Array<any> | null {
+  const toolCallsMatch = content.match(/<｜tool▁calls▁begin｜>(.*?)<｜tool▁calls▁end｜>/s);
+  if (!toolCallsMatch) return null;
+  
+  const toolCallsText = toolCallsMatch[1];
+  const toolCallPattern = /<｜tool▁call▁begin｜>(.*?)<｜tool▁sep｜>(.*?)<｜tool▁call▁end｜>/gs;
+  const toolCalls: Array<any> = [];
+  
+  let match;
+  while ((match = toolCallPattern.exec(toolCallsText)) !== null) {
+    const functionName = match[1].trim();
+    let args = match[2].trim();
+    
+    let parsedArgs = {};
+    if (args && args !== '{}') {
+      try {
+        parsedArgs = JSON.parse(args);
+      } catch (e) {
+        console.warn(`Failed to parse DeepSeek tool args for ${functionName}:`, args);
+      }
+    }
+    
+    toolCalls.push({
+      id: `deepseek_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+      type: 'function',
+      function: {
+        name: functionName,
+        arguments: JSON.stringify(parsedArgs)
+      }
+    });
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// Parser for Gemini/Kimi tool_code block format
+export function parseToolCodeBlocks(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  
+  const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
+  let match;
+  
+  while ((match = toolCodeRegex.exec(content)) !== null) {
+    const code = match[1].trim();
+    
+    // Parse invoke_edge_function({ function_name: "...", payload: {...} })
+    const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
+    if (invokeMatch) {
+      try {
+        let argsStr = `{${invokeMatch[1]}}`;
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const args = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: 'invoke_edge_function', arguments: JSON.stringify(args) }
+        });
+      } catch (e) {
+        console.warn('Failed to parse invoke_edge_function from tool_code:', e.message);
+      }
+      continue;
+    }
+    
+    // Parse direct function calls like check_system_status({}) or system_status()
+    const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
+    if (directMatch) {
+      const funcName = directMatch[1];
+      let argsStr = directMatch[2] || '{}';
+      try {
+        argsStr = argsStr.replace(/(\w+)\s*:/g, '"$1":').replace(/'/g, '"').replace(/""+/g, '"');
+        const parsedArgs = JSON.parse(argsStr);
+        toolCalls.push({
+          id: `tool_code_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: funcName, arguments: JSON.stringify(parsedArgs) }
+        });
+      } catch (e) {
+        console.warn(`Failed to parse ${funcName} from tool_code:`, e.message);
+      }
+    }
+  }
+  
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// Parse conversational tool intent (e.g., "I'm going to call get_mining_stats")
+export function parseConversationalToolIntent(content: string): Array<any> | null {
+  const toolCalls: Array<any> = [];
+  const patterns = [
+    /(?:call(?:ing)?|use|invoke|execute|run|check(?:ing)?)\s+(?:the\s+)?(?:function\s+|tool\s+)?[`"']?(\w+)[`"']?/gi,
+    /let me (?:call|check|get|invoke)\s+[`"']?(\w+)[`"']?/gi,
+    /I(?:'ll| will) (?:call|invoke|use)\s+[`"']?(\w+)[`"']?/gi
+  ];
+  
+  const knownTools = [
+    'get_mining_stats', 'get_system_status', 'get_ecosystem_metrics', 
+    'search_knowledge', 'recall_entity', 'invoke_edge_function', 
+    'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks'
+  ];
+  
+  for (const pattern of patterns) {
+    let match;
+    while ((match = pattern.exec(content)) !== null) {
+      const funcName = match[1];
+      if (knownTools.includes(funcName) && !toolCalls.find(t => t.function.name === funcName)) {
+        toolCalls.push({
+          id: `conv_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+          type: 'function',
+          function: { name: funcName, arguments: '{}' }
+        });
+      }
+    }
+  }
+  return toolCalls.length > 0 ? toolCalls : null;
+}
+
+// Detect if query needs data (should force tool calls)
+export function needsDataRetrieval(messages: any[]): boolean {
+  const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
+  
+  const dataKeywords = [
+    'what is', 'what\'s', 'what are', 'who is', 'who are', 'where is', 'when is',
+    'how is', 'how are', 'how much', 'how many', 'why is', 'why are',
+    'show me', 'tell me', 'give me', 'fetch', 'get', 'list', 'find', 'search',
+    'check', 'analyze', 'run', 'execute', 'perform', 'scan', 'diagnose',
+    'look up', 'lookup', 'retrieve', 'query', 'pull', 'grab',
+    'status', 'health', 'stats', 'statistics', 'metrics', 'analytics',
+    'performance', 'report', 'overview', 'summary', 'dashboard',
+    'current', 'recent', 'latest', 'today', 'now', 'real-time', 'realtime', 'live',
+    'mining', 'hashrate', 'workers', 'agents', 'tasks', 'ecosystem',
+    'proposals', 'governance', 'cron', 'functions', 'logs', 'activity',
+    'recall', 'remember', 'stored', 'saved', 'previous', 'history',
+    'compare', 'between', 'vs', 'versus', 'difference',
+    'count', 'total', 'number', 'amount', 'percentage', 'rate',
+    'create', 'generate', 'make', 'draw', 'design', 'render', 'illustrate',
+    'visualize', 'picture', 'image', 'video', 'animate', 'animation',
+    'photo', 'artwork', 'graphic', 'clip', 'film', 'scene'
+  ];
+  
+  const hasQuestionMark = lastUser.includes('?');
+  const imperativePatterns = /^(show|tell|give|get|list|find|check|run|execute|analyze|fetch|retrieve|scan|diagnose|look|pull)/i;
+  const startsWithImperative = imperativePatterns.test(lastUser.trim());
+  
+  return hasQuestionMark || startsWithImperative || dataKeywords.some(k => lastUser.includes(k));
+}
+
+// Convert OpenAI tool format to Gemini function declaration format
+export function convertToolsToGeminiFormat(tools: any[]): any[] {
+  return tools.map(tool => ({
+    name: tool.function.name,
+    description: tool.function.description,
+    parameters: tool.function.parameters
+  }));
+}
+
+// Retrieve memory contexts from database (server-side fallback)
+export async function retrieveMemoryContexts(supabase: any, sessionKey: string): Promise<any[]> {
+  if (!sessionKey) return [];
+  
+  console.log('📚 Retrieving memory contexts server-side...');
+  try {
+    const { data: serverMemories } = await supabase
+      .from('memory_contexts')
+      .select('context_type, content, importance_score')
+      .or(`user_id.eq.${sessionKey},session_id.eq.${sessionKey}`)
+      .order('importance_score', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(30);
+    
+    if (serverMemories && serverMemories.length > 0) {
+      console.log(`✅ Retrieved ${serverMemories.length} memory contexts`);
+      return serverMemories.map(m => ({
+        type: m.context_type,
+        content: m.content?.slice?.(0, 500) || String(m.content).slice(0, 500),
+        score: m.importance_score
+      }));
+    }
+  } catch (error) {
+    console.warn('⚠️ Failed to retrieve memory contexts:', error.message);
+  }
+  return [];
+}
 
 // ========== CORS HEADERS ==========
 const corsHeaders = {
@@ -1438,11 +1643,46 @@ class EnhancedProviderCascade {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.gemini.timeoutMs);
       
-      const geminiMessages = messages.map(msg => ({
-        role: msg.role === 'assistant' ? 'model' : 'user',
-        parts: [{ text: msg.content || '' }]
-      }));
+      // Inject tool calling mandate into system message
+      const enhancedMessages = messages.map(m => 
+        m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+      );
+
+      const geminiMessages = enhancedMessages.map(msg => {
+        if (msg.role === 'tool') {
+          return {
+            role: 'function',
+            parts: [{
+              functionResponse: {
+                name: msg.name || 'unknown',
+                response: { content: msg.content }
+              }
+            }]
+          };
+        }
+        
+        const parts: any[] = [{ text: msg.content || '' }];
+        
+        if (msg.tool_calls) {
+          msg.tool_calls.forEach((tc: any) => {
+            parts.push({
+              functionCall: {
+                name: tc.function.name,
+                args: JSON.parse(tc.function.arguments)
+              }
+            });
+          });
+        }
+        
+        return {
+          role: msg.role === 'assistant' ? 'model' : 'user',
+          parts
+        };
+      });
       
+      const forceTools = needsDataRetrieval(messages);
+      const geminiTools = tools.length > 0 ? [{ function_declarations: convertToolsToGeminiFormat(tools) }] : [];
+
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
         {
@@ -1450,6 +1690,12 @@ class EnhancedProviderCascade {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             contents: geminiMessages,
+            tools: geminiTools,
+            tool_config: tools.length > 0 ? {
+              function_calling_config: {
+                mode: forceTools ? 'ANY' : 'AUTO'
+              }
+            } : undefined,
             generationConfig: {
               temperature: 0.7,
               maxOutputTokens: 4000
@@ -1473,7 +1719,44 @@ class EnhancedProviderCascade {
       }
       
       const data = await response.json();
-      const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      const candidate = data.candidates?.[0];
+      const content = candidate?.content;
+      const parts = content?.parts || [];
+      
+      let text = '';
+      const toolCalls: any[] = [];
+      
+      for (const part of parts) {
+        if (part.text) {
+          text += part.text;
+        }
+        if (part.functionCall) {
+          toolCalls.push({
+            id: `gemini_${Date.now()}_${Math.random().toString(36).substring(7)}`,
+            type: 'function',
+            function: {
+              name: part.functionCall.name,
+              arguments: JSON.stringify(part.functionCall.args)
+            }
+          });
+        }
+      }
+
+      // Fallback: Parse tool_code blocks if no native tool calls but text contains them
+      if (toolCalls.length === 0 && text.includes('```tool_code')) {
+        const parsedTools = parseToolCodeBlocks(text);
+        if (parsedTools) toolCalls.push(...parsedTools);
+      }
+      
+      if (toolCalls.length > 0) {
+        return {
+          success: true,
+          tool_calls: toolCalls,
+          content: text,
+          provider: 'gemini',
+          model: 'gemini-2.0-flash-exp'
+        };
+      }
       
       return {
         success: true,
@@ -1495,6 +1778,13 @@ class EnhancedProviderCascade {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.deepseek.timeoutMs);
       
+      // Inject tool calling mandate into system message
+      const enhancedMessages = messages.map(m => 
+        m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+      );
+
+      const forceTools = needsDataRetrieval(messages);
+
       const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1503,10 +1793,13 @@ class EnhancedProviderCascade {
         },
         body: JSON.stringify({
           model: 'deepseek-chat',
-          messages,
+          messages: enhancedMessages,
           temperature: 0.7,
           max_tokens: 4000,
-          ...(tools.length > 0 && { tools, tool_choice: 'auto' })
+          ...(tools.length > 0 && { 
+            tools, 
+            tool_choice: forceTools ? 'required' : 'auto' 
+          })
         }),
         signal: controller.signal
       });
@@ -1535,10 +1828,20 @@ class EnhancedProviderCascade {
         };
       }
       
-      if (message.tool_calls?.length > 0) {
+      const content = message.content || '';
+      const toolCalls = message.tool_calls || [];
+
+      // Fallback: Parse DeepSeek's specific tool call format if no native tool calls
+      if (toolCalls.length === 0 && content.includes('<｜tool▁calls▁begin｜>')) {
+        const parsedTools = parseDeepSeekToolCalls(content);
+        if (parsedTools) toolCalls.push(...parsedTools);
+      }
+      
+      if (toolCalls.length > 0) {
         return {
           success: true,
-          tool_calls: message.tool_calls,
+          tool_calls: toolCalls,
+          content: content,
           provider: 'deepseek',
           model: 'deepseek-chat'
         };
@@ -1546,7 +1849,7 @@ class EnhancedProviderCascade {
       
       return {
         success: true,
-        content: message.content || '',
+        content: content,
         provider: 'deepseek',
         model: 'deepseek-chat'
       };
@@ -1564,10 +1867,50 @@ class EnhancedProviderCascade {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.anthropic.timeoutMs);
       
-      const lastMessage = messages[messages.length - 1];
-      const systemMessages = messages.filter(m => m.role === 'system');
+      // Inject tool calling mandate into system message
+      const enhancedMessages = messages.map(m => 
+        m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+      );
+
+      const systemMessages = enhancedMessages.filter(m => m.role === 'system');
       const systemPrompt = systemMessages.map(m => m.content).join('\n');
+      const chatMessages = enhancedMessages.filter(m => m.role !== 'system').map(m => {
+        if (m.role === 'tool') {
+          return {
+            role: 'user',
+            content: [{
+              type: 'tool_result',
+              tool_use_id: m.tool_call_id,
+              content: m.content
+            }]
+          };
+        }
+        if (m.tool_calls) {
+          return {
+            role: 'assistant',
+            content: [
+              { type: 'text', text: m.content || '' },
+              ...m.tool_calls.map((tc: any) => ({
+                type: 'tool_use',
+                id: tc.id,
+                name: tc.function.name,
+                input: JSON.parse(tc.function.arguments)
+              }))
+            ]
+          };
+        }
+        return {
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: m.content
+        };
+      });
       
+      const anthropicTools = tools.map(t => ({
+        name: t.function.name,
+        description: t.function.description,
+        input_schema: t.function.parameters
+      }));
+
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -1580,10 +1923,8 @@ class EnhancedProviderCascade {
           max_tokens: 4000,
           temperature: 0.7,
           system: systemPrompt,
-          messages: [{
-            role: 'user',
-            content: lastMessage.content
-          }]
+          messages: chatMessages,
+          tools: anthropicTools.length > 0 ? anthropicTools : undefined
         }),
         signal: controller.signal
       });
@@ -1602,8 +1943,35 @@ class EnhancedProviderCascade {
       }
       
       const data = await response.json();
-      const text = data.content?.[0]?.text || '';
+      const content = data.content || [];
+      let text = '';
+      const toolCalls: any[] = [];
+
+      for (const item of content) {
+        if (item.type === 'text') {
+          text += item.text;
+        } else if (item.type === 'tool_use') {
+          toolCalls.push({
+            id: item.id,
+            type: 'function',
+            function: {
+              name: item.name,
+              arguments: JSON.stringify(item.input)
+            }
+          });
+        }
+      }
       
+      if (toolCalls.length > 0) {
+        return {
+          success: true,
+          tool_calls: toolCalls,
+          content: text,
+          provider: 'anthropic',
+          model: 'claude-3-haiku-20240307'
+        };
+      }
+
       return {
         success: true,
         content: text,
@@ -1624,6 +1992,13 @@ class EnhancedProviderCascade {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.kimi.timeoutMs);
       
+      // Inject tool calling mandate into system message
+      const enhancedMessages = messages.map(m => 
+        m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+      );
+
+      const forceTools = needsDataRetrieval(messages);
+
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -1634,9 +2009,13 @@ class EnhancedProviderCascade {
         },
         body: JSON.stringify({
           model: 'moonshotai/kimi-k2',
-          messages,
+          messages: enhancedMessages,
           temperature: 0.7,
-          max_tokens: 4000
+          max_tokens: 4000,
+          ...(tools.length > 0 && { 
+            tools, 
+            tool_choice: forceTools ? 'required' : 'auto' 
+          })
         }),
         signal: controller.signal
       });
@@ -1665,9 +2044,34 @@ class EnhancedProviderCascade {
         };
       }
       
+      const content = message.content || '';
+      const toolCalls = message.tool_calls || [];
+
+      // Fallback: Parse tool_code blocks if no native tool calls
+      if (toolCalls.length === 0 && content.includes('```tool_code')) {
+        const parsedTools = parseToolCodeBlocks(content);
+        if (parsedTools) toolCalls.push(...parsedTools);
+      }
+
+      // Fallback: Parse conversational intent
+      if (toolCalls.length === 0) {
+        const parsedTools = parseConversationalToolIntent(content);
+        if (parsedTools) toolCalls.push(...parsedTools);
+      }
+      
+      if (toolCalls.length > 0) {
+        return {
+          success: true,
+          tool_calls: toolCalls,
+          content: content,
+          provider: 'kimi',
+          model: 'moonshotai/kimi-k2'
+        };
+      }
+
       return {
         success: true,
-        content: message.content || '',
+        content: content,
         provider: 'kimi',
         model: 'moonshotai/kimi-k2'
       };
@@ -2568,95 +2972,92 @@ async function handleToolCallingLoop(
 }> {
   let currentMessages = [...messages];
   let iterations = 0;
-  let toolsExecuted: Array<any> = [];
+  let allToolsExecuted: Array<any> = [];
+  let currentCascadeResult = cascadeResult;
   
-  // If we have tool calls, execute them
-  if (cascadeResult.tool_calls && cascadeResult.tool_calls.length > 0) {
-    console.log(`🔄 [${executiveName}] Starting tool calling loop with ${cascadeResult.tool_calls.length} tool(s)`);
-    
-    const { content: toolContent, toolsExecuted: executedTools } = await handleToolChain(
-      supabase,
-      cascadeResult.tool_calls,
-      executiveName,
-      userQuery,
-      useCache
-    );
-    
-    toolsExecuted = executedTools;
-    
-    // Add the assistant's tool call message
-    currentMessages.push({
-      role: 'assistant',
-      content: null,
-      tool_calls: cascadeResult.tool_calls
-    });
-    
-    // Add tool results as tool messages
-    for (let i = 0; i < cascadeResult.tool_calls.length; i++) {
-      const toolCall = cascadeResult.tool_calls[i];
-      const toolResult = toolsExecuted[i];
+  while (iterations < MAX_TOOL_ITERATIONS) {
+    // If we have tool calls, execute them
+    if (currentCascadeResult.tool_calls && currentCascadeResult.tool_calls.length > 0) {
+      console.log(`🔄 [${executiveName}] Iteration ${iterations + 1}: Executing ${currentCascadeResult.tool_calls.length} tool(s)`);
       
-      currentMessages.push({
-        role: 'tool',
-        tool_call_id: toolCall.id,
-        content: JSON.stringify(toolResult.result || { error: toolResult.error })
-      });
-    }
-    
-    // Get final response with tool results
-    const finalCascadeResult = await cascade.callWithCascade(
-      currentMessages,
-      ELIZA_TOOLS,
-      cascadeResult.provider,
-      1
-    );
-    
-    iterations = 1;
-    
-    if (finalCascadeResult.success && finalCascadeResult.content) {
+      const { content: toolContent, toolsExecuted: executedTools } = await handleToolChain(
+        supabase,
+        currentCascadeResult.tool_calls,
+        executiveName,
+        userQuery,
+        useCache
+      );
+      
+      allToolsExecuted.push(...executedTools);
+      
+      // Add the assistant's tool call message
       currentMessages.push({
         role: 'assistant',
-        content: finalCascadeResult.content
+        content: currentCascadeResult.content || null,
+        tool_calls: currentCascadeResult.tool_calls
       });
       
-      return {
-        content: finalCascadeResult.content,
-        toolsExecuted,
-        finalMessages: currentMessages,
-        iterations
-      };
+      // Add tool results as tool messages
+      for (let i = 0; i < currentCascadeResult.tool_calls.length; i++) {
+        const toolCall = currentCascadeResult.tool_calls[i];
+        const toolResult = executedTools[i];
+        
+        currentMessages.push({
+          role: 'tool',
+          tool_call_id: toolCall.id,
+          name: toolCall.function.name,
+          content: JSON.stringify(toolResult.result || { error: toolResult.error })
+        });
+      }
+      
+      // Get next response with tool results
+      currentCascadeResult = await cascade.callWithCascade(
+        currentMessages,
+        ELIZA_TOOLS,
+        currentCascadeResult.provider,
+        1
+      );
+      
+      iterations++;
+      
+      if (!currentCascadeResult.success) {
+        console.warn(`⚠️ [${executiveName}] Cascade failed during tool loop iteration ${iterations}`);
+        break;
+      }
     } else {
-      // Fallback to tool results if final response fails
-      return {
-        content: toolContent,
-        toolsExecuted,
-        finalMessages: currentMessages,
-        iterations
-      };
+      // No more tool calls, we're done
+      break;
     }
   }
   
-  // No tool calls, just return the content
-  if (cascadeResult.content) {
+  // Final synthesis
+  let finalContent = currentCascadeResult.content || '';
+  
+  // Remove any tool_code blocks from final response
+  if (finalContent.includes('```tool_code')) {
+    finalContent = finalContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
+  }
+  
+  if (finalContent) {
     currentMessages.push({
       role: 'assistant',
-      content: cascadeResult.content
+      content: finalContent
     });
     
     return {
-      content: cascadeResult.content,
-      toolsExecuted: [],
+      content: finalContent,
+      toolsExecuted: allToolsExecuted,
       finalMessages: currentMessages,
-      iterations: 0
+      iterations
     };
   }
   
   // Fallback if no content
   return {
-    content: 'I apologize, but I was unable to generate a response. Please try again.',
-    toolsExecuted: [],
+    content: currentCascadeResult.content || 'I apologize, but I was unable to generate a response. Please try again.',
+    toolsExecuted: allToolsExecuted,
     finalMessages: currentMessages,
-    iterations: 0
+    iterations
   };
 }
 
@@ -2750,8 +3151,14 @@ serve(async (req) => {
     const tools = useTools ? await loadToolsFromSchema(supabase) : [];
     console.log(`📋 Loaded ${tools.length} tools for execution`);
     
+    // Retrieve memory contexts if session_id is provided
+    const memoryContexts = session_id ? await retrieveMemoryContexts(supabase, session_id) : [];
+    const memoryPrompt = memoryContexts.length > 0 
+      ? `\n\nRECALLED MEMORY CONTEXTS:\n${memoryContexts.map(m => `[${m.type}] ${m.content}`).join('\n')}`
+      : '';
+
     const aiMessages = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: systemPrompt + memoryPrompt },
       ...conversationHistory.slice(-5),
       ...messages
     ];
