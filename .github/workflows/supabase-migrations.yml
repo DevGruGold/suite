@@ -1,51 +1,55 @@
-name: Supabase Migrations Sync
+name: Supabase Full Deploy
 
 on:
   push:
     branches: [main]
     paths:
-      - 'supabase/migrations/**'
-      - 'supabase/config.toml'
+      - 'supabase/**' # Triggers on ANY change within the supabase/ directory
   workflow_dispatch:
 
 jobs:
-  sync-migrations:
+  deploy:
     runs-on: ubuntu-latest
     
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Fetches full history for better change detection
       
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v1
         with:
           version: latest
       
-      - name: Link to Supabase project
+      - name: Link to Supabase Project
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
           supabase link --project-ref vawouugtzwmejxqkeqqj
-        continue-on-error: true
       
-      - name: Pull remote migrations (if needed)
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-        run: |
-          echo "Checking for remote migrations..."
-          supabase db pull --dry-run || echo "No remote changes to pull"
-        continue-on-error: true
-      
-      - name: Push local migrations to remote
+      - name: Deploy Database Migrations
+        if: contains(github.event.head_commit.message, 'migration') || contains(github.event.head_commit.modified, 'supabase/migrations/')
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
           SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          echo "Pushing migrations to remote..."
-          supabase db push --dry-run || echo "Migrations already in sync"
-        continue-on-error: true
+          echo "Deploying database migrations..."
+          supabase db push
       
-      - name: Summary
+      - name: Discover and Deploy All Edge Functions
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          echo "✅ Migration sync check complete"
-          echo "Note: Supabase preview will handle migration sync automatically"
+          echo "Discovering Edge Functions..."
+          
+          # Navigate to functions directory
+          cd supabase/functions 2>/dev/null || { echo "No functions directory found"; exit 0; }
+          
+          # Find all function directories (each should have an index.ts)
+          for func_dir in */; do
+            if [ -f "${func_dir}index.ts" ] || [ -f "${func_dir}index.js" ]; then
+              func_name="${func_dir%/}"
+              echo "🚀 Deploying function: $func_name"
+              supabase functions deploy "$func_name" --project-ref vawouugtzwmejxqkeqqj
+            fi
+          done
