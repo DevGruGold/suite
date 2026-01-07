@@ -183,6 +183,66 @@ export function TreasuryStats() {
 
   return (
     <div className="space-y-6">
+      {/* MobileMonero $1M Lock - MOVED TO TOP */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Lock className="h-5 w-5 text-yellow-500" />
+            MobileMonero $1M Lock
+          </CardTitle>
+          <CardDescription>
+            First million dollars of XMR earned by global MobileMonero workers is permanently locked
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Lock Progress</span>
+              <span className="font-semibold">
+                {treasuryData ? `${treasuryData.lock_progress.toFixed(2)}%` : '0%'}
+              </span>
+            </div>
+            <Progress 
+              value={treasuryData?.lock_progress || 0} 
+              className="h-3"
+            />
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">
+                {treasuryData ? formatCurrency(treasuryData.locked_value_usd) : '$0.00'}
+              </span>
+              <span className="text-muted-foreground">
+                {formatCurrency(LOCK_TARGET_USD)}
+              </span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Locked XMR</p>
+              <p className="text-lg font-bold text-yellow-600">
+                {treasuryData ? formatXMR(treasuryData.locked_xmr) : '0.000000 XMR'}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {treasuryData ? formatCurrency(treasuryData.locked_value_usd) : '$0.00'}
+              </p>
+            </div>
+
+            <div className="space-y-1">
+              <p className="text-sm text-muted-foreground">Remaining to Lock</p>
+              <p className="text-lg font-bold">
+                {treasuryData 
+                  ? formatCurrency(LOCK_TARGET_USD - treasuryData.locked_value_usd)
+                  : formatCurrency(LOCK_TARGET_USD)
+                }
+              </p>
+              <p className="text-xs text-muted-foreground">
+                Until permanent lock
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* Main Treasury Overview */}
       <Card>
         <CardHeader>
@@ -245,66 +305,6 @@ export function TreasuryStats() {
               </div>
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* MobileMonero $1M Lock */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Lock className="h-5 w-5 text-yellow-500" />
-            MobileMonero $1M Lock
-          </CardTitle>
-          <CardDescription>
-            First million dollars of XMR earned by global MobileMonero workers is permanently locked
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Lock Progress</span>
-              <span className="font-semibold">
-                {treasuryData ? `${treasuryData.lock_progress.toFixed(2)}%` : '0%'}
-              </span>
-            </div>
-            <Progress 
-              value={treasuryData?.lock_progress || 0} 
-              className="h-3"
-            />
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">
-                {treasuryData ? formatCurrency(treasuryData.locked_value_usd) : '$0.00'}
-              </span>
-              <span className="text-muted-foreground">
-                {formatCurrency(LOCK_TARGET_USD)}
-              </span>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4 border-t">
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Locked XMR</p>
-              <p className="text-lg font-bold text-yellow-600">
-                {treasuryData ? formatXMR(treasuryData.locked_xmr) : '0.000000 XMR'}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                {treasuryData ? formatCurrency(treasuryData.locked_value_usd) : '$0.00'}
-              </p>
-            </div>
-
-            <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Remaining to Lock</p>
-              <p className="text-lg font-bold">
-                {treasuryData 
-                  ? formatCurrency(LOCK_TARGET_USD - treasuryData.locked_value_usd)
-                  : formatCurrency(LOCK_TARGET_USD)
-                }
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Until permanent lock
-              </p>
-            </div>
-          </div>
         </CardContent>
       </Card>
 

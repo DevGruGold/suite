@@ -60,6 +60,9 @@ const Earn = () => {
           {/* Treasury Tab - NOW WITH REAL STATS */}
           <TabsContent value="treasury">
             <div className="grid gap-6 md:grid-cols-2">
+              {/* REPLACED STATIC TREASURY STATS WITH REAL COMPONENT */}
+              <TreasuryStats />
+
               <Card className="border-border bg-card">
                 <CardHeader>
                   <CardTitle className="text-foreground">Purchase Crypto</CardTitle>
@@ -80,9 +83,6 @@ const Earn = () => {
                   </div>
                 </CardContent>
               </Card>
-
-              {/* REPLACED STATIC TREASURY STATS WITH REAL COMPONENT */}
-              <TreasuryStats />
             </div>
           </TabsContent>
 
