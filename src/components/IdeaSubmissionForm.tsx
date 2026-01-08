@@ -46,7 +46,10 @@ export const IdeaSubmissionForm = () => {
           status: 'submitted'
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
 
       toast({
         title: "Idea Submitted! 🎉",
@@ -62,7 +65,7 @@ export const IdeaSubmissionForm = () => {
       console.error('Error submitting idea:', error);
       toast({
         title: "Submission Failed",
-        description: error.message,
+        description: error.message || "An unexpected error occurred. Please try again.",
         variant: "destructive"
       });
     } finally {
