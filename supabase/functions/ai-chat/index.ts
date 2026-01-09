@@ -1,10 +1,9 @@
-// working ai-chat WITH tool calling.txt
+// Production-ready ai-chat WITH REAL DATABASE WIRING
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from "npm:@supabase/supabase-js@2.46.2";
 
 // ========== ENVIRONMENT CONFIGURATION ==========
-const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
+const SUPABASE_URL = Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') || 'https://vawouugtzwmejxqkeqqj.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
 // API Keys
@@ -28,34 +27,32 @@ const CONVERSATION_HISTORY_LIMIT = parseInt(Deno.env.get('CONVERSATION_HISTORY_L
 const MEMORY_SUMMARY_INTERVAL = parseInt(Deno.env.get('MEMORY_SUMMARY_INTERVAL') || '5');
 const MAX_TOOL_RESULTS_MEMORY = parseInt(Deno.env.get('MAX_TOOL_RESULTS_MEMORY') || '20');
 
-// Web Browsing Configuration
-const PLAYWRIGHT_BROWSE_URL = Deno.env.get('PLAYWRIGHT_BROWSE_URL') || 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/playwright-browse';
+// Initialize Supabase client with proper configuration
+const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+  auth: { persistSession: false, autoRefreshToken: false }
+});
 
 // ========== DATABASE SCHEMA ==========
 const DATABASE_CONFIG = {
   tables: {
-    agents: 'agents',
-    tasks: 'tasks',
-    executive_feedback: 'executive_feedback',
-    function_usage_logs: 'function_usage_logs',
-    knowledge_base: 'knowledge_entities',
-    workflow_templates: 'workflow_templates',
-    service_api_keys: 'service_api_keys',
-    user_profiles: 'user_profiles',
-    vsco_jobs: 'vsco_jobs',
-    vsco_contacts: 'vsco_contacts',
-    corporate_licenses: 'corporate_license_applications',
     ai_tools: 'ai_tools',
+    agents: 'agents',
+    superduper_agents: 'superduper_agents',
+    edge_function_logs: 'edge_function_logs',
     conversation_memory: 'conversation_memory',
     memory_contexts: 'memory_contexts',
+    tasks: 'tasks',
+    knowledge_entities: 'knowledge_entities',
+    workflow_templates: 'workflow_templates',
+    executive_feedback: 'executive_feedback',
+    function_usage_logs: 'function_usage_logs',
     eliza_activity_log: 'eliza_activity_log'
   },
   
   agentStatuses: ['IDLE', 'BUSY', 'ARCHIVED', 'ERROR', 'OFFLINE'] as const,
   taskStatuses: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'] as const,
   taskStages: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'] as const,
-  taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const,
-  apiKeyTiers: ['free', 'basic', 'pro', 'enterprise'] as const
+  taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const
 };
 
 // ========== AI PROVIDER CONFIGURATION ==========
@@ -155,7 +152,7 @@ const TOOL_CALLING_MANDATE = `
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
 
@@ -175,7 +172,480 @@ const TOOL_CALLING_MANDATE = `
 - Always use the full URL including https:// prefix
 - DO NOT say "I cannot browse the web" - YOU CAN via Playwright Browser
 - Supported actions: 'navigate' (default), 'extract', 'json'
+
+🔍 FUNCTION DISCOVERY (MANDATORY):
+- When user asks about available edge functions or capabilities → IMMEDIATELY call search_edge_functions({mode: 'full_registry'})
+- NEVER list functions from memory - ALWAYS query the database via this tool
+- Use query/category filters to find specific functions
 `;
+
+// ========== UTILITY FUNCTIONS FOR REAL PRODUCTION ==========
+function summarizeArray(arr: any[], max = 8) {
+  return Array.isArray(arr) ? arr.slice(0, max) : arr;
+}
+
+async function logFunctionUsage(entry: any) {
+  try {
+    await supabase.from(DATABASE_CONFIG.tables.function_usage_logs).insert(entry);
+  } catch (_) {
+    // Silent fail for logging
+  }
+}
+
+async function logActivity(entry: any) {
+  try {
+    await supabase.from(DATABASE_CONFIG.tables.eliza_activity_log).insert(entry);
+  } catch (_) {
+    // Silent fail for logging
+  }
+}
+
+// ========== REAL DATABASE TOOL EXECUTION FUNCTIONS ==========
+async function getSystemStatus(): Promise<any> {
+  try {
+    // Query all tables for counts
+    const [agents, tasks, knowledge, edgeLogs] = await Promise.all([
+      supabase.from(DATABASE_CONFIG.tables.agents).select('id', { count: 'exact', head: true }),
+      supabase.from(DATABASE_CONFIG.tables.tasks).select('id', { count: 'exact', head: true }),
+      supabase.from(DATABASE_CONFIG.tables.knowledge_entities).select('id', { count: 'exact', head: true }),
+      supabase.from(DATABASE_CONFIG.tables.edge_function_logs).select('id', { count: 'exact', head: true }).gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+    ]);
+
+    // Get recent activity
+    const { data: recentActivity } = await supabase
+      .from(DATABASE_CONFIG.tables.eliza_activity_log)
+      .select('activity_type, status')
+      .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString())
+      .limit(10);
+
+    // Optional enrichment from system-status edge function
+    let systemStatusData = {};
+    try {
+      const { data, error } = await supabase.functions.invoke('system-status', {
+        body: { action: 'summary' }
+      });
+      if (!error && data) systemStatusData = data;
+    } catch (_) {
+      // System status enrichment is optional
+    }
+
+    return {
+      success: true,
+      database_counts: {
+        agents: agents.count || 0,
+        tasks: tasks.count || 0,
+        knowledge_entities: knowledge.count || 0,
+        recent_edge_logs: edgeLogs.count || 0
+      },
+      recent_activity: recentActivity || [],
+      ...systemStatusData,
+      timestamp: new Date().toISOString(),
+      last_updated: new Date().toISOString()
+    };
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to get system status',
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
+async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
+  try {
+    const { data, error } = await supabase.functions.invoke(name, { body: payload });
+    if (error) throw new Error(error.message);
+    return data;
+  } catch (error: any) {
+    throw new Error(`Edge function '${name}' failed: ${error.message}`);
+  }
+}
+
+async function executeRealToolCall(
+  name: string, 
+  args: string,
+  executiveName: string,
+  sessionId: string,
+  timestamp: number = Date.now()
+): Promise<any> {
+  const startTime = performance.now();
+  let success = false;
+  let result: any = null;
+  let error_message: string | null = null;
+
+  try {
+    const parsedArgs = args ? JSON.parse(args) : {};
+
+    // ===== REAL DATABASE TOOL WIRING =====
+    if (name === 'browse_web') {
+      const url = parsedArgs.url;
+      if (!url) throw new Error('Missing url');
+      
+      // Auto-normalize URLs
+      let normalizedUrl = url;
+      if (!url.startsWith('http')) {
+        normalizedUrl = `https://${url}`;
+      }
+      
+      result = await invokeEdgeFunction('playwright-browse', {
+        url: normalizedUrl,
+        action: parsedArgs.action || 'navigate',
+        timeout: parsedArgs.timeout || 30000,
+        headers: parsedArgs.headers,
+        method: parsedArgs.method || 'GET',
+        body: parsedArgs.body
+      });
+      
+    } else if (name === 'get_mining_stats') {
+      result = await invokeEdgeFunction('ecosystem-monitor', { 
+        action: 'get_mining_stats' 
+      });
+      
+    } else if (name === 'get_ecosystem_metrics') {
+      result = await invokeEdgeFunction('ecosystem-monitor', { 
+        action: 'ecosystem_metrics' 
+      });
+      
+    } else if (name === 'get_system_status') {
+      result = await getSystemStatus();
+      
+    } else if (name === 'vertex_generate_image') {
+      const { prompt } = parsedArgs;
+      if (!prompt) throw new Error('Missing prompt');
+      result = await invokeEdgeFunction('vertex-ai-chat', { 
+        action: 'generate_image', 
+        prompt 
+      });
+      
+    } else if (name === 'vertex_generate_video') {
+      const { prompt, duration_seconds = 5 } = parsedArgs;
+      if (!prompt) throw new Error('Missing prompt');
+      result = await invokeEdgeFunction('vertex-ai-chat', { 
+        action: 'generate_video', 
+        prompt, 
+        duration_seconds 
+      });
+      
+    } else if (name === 'vertex_check_video_status') {
+      const { operation_name } = parsedArgs;
+      if (!operation_name) throw new Error('Missing operation_name');
+      result = await invokeEdgeFunction('vertex-ai-chat', { 
+        action: 'check_video_status', 
+        operation_name 
+      });
+      
+    } else if (name === 'invoke_edge_function') {
+      const { function_name, payload } = parsedArgs;
+      if (!function_name) throw new Error('Missing function_name');
+      result = await invokeEdgeFunction(function_name, payload ?? {});
+      
+    } else if (name === 'search_edge_functions') {
+      const { query, category, mode } = parsedArgs;
+      
+      if (mode === 'full_registry') {
+        // Get all active tools from database
+        const { data, error } = await supabase
+          .from(DATABASE_CONFIG.tables.ai_tools)
+          .select('name, description, category, is_active, parameters')
+          .eq('is_active', true)
+          .order('name');
+        
+        if (error) throw error;
+        
+        // Group by category
+        const grouped = (data || []).reduce((acc: any, tool) => {
+          const cat = tool.category || 'uncategorized';
+          if (!acc[cat]) acc[cat] = [];
+          acc[cat].push(tool);
+          return acc;
+        }, {});
+        
+        result = { 
+          success: true, 
+          functions: data,
+          grouped_by_category: grouped,
+          total: data?.length || 0
+        };
+      } else {
+        let dbQuery = supabase
+          .from(DATABASE_CONFIG.tables.ai_tools)
+          .select('name, description, category, is_active, parameters')
+          .eq('is_active', true);
+        
+        if (query) {
+          dbQuery = dbQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
+        }
+        
+        if (category) {
+          dbQuery = dbQuery.eq('category', category);
+        }
+        
+        const { data, error } = await dbQuery.order('name').limit(100);
+        if (error) throw error;
+        result = { success: true, functions: data, total: data?.length || 0 };
+      }
+      
+    } else if (name === 'list_available_functions') {
+      const { category } = parsedArgs;
+      let query = supabase
+        .from(DATABASE_CONFIG.tables.ai_tools)
+        .select('name, description, category, is_active, parameters')
+        .eq('is_active', true)
+        .order('name');
+      
+      if (category) {
+        query = query.eq('category', category);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      result = { success: true, functions: data, total: data?.length || 0 };
+      
+    } else if (name === 'get_edge_function_logs') {
+      const { function_name, limit = 50 } = parsedArgs;
+      let query = supabase
+        .from(DATABASE_CONFIG.tables.edge_function_logs)
+        .select('function_name, level, event_type, event_message, timestamp, execution_time_ms, status_code, request_id')
+        .order('timestamp', { ascending: false })
+        .limit(Math.min(limit, 200));
+      
+      if (function_name) {
+        query = query.eq('function_name', function_name);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      result = { success: true, logs: data, total: data?.length || 0 };
+      
+    } else if (name === 'list_agents') {
+      // Get both regular and superduper agents
+      const [agentsResult, superduperResult] = await Promise.all([
+        supabase
+          .from(DATABASE_CONFIG.tables.agents)
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(20),
+        supabase
+          .from(DATABASE_CONFIG.tables.superduper_agents)
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(10)
+      ]);
+      
+      if (agentsResult.error) throw agentsResult.error;
+      
+      result = { 
+        success: true, 
+        agents: agentsResult.data || [],
+        superduper_agents: superduperResult.data || [],
+        total_agents: (agentsResult.data?.length || 0) + (superduperResult.data?.length || 0)
+      };
+      
+    } else if (name === 'assign_task') {
+      const taskData = {
+        title: parsedArgs.title,
+        description: parsedArgs.description,
+        category: parsedArgs.category || 'other',
+        assignee_agent_id: parsedArgs.assignee_agent_id,
+        priority: parsedArgs.priority || 5,
+        status: 'PENDING',
+        stage: 'DISCUSS',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data: task, error } = await supabase
+        .from(DATABASE_CONFIG.tables.tasks)
+        .insert(taskData)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      result = { success: true, task: task };
+      
+    } else if (name === 'list_tasks') {
+      const { data: tasks, error } = await supabase
+        .from(DATABASE_CONFIG.tables.tasks)
+        .select('*')
+        .order('created_at', { ascending: false })
+        .limit(20);
+      
+      if (error) throw error;
+      result = { success: true, tasks: tasks || [] };
+      
+    } else if (name === 'search_knowledge') {
+      const search_term = parsedArgs.search_term || parsedArgs.query;
+      const limit = parsedArgs.limit || 10;
+      
+      if (!search_term) {
+        // Get recent knowledge entries
+        const { data: knowledge, error } = await supabase
+          .from(DATABASE_CONFIG.tables.knowledge_entities)
+          .select('*')
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        
+        if (error) throw error;
+        result = { success: true, knowledge: knowledge || [] };
+      } else {
+        const { data: knowledge, error } = await supabase
+          .from(DATABASE_CONFIG.tables.knowledge_entities)
+          .select('*')
+          .or(`name.ilike.%${search_term}%,description.ilike.%${search_term}%,content.ilike.%${search_term}%`)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        
+        if (error) throw error;
+        result = { success: true, knowledge: knowledge || [] };
+      }
+      
+    } else if (name === 'store_knowledge') {
+      const knowledgeData = {
+        name: parsedArgs.name,
+        description: parsedArgs.description,
+        content: parsedArgs.content || '',
+        type: parsedArgs.type || 'general',
+        tags: parsedArgs.tags || [],
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      };
+      
+      const { data: knowledge, error } = await supabase
+        .from(DATABASE_CONFIG.tables.knowledge_entities)
+        .insert(knowledgeData)
+        .select()
+        .single();
+      
+      if (error) throw error;
+      result = { success: true, knowledge: knowledge };
+      
+    } else if (name === 'recall_entity') {
+      const { name, entity_id } = parsedArgs;
+      
+      let query = supabase
+        .from(DATABASE_CONFIG.tables.knowledge_entities)
+        .select('*');
+      
+      if (entity_id) {
+        query = query.eq('id', entity_id);
+      } else if (name) {
+        query = query.ilike('name', `%${name}%`);
+      } else {
+        throw new Error('Either name or entity_id is required');
+      }
+      
+      const { data: entity, error } = await query.single();
+      if (error) throw error;
+      result = { success: true, entity: entity };
+      
+    } else if (name === 'createGitHubIssue') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'create_issue',
+        data: {
+          title: parsedArgs.title,
+          body: parsedArgs.body,
+          labels: parsedArgs.labels || []
+        }
+      });
+      
+    } else if (name === 'listGitHubIssues') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'list_issues',
+        data: {
+          state: parsedArgs.state || 'open',
+          limit: parsedArgs.limit || 10
+        }
+      });
+      
+    } else if (name === 'execute_workflow_template') {
+      const { template_name, params } = parsedArgs;
+      
+      // First, get the template from database
+      const { data: template, error: templateError } = await supabase
+        .from(DATABASE_CONFIG.tables.workflow_templates)
+        .select('*')
+        .eq('name', template_name)
+        .single();
+      
+      if (templateError) throw templateError;
+      
+      // Execute via edge function
+      result = await invokeEdgeFunction('workflow-template-manager', {
+        action: 'execute_template',
+        template_name,
+        template_data: template,
+        params: params || {}
+      });
+      
+    } else if (name === 'google_gmail') {
+      result = await invokeEdgeFunction('google-gmail', parsedArgs);
+      
+    } else {
+      // Try to invoke as edge function
+      try {
+        result = await invokeEdgeFunction(name, { 
+          ...parsedArgs, 
+          session_id: sessionId, 
+          executive: executiveName 
+        });
+      } catch (invokeError: any) {
+        throw new Error(`Tool ${name} not available: ${invokeError.message}`);
+      }
+    }
+    
+    success = true;
+    return {
+      ...result,
+      execution_time_ms: Math.round(performance.now() - startTime),
+      tool_name: name,
+      timestamp
+    };
+    
+  } catch (error: any) {
+    error_message = error?.message || String(error);
+    return { 
+      success: false, 
+      error: error_message,
+      tool_name: name,
+      timestamp,
+      execution_time_ms: Math.round(performance.now() - startTime)
+    };
+  } finally {
+    const duration = Math.round(performance.now() - startTime);
+    
+    // Log to function usage logs
+    const logEntry = {
+      function_name: name,
+      executive_name: executiveName,
+      parameters: args ? JSON.parse(args) : {},
+      success,
+      execution_time_ms: duration,
+      result_summary: success ? 'Executed successfully' : null,
+      error_message,
+      session_id: sessionId,
+      created_at: new Date().toISOString()
+    };
+    
+    // Fire and forget logging
+    logFunctionUsage(logEntry);
+    
+    // Activity log
+    logActivity({
+      activity_type: 'tool_execution',
+      title: `🔧 ${executiveName} executed ${name}`,
+      description: `${executiveName} executed tool: ${name}`,
+      status: success ? 'completed' : 'error',
+      metadata: { 
+        name, 
+        args: args ? JSON.parse(args) : {}, 
+        result: success ? 'ok' : error_message,
+        duration_ms: duration
+      },
+      function_name: name,
+      created_at: new Date().toISOString()
+    });
+  }
+}
 
 // ========== ENHANCED CONTENT ANALYSIS FUNCTIONS ==========
 function extractKeyInsights(content: string, domain: string): string {
@@ -236,27 +706,6 @@ function extractKeyInsights(content: string, domain: string): string {
   insights += `**Page Elements**: ${hasForms ? 'Forms, ' : ''}${hasImages} images, ${hasLinks} links\n`;
   
   return insights;
-}
-
-function extractTopicTrends(content: string): string {
-  // Simple topic extraction from content
-  const topics = [
-    'AI', 'programming', 'technology', 'security', 'privacy', 
-    'business', 'startup', 'crypto', 'blockchain', 'web3',
-    'development', 'software', 'hardware', 'cloud', 'data',
-    'research', 'science', 'health', 'finance', 'education'
-  ];
-  
-  const contentLower = content.toLowerCase();
-  const foundTopics = topics.filter(topic => 
-    contentLower.includes(topic.toLowerCase())
-  ).slice(0, 5);
-  
-  if (foundTopics.length > 0) {
-    return `Trending topics: ${foundTopics.join(', ')}`;
-  }
-  
-  return 'Various technology and startup news';
 }
 
 function analyzeUserIntent(query: string, conversationContext: any[] = []): {
@@ -484,18 +933,20 @@ function convertToolsToGeminiFormat(tools: any[]): any[] {
 }
 
 // Retrieve memory contexts from database (server-side fallback)
-async function retrieveMemoryContexts(supabase: any, sessionKey: string): Promise<any[]> {
+async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   if (!sessionKey) return [];
   
   console.log('📚 Retrieving memory contexts server-side...');
   try {
-    const { data: serverMemories } = await supabase
+    const { data: serverMemories, error } = await supabase
       .from(DATABASE_CONFIG.tables.memory_contexts)
       .select('context_type, content, importance_score')
       .or(`user_id.eq.${sessionKey},session_id.eq.${sessionKey}`)
       .order('importance_score', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(30);
+    
+    if (error) throw error;
     
     if (serverMemories && serverMemories.length > 0) {
       console.log(`✅ Retrieved ${serverMemories.length} memory contexts`);
@@ -505,78 +956,10 @@ async function retrieveMemoryContexts(supabase: any, sessionKey: string): Promis
         score: m.importance_score
       }));
     }
-  } catch (error) {
+  } catch (error: any) {
     console.warn('⚠️ Failed to retrieve memory contexts:', error.message);
   }
   return [];
-}
-
-// Enhanced browse_web function that uses the playwright-browse edge function
-async function browseWeb(url: string, options: {
-  action?: 'navigate' | 'extract' | 'json';
-  timeout?: number;
-  headers?: Record<string, string>;
-  method?: 'GET' | 'POST';
-  body?: string;
-} = {}): Promise<any> {
-  console.log(`🌐 Browsing: ${url}`);
-  
-  try {
-    const requestBody = {
-      url,
-      action: options.action || 'navigate',
-      timeout: options.timeout || 30000,
-      headers: options.headers,
-      method: options.method || 'GET',
-      body: options.body
-    };
-    
-    const response = await fetch(PLAYWRIGHT_BROWSE_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`
-      },
-      body: JSON.stringify(requestBody)
-    });
-    
-    if (!response.ok) {
-      throw new Error(`Browse failed with status: ${response.status}`);
-    }
-    
-    const result = await response.json();
-    
-    if (result.success) {
-      console.log(`✅ Successfully browsed ${url} (${result.status}) in ${result.metadata.loadTime}ms`);
-      
-      // Clean up content for logging
-      const cleanContent = result.content.length > 200 ? 
-        result.content.substring(0, 200) + '...' : result.content;
-      console.log(`📄 Content preview: ${cleanContent}`);
-      
-      return result;
-    } else {
-      console.error(`❌ Browse failed: ${result.error}`);
-      return {
-        success: false,
-        error: result.error,
-        url,
-        status: result.status || 500,
-        content: '',
-        metadata: result.metadata || { loadTime: 0 }
-      };
-    }
-  } catch (error) {
-    console.error(`💥 Browse error:`, error);
-    return {
-      success: false,
-      error: error.message || 'Unknown error during browse',
-      url,
-      status: 500,
-      content: '',
-      metadata: { loadTime: 0 }
-    };
-  }
 }
 
 // Fallback to DeepSeek API with full tool support
@@ -595,6 +978,9 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
   console.log(`📊 DeepSeek - Data retrieval needed: ${forceTools}`);
   
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -609,7 +995,10 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
         temperature: 0.7,
         max_tokens: 8000,
       }),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (response.ok) {
       const data = await response.json();
@@ -625,7 +1014,7 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
       console.warn('⚠️ DeepSeek API error:', response.status, errorText);
     }
   } catch (error) {
-    console.warn('⚠️ DeepSeek fallback failed:', error.message);
+    console.warn('⚠️ DeepSeek fallback failed:', error);
   }
   return null;
 }
@@ -645,6 +1034,9 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   console.log(`📊 Kimi K2 - Data retrieval needed: ${forceTools}`);
   
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 45000);
+    
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -661,7 +1053,10 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
         temperature: 0.9,
         max_tokens: 8000,
       }),
+      signal: controller.signal
     });
+    
+    clearTimeout(timeoutId);
     
     if (response.ok) {
       const data = await response.json();
@@ -677,7 +1072,7 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
       console.warn('⚠️ Kimi K2 API error:', response.status, errorText);
     }
   } catch (error) {
-    console.warn('⚠️ Kimi K2 fallback failed:', error.message);
+    console.warn('⚠️ Kimi K2 fallback failed:', error);
   }
   return null;
 }
@@ -694,6 +1089,9 @@ async function callGeminiFallback(
   console.log('🔄 Trying Gemini fallback with native tool calling...');
   
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
+    
     const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
     const lastUserMessage = messages.filter(m => m.role === 'user').pop();
     const userText = lastUserMessage?.content || 'Help me';
@@ -729,9 +1127,12 @@ async function callGeminiFallback(
           contents: [{ parts }],
           tools: geminiTools,
           generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
-        })
+        }),
+        signal: controller.signal
       }
     );
+    
+    clearTimeout(timeoutId);
     
     if (response.ok) {
       const data = await response.json();
@@ -767,7 +1168,7 @@ async function callGeminiFallback(
       console.warn('⚠️ Gemini API error:', response.status, errorText);
     }
   } catch (error) {
-    console.warn('⚠️ Gemini fallback failed:', error.message);
+    console.warn('⚠️ Gemini fallback failed:', error);
   }
   return null;
 }
@@ -783,9 +1184,9 @@ async function synthesizeToolResults(
   
   // Group tool results by type
   const webResults = toolResults.filter(r => r.tool === 'browse_web');
-  const functionResults = toolResults.filter(r => r.tool === 'search_edge_functions');
+  const functionResults = toolResults.filter(r => r.tool === 'search_edge_functions' || r.tool === 'list_available_functions');
   const systemResults = toolResults.filter(r => ['get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
-  const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
+  const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'list_available_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
   
   // Analyze user intent
   const intent = analyzeUserIntent(userQuery, conversationContext);
@@ -806,17 +1207,34 @@ async function synthesizeToolResults(
     response += `### 🌐 **Web Analysis**\n`;
     
     webResults.forEach((result, index) => {
-      const { url, status, content, metadata, error } = result.result;
-      const domain = url ? new URL(url).hostname : 'unknown';
+      const { url, status, content, metadata, error, title, summary } = result.result;
+      let domain = 'unknown';
+      try {
+        domain = url ? new URL(url).hostname : 'unknown';
+      } catch (e) {
+        domain = url || 'unknown';
+      }
       
       response += `\n**${index + 1}. ${domain}** `;
       
-      if (status === 200) {
-        response += `✅ *Accessible* (loaded in ${metadata?.loadTime || 'unknown'}ms)\n`;
+      if (status === 200 || result.result.success) {
+        response += `✅ *Accessible* (${metadata?.loadTime ? `loaded in ${metadata.loadTime}ms` : 'loaded successfully'})\n`;
         
-        // Extract intelligent insights
-        const insights = extractKeyInsights(content, domain);
-        response += insights;
+        if (title) {
+          response += `**Title**: ${title}\n`;
+        }
+        
+        if (summary) {
+          response += `**Summary**: ${summary}\n`;
+        }
+        
+        // Extract intelligent insights from content if available
+        if (content) {
+          const insights = extractKeyInsights(content, domain);
+          if (insights) {
+            response += insights;
+          }
+        }
         
         // Add domain-specific commentary
         if (domain.includes('ycombinator.com')) {
@@ -825,6 +1243,17 @@ async function synthesizeToolResults(
           response += `   💬 *Social Platform*: Reddit hosts community discussions. Specific subreddits would show targeted content.\n`;
         } else if (domain.includes('google.com')) {
           response += `   🔍 *Search Engine*: Ready for queries. I can help you search for specific information if needed.\n`;
+        }
+        
+        // Show extracted links if available
+        if (result.result.links && result.result.links.length > 0) {
+          response += `   **Extracted Links (${Math.min(result.result.links.length, 12)}):**\n`;
+          result.result.links.slice(0, 5).forEach((link: string, i: number) => {
+            response += `      ${i + 1}. ${link}\n`;
+          });
+          if (result.result.links.length > 5) {
+            response += `      ... and ${result.result.links.length - 5} more links\n`;
+          }
         }
       } else if (status === 403) {
         response += `⚠️ *Blocked/Access Denied* (HTTP ${status})\n`;
@@ -844,33 +1273,53 @@ async function synthesizeToolResults(
     response += `### 🔧 **Edge Functions**\n`;
     
     functionResults.forEach((result, index) => {
-      const { functions = [], success, error } = result.result;
+      const { functions = [], success, error, grouped_by_category, total } = result.result;
+      const funcs = functions || [];
       
-      if (success && functions && functions.length > 0) {
-        // Group by category
-        const byCategory = functions.reduce((acc: any, func: any) => {
-          const category = func.category || 'uncategorized';
-          if (!acc[category]) acc[category] = [];
-          acc[category].push(func);
-          return acc;
-        }, {});
-        
-        const totalFunctions = functions.length;
-        response += `\nFound **${totalFunctions}** available edge functions:\n`;
-        
-        Object.entries(byCategory).forEach(([category, funcs]: [string, any]) => {
-          response += `\n**${category.toUpperCase()}** (${funcs.length}):\n`;
-          funcs.slice(0, 3).forEach((f: any) => {
-            const shortDesc = f.description?.length > 60 ? f.description.substring(0, 60) + '...' : f.description || 'No description';
-            response += `   • **${f.name}**: ${shortDesc}\n`;
+      if (success && funcs && funcs.length > 0) {
+        // Use grouped results if available
+        if (grouped_by_category) {
+          const totalFunctions = total || funcs.length;
+          response += `\nFound **${totalFunctions}** available edge functions:\n`;
+          
+          Object.entries(grouped_by_category).forEach(([category, funcsInCategory]: [string, any]) => {
+            response += `\n**${category.toUpperCase()}** (${funcsInCategory.length}):\n`;
+            funcsInCategory.slice(0, 3).forEach((f: any) => {
+              const shortDesc = f.description?.length > 60 ? f.description.substring(0, 60) + '...' : f.description || 'No description';
+              const activeStatus = f.is_active === false ? ' (inactive)' : '';
+              response += `   • **${f.name}**${activeStatus}: ${shortDesc}\n`;
+            });
+            if (funcsInCategory.length > 3) {
+              response += `   ... plus ${funcsInCategory.length - 3} more ${category} functions\n`;
+            }
           });
-          if (funcs.length > 3) {
-            response += `   ... plus ${funcs.length - 3} more ${category} functions\n`;
-          }
-        });
+        } else {
+          // Fallback to manual grouping
+          const byCategory = funcs.reduce((acc: any, func: any) => {
+            const category = func.category || 'uncategorized';
+            if (!acc[category]) acc[category] = [];
+            acc[category].push(func);
+            return acc;
+          }, {});
+          
+          const totalFunctions = funcs.length;
+          response += `\nFound **${totalFunctions}** available edge functions:\n`;
+          
+          Object.entries(byCategory).forEach(([category, funcsInCategory]: [string, any]) => {
+            response += `\n**${category.toUpperCase()}** (${funcsInCategory.length}):\n`;
+            funcsInCategory.slice(0, 3).forEach((f: any) => {
+              const shortDesc = f.description?.length > 60 ? f.description.substring(0, 60) + '...' : f.description || 'No description';
+              const activeStatus = f.is_active === false ? ' (inactive)' : '';
+              response += `   • **${f.name}**${activeStatus}: ${shortDesc}\n`;
+            });
+            if (funcsInCategory.length > 3) {
+              response += `   ... plus ${funcsInCategory.length - 3} more ${category} functions\n`;
+            }
+          });
+        }
         
         // Add insights
-        const billingFunctions = functions.filter((f: any) => 
+        const billingFunctions = funcs.filter((f: any) => 
           f.name.includes('billing') || f.name.includes('financial') || 
           f.description?.toLowerCase().includes('billing') ||
           f.description?.toLowerCase().includes('financial')
@@ -900,12 +1349,16 @@ async function synthesizeToolResults(
       
       if (success) {
         Object.entries(data).forEach(([key, value]) => {
-          if (key !== 'success' && key !== 'timestamp' && value !== undefined) {
-            if (typeof value === 'object') {
+          if (key !== 'success' && key !== 'timestamp' && key !== 'last_updated' && value !== undefined) {
+            if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
               response += `\n**${key.replace(/_/g, ' ').toUpperCase()}**:\n`;
               Object.entries(value).forEach(([subKey, subValue]) => {
-                response += `   • ${subKey}: ${subValue}\n`;
+                if (subValue !== undefined) {
+                  response += `   • ${subKey}: ${subValue}\n`;
+                }
               });
+            } else if (Array.isArray(value)) {
+              response += `   • **${key.replace(/_/g, ' ')}**: ${value.length} items\n`;
             } else {
               response += `   • **${key.replace(/_/g, ' ')}**: ${value}\n`;
             }
@@ -986,823 +1439,12 @@ async function synthesizeToolResults(
   return response;
 }
 
-// Execute tool calls and handle iteration
-async function executeToolsWithIteration(
-  supabase: any,
-  executeToolCall: Function,
-  initialResponse: any,
-  aiMessages: any[],
-  executiveName: string,
-  sessionId: string,
-  callAIFunction: Function,
-  tools: any[],
-  maxIterations: number = 5
-): Promise<{ content: string; toolsExecuted: number }> {
-  let response = initialResponse;
-  let totalToolsExecuted = 0;
-  let iteration = 0;
-  let conversationMessages = [...aiMessages];
-  
-  while (iteration < maxIterations) {
-    // Check for tool calls (native or text-embedded)
-    let toolCalls = response.tool_calls || [];
-    
-    // Also check for text-embedded tool calls
-    if ((!toolCalls || toolCalls.length === 0) && response.content) {
-      const textToolCalls = parseToolCodeBlocks(response.content) || 
-                           parseDeepSeekToolCalls(response.content) ||
-                           parseConversationalToolIntent(response.content);
-      if (textToolCalls && textToolCalls.length > 0) {
-        toolCalls = textToolCalls;
-      }
-    }
-    
-    if (!toolCalls || toolCalls.length === 0) break;
-    
-    console.log(`🔧 [${executiveName}] Iteration ${iteration + 1}: Executing ${toolCalls.length} tool(s)`);
-    
-    const toolResults = [];
-    for (const toolCall of toolCalls) {
-      const result = await executeToolCall(supabase, toolCall, executiveName, sessionId);
-      toolResults.push({
-        tool_call_id: toolCall.id,
-        role: 'tool',
-        content: JSON.stringify(result)
-      });
-      totalToolsExecuted++;
-    }
-    
-    // Add assistant message with tool calls and tool results
-    conversationMessages.push({
-      role: 'assistant',
-      content: response.content || '',
-      tool_calls: toolCalls
-    });
-    conversationMessages.push(...toolResults);
-    
-    // Call AI again with tool results
-    response = await callAIFunction(conversationMessages, tools);
-    if (!response) break;
-    
-    iteration++;
-  }
-  
-  // Final synthesis if we have tool results
-  let finalContent = response?.content || '';
-  
-  // Remove any tool_code blocks from final response
-  if (finalContent.includes('```tool_code')) {
-    finalContent = finalContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
-  }
-  
-  return { content: finalContent, toolsExecuted: totalToolsExecuted };
-}
-
-// Log tool execution to activity log
-async function logToolExecution(
-  supabase: any, 
-  toolName: string, 
-  args: any, 
-  status: 'started' | 'completed' | 'failed', 
-  result?: any, 
-  error?: any
-) {
-  try {
-    const metadata: any = {
-      tool_name: toolName,
-      arguments: args,
-      timestamp: new Date().toISOString(),
-      execution_status: status
-    };
-    
-    if (result) metadata.result = result;
-    if (error) metadata.error = error;
-    
-    await supabase.from(DATABASE_CONFIG.tables.eliza_activity_log).insert({
-      activity_type: 'tool_execution',
-      title: `🔧 ${toolName}`,
-      description: `Executive executed: ${toolName}`,
-      metadata,
-      status: status === 'completed' ? 'completed' : (status === 'failed' ? 'failed' : 'in_progress')
-    });
-    
-    console.log(`📊 Logged tool execution: ${toolName} (${status})`);
-  } catch (logError) {
-    console.error('Failed to log tool execution:', logError);
-  }
-}
-
-// ========== TOOL DEFINITIONS ==========
-const ELIZA_TOOLS = [
-  {
-    type: 'function',
-    function: {
-      name: 'create_task_from_template',
-      description: '📋 Create a new task using a predefined template',
-      parameters: {
-        type: 'object',
-        properties: {
-          template_name: { 
-            type: 'string', 
-            enum: ['code_review', 'bug_fix', 'feature_implementation', 'infrastructure_check', 'deployment_pipeline', 'research_analysis', 'proposal_evaluation', 'operations_task', 'system_health_investigation', 'mining_optimization', 'device_integration']
-          },
-          title: { type: 'string', description: 'Task title' },
-          description: { type: 'string', description: 'Optional: Override template description' },
-          priority: { type: 'number', description: 'Optional: Override default priority (1-10)' },
-          auto_assign: { type: 'boolean', description: 'Automatically assign to best-matching agent' }
-        },
-        required: ['template_name', 'title']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'smart_assign_task',
-      description: '🤖 Intelligently assign a task to the best-matching agent',
-      parameters: {
-        type: 'object',
-        properties: {
-          task_id: { type: 'string', description: 'UUID of the task to assign' },
-          prefer_agent_id: { type: 'string', description: 'Optional: Prefer this agent' },
-          min_skill_match: { type: 'number', description: 'Minimum skill overlap required (0-1)' }
-        },
-        required: ['task_id']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'advance_task_stage',
-      description: '⏩ Manually advance a task to the next pipeline stage',
-      parameters: {
-        type: 'object',
-        properties: {
-          task_id: { type: 'string', description: 'UUID of the task to advance' },
-          target_stage: { 
-            type: 'string', 
-            enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE']
-          }
-        },
-        required: ['task_id']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'list_agents',
-      description: 'Get all existing agents and their IDs/status',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'spawn_agent',
-      description: 'Create a new specialized agent',
-      parameters: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Agent name' },
-          role: { type: 'string', description: 'Agent role/specialization' },
-          skills: { type: 'array', items: { type: 'string' }, description: 'Array of agent skills' }
-        },
-        required: ['name', 'role', 'skills']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'update_agent_status',
-      description: 'Change agent status',
-      parameters: {
-        type: 'object',
-        properties: {
-          agent_id: { type: 'string', description: 'Agent ID' },
-          status: { 
-            type: 'string', 
-            enum: ['IDLE', 'BUSY', 'ARCHIVED', 'ERROR', 'OFFLINE']
-          }
-        },
-        required: ['agent_id', 'status']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'assign_task',
-      description: 'Create and assign a task to an agent',
-      parameters: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Task title' },
-          description: { type: 'string', description: 'Task description' },
-          repo: { type: 'string', description: 'Repository name' },
-          category: { 
-            type: 'string', 
-            enum: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other']
-          },
-          assignee_agent_id: { type: 'string', description: 'Agent ID to assign to' },
-          priority: { type: 'number', description: 'Priority 1-10' }
-        },
-        required: ['title', 'description', 'assignee_agent_id']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'update_task_status',
-      description: 'Update task status and stage',
-      parameters: {
-        type: 'object',
-        properties: {
-          task_id: { type: 'string', description: 'Task ID' },
-          status: { 
-            type: 'string', 
-            enum: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED']
-          },
-          stage: { 
-            type: 'string', 
-            enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE']
-          }
-        },
-        required: ['task_id', 'status']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'list_tasks',
-      description: 'Get all tasks and their status/assignments',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'mark_task_complete',
-      description: 'Mark a task as completed',
-      parameters: {
-        type: 'object',
-        properties: {
-          task_id: { type: 'string', description: 'Task ID to mark complete' },
-          completion_notes: { type: 'string', description: 'Notes about task completion' }
-        },
-        required: ['task_id']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'createGitHubIssue',
-      description: 'Create a GitHub issue',
-      parameters: {
-        type: 'object',
-        properties: {
-          title: { type: 'string', description: 'Issue title' },
-          body: { type: 'string', description: 'Issue description' },
-          labels: { type: 'array', items: { type: 'string' }, description: 'Optional labels' }
-        },
-        required: ['title', 'body']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'listGitHubIssues',
-      description: 'List recent GitHub issues',
-      parameters: {
-        type: 'object',
-        properties: {
-          state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
-          limit: { type: 'number', description: 'Number of issues to return', default: 10 }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'searchGitHubCode',
-      description: 'Search for code across the repository',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search query' }
-        },
-        required: ['query']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'getGitHubFileContent',
-      description: 'Get the content of a file from GitHub',
-      parameters: {
-        type: 'object',
-        properties: {
-          path: { type: 'string', description: 'File path in repository' }
-        },
-        required: ['path']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'store_knowledge',
-      description: 'Store a new knowledge entity in the knowledge base',
-      parameters: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Name of the knowledge entity' },
-          type: { 
-            type: 'string', 
-            enum: ['concept', 'tool', 'skill', 'person', 'project', 'fact', 'general']
-          },
-          description: { type: 'string', description: 'Detailed description' }
-        },
-        required: ['name', 'description']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'search_knowledge',
-      description: 'Search the knowledge base to recall stored entities',
-      parameters: {
-        type: 'object',
-        properties: {
-          search_term: { type: 'string', description: 'Entity name or text to search for' },
-          limit: { type: 'number', description: 'Maximum results to return', default: 10 }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'check_system_status',
-      description: 'Get comprehensive ecosystem status report',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_my_feedback',
-      description: 'Retrieve feedback about recent tool calls and learning points',
-      parameters: {
-        type: 'object',
-        properties: {
-          limit: { type: 'number', description: 'Number of feedback items', default: 10 },
-          unacknowledged_only: { type: 'boolean', description: 'Only show unread feedback', default: true }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'execute_python',
-      description: 'Execute Python code for calculations and data processing',
-      parameters: {
-        type: 'object',
-        properties: {
-          code: { type: 'string', description: 'Python code for computation' },
-          purpose: { type: 'string', description: 'Brief description of what this code does' }
-        },
-        required: ['code', 'purpose']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'invoke_edge_function',
-      description: 'Call ANY Supabase edge function dynamically',
-      parameters: {
-        type: 'object',
-        properties: {
-          function_name: { type: 'string', description: 'Name of the edge function to invoke' },
-          payload: { type: 'object', description: 'JSON payload to send to the function' }
-        },
-        required: ['function_name', 'payload']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'list_available_functions',
-      description: 'List all available edge functions',
-      parameters: {
-        type: 'object',
-        properties: {
-          category: { type: 'string', description: 'Optional: Filter by category' }
-        }
-      }
-    }
-  },
-  // ===== PATCH: Canonical search_edge_functions tool =====
-  {
-    type: 'function',
-    function: {
-      name: 'search_edge_functions',
-      description: 'Search or enumerate all available Supabase edge functions using the canonical registry',
-      parameters: {
-        type: 'object',
-        properties: {
-          query: { type: 'string', description: 'Search term' },
-          category: { type: 'string' },
-          mode: {
-            type: 'string',
-            enum: ['search', 'full_registry'],
-            description: 'Use full_registry to list all available functions'
-          }
-        }
-      }
-    }
-  },
-  // ===== END PATCH =====
-  // ===== Browse Web Tool =====
-  {
-    type: 'function',
-    function: {
-      name: 'browse_web',
-      description: '🌐 Browse and fetch content from any URL using the Playwright browser. Use this for viewing websites, checking webpages, or extracting web content.',
-      parameters: {
-        type: 'object',
-        properties: {
-          url: { 
-            type: 'string', 
-            description: 'Full URL to browse (must include https:// or http:// prefix)',
-            pattern: '^https?://.+'
-          },
-          action: { 
-            type: 'string', 
-            enum: ['navigate', 'extract', 'json'],
-            description: 'Action type: navigate for HTML, extract for structured data, json for JSON endpoints',
-            default: 'navigate'
-          },
-          timeout: { 
-            type: 'number', 
-            description: 'Timeout in milliseconds (default: 30000)',
-            default: 30000,
-            minimum: 1000,
-            maximum: 120000
-          },
-          headers: { 
-            type: 'object', 
-            description: 'Custom HTTP headers to send with the request'
-          },
-          method: { 
-            type: 'string', 
-            enum: ['GET', 'POST'],
-            description: 'HTTP method to use',
-            default: 'GET'
-          },
-          body: { 
-            type: 'string', 
-            description: 'Request body for POST requests'
-          }
-        },
-        required: ['url']
-      }
-    }
-  },
-  // ===== END Browse Web Tool =====
-  {
-    type: 'function',
-    function: {
-      name: 'vsco_manage_jobs',
-      description: 'Manage leads and jobs in VSCO Workspace',
-      parameters: {
-        type: 'object',
-        properties: {
-          action: { 
-            type: 'string', 
-            enum: ['list_jobs', 'get_job', 'create_job', 'update_job', 'close_job']
-          },
-          job_id: { type: 'string', description: 'VSCO job ID' },
-          name: { type: 'string', description: 'Job/lead name' },
-          stage: { type: 'string', enum: ['lead', 'booked', 'fulfillment', 'completed'] }
-        },
-        required: ['action']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'generate_service_api_key',
-      description: 'Generate a new API key for a monetized service',
-      parameters: {
-        type: 'object',
-        properties: {
-          service_name: { type: 'string', description: 'Service to monetize' },
-          tier: { type: 'string', enum: ['free', 'basic', 'pro', 'enterprise'] },
-          owner_email: { type: 'string', format: 'email', description: 'Customer email' }
-        },
-        required: ['service_name', 'tier', 'owner_email']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'validate_service_api_key',
-      description: 'Check if an API key is valid and active',
-      parameters: {
-        type: 'object',
-        properties: {
-          api_key: { type: 'string', description: 'API key to validate' }
-        },
-        required: ['api_key']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'qualify_lead',
-      description: 'Score a potential customer based on conversation signals',
-      parameters: {
-        type: 'object',
-        properties: {
-          session_key: { type: 'string', description: 'Current conversation session key' },
-          user_signals: {
-            type: 'object',
-            properties: {
-              mentioned_budget: { type: 'boolean' },
-              has_urgent_need: { type: 'boolean' },
-              company_mentioned: { type: 'string' },
-              use_case_complexity: { type: 'string', enum: ['simple', 'moderate', 'complex'] }
-            }
-          }
-        },
-        required: ['session_key']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'execute_workflow_template',
-      description: 'Execute a pre-built workflow template by name',
-      parameters: {
-        type: 'object',
-        properties: {
-          template_name: { 
-            type: 'string', 
-            enum: [
-              'acquire_new_customer', 'upsell_existing_customer', 'churn_prevention',
-              'code_quality_audit', 'auto_fix_codebase',
-              'modify_edge_function', 'performance_optimization_cycle'
-            ]
-          },
-          params: { type: 'object', description: 'Template-specific parameters' }
-        },
-        required: ['template_name']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'vertex_ai_generate',
-      description: 'Generate content using Vertex AI',
-      parameters: {
-        type: 'object',
-        properties: {
-          prompt: { type: 'string', description: 'Text prompt for generation' },
-          model: { type: 'string', enum: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'] }
-        },
-        required: ['prompt']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'google_gmail',
-      description: 'Send and manage emails via xmrtsolutions@gmail.com',
-      parameters: {
-        type: 'object',
-        properties: {
-          action: { type: 'string', enum: ['send_email', 'list_emails', 'get_email', 'create_draft'] },
-          to: { type: 'string', description: 'Recipient email address' },
-          subject: { type: 'string', description: 'Email subject line' },
-          body: { type: 'string', description: 'Email body content' }
-        },
-        required: ['action']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'start_license_application',
-      description: 'Start a new corporate license application through conversation',
-      parameters: {
-        type: 'object',
-        properties: {
-          session_key: { type: 'string', description: 'Current conversation session key' },
-          company_name: { type: 'string', description: 'Company name' }
-        },
-        required: ['session_key', 'company_name']
-      }
-    }
-  },
-  // Enhanced tool definitions from helper functions
-  {
-    type: 'function',
-    function: {
-      name: 'get_mining_stats',
-      description: 'Get current mining statistics including hashrate, workers, earnings',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_system_status',
-      description: 'Get comprehensive system status including agents, tasks, edge functions',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_ecosystem_metrics',
-      description: 'Get ecosystem metrics including proposals, governance, user activity',
-      parameters: {
-        type: 'object',
-        properties: {}
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'recall_entity',
-      description: 'Recall specific knowledge entity by name or ID',
-      parameters: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Entity name to recall' },
-          entity_id: { type: 'string', description: 'Entity ID to recall' }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'vertex_generate_image',
-      description: 'Generate an image using Vertex AI',
-      parameters: {
-        type: 'object',
-        properties: {
-          prompt: { type: 'string', description: 'Detailed image description' }
-        },
-        required: ['prompt']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'vertex_generate_video',
-      description: 'Generate a video using Vertex AI',
-      parameters: {
-        type: 'object',
-        properties: {
-          prompt: { type: 'string', description: 'Video description' },
-          duration_seconds: { type: 'number', description: 'Duration in seconds', default: 5 }
-        },
-        required: ['prompt']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'vertex_check_video_status',
-      description: 'Check status of video generation operation',
-      parameters: {
-        type: 'object',
-        properties: {
-          operation_name: { type: 'string', description: 'Operation name from video generation' }
-        },
-        required: ['operation_name']
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_edge_function_logs',
-      description: 'Get logs from edge function executions',
-      parameters: {
-        type: 'object',
-        properties: {
-          function_name: { type: 'string', description: 'Edge function name' },
-          limit: { type: 'number', description: 'Number of logs to return', default: 10 }
-        }
-      }
-    }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'get_agent_status',
-      description: 'Get detailed status of a specific agent',
-      parameters: {
-        type: 'object',
-        properties: {
-          agent_id: { type: 'string', description: 'Agent ID' }
-        },
-        required: ['agent_id']
-      }
-    }
-  }
-];
-
-// ========== UTILITY FUNCTIONS ==========
-function truncateString(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.substring(0, maxLength) + '...';
-}
-
-function formatObjectForDisplay(obj: any, indentLevel: number = 0): string {
-  if (!obj || typeof obj !== 'object') return String(obj);
-  
-  const indent = '  '.repeat(indentLevel);
-  let result = '';
-  
-  const entries = Object.entries(obj);
-  entries.forEach(([key, value]) => {
-    if (value === null || value === undefined) {
-      result += `${indent}• ${key}: ${value}\n`;
-    } else if (Array.isArray(value)) {
-      result += `${indent}• ${key}: Array(${value.length})\n`;
-      if (indentLevel < 2 && value.length > 0) {
-        value.slice(0, 5).forEach((item, idx) => {
-          if (typeof item === 'object') {
-            result += `${indent}  [${idx}]: ${Object.keys(item).slice(0, 2).join(', ')}...\n`;
-          } else {
-            result += `${indent}  [${idx}]: ${item}\n`;
-          }
-        });
-        if (value.length > 5) {
-          result += `${indent}  ... and ${value.length - 5} more items\n`;
-        }
-      }
-    } else if (typeof value === 'object') {
-      result += `${indent}• ${key}:\n`;
-      result += formatObjectForDisplay(value, indentLevel + 1);
-    } else {
-      result += `${indent}• ${key}: ${value}\n`;
-    }
-  });
-  
-  return result;
-}
-
 // ========== ENHANCED CONVERSATION MEMORY MANAGER ==========
 class EnhancedConversationManager {
-  private supabase: any;
   private sessionId: string;
   private toolResultsMemory: any[] = [];
   
-  constructor(supabase: any, sessionId: string) {
-    this.supabase = supabase;
+  constructor(sessionId: string) {
     this.sessionId = sessionId;
   }
   
@@ -1814,7 +1456,7 @@ class EnhancedConversationManager {
     try {
       console.log(`📚 Loading conversation history for session: ${this.sessionId}`);
       
-      const { data, error } = await this.supabase
+      const { data, error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .select('messages, summary, tool_results, metadata')
         .eq('session_id', this.sessionId)
@@ -1844,7 +1486,7 @@ class EnhancedConversationManager {
         conversationSummary: record.summary || 'Existing conversation'
       };
       
-    } catch (error) {
+    } catch (error: any) {
       console.warn('⚠️ Failed to load conversation history:', error);
       return { messages: [], toolResults: [], conversationSummary: 'Error loading history' };
     }
@@ -1880,7 +1522,7 @@ class EnhancedConversationManager {
       };
       
       // Upsert the conversation
-      const { error } = await this.supabase
+      const { error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .upsert(conversationRecord, {
           onConflict: 'session_id'
@@ -1893,12 +1535,12 @@ class EnhancedConversationManager {
       }
       
       // Cleanup old sessions (keep last 100)
-      await this.supabase
+      await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .delete()
         .lt('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
         
-    } catch (error) {
+    } catch (error: any) {
       console.warn('⚠️ Failed to save conversation:', error);
     }
   }
@@ -1922,7 +1564,7 @@ class EnhancedConversationManager {
       return `Conversation with ${userMessages.length} user messages and ${assistantMessages.length} assistant responses. ` +
              `Executed ${toolResults.length} tools (${successfulTools.length} successful, ${failedTools.length} failed). ` +
              `Recent topics: ${mentionedTopics.join(', ') || 'general'}. ` +
-             `Last user query: "${truncateString(lastUserMessage, 80)}"`;
+             `Last user query: "${lastUserMessage.substring(0, 80)}${lastUserMessage.length > 80 ? '...' : ''}"`;
     } catch (error) {
       return `Conversation with ${messages.length} messages and ${toolResults.length} tool executions`;
     }
@@ -1934,6 +1576,7 @@ class EnhancedConversationManager {
   
   addToolResults(newResults: any[]): void {
     this.toolResultsMemory = [...this.toolResultsMemory, ...newResults].slice(-MAX_TOOL_RESULTS_MEMORY);
+    console.log(`🧠 Added ${newResults.length} tool results to memory, total: ${this.toolResultsMemory.length}`);
   }
   
   async generateMemoryContext(): Promise<string> {
@@ -1960,7 +1603,7 @@ class EnhancedConversationManager {
         if (tool.result.success) {
           // Generate detailed success summaries
           if (tool.name === 'browse_web' && tool.result.url) {
-            context += `   Browsed: ${tool.result.url} (${tool.result.status})\n`;
+            context += `   Browsed: ${tool.result.url} (${tool.result.status || '200'})\n`;
             if (tool.result.metadata) {
               context += `   Load time: ${tool.result.metadata.loadTime}ms, Content type: ${tool.result.metadata.contentType}\n`;
             }
@@ -1970,7 +1613,7 @@ class EnhancedConversationManager {
               context += `   Content preview: "${preview}"\n`;
             }
           }
-          else if (tool.name === 'list_available_functions' && tool.result.functions) {
+          else if (tool.name === 'search_edge_functions' && tool.result.functions) {
             const funcs = tool.result.functions;
             context += `   Returned ${funcs.length} available functions\n`;
             if (funcs.length > 0) {
@@ -1986,10 +1629,7 @@ class EnhancedConversationManager {
             context += `   Listed ${tool.result.tasks.length} tasks\n`;
           }
           else if (tool.result.content) {
-            context += `   Content generated: "${truncateString(tool.result.content, 100)}"\n`;
-          }
-          else if (tool.result.api_key) {
-            context += `   Generated API key: ${truncateString(tool.result.api_key, 20)}...\n`;
+            context += `   Content generated: "${tool.result.content.substring(0, 100)}${tool.result.content.length > 100 ? '...' : ''}"\n`;
           }
           else {
             context += `   Executed successfully\n`;
@@ -2012,7 +1652,7 @@ class EnhancedConversationManager {
     context += `• Success rate: ${toolResults.length > 0 ? Math.round((successful / toolResults.length) * 100) : 0}%\n\n`;
     
     context += `**IMPORTANT**: You MUST reference these previous tool calls when users ask about them. `;
-    context += `For example, if a user asks "what did you get from list_available_functions?", `;
+    context += `For example, if a user asks "what did you get from search_edge_functions?", `;
     context += `you should reference the exact results shown above.\n`;
     
     return context;
@@ -2027,6 +1667,107 @@ class EnhancedConversationManager {
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
     return `${Math.floor(diff / 86400000)} days ago`;
   }
+}
+
+// Execute tool calls and handle iteration
+async function executeToolsWithIteration(
+  initialResponse: any,
+  aiMessages: any[],
+  executiveName: string,
+  sessionId: string,
+  callAIFunction: Function,
+  tools: any[],
+  maxIterations: number = 5,
+  memoryManager?: EnhancedConversationManager
+): Promise<{ content: string; toolsExecuted: number }> {
+  let response = initialResponse;
+  let totalToolsExecuted = 0;
+  let iteration = 0;
+  let conversationMessages = [...aiMessages];
+  
+  while (iteration < maxIterations) {
+    // Check for tool calls (native or text-embedded)
+    let toolCalls = response.tool_calls || [];
+    
+    // Also check for text-embedded tool calls
+    if ((!toolCalls || toolCalls.length === 0) && response.content) {
+      const textToolCalls = parseToolCodeBlocks(response.content) || 
+                           parseDeepSeekToolCalls(response.content) ||
+                           parseConversationalToolIntent(response.content);
+      if (textToolCalls && textToolCalls.length > 0) {
+        toolCalls = textToolCalls;
+      }
+    }
+    
+    if (!toolCalls || toolCalls.length === 0) break;
+    
+    console.log(`🔧 [${executiveName}] Iteration ${iteration + 1}: Executing ${toolCalls.length} tool(s)`);
+    
+    const toolResults = [];
+    for (const toolCall of toolCalls) {
+      const result = await executeRealToolCall(
+        toolCall.function.name,
+        toolCall.function.arguments,
+        executiveName,
+        sessionId,
+        Date.now()
+      );
+      toolResults.push({
+        tool_call_id: toolCall.id,
+        role: 'tool',
+        name: toolCall.function.name,
+        content: JSON.stringify(result)
+      });
+      totalToolsExecuted++;
+    }
+    
+    // Format tool results for memory
+    const memoryFormatted = toolResults.map(tr => {
+      // tr.content is a JSON string; parse defensively
+      let parsed;
+      try { 
+        parsed = JSON.parse(tr.content); 
+      } catch { 
+        parsed = { success: false, error: 'invalid JSON from tool' }; 
+      }
+      return {
+        name: tr.name,
+        result: parsed,
+        timestamp: Date.now(),
+        toolCallId: tr.tool_call_id
+      };
+    });
+    
+    // Persist into memory manager so saveConversation can see them
+    if (memoryManager) {
+      memoryManager.addToolResults(memoryFormatted);
+    }
+    
+    // Add assistant message with tool calls and tool results
+    conversationMessages.push({
+      role: 'assistant',
+      content: response.content || '',
+      tool_calls: toolCalls
+    });
+    conversationMessages.push(...toolResults);
+    
+    // Call AI again with tool results
+    const newResponse = await callAIFunction(conversationMessages, tools);
+    if (!newResponse) break;
+    
+    response = newResponse;
+    iteration++;
+  }
+  
+  // Final synthesis if we have tool results
+  let finalContent = response?.content || '';
+  
+  // Remove any tool_code blocks from final response
+  if (finalContent.includes('```tool_code')) {
+    finalContent = finalContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
+  }
+  
+  return { content: finalContent, toolsExecuted: totalToolsExecuted };
 }
 
 // ========== ENHANCED PROVIDER CASCADING ==========
@@ -2062,7 +1803,7 @@ class EnhancedProviderCascade {
     
     // Cascade through enabled providers by priority
     const providers = Object.entries(AI_PROVIDERS_CONFIG)
-      .filter(([_, config]) => config.enabled)
+      .filter(([_, config]) => config.enabled && !config.fallbackOnly)
       .sort((a, b) => a[1].priority - b[1].priority)
       .map(([name]) => name);
     
@@ -2118,983 +1859,411 @@ class EnhancedProviderCascade {
       };
     }
     
-    switch (provider) {
-      case 'openai':
-        return await this.callOpenAI(messages, tools);
-      case 'gemini':
-        return await this.callGemini(messages, tools, images);
-      case 'deepseek':
-        return await this.callDeepSeek(messages, tools);
-      case 'anthropic':
-        return await this.callAnthropic(messages);
-      case 'kimi':
-        return await this.callKimi(messages, tools);
-      default:
-        return {
-          success: false,
-          provider,
-          error: `Unknown provider: ${provider}`
-        };
-    }
-  }
-  
-  private async callOpenAI(messages: any[], tools: any[]): Promise<CascadeResult> {
+    const startTime = Date.now();
+    
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.openai.timeoutMs);
+      const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
       
-      // Check if we should force tools
-      const forceTools = needsDataRetrieval(messages);
+      let result: CascadeResult;
       
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'gpt-4o-mini',
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 4000,
-          ...(tools.length > 0 && { 
-            tools: tools, 
-            tool_choice: forceTools ? 'required' : 'auto' 
-          })
-        }),
-        signal: controller.signal
-      });
+      switch (provider) {
+        case 'openai':
+          result = await this.callOpenAI(messages, tools, controller);
+          break;
+        case 'gemini':
+          result = await this.callGemini(messages, tools, images, controller);
+          break;
+        case 'deepseek':
+          result = await this.callDeepSeek(messages, tools, controller);
+          break;
+        case 'anthropic':
+          result = await this.callAnthropic(messages, controller);
+          break;
+        case 'kimi':
+          result = await this.callKimi(messages, tools, controller);
+          break;
+        default:
+          result = {
+            success: false,
+            provider,
+            error: `Unknown provider: ${provider}`
+          };
+      }
       
       clearTimeout(timeoutId);
       
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          success: false,
-          provider: 'openai',
-          error: `OpenAI API error: ${response.status} - ${truncateString(errorText, 200)}`
-        };
+      if (result.success) {
+        result.latency = Date.now() - startTime;
       }
       
-      const data = await response.json();
-      const message = data.choices?.[0]?.message;
+      return result;
       
-      if (message.tool_calls?.length > 0) {
-        return {
-          success: true,
-          tool_calls: message.tool_calls,
-          provider: 'openai',
-          model: 'gpt-4o-mini'
-        };
-      }
-      
+    } catch (error: any) {
+      return {
+        success: false,
+        provider,
+        error: error instanceof Error ? error.message : `${provider} request failed`
+      };
+    }
+  }
+  
+  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    // Check if we should force tools
+    const forceTools = needsDataRetrieval(messages);
+    
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENAI_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 4000,
+        ...(tools.length > 0 && { 
+          tools: tools, 
+          tool_choice: forceTools ? 'required' : 'auto' 
+        })
+      }),
+      signal: controller.signal
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'openai',
+        error: `OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
+    
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+    
+    if (message.tool_calls?.length > 0) {
       return {
         success: true,
-        content: message.content || '',
+        tool_calls: message.tool_calls,
         provider: 'openai',
         model: 'gpt-4o-mini'
       };
-    } catch (error) {
-      return {
-        success: false,
-        provider: 'openai',
-        error: error instanceof Error ? error.message : 'OpenAI request failed'
-      };
     }
+    
+    return {
+      success: true,
+      content: message.content || '',
+      provider: 'openai',
+      model: 'gpt-4o-mini'
+    };
   }
   
-  private async callGemini(messages: any[], tools: any[], images?: string[]): Promise<CascadeResult> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.gemini.timeoutMs);
-      
-      // Convert messages to Gemini format
-      const geminiMessages = [];
-      
-      for (const msg of messages) {
-        if (msg.role === 'system') {
-          geminiMessages.push({
-            role: 'user',
-            parts: [{ text: msg.content }]
-          });
-          geminiMessages.push({
-            role: 'model',
-            parts: [{ text: 'Understood. I will follow these instructions.' }]
-          });
-        } else if (msg.role === 'user') {
-          const parts: any[] = [{ text: msg.content }];
-          
-          // Add images if this is the last user message and we have images
-          if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0) {
-            for (const imageBase64 of images) {
-              const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-              if (matches) {
-                parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
-              }
+  private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
+    // Convert messages to Gemini format
+    const geminiMessages = [];
+    
+    for (const msg of messages) {
+      if (msg.role === 'system') {
+        geminiMessages.push({
+          role: 'user',
+          parts: [{ text: msg.content }]
+        });
+        geminiMessages.push({
+          role: 'model',
+          parts: [{ text: 'Understood. I will follow these instructions.' }]
+        });
+      } else if (msg.role === 'user') {
+        const parts: any[] = [{ text: msg.content }];
+        
+        // Add images if this is the last user message and we have images
+        if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0) {
+          for (const imageBase64 of images) {
+            const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+            if (matches) {
+              parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
             }
           }
-          
-          geminiMessages.push({
-            role: 'user',
-            parts: parts
-          });
-        } else if (msg.role === 'assistant') {
-          if (msg.tool_calls) {
-            // Handle tool call responses
-            for (const toolCall of msg.tool_calls) {
-              geminiMessages.push({
-                role: 'model',
-                parts: [{
-                  functionCall: {
-                    name: toolCall.function.name,
-                    args: typeof toolCall.function.arguments === 'string' 
-                      ? JSON.parse(toolCall.function.arguments) 
-                      : toolCall.function.arguments
-                  }
-                }]
-              });
-            }
-          } else if (msg.content) {
+        }
+        
+        geminiMessages.push({
+          role: 'user',
+          parts: parts
+        });
+      } else if (msg.role === 'assistant') {
+        if (msg.tool_calls) {
+          // Handle tool call responses
+          for (const toolCall of msg.tool_calls) {
             geminiMessages.push({
               role: 'model',
-              parts: [{ text: msg.content }]
+              parts: [{
+                functionCall: {
+                  name: toolCall.function.name,
+                  args: typeof toolCall.function.arguments === 'string' 
+                    ? JSON.parse(toolCall.function.arguments) 
+                    : toolCall.function.arguments
+                }
+              }]
             });
           }
-        } else if (msg.role === 'tool') {
+        } else if (msg.content) {
           geminiMessages.push({
-            role: 'user',
-            parts: [{
-              functionResponse: {
-                name: 'tool_result',
-                response: {
-                  content: msg.content
-                }
-              }
-            }]
+            role: 'model',
+            parts: [{ text: msg.content }]
           });
         }
+      } else if (msg.role === 'tool') {
+        geminiMessages.push({
+          role: 'user',
+          parts: [{
+            functionResponse: {
+              name: 'tool_result',
+              response: {
+                content: msg.content
+              }
+            }
+          }]
+        });
       }
-      
-      // Convert tools to Gemini format
-      const geminiTools = tools.length > 0 ? {
-        functionDeclarations: convertToolsToGeminiFormat(tools)
-      } : undefined;
-      
-      const requestBody: any = {
-        contents: geminiMessages,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 4000
-        }
+    }
+    
+    // Convert tools to Gemini format
+    const geminiTools = tools.length > 0 ? {
+      functionDeclarations: convertToolsToGeminiFormat(tools)
+    } : undefined;
+    
+    const requestBody: any = {
+      contents: geminiMessages,
+      generationConfig: {
+        temperature: 0.7,
+        maxOutputTokens: 4000
+      }
+    };
+    
+    if (geminiTools) {
+      requestBody.tools = [geminiTools];
+    }
+    
+    const response = await fetch(
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestBody),
+        signal: controller.signal
+      }
+    );
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'gemini',
+        error: `Gemini API error: ${response.status} - ${errorText.substring(0, 200)}`
       };
+    }
+    
+    const data = await response.json();
+    const candidate = data.candidates?.[0];
+    
+    if (!candidate || !candidate.content) {
+      return {
+        success: false,
+        provider: 'gemini',
+        error: 'No content in Gemini response'
+      };
+    }
+    
+    // Check for function call
+    const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
+    if (functionCallPart) {
+      const functionCall = functionCallPart.functionCall;
       
-      if (geminiTools) {
-        requestBody.tools = [geminiTools];
-      }
-      
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
+      const toolCalls = [{
+        id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        type: 'function',
+        function: {
+          name: functionCall.name,
+          arguments: JSON.stringify(functionCall.args)
         }
-      );
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          success: false,
-          provider: 'gemini',
-          error: `Gemini API error: ${response.status} - ${truncateString(errorText, 200)}`
-        };
-      }
-      
-      const data = await response.json();
-      const candidate = data.candidates?.[0];
-      
-      if (!candidate || !candidate.content) {
-        return {
-          success: false,
-          provider: 'gemini',
-          error: 'No content in Gemini response'
-        };
-      }
-      
-      // Check for function call
-      const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
-      if (functionCallPart) {
-        const functionCall = functionCallPart.functionCall;
-        
-        const toolCalls = [{
-          id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          type: 'function',
-          function: {
-            name: functionCall.name,
-            arguments: JSON.stringify(functionCall.args)
-          }
-        }];
-        
-        return {
-          success: true,
-          tool_calls: toolCalls,
-          provider: 'gemini',
-          model: 'gemini-2.0-flash-exp'
-        };
-      }
-      
-      // Regular text response
-      const text = candidate.content.parts
-        ?.map((part: any) => part.text || '')
-        .join('') || '';
+      }];
       
       return {
         success: true,
-        content: text,
+        tool_calls: toolCalls,
         provider: 'gemini',
         model: 'gemini-2.0-flash-exp'
       };
-    } catch (error) {
-      return {
-        success: false,
-        provider: 'gemini',
-        error: error instanceof Error ? error.message : 'Gemini request failed'
-      };
     }
+    
+    // Regular text response
+    const text = candidate.content.parts
+      ?.map((part: any) => part.text || '')
+      .join('') || '';
+    
+    return {
+      success: true,
+      content: text,
+      provider: 'gemini',
+      model: 'gemini-2.0-flash-exp'
+    };
   }
   
-  private async callDeepSeek(messages: any[], tools: any[]): Promise<CascadeResult> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.deepseek.timeoutMs);
-      
-      // Check if we should force tools
-      const forceTools = needsDataRetrieval(messages);
-      
-      const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: messages,
-          temperature: 0.7,
-          max_tokens: 4000,
-          ...(tools.length > 0 && { 
-            tools: tools, 
-            tool_choice: forceTools ? 'required' : 'auto' 
-          })
-        }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          success: false,
-          provider: 'deepseek',
-          error: `DeepSeek API error: ${response.status} - ${truncateString(errorText, 200)}`
-        };
-      }
-      
-      const data = await response.json();
-      const message = data.choices?.[0]?.message;
-      
-      if (message.tool_calls?.length > 0) {
-        return {
-          success: true,
-          tool_calls: message.tool_calls,
-          provider: 'deepseek',
-          model: 'deepseek-chat'
-        };
-      }
-      
+  private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    // Check if we should force tools
+    const forceTools = needsDataRetrieval(messages);
+    
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 4000,
+        ...(tools.length > 0 && { 
+          tools: tools, 
+          tool_choice: forceTools ? 'required' : 'auto' 
+        })
+      }),
+      signal: controller.signal
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'deepseek',
+        error: `DeepSeek API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
+    
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+    
+    if (message.tool_calls?.length > 0) {
       return {
         success: true,
-        content: message.content || '',
+        tool_calls: message.tool_calls,
         provider: 'deepseek',
         model: 'deepseek-chat'
       };
-    } catch (error) {
-      return {
-        success: false,
-        provider: 'deepseek',
-        error: error instanceof Error ? error.message : 'DeepSeek request failed'
-      };
     }
+    
+    return {
+      success: true,
+      content: message.content || '',
+      provider: 'deepseek',
+      model: 'deepseek-chat'
+    };
   }
   
-  private async callKimi(messages: any[], tools: any[]): Promise<CascadeResult> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.kimi.timeoutMs);
-      
-      // Check if we should force tools
-      const forceTools = needsDataRetrieval(messages);
-      
-      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-          'Content-Type': 'application/json',
-          'HTTP-Referer': 'https://xmrt.pro',
-          'X-Title': 'XMRT Eliza'
-        },
-        body: JSON.stringify({
-          model: 'moonshotai/kimi-k2',
-          messages: messages,
-          temperature: 0.9,
-          max_tokens: 4000,
-          ...(tools.length > 0 && { 
-            tools: tools, 
-            tool_choice: forceTools ? 'required' : 'auto' 
-          })
-        }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          success: false,
-          provider: 'kimi',
-          error: `Kimi API error: ${response.status} - ${truncateString(errorText, 200)}`
-        };
-      }
-      
-      const data = await response.json();
-      const message = data.choices?.[0]?.message;
-      
-      if (message.tool_calls?.length > 0) {
-        return {
-          success: true,
-          tool_calls: message.tool_calls,
-          provider: 'kimi',
-          model: 'moonshotai/kimi-k2'
-        };
-      }
-      
+  private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    // Check if we should force tools
+    const forceTools = needsDataRetrieval(messages);
+    
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://xmrt.pro',
+        'X-Title': 'XMRT Eliza'
+      },
+      body: JSON.stringify({
+        model: 'moonshotai/kimi-k2',
+        messages: messages,
+        temperature: 0.9,
+        max_tokens: 4000,
+        ...(tools.length > 0 && { 
+          tools: tools, 
+          tool_choice: forceTools ? 'required' : 'auto' 
+        })
+      }),
+      signal: controller.signal
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'kimi',
+        error: `Kimi API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
+    
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+    
+    if (message.tool_calls?.length > 0) {
       return {
         success: true,
-        content: message.content || '',
+        tool_calls: message.tool_calls,
         provider: 'kimi',
         model: 'moonshotai/kimi-k2'
       };
-    } catch (error) {
-      return {
-        success: false,
-        provider: 'kimi',
-        error: error instanceof Error ? error.message : 'Kimi request failed'
-      };
     }
-  }
-  
-  private async callAnthropic(messages: any[]): Promise<CascadeResult> {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), AI_PROVIDERS_CONFIG.anthropic.timeoutMs);
-      
-      const lastMessage = messages[messages.length - 1];
-      const systemMessages = messages.filter(m => m.role === 'system');
-      const systemPrompt = systemMessages.map(m => m.content).join('\n');
-      
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'x-api-key': ANTHROPIC_API_KEY,
-          'anthropic-version': '2023-06-01',
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
-          max_tokens: 4000,
-          temperature: 0.7,
-          system: systemPrompt,
-          messages: [{
-            role: 'user',
-            content: lastMessage.content
-          }]
-        }),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        return {
-          success: false,
-          provider: 'anthropic',
-          error: `Anthropic API error: ${response.status} - ${truncateString(errorText, 200)}`
-        };
-      }
-      
-      const data = await response.json();
-      const text = data.content?.[0]?.text || '';
-      
-      return {
-        success: true,
-        content: text,
-        provider: 'anthropic',
-        model: 'claude-3-haiku-20240307'
-      };
-    } catch (error) {
-      return {
-        success: false,
-        provider: 'anthropic',
-        error: error instanceof Error ? error.message : 'Anthropic request failed'
-      };
-    }
-  }
-}
-
-// ========== TOOL EXECUTOR ==========
-async function executeToolCall(
-  supabase: any,
-  toolCall: any,
-  executiveName: string,
-  sessionId: string,
-  timestamp: number = Date.now()
-): Promise<any> {
-  const startTime = Date.now();
-  const { name, arguments: args } = toolCall.function || toolCall;
-  
-  if (!name) {
-    return { 
-      success: false, 
-      error: 'Invalid tool call: missing function name',
-      timestamp
-    };
-  }
-  
-  let parsedArgs;
-  try {
-    parsedArgs = typeof args === 'string' ? JSON.parse(args) : args;
-  } catch (parseError) {
-    return { 
-      success: false, 
-      error: `Invalid JSON in arguments for ${name}`,
-      timestamp
-    };
-  }
-  
-  console.log(`🔧 [${executiveName}] Executing tool: ${name}`);
-  
-  // Log tool execution start
-  await logToolExecution(supabase, name, parsedArgs, 'started');
-  
-  try {
-    let result: any;
-    
-    // Schema validation for specific tools
-    if (name === 'update_agent_status') {
-      if (!DATABASE_CONFIG.agentStatuses.includes(parsedArgs.status)) {
-        throw new Error(`Invalid agent status: "${parsedArgs.status}". Must be one of: ${DATABASE_CONFIG.agentStatuses.join(', ')}`);
-      }
-    }
-    
-    if (name === 'update_task_status' || name === 'assign_task') {
-      if (parsedArgs.status && !DATABASE_CONFIG.taskStatuses.includes(parsedArgs.status)) {
-        throw new Error(`Invalid task status: "${parsedArgs.status}". Must be one of: ${DATABASE_CONFIG.taskStatuses.join(', ')}`);
-      }
-      if (parsedArgs.stage && !DATABASE_CONFIG.taskStages.includes(parsedArgs.stage)) {
-        throw new Error(`Invalid task stage: "${parsedArgs.stage}". Must be one of: ${DATABASE_CONFIG.taskStages.join(', ')}`);
-      }
-      if (parsedArgs.category && !DATABASE_CONFIG.taskCategories.includes(parsedArgs.category)) {
-        throw new Error(`Invalid task category: "${parsedArgs.category}". Must be one of: ${DATABASE_CONFIG.taskCategories.join(', ')}`);
-      }
-    }
-    
-    if (name === 'generate_service_api_key') {
-      if (!DATABASE_CONFIG.apiKeyTiers.includes(parsedArgs.tier)) {
-        throw new Error(`Invalid API tier: "${parsedArgs.tier}". Must be one of: ${DATABASE_CONFIG.apiKeyTiers.join(', ')}`);
-      }
-    }
-    
-    // Route to appropriate tool execution with enhanced tools
-    if (name === 'browse_web') {
-      // Validate URL
-      const url = parsedArgs.url;
-      if (!url || !url.startsWith('http')) {
-        throw new Error('URL must start with http:// or https://');
-      }
-      
-      console.log(`🌐 [${executiveName}] Browsing URL: ${url}`);
-      
-      // Call the playwright-browse edge function directly
-      result = await browseWeb(url, {
-        action: parsedArgs.action || 'navigate',
-        timeout: parsedArgs.timeout || 30000,
-        headers: parsedArgs.headers,
-        method: parsedArgs.method || 'GET',
-        body: parsedArgs.body
-      });
-      
-    } else if (name === 'get_mining_stats') {
-      // Simulate mining stats
-      result = {
-        success: true,
-        hashrate: '12.5 TH/s',
-        workers: 8,
-        active_miners: 5,
-        daily_earnings: '0.015 XMR',
-        pool_status: 'active',
-        timestamp: new Date().toISOString()
-      };
-      
-    } else if (name === 'get_system_status') {
-      const agents = await supabase.from(DATABASE_CONFIG.tables.agents).select('id, name, status').limit(10);
-      const tasks = await supabase.from(DATABASE_CONFIG.tables.tasks).select('id, title, status').limit(10);
-      const knowledge = await supabase.from(DATABASE_CONFIG.tables.knowledge_base).select('id, name').limit(5);
-      
-      result = {
-        success: true,
-        status: 'operational',
-        agents: agents.data?.length || 0,
-        tasks: tasks.data?.length || 0,
-        knowledge_entities: knowledge.data?.length || 0,
-        timestamp: new Date().toISOString()
-      };
-      
-    } else if (name === 'get_ecosystem_metrics') {
-      // Simulate ecosystem metrics
-      result = {
-        success: true,
-        active_proposals: 3,
-        total_users: 125,
-        daily_active_users: 42,
-        governance_participation: '67%',
-        mining_pools: 2,
-        edge_functions: 15,
-        timestamp: new Date().toISOString()
-      };
-      
-    } else if (name === 'vertex_generate_image') {
-      // Simulate Vertex AI image generation
-      const prompt = parsedArgs.prompt;
-      result = {
-        success: true,
-        image_url: `https://vertex-ai-generated.com/image-${Date.now()}.png`,
-        prompt: prompt,
-        generated_at: new Date().toISOString(),
-        operation_id: `img_${Date.now()}`
-      };
-      
-    } else if (name === 'vertex_generate_video') {
-      // Simulate Vertex AI video generation
-      const prompt = parsedArgs.prompt;
-      const duration = parsedArgs.duration_seconds || 5;
-      result = {
-        success: true,
-        operation_name: `video_op_${Date.now()}`,
-        status: 'RUNNING',
-        estimated_completion_time: new Date(Date.now() + 30000).toISOString(),
-        prompt: prompt,
-        duration_seconds: duration
-      };
-      
-    } else if (name === 'vertex_check_video_status') {
-      // Simulate video status check
-      const operationName = parsedArgs.operation_name;
-      result = {
-        success: true,
-        operation_name: operationName,
-        status: 'SUCCEEDED',
-        video_url: `https://vertex-ai-generated.com/video-${Date.now()}.mp4`,
-        completed_at: new Date().toISOString()
-      };
-      
-    } else if (name === 'get_edge_function_logs') {
-      const functionName = parsedArgs.function_name;
-      const limit = parsedArgs.limit || 10;
-      
-      const { data: logs, error } = await supabase
-        .from(DATABASE_CONFIG.tables.function_usage_logs)
-        .select('*')
-        .eq('function_name', functionName)
-        .order('created_at', { ascending: false })
-        .limit(limit);
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, logs: logs || [] };
-      
-    } else if (name === 'get_agent_status') {
-      const agentId = parsedArgs.agent_id;
-      
-      const { data: agent, error } = await supabase
-        .from(DATABASE_CONFIG.tables.agents)
-        .select('*')
-        .eq('id', agentId)
-        .single();
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, agent: agent };
-      
-    } else if (name === 'list_agents') {
-      const { data: agents, error } = await supabase
-        .from(DATABASE_CONFIG.tables.agents)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, agents: agents || [] };
-      
-    } else if (name === 'assign_task') {
-      const taskData = {
-        title: parsedArgs.title,
-        description: parsedArgs.description,
-        category: parsedArgs.category || 'other',
-        assignee_agent_id: parsedArgs.assignee_agent_id,
-        priority: parsedArgs.priority || 5,
-        status: 'PENDING',
-        stage: 'DISCUSS',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      const { data: task, error } = await supabase
-        .from(DATABASE_CONFIG.tables.tasks)
-        .insert(taskData)
-        .select()
-        .single();
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, task: task };
-      
-    } else if (name === 'list_tasks') {
-      const { data: tasks, error } = await supabase
-        .from(DATABASE_CONFIG.tables.tasks)
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(20);
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, tasks: tasks || [] };
-      
-    } else if (name === 'createGitHubIssue') {
-      const githubResult = await supabase.functions.invoke('github-integration', {
-        body: {
-          action: 'create_issue',
-          data: {
-            title: parsedArgs.title,
-            body: parsedArgs.body,
-            labels: parsedArgs.labels || []
-          }
-        }
-      });
-      
-      if (githubResult.error) throw new Error(githubResult.error.message);
-      result = { success: true, ...githubResult.data };
-      
-    } else if (name === 'listGitHubIssues') {
-      const githubResult = await supabase.functions.invoke('github-integration', {
-        body: {
-          action: 'list_issues',
-          data: {
-            state: parsedArgs.state || 'open',
-            limit: parsedArgs.limit || 10
-          }
-        }
-      });
-      
-      if (githubResult.error) throw new Error(githubResult.error.message);
-      result = { success: true, ...githubResult.data };
-      
-    } else if (name === 'search_knowledge') {
-      const { data: knowledge, error } = await supabase
-        .from(DATABASE_CONFIG.tables.knowledge_base)
-        .select('*')
-        .or(`name.ilike.%${parsedArgs.search_term}%,description.ilike.%${parsedArgs.search_term}%`)
-        .order('created_at', { ascending: false })
-        .limit(parsedArgs.limit || 10);
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, knowledge: knowledge || [] };
-      
-    } else if (name === 'store_knowledge') {
-      const knowledgeData = {
-        name: parsedArgs.name,
-        description: parsedArgs.description,
-        type: parsedArgs.type || 'general',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
-      };
-      
-      const { data: knowledge, error } = await supabase
-        .from(DATABASE_CONFIG.tables.knowledge_base)
-        .insert(knowledgeData)
-        .select()
-        .single();
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, knowledge: knowledge };
-      
-    } else if (name === 'check_system_status') {
-      const agents = await supabase.from(DATABASE_CONFIG.tables.agents).select('id, name, status').limit(10);
-      const tasks = await supabase.from(DATABASE_CONFIG.tables.tasks).select('id, title, status').limit(10);
-      const knowledge = await supabase.from(DATABASE_CONFIG.tables.knowledge_base).select('id, name').limit(5);
-      
-      result = {
-        success: true,
-        status: 'operational',
-        agents: agents.data?.length || 0,
-        tasks: tasks.data?.length || 0,
-        knowledge_entities: knowledge.data?.length || 0,
-        timestamp: new Date().toISOString()
-      };
-      
-    } else if (name === 'execute_python') {
-      const pythonResult = await supabase.functions.invoke('python-executor', {
-        body: { 
-          code: parsedArgs.code, 
-          purpose: parsedArgs.purpose
-        }
-      });
-      
-      if (pythonResult.error) throw new Error(pythonResult.error.message);
-      result = { success: true, ...pythonResult.data };
-      
-    } else if (name === 'invoke_edge_function') {
-      try {
-        const funcResult = await supabase.functions.invoke(parsedArgs.function_name, {
-          body: parsedArgs.payload
-        });
-        
-        if (funcResult.error) throw new Error(funcResult.error.message);
-        result = { success: true, ...funcResult.data };
-      } catch (invokeError) {
-        throw new Error(`Edge function '${parsedArgs.function_name}' failed: ${invokeError.message}`);
-      }
-      
-    } else if (name === 'list_available_functions') {
-      // List edge functions from database
-      const { data: functions, error } = await supabase
-        .from(DATABASE_CONFIG.tables.ai_tools)
-        .select('name, description, category')
-        .eq('is_active', true);
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, functions: functions || [] };
-      
-    // ===== PATCH: search_edge_functions executor =====
-    } else if (name === 'search_edge_functions') {
-      const mode = parsedArgs.mode || 'search';
-      const query = (parsedArgs.query || '').trim();
-      const category = (parsedArgs.category || '').trim();
-
-      if (mode === 'full_registry') {
-        const { data: functions, error } = await supabase
-          .from(DATABASE_CONFIG.tables.ai_tools)
-          .select('name, description, category')
-          .eq('is_active', true);
-        if (error) throw new Error(error.message);
-        result = { success: true, ok: true, functions: functions || [] };
-      } else {
-        // mode === 'search'
-        let q = supabase.from(DATABASE_CONFIG.tables.ai_tools)
-          .select('name, description, category')
-          .eq('is_active', true);
-
-        if (query) {
-          q = q.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
-        }
-        if (category) {
-          q = q.eq('category', category);
-        }
-
-        const { data: functions, error } = await q.limit(100);
-        if (error) throw new Error(error.message);
-        result = { success: true, ok: true, functions: functions || [] };
-      }
-    // ===== END PATCH =====
-      
-    } else if (name === 'vsco_manage_jobs') {
-      const vscoResult = await supabase.functions.invoke('vsco-workspace', {
-        body: {
-          action: parsedArgs.action,
-          data: parsedArgs
-        }
-      });
-      
-      if (vscoResult.error) throw new Error(vscoResult.error.message);
-      result = { success: true, ...vscoResult.data };
-      
-    } else if (name === 'generate_service_api_key') {
-      const apiKey = `sk_${Math.random().toString(36).substr(2, 24)}_${Date.now()}`;
-      
-      const keyData = {
-        service_name: parsedArgs.service_name,
-        tier: parsedArgs.tier,
-        api_key: apiKey,
-        owner_email: parsedArgs.owner_email,
-        owner_name: parsedArgs.owner_name || '',
-        quota_remaining: parsedArgs.tier === 'free' ? 100 : parsedArgs.tier === 'basic' ? 1000 : 10000,
-        is_active: true,
-        created_at: new Date().toISOString()
-      };
-      
-      const { data: serviceKey, error } = await supabase
-        .from(DATABASE_CONFIG.tables.service_api_keys)
-        .insert(keyData)
-        .select()
-        .single();
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, api_key: apiKey, ...serviceKey };
-      
-    } else if (name === 'qualify_lead') {
-      // Simple lead scoring
-      let score = 50;
-      if (parsedArgs.user_signals?.mentioned_budget) score += 20;
-      if (parsedArgs.user_signals?.has_urgent_need) score += 15;
-      if (parsedArgs.user_signals?.use_case_complexity === 'complex') score += 10;
-      if (parsedArgs.user_signals?.company_mentioned) score += 5;
-      
-      const level = score >= 70 ? 'high' : score >= 50 ? 'medium' : 'low';
-      
-      result = {
-        success: true,
-        score: Math.min(score, 100),
-        level: level,
-        session_key: parsedArgs.session_key,
-        qualification: level === 'high' ? 'Hot lead - ready for sales' : 
-                     level === 'medium' ? 'Warm lead - nurture needed' : 
-                     'Cold lead - early stage'
-      };
-      
-    } else if (name === 'execute_workflow_template') {
-      const workflowResult = await supabase.functions.invoke('workflow-template-manager', {
-        body: {
-          action: 'execute_template',
-          template_name: parsedArgs.template_name,
-          params: parsedArgs.params || {}
-        }
-      });
-      
-      if (workflowResult.error) throw new Error(workflowResult.error.message);
-      result = { success: true, ...workflowResult.data };
-      
-    } else if (name === 'vertex_ai_generate') {
-      const vertexResult = await supabase.functions.invoke('vertex-ai-chat', {
-        body: {
-          messages: [{ role: 'user', content: parsedArgs.prompt }],
-          model: parsedArgs.model || 'gemini-2.5-flash',
-          temperature: 0.7,
-          maxTokens: 4000
-        }
-      });
-      
-      if (vertexResult.error) throw new Error(vertexResult.error.message);
-      result = { success: true, ...vertexResult.data };
-      
-    } else if (name === 'google_gmail') {
-      const gmailResult = await supabase.functions.invoke('google-gmail', {
-        body: parsedArgs
-      });
-      
-      if (gmailResult.error) throw new Error(gmailResult.error.message);
-      result = { success: true, ...gmailResult.data };
-      
-    } else if (name === 'start_license_application') {
-      const licenseData = {
-        session_key: parsedArgs.session_key,
-        company_name: parsedArgs.company_name,
-        company_size: parsedArgs.company_size || 0,
-        contact_name: parsedArgs.contact_name || '',
-        contact_email: parsedArgs.contact_email || '',
-        status: 'draft',
-        created_at: new Date().toISOString()
-      };
-      
-      const { data: application, error } = await supabase
-        .from(DATABASE_CONFIG.tables.corporate_licenses)
-        .insert(licenseData)
-        .select()
-        .single();
-      
-      if (error) throw new Error(error.message);
-      result = { success: true, application: application };
-      
-    } else {
-      // Try to invoke as edge function
-      try {
-        const funcResult = await supabase.functions.invoke(name, {
-          body: { ...parsedArgs, session_id: sessionId, executive: executiveName }
-        });
-        
-        if (funcResult.error) {
-          throw new Error(`Tool ${name} not available: ${funcResult.error.message}`);
-        }
-        result = { success: true, ...funcResult.data };
-      } catch (invokeError) {
-        throw new Error(`Tool ${name} execution failed: ${invokeError.message}`);
-      }
-    }
-    
-    // Log tool execution completion
-    await logToolExecution(supabase, name, parsedArgs, 'completed', result);
-    
-    // Log tool execution in function usage logs
-    await supabase
-      .from(DATABASE_CONFIG.tables.function_usage_logs)
-      .insert({
-        function_name: name,
-        executive_name: executiveName,
-        parameters: parsedArgs,
-        success: true,
-        execution_time_ms: Date.now() - startTime,
-        result_summary: 'Tool executed successfully',
-        session_id: sessionId,
-        created_at: new Date().toISOString()
-      });
     
     return {
-      ...result,
-      execution_time_ms: Date.now() - startTime,
-      tool_name: name,
-      timestamp
+      success: true,
+      content: message.content || '',
+      provider: 'kimi',
+      model: 'moonshotai/kimi-k2'
     };
+  }
+  
+  private async callAnthropic(messages: any[], controller: AbortController): Promise<CascadeResult> {
+    const lastMessage = messages[messages.length - 1];
+    const systemMessages = messages.filter(m => m.role === 'system');
+    const systemPrompt = systemMessages.map(m => m.content).join('\n');
     
-  } catch (error) {
-    // Log error
-    const errorMessage = error instanceof Error ? error.message : 'Tool execution failed';
-    await logToolExecution(supabase, name, parsedArgs, 'failed', undefined, errorMessage);
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': ANTHROPIC_API_KEY,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-haiku-20240307',
+        max_tokens: 4000,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: lastMessage.content
+        }]
+      }),
+      signal: controller.signal
+    });
     
-    await supabase
-      .from(DATABASE_CONFIG.tables.function_usage_logs)
-      .insert({
-        function_name: name,
-        executive_name: executiveName,
-        parameters: parsedArgs,
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
         success: false,
-        execution_time_ms: Date.now() - startTime,
-        error_message: errorMessage,
-        session_id: sessionId,
-        created_at: new Date().toISOString()
-      });
+        provider: 'anthropic',
+        error: `Anthropic API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
     
-    return { 
-      success: false, 
-      error: errorMessage,
-      tool_name: name,
-      timestamp
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+    
+    return {
+      success: true,
+      content: text,
+      provider: 'anthropic',
+      model: 'claude-3-haiku-20240307'
     };
   }
 }
 
 // ========== TOOL CHAINING HANDLER ==========
 async function handleToolChain(
-  supabase: any,
   toolCalls: any[],
   executiveName: string,
   sessionId: string
@@ -3109,7 +2278,13 @@ async function handleToolChain(
   
   for (const toolCall of toolCalls) {
     const timestamp = Date.now();
-    const result = await executeToolCall(supabase, toolCall, executiveName, sessionId, timestamp);
+    const result = await executeRealToolCall(
+      toolCall.function.name,
+      toolCall.function.arguments,
+      executiveName,
+      sessionId,
+      timestamp
+    );
     
     // Format tool result for memory
     const memoryResult = {
@@ -3136,19 +2311,11 @@ async function handleToolChain(
 // ========== SYSTEM PROMPT GENERATOR ==========
 function generateSystemPrompt(
   executiveName: string = EXECUTIVE_NAME,
-  memoryContext: string = '',
-  mode: string = 'single',
-  interactionMode: string = 'text'
+  memoryContext: string = ''
 ): string {
   return `${TOOL_CALLING_MANDATE}
 
 You are ${executiveName}, the ${EXECUTIVE_ROLE} for XMRT-DAO Ecosystem.
-	## 🎭 OPERATIONAL MODE: ${mode.toUpperCase()}
-	${mode === 'council' ? 'You are operating in COUNCIL MODE. You should act as a lead coordinator for a group of specialized agents. Synthesize multiple perspectives and delegate tasks when appropriate.' : 'You are operating in SINGLE MODE. Provide direct, focused assistance as the primary intelligence.'}
-	
-	## 🎙️ INTERACTION MODE: ${interactionMode.toUpperCase()}
-	${interactionMode === 'voice' || interactionMode === 'tts' ? 'The user is interacting via VOICE/TTS. Keep your responses concise, clear, and easy to listen to. Avoid long lists or complex tables unless specifically requested.' : 'The user is interacting via TEXT/MULTIMODAL. You can use rich markdown, tables, and detailed explanations.'}
-
 
 ## 🎯 CORE RESPONSE PHILOSOPHY
 You are an **intelligent analyst and proactive assistant**, not just a tool executor. Your responses should:
@@ -3159,7 +2326,7 @@ You are an **intelligent analyst and proactive assistant**, not just a tool exec
 5. **Be helpful, insightful, and action-oriented**
 
 ## 🚀 CRITICAL DIRECTIVES:
-1. You are an ACTION-ORIENTED EXECUTOR, not an explainer
+1. You are an ACTION-ORIENTED EXECUTIVE, not an explainer
 2. When users ask for something, IMMEDIATELY use available tools
 3. Present results naturally as if you already know them
 4. NEVER say "I'm going to..." or "Let me..." - just do it
@@ -3173,7 +2340,7 @@ You are an **intelligent analyst and proactive assistant**, not just a tool exec
 - Suggest **next actions** or **alternative approaches** when tools fail
 - Use **emoji and formatting** to make responses readable and engaging
 
-// ===== PATCH: HARD RULE for search_edge_functions =====
+// ===== HARD RULE for search_edge_functions =====
 HARD RULES FOR FUNCTION DISCOVERY:
 - If the user asks about available edge functions or capabilities, you MUST call search_edge_functions.
 - You are NOT allowed to claim knowledge of available functions without querying this tool. Do not list, summarize, or imply availability without calling it.
@@ -3199,25 +2366,7 @@ DATABASE SCHEMA AWARENESS:
 - Agent Statuses: ${DATABASE_CONFIG.agentStatuses.join(', ')}
 - Task Statuses: ${DATABASE_CONFIG.taskStatuses.join(', ')}
 - Task Stages: ${DATABASE_CONFIG.taskStages.join(' → ')}
-- API Tiers: ${DATABASE_CONFIG.apiKeyTiers.join(', ')}
-
-TOOLS AVAILABLE: ${ELIZA_TOOLS.length} tools across 16 categories
-1. 🚀 STAE - Task Automation Engine
-2. 🤖 Agent Management
-3. 🐙 GitHub Integration
-4. 🧠 Knowledge Management
-5. 🔍 System Diagnostics
-6. 🐍 Code Execution
-7. 🌐 Edge Functions
-8. 🔎 Edge Function Discovery (search_edge_functions)
-9. 🌐 Web Browsing (browse_web - FOR ALL URL VIEWING)
-10. 📸 VSCO Workspace
-11. 💰 Revenue Generation
-12. 🎯 User Acquisition
-13. 🔄 Workflow Templates
-14. 🔷 Vertex AI
-15. ☁️ Google Cloud Services
-16. 📋 Corporate Licensing
+- Task Categories: ${DATABASE_CONFIG.taskCategories.join(', ')}
 
 ${memoryContext}
 
@@ -3245,7 +2394,6 @@ Remember: You are an intelligent analyst and proactive assistant. Your value is 
 // ========== EMERGENCY STATIC FALLBACK ==========
 async function emergencyStaticFallback(
   query: string,
-  supabase: any,
   executiveName: string
 ): Promise<{ 
   content: string; 
@@ -3273,8 +2421,394 @@ async function emergencyStaticFallback(
   };
 }
 
+// ========== TOOL DEFINITIONS ==========
+const ELIZA_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'search_edge_functions',
+      description: 'Search or enumerate all available Supabase edge functions using the canonical registry',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search term' },
+          category: { type: 'string' },
+          mode: {
+            type: 'string',
+            enum: ['search', 'full_registry'],
+            description: 'Use full_registry to list all available functions'
+          }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'browse_web',
+      description: '🌐 Browse and fetch content from any URL using the Playwright browser. Use this for viewing websites, checking webpages, or extracting web content.',
+      parameters: {
+        type: 'object',
+        properties: {
+          url: { 
+            type: 'string', 
+            description: 'Full URL to browse (must include https:// or http:// prefix)',
+            pattern: '^https?://.+'
+          },
+          action: { 
+            type: 'string', 
+            enum: ['navigate', 'extract', 'json'],
+            description: 'Action type: navigate for HTML, extract for structured data, json for JSON endpoints',
+            default: 'navigate'
+          },
+          timeout: { 
+            type: 'number', 
+            description: 'Timeout in milliseconds (default: 30000)',
+            default: 30000,
+            minimum: 1000,
+            maximum: 120000
+          },
+          headers: { 
+            type: 'object', 
+            description: 'Custom HTTP headers to send with the request'
+          },
+          method: { 
+            type: 'string', 
+            enum: ['GET', 'POST'],
+            description: 'HTTP method to use',
+            default: 'GET'
+          },
+          body: { 
+            type: 'string', 
+            description: 'Request body for POST requests'
+          }
+        },
+        required: ['url']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_mining_stats',
+      description: 'Get current mining statistics including hashrate, workers, earnings',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_system_status',
+      description: 'Get comprehensive system status including agents, tasks, edge functions',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_ecosystem_metrics',
+      description: 'Get ecosystem metrics including proposals, governance, user activity',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'invoke_edge_function',
+      description: 'Call ANY Supabase edge function dynamically',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: { type: 'string', description: 'Name of the edge function to invoke' },
+          payload: { type: 'object', description: 'JSON payload to send to the function' }
+        },
+        required: ['function_name', 'payload']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_available_functions',
+      description: 'List all available edge functions',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: { type: 'string', description: 'Optional: Filter by category' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_edge_function_logs',
+      description: 'Get logs from edge function executions',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: { type: 'string', description: 'Edge function name' },
+          limit: { type: 'number', description: 'Number of logs to return', default: 10 }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_agents',
+      description: 'Get all existing agents and their IDs/status',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'assign_task',
+      description: 'Create and assign a task to an agent',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Task title' },
+          description: { type: 'string', description: 'Task description' },
+          category: { 
+            type: 'string', 
+            enum: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other']
+          },
+          assignee_agent_id: { type: 'string', description: 'Agent ID to assign to' },
+          priority: { type: 'number', description: 'Priority 1-10' }
+        },
+        required: ['title', 'description', 'assignee_agent_id']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_tasks',
+      description: 'Get all tasks and their status/assignments',
+      parameters: {
+        type: 'object',
+        properties: {}
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge',
+      description: 'Search the knowledge base to recall stored entities',
+      parameters: {
+        type: 'object',
+        properties: {
+          search_term: { type: 'string', description: 'Entity name or text to search for' },
+          limit: { type: 'number', description: 'Maximum results to return', default: 10 }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'recall_entity',
+      description: 'Recall specific knowledge entity by name or ID',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Entity name to recall' },
+          entity_id: { type: 'string', description: 'Entity ID to recall' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'store_knowledge',
+      description: 'Store a new knowledge entity in the knowledge base',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Name of the knowledge entity' },
+          type: { 
+            type: 'string', 
+            enum: ['concept', 'tool', 'skill', 'person', 'project', 'fact', 'general']
+          },
+          description: { type: 'string', description: 'Detailed description' }
+        },
+        required: ['name', 'description']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_generate_image',
+      description: 'Generate an image using Vertex AI',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Detailed image description' }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_generate_video',
+      description: 'Generate a video using Vertex AI',
+      parameters: {
+        type: 'object',
+        properties: {
+          prompt: { type: 'string', description: 'Video description' },
+          duration_seconds: { type: 'number', description: 'Duration in seconds', default: 5 }
+        },
+        required: ['prompt']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vertex_check_video_status',
+      description: 'Check status of video generation operation',
+      parameters: {
+        type: 'object',
+        properties: {
+          operation_name: { type: 'string', description: 'Operation name from video generation' }
+        },
+        required: ['operation_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'createGitHubIssue',
+      description: 'Create a GitHub issue',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Issue title' },
+          body: { type: 'string', description: 'Issue description' },
+          labels: { type: 'array', items: { type: 'string' }, description: 'Optional labels' }
+        },
+        required: ['title', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listGitHubIssues',
+      description: 'List recent GitHub issues',
+      parameters: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
+          limit: { type: 'number', description: 'Number of issues to return', default: 10 }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'execute_workflow_template',
+      description: 'Execute a pre-built workflow template by name',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: { 
+            type: 'string', 
+            enum: [
+              'acquire_new_customer', 'upsell_existing_customer', 'churn_prevention',
+              'code_quality_audit', 'auto_fix_codebase',
+              'modify_edge_function', 'performance_optimization_cycle'
+            ]
+          },
+          params: { type: 'object', description: 'Template-specific parameters' }
+        },
+        required: ['template_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'google_gmail',
+      description: 'Send and manage emails via xmrtsolutions@gmail.com',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', enum: ['send_email', 'list_emails', 'get_email', 'create_draft'] },
+          to: { type: 'string', description: 'Recipient email address' },
+          subject: { type: 'string', description: 'Email subject line' },
+          body: { type: 'string', description: 'Email body content' }
+        },
+        required: ['action']
+      }
+    }
+  }
+];
+
+// ========== UTILITY FUNCTIONS ==========
+function truncateString(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength) + '...';
+}
+
+function formatObjectForDisplay(obj: any, indentLevel: number = 0): string {
+  if (!obj || typeof obj !== 'object') return String(obj);
+  
+  const indent = '  '.repeat(indentLevel);
+  let result = '';
+  
+  const entries = Object.entries(obj);
+  entries.forEach(([key, value]) => {
+    if (value === null || value === undefined) {
+      result += `${indent}• ${key}: ${value}\n`;
+    } else if (Array.isArray(value)) {
+      result += `${indent}• ${key}: Array(${value.length})\n`;
+      if (indentLevel < 2 && value.length > 0) {
+        value.slice(0, 5).forEach((item, idx) => {
+          if (typeof item === 'object') {
+            result += `${indent}  [${idx}]: ${Object.keys(item).slice(0, 2).join(', ')}...\n`;
+          } else {
+            result += `${indent}  [${idx}]: ${item}\n`;
+          }
+        });
+        if (value.length > 5) {
+          result += `${indent}  ... and ${value.length - 5} more items\n`;
+        }
+      }
+    } else if (typeof value === 'object') {
+      result += `${indent}• ${key}:\n`;
+      result += formatObjectForDisplay(value, indentLevel + 1);
+    } else {
+      result += `${indent}• ${key}: ${value}\n`;
+    }
+  });
+  
+  return result;
+}
+
 // ========== MAIN SERVE FUNCTION ==========
-serve(async (req) => {
+Deno.serve(async (req) => {
   const startTime = Date.now();
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
   
@@ -3290,11 +2824,21 @@ serve(async (req) => {
       return new Response(null, { headers: corsHeaders });
     }
     
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    
     // Handle GET request for health check
     if (req.method === 'GET') {
       clearTimeout(timeoutId);
+      
+      // Get real tool count from database
+      const { count: toolCount } = await supabase
+        .from(DATABASE_CONFIG.tables.ai_tools)
+        .select('*', { count: 'exact', head: true })
+        .eq('is_active', true);
+      
+      // Get agent count
+      const { count: agentCount } = await supabase
+        .from(DATABASE_CONFIG.tables.agents)
+        .select('*', { count: 'exact', head: true });
+      
       return new Response(
         JSON.stringify({
           status: 'operational',
@@ -3302,12 +2846,13 @@ serve(async (req) => {
           executive: `${EXECUTIVE_NAME} - ${EXECUTIVE_ROLE}`,
           version: '3.0.0',
           timestamp: new Date().toISOString(),
-          features: ['self-contained', 'persistent-memory', 'multi-provider', 'tool-chaining', 'enhanced-executive-helpers', 'edge-function-discovery', 'web-browsing', 'intelligent-analysis'],
-          tools_available: ELIZA_TOOLS.length,
+          features: ['production-ready', 'real-database-wiring', 'persistent-memory', 'multi-provider', 'tool-chaining', 'edge-function-discovery', 'web-browsing', 'intelligent-analysis'],
+          tools_available: toolCount || 0,
+          agents_available: agentCount || 0,
           providers_enabled: Object.values(AI_PROVIDERS_CONFIG).filter(p => p.enabled).map(p => p.name),
           web_browsing: {
             enabled: true,
-            endpoint: PLAYWRIGHT_BROWSE_URL,
+            endpoint: 'playwright-browse',
             capabilities: ['navigate', 'extract', 'json'],
             max_timeout: 120000
           },
@@ -3316,6 +2861,7 @@ serve(async (req) => {
             tool_memory_limit: MAX_TOOL_RESULTS_MEMORY,
             summary_interval: MEMORY_SUMMARY_INTERVAL
           },
+          database_connected: true,
           request_id: requestId
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -3337,7 +2883,7 @@ serve(async (req) => {
     let body;
     try {
       body = await req.json();
-    } catch (parseError) {
+    } catch (parseError: any) {
       clearTimeout(timeoutId);
       return new Response(
         JSON.stringify({ 
@@ -3359,11 +2905,7 @@ serve(async (req) => {
       save_memory = true,
       temperature = 0.7,
       maxTokens = 4000,
-      images = [],
-      // New dashboard options
-      mode = 'single', // 'single' vs 'council'
-      interaction_mode = 'text', // 'text', 'voice', 'tts', 'multimodal'
-      attachments = [] // Array of attachment objects
+      images = []
     } = body;
     
     // Validate input
@@ -3382,13 +2924,13 @@ serve(async (req) => {
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${session_id}`);
     
     // Initialize conversation manager
-    const conversationManager = new EnhancedConversationManager(supabase, session_id);
+    const conversationManager = new EnhancedConversationManager(session_id);
     
     // Load conversation history and previous tool results
     const { messages: savedMessages, toolResults: previousToolResults } = await conversationManager.loadConversationHistory();
     
     // Retrieve memory contexts
-    const memoryContexts = await retrieveMemoryContexts(supabase, session_id);
+    const memoryContexts = await retrieveMemoryContexts(session_id);
     let memoryContext = '';
     if (memoryContexts.length > 0) {
       memoryContext += "## 🧠 STORED MEMORY CONTEXTS\n\n";
@@ -3403,25 +2945,7 @@ serve(async (req) => {
     memoryContext += toolMemoryContext;
     
     // Generate system prompt with memory context
-    const systemPrompt = generateSystemPrompt(executive_name, memoryContext, mode, interaction_mode);
-    // Process attachments and add to context
-    let attachmentContext = '';
-    if (attachments && attachments.length > 0) {
-      attachmentContext = "\n\n## 📎 ATTACHMENTS PROVIDED BY USER\n";
-      attachments.forEach((att: any, idx: number) => {
-        attachmentContext += `**Attachment ${idx + 1}**: ${att.name || 'Unnamed'} (${att.type || 'unknown'})\n`;
-        if (att.content) {
-          attachmentContext += `Content: ${att.content.slice(0, 2000)}${att.content.length > 2000 ? '... (truncated)' : ''}\n`;
-        } else if (att.url) {
-          attachmentContext += `URL: ${att.url}\n`;
-        }
-      });
-      console.log(`📎 Processed ${attachments.length} attachments`);
-    }
-
-    // Add attachment context to system prompt or first message
-    const finalSystemPrompt = systemPrompt + attachmentContext;
-
+    const systemPrompt = generateSystemPrompt(executive_name, memoryContext);
     
     // Build message array (include previous messages + new messages)
     const allMessages = [
@@ -3432,34 +2956,79 @@ serve(async (req) => {
     // Few-shot examples for intelligent responses
     const FEW_SHOTS = [
       { role: 'user', content: 'What edge functions are available?' },
-      { role: 'assistant', tool: 'search_edge_functions', arguments: { mode: 'full_registry' } },
-      { role: 'tool', name: 'search_edge_functions', content: JSON.stringify({ ok: true, functions: [] }) },
+      { role: 'assistant', tool_calls: [{ 
+        id: 'call_1', 
+        type: 'function', 
+        function: { 
+          name: 'search_edge_functions', 
+          arguments: JSON.stringify({ mode: 'full_registry' }) 
+        }
+      }]},
+      { role: 'tool', tool_call_id: 'call_1', name: 'search_edge_functions', content: JSON.stringify({ 
+        success: true, 
+        functions: [], 
+        total: 0,
+        grouped_by_category: {}
+      }) },
       { role: 'assistant', content: '🔍 **I checked the edge function registry.**\n\n📭 *No functions found* in the registry.\n\n💡 *Suggestion*: You might want to create a new function or check the database directly. I can help you create one if you tell me what you need!' },
       
       { role: 'user', content: 'Do we have any billing-related functions?' },
-      { role: 'assistant', tool: 'search_edge_functions', arguments: { mode: 'search', query: 'billing', category: 'billing' } },
-      { role: 'tool', name: 'search_edge_functions', content: JSON.stringify({ ok: true, functions: [{ name: 'vsco_manage_financials', description: 'Manage VSCO billing and financials', category: 'billing' }] }) },
+      { role: 'assistant', tool_calls: [{ 
+        id: 'call_2', 
+        type: 'function', 
+        function: { 
+          name: 'search_edge_functions', 
+          arguments: JSON.stringify({ query: 'billing', category: 'billing' }) 
+        }
+      }]},
+      { role: 'tool', tool_call_id: 'call_2', name: 'search_edge_functions', content: JSON.stringify({ 
+        success: true, 
+        functions: [{ name: 'vsco_manage_financials', description: 'Manage VSCO billing and financials', category: 'billing', is_active: true }], 
+        total: 1,
+        grouped_by_category: { billing: [{ name: 'vsco_manage_financials', description: 'Manage VSCO billing and financials', category: 'billing', is_active: true }] }
+      }) },
       { role: 'assistant', content: '💰 **Found billing-related functions!**\n\n🔧 **Billing Functions**:\n   • **vsco_manage_financials**: Manage VSCO billing and financials\n\n🎯 *Analysis*: We have one billing function focused on VSCO financial management. This could handle invoicing, payment tracking, and financial reporting for VSCO services.\n\n🚀 *Next Steps*: You can invoke this function or create additional billing functions for other services.' },
       
       // Browse web examples
       { role: 'user', content: 'Check https://news.ycombinator.com for me' },
-      { role: 'assistant', tool: 'browse_web', arguments: { url: 'https://news.ycombinator.com', action: 'navigate' } },
-      { role: 'tool', name: 'browse_web', content: JSON.stringify({ success: true, url: 'https://news.ycombinator.com', status: 200, content: '<html>...Hacker News content...</html>', metadata: { loadTime: 356 } }) },
+      { role: 'assistant', tool_calls: [{ 
+        id: 'call_3', 
+        type: 'function', 
+        function: { 
+          name: 'browse_web', 
+          arguments: JSON.stringify({ url: 'https://news.ycombinator.com', action: 'navigate' }) 
+        }
+      }]},
+      { role: 'tool', tool_call_id: 'call_3', name: 'browse_web', content: JSON.stringify({ 
+        success: true, 
+        url: 'https://news.ycombinator.com', 
+        status: 200, 
+        content: '<html>...Hacker News content...</html>', 
+        metadata: { loadTime: 356 } 
+      }) },
       { role: 'assistant', content: '🌐 **Hacker News Analysis**\n\n✅ *Accessible* (loaded in 356ms)\n📰 **Top Technology Headlines**:\n   1. AI Breakthrough in Medical Diagnostics\n   2. New Programming Language Released\n   3. Major Security Vulnerability Patched\n   4. Startup Raises $50M Series B\n   5. Open Source Project Hits 10k Stars\n\n💡 *Insight*: Hacker News shows strong interest in AI, security, and funding news. Good source for tech trends and startup ecosystem updates.' },
       
-      { role: 'user', content: 'What\'s on the front page of Reddit?' },
-      { role: 'assistant', tool: 'browse_web', arguments: { url: 'https://www.reddit.com', action: 'extract' } },
-      { role: 'tool', name: 'browse_web', content: JSON.stringify({ success: false, url: 'https://www.reddit.com', status: 403, error: 'Access denied', metadata: { loadTime: 25 } }) },
-      { role: 'assistant', content: '🌐 **Reddit Access Check**\n\n⚠️ *Blocked/Access Denied* (HTTP 403)\n\n🔒 *Analysis*: Reddit is blocking automated access, which is common for sites with strict bot protection.\n\n💡 *Suggestions*:\n   1. Try accessing through a regular browser\n   2. Use Reddit\'s official API with authentication\n   3. Check specific subreddits directly (e.g., r/programming)\n\nI can help you with other sites or search for Reddit alternatives!' },
-      
       { role: 'user', content: 'Open google.com' },
-      { role: 'assistant', tool: 'browse_web', arguments: { url: 'https://google.com', action: 'navigate' } },
-      { role: 'tool', name: 'browse_web', content: JSON.stringify({ success: true, url: 'https://google.com', status: 200, content: '<html>...Google search page...</html>', metadata: { loadTime: 96 } }) },
+      { role: 'assistant', tool_calls: [{ 
+        id: 'call_4', 
+        type: 'function', 
+        function: { 
+          name: 'browse_web', 
+          arguments: JSON.stringify({ url: 'https://google.com', action: 'navigate' }) 
+        }
+      }]},
+      { role: 'tool', tool_call_id: 'call_4', name: 'browse_web', content: JSON.stringify({ 
+        success: true, 
+        url: 'https://google.com', 
+        status: 200, 
+        content: '<html>...Google search page...</html>', 
+        metadata: { loadTime: 96 } 
+      }) },
       { role: 'assistant', content: '🔍 **Google Homepage Check**\n\n✅ *Accessible* (loaded in 96ms)\n🌐 **Search Engine Ready**\n\n💡 *Analysis*: Google.com is loading normally. This is the world\'s most popular search engine homepage.\n\n🚀 *Next Steps*: I can help you search for specific information. Just tell me what you\'re looking for and I\'ll help formulate the search query!' }
     ];
     
     const messagesArray = [
-      { role: 'system', content: finalSystemPrompt },
+      { role: 'system', content: systemPrompt },
       ...FEW_SHOTS,
       ...allMessages
     ];
@@ -3477,7 +3046,6 @@ serve(async (req) => {
       // Emergency fallback
       const emergencyResult = await emergencyStaticFallback(
         query,
-        supabase,
         executive_name
       );
       
@@ -3519,17 +3087,16 @@ serve(async (req) => {
       return result;
     };
     
-    // Use enhanced tool execution with iteration
+    // Use enhanced tool execution with iteration and pass memory manager
     const { content: finalContent, toolsExecuted } = await executeToolsWithIteration(
-      supabase,
-      executeToolCall,
       cascadeResult,
       messagesArray,
       executive_name,
       session_id,
       callAIFunction,
       tools,
-      MAX_TOOL_ITERATIONS
+      MAX_TOOL_ITERATIONS,
+      conversationManager
     );
     
     // Synthesize tool results if we have any
@@ -3562,6 +3129,12 @@ serve(async (req) => {
     if (save_memory) {
       const toolResults = conversationManager.getToolResults();
       const newResults = toolResults.slice(previousToolResults.length);
+      
+      // Add instrumentation to verify counts
+      console.log(
+        `🧪 Pre-save: detected ${toolResults.length} total tool results in memory, ` +
+        `${newResults.length} new since load, executed ${toolsExecuted} tools this request`
+      );
       
       await conversationManager.saveConversation(
         [...messagesArray, { role: 'assistant', content: responseContent || '' }],
@@ -3605,7 +3178,7 @@ serve(async (req) => {
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
     
-  } catch (error) {
+  } catch (error: any) {
     clearTimeout(timeoutId);
     
     console.error(`💥 Critical error for request ${requestId}:`, error);
