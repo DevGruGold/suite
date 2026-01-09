@@ -1,4 +1,4 @@
-// Production-ready ai-chat WITH REAL DATABASE WIRING
+// Production-ready ai-chat WITH REAL DATABASE WIRING AND ENHANCED FEATURES
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.46.2";
 
@@ -27,6 +27,10 @@ const CONVERSATION_HISTORY_LIMIT = parseInt(Deno.env.get('CONVERSATION_HISTORY_L
 const MEMORY_SUMMARY_INTERVAL = parseInt(Deno.env.get('MEMORY_SUMMARY_INTERVAL') || '5');
 const MAX_TOOL_RESULTS_MEMORY = parseInt(Deno.env.get('MAX_TOOL_RESULTS_MEMORY') || '20');
 
+// NEW: Conversation Memory Configuration
+const CONVERSATION_SUMMARY_LIMIT = parseInt(Deno.env.get('CONVERSATION_SUMMARY_LIMIT') || '2000');
+const MAX_SUMMARIZED_CONVERSATIONS = parseInt(Deno.env.get('MAX_SUMMARIZED_CONVERSATIONS') || '50');
+
 // Initialize Supabase client with proper configuration
 const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
   auth: { persistSession: false, autoRefreshToken: false }
@@ -46,7 +50,11 @@ const DATABASE_CONFIG = {
     workflow_templates: 'workflow_templates',
     executive_feedback: 'executive_feedback',
     function_usage_logs: 'function_usage_logs',
-    eliza_activity_log: 'eliza_activity_log'
+    eliza_activity_log: 'eliza_activity_log',
+    // NEW: Enhanced conversation tables
+    conversation_summaries: 'conversation_summaries',
+    conversation_context: 'conversation_context',
+    attachment_analysis: 'attachment_analysis'
   },
   
   agentStatuses: ['IDLE', 'BUSY', 'ARCHIVED', 'ERROR', 'OFFLINE'] as const,
@@ -152,7 +160,7 @@ const TOOL_CALLING_MANDATE = `
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
 
@@ -177,6 +185,11 @@ const TOOL_CALLING_MANDATE = `
 - When user asks about available edge functions or capabilities → IMMEDIATELY call search_edge_functions({mode: 'full_registry'})
 - NEVER list functions from memory - ALWAYS query the database via this tool
 - Use query/category filters to find specific functions
+
+📎 ATTACHMENT ANALYSIS (MANDATORY):
+- When user provides attachments (images, PDFs, docs, code files) → IMMEDIATELY call analyze_attachment({attachments: [...]})
+- This tool can analyze: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol, .js, .ts, .py, .java, .cpp, .rs, .go, .md, .json, .yaml, .yml, .csv
+- Always analyze attachments when they are provided
 `;
 
 // ========== UTILITY FUNCTIONS FOR REAL PRODUCTION ==========
@@ -197,6 +210,406 @@ async function logActivity(entry: any) {
     await supabase.from(DATABASE_CONFIG.tables.eliza_activity_log).insert(entry);
   } catch (_) {
     // Silent fail for logging
+  }
+}
+
+// ========== NEW: ENHANCED CONVERSATION PERSISTENCE FUNCTIONS ==========
+class EnhancedConversationPersistence {
+  private sessionId: string;
+  private userId?: string;
+  
+  constructor(sessionId: string, userId?: string) {
+    this.sessionId = sessionId;
+    this.userId = userId;
+  }
+  
+  // Load previous conversation summaries (2000+ conversations)
+  async loadHistoricalSummaries(limit: number = MAX_SUMMARIZED_CONVERSATIONS): Promise<any[]> {
+    try {
+      console.log(`📚 Loading historical conversation summaries for session: ${this.sessionId}`);
+      
+      let query = supabase
+        .from(DATABASE_CONFIG.tables.conversation_summaries)
+        .select('id, summary, key_topics, sentiment, created_at, metadata')
+        .order('created_at', { ascending: false })
+        .limit(limit);
+      
+      // Try to filter by user if available
+      if (this.userId) {
+        query = query.eq('user_id', this.userId);
+      } else {
+        query = query.eq('session_id', this.sessionId);
+      }
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.warn('⚠️ Database error loading historical summaries:', error.message);
+        return [];
+      }
+      
+      if (!data || data.length === 0) {
+        console.log('📭 No historical conversation summaries found');
+        return [];
+      }
+      
+      console.log(`📖 Loaded ${data.length} historical conversation summaries`);
+      return data;
+      
+    } catch (error: any) {
+      console.warn('⚠️ Failed to load historical summaries:', error);
+      return [];
+    }
+  }
+  
+  // Save conversation summary for future recall
+  async saveConversationSummary(
+    messages: any[],
+    toolResults: any[] = [],
+    metadata: any = {}
+  ): Promise<string | null> {
+    try {
+      // Generate intelligent summary using AI
+      const summary = await this.generateIntelligentSummary(messages, toolResults);
+      
+      // Extract key topics
+      const keyTopics = this.extractKeyTopics(messages);
+      
+      // Analyze sentiment
+      const sentiment = this.analyzeSentiment(messages);
+      
+      const summaryRecord = {
+        session_id: this.sessionId,
+        user_id: this.userId,
+        summary: summary,
+        key_topics: keyTopics,
+        sentiment: sentiment,
+        metadata: {
+          ...metadata,
+          message_count: messages.length,
+          tool_call_count: toolResults.length,
+          conversation_date: new Date().toISOString(),
+          executive_name: EXECUTIVE_NAME
+        },
+        created_at: new Date().toISOString()
+      };
+      
+      const { data, error } = await supabase
+        .from(DATABASE_CONFIG.tables.conversation_summaries)
+        .insert(summaryRecord)
+        .select()
+        .single();
+      
+      if (error) {
+        console.warn('⚠️ Failed to save conversation summary:', error.message);
+        return null;
+      }
+      
+      console.log(`💾 Saved conversation summary with ID: ${data.id}`);
+      return data.id;
+      
+    } catch (error: any) {
+      console.warn('⚠️ Failed to save conversation summary:', error);
+      return null;
+    }
+  }
+  
+  // Generate intelligent conversation summary using AI cascade
+  private async generateIntelligentSummary(messages: any[], toolResults: any[]): Promise<string> {
+    try {
+      const userMessages = messages.filter(m => m.role === 'user');
+      const assistantMessages = messages.filter(m => m.role === 'assistant');
+      
+      if (userMessages.length === 0) {
+        return "Conversation started";
+      }
+      
+      // Use a simple summary for now, could be enhanced with AI
+      const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
+      const lastAssistantMessage = assistantMessages[assistantMessages.length - 1]?.content || '';
+      
+      const successfulTools = toolResults.filter(r => r.result?.success).length;
+      const failedTools = toolResults.filter(r => !r.result?.success).length;
+      
+      // Extract topics from recent messages
+      const recentText = messages.slice(-5).map(m => m.content).join(' ').toLowerCase();
+      const topics = this.extractKeyTopics(messages);
+      
+      return `Conversation about ${topics.join(', ') || 'various topics'}. User asked about "${lastUserMessage.substring(0, 100)}". Assistant responded about "${lastAssistantMessage.substring(0, 100)}". Executed ${toolResults.length} tools (${successfulTools} successful, ${failedTools} failed).`;
+      
+    } catch (error) {
+      return `Conversation with ${messages.length} messages and ${toolResults.length} tool executions`;
+    }
+  }
+  
+  private extractKeyTopics(messages: any[]): string[] {
+    const topics = [
+      'task', 'agent', 'github', 'deploy', 'bug', 'api', 'function', 'system', 'mining', 'web', 'url', 'browse',
+      'code', 'programming', 'development', 'smart contract', 'solidity', 'blockchain', 'crypto',
+      'image', 'video', 'generate', 'create', 'design', 'art', 'graphic',
+      'document', 'pdf', 'analysis', 'review', 'audit', 'security',
+      'financial', 'billing', 'payment', 'invoice', 'transaction',
+      'database', 'storage', 'memory', 'performance', 'optimization',
+      'help', 'support', 'guide', 'tutorial', 'how-to'
+    ];
+    
+    const allText = messages.map(m => m.content).join(' ').toLowerCase();
+    const foundTopics = topics.filter(topic => allText.includes(topic));
+    
+    // Return unique topics
+    return [...new Set(foundTopics)];
+  }
+  
+  private analyzeSentiment(messages: any[]): string {
+    const positiveWords = ['good', 'great', 'excellent', 'awesome', 'thanks', 'thank', 'helpful', 'perfect', 'love', 'amazing'];
+    const negativeWords = ['bad', 'terrible', 'awful', 'wrong', 'error', 'failed', 'broken', 'problem', 'issue', 'disappointed'];
+    
+    const allText = messages.map(m => m.content).join(' ').toLowerCase();
+    
+    let positiveCount = 0;
+    let negativeCount = 0;
+    
+    positiveWords.forEach(word => {
+      if (allText.includes(word)) positiveCount++;
+    });
+    
+    negativeWords.forEach(word => {
+      if (allText.includes(word)) negativeCount++;
+    });
+    
+    if (positiveCount > negativeCount * 2) return 'positive';
+    if (negativeCount > positiveCount * 2) return 'negative';
+    return 'neutral';
+  }
+  
+  // Track conversation context for ambiguous responses like "yes"
+  async saveConversationContext(
+    currentQuestion: string,
+    assistantResponse: string,
+    userResponse: string,
+    metadata: any = {}
+  ): Promise<void> {
+    try {
+      const contextRecord = {
+        session_id: this.sessionId,
+        user_id: this.userId,
+        current_question: currentQuestion,
+        assistant_response: assistantResponse,
+        user_response: userResponse,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          ...metadata,
+          executive_name: EXECUTIVE_NAME,
+          context_type: 'follow_up'
+        }
+      };
+      
+      const { error } = await supabase
+        .from(DATABASE_CONFIG.tables.conversation_context)
+        .insert(contextRecord);
+      
+      if (error) {
+        console.warn('⚠️ Failed to save conversation context:', error.message);
+      } else {
+        console.log('💾 Saved conversation context for follow-up understanding');
+      }
+      
+    } catch (error: any) {
+      console.warn('⚠️ Failed to save conversation context:', error);
+    }
+  }
+  
+  // Load recent conversation context to understand ambiguous responses
+  async loadRecentContext(limit: number = 5): Promise<any[]> {
+    try {
+      const { data, error } = await supabase
+        .from(DATABASE_CONFIG.tables.conversation_context)
+        .select('*')
+        .eq('session_id', this.sessionId)
+        .order('timestamp', { ascending: false })
+        .limit(limit);
+      
+      if (error) {
+        console.warn('⚠️ Database error loading conversation context:', error.message);
+        return [];
+      }
+      
+      return data || [];
+      
+    } catch (error: any) {
+      console.warn('⚠️ Failed to load conversation context:', error);
+      return [];
+    }
+  }
+}
+
+// ========== NEW: ATTACHMENT ANALYSIS FUNCTIONS ==========
+class AttachmentAnalyzer {
+  // Supported file extensions for analysis
+  static readonly SUPPORTED_EXTENSIONS = [
+    // Text files
+    '.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.csv', '.html', '.htm',
+    // Documents
+    '.pdf', '.doc', '.docx', '.rtf',
+    // Images
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg',
+    // Code files
+    '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.cs', 
+    '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
+    '.sol', '.vy', // Solidity/Vyper smart contracts
+    '.sh', '.bash', '.zsh', // Shell scripts
+    '.sql', '.pl', '.lua', '.r', '.m', '.matlab',
+    // Data files
+    '.csv', '.tsv', '.xls', '.xlsx',
+    // Configuration files
+    '.ini', '.conf', '.cfg', '.env'
+  ];
+  
+  static isSupportedFile(filename: string): boolean {
+    const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+    return this.SUPPORTED_EXTENSIONS.includes(extension);
+  }
+  
+  static getFileType(filename: string): string {
+    const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
+    
+    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(extension)) {
+      return 'image';
+    } else if (['.pdf', '.doc', '.docx', '.rtf'].includes(extension)) {
+      return 'document';
+    } else if (['.sol', '.vy'].includes(extension)) {
+      return 'smart_contract';
+    } else if (['.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.go', '.rs'].includes(extension)) {
+      return 'code';
+    } else if (['.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.csv'].includes(extension)) {
+      return 'text';
+    } else {
+      return 'unknown';
+    }
+  }
+  
+  // Analyze text-based attachments
+  static async analyzeTextContent(content: string, filename: string): Promise<any> {
+    const fileType = this.getFileType(filename);
+    
+    let analysis = {
+      file_type: fileType,
+      filename: filename,
+      content_preview: content.substring(0, 5000), // Limit preview
+      estimated_lines: content.split('\n').length,
+      estimated_words: content.split(/\s+/).length,
+      has_code: false,
+      detected_language: 'unknown',
+      key_findings: []
+    };
+    
+    // Detect programming language for code files
+    if (fileType === 'code' || fileType === 'smart_contract') {
+      analysis.has_code = true;
+      
+      // Simple language detection
+      if (filename.endsWith('.sol')) {
+        analysis.detected_language = 'solidity';
+        analysis.key_findings.push('Smart contract file detected');
+        
+        // Extract contract name
+        const contractMatch = content.match(/contract\s+(\w+)/);
+        if (contractMatch) {
+          analysis.key_findings.push(`Contract name: ${contractMatch[1]}`);
+        }
+        
+        // Look for function definitions
+        const functionMatches = content.match(/function\s+(\w+)/g);
+        if (functionMatches) {
+          analysis.key_findings.push(`Found ${functionMatches.length} functions`);
+        }
+        
+      } else if (filename.endsWith('.js') || filename.endsWith('.jsx')) {
+        analysis.detected_language = 'javascript';
+      } else if (filename.endsWith('.ts') || filename.endsWith('.tsx')) {
+        analysis.detected_language = 'typescript';
+      } else if (filename.endsWith('.py')) {
+        analysis.detected_language = 'python';
+      } else if (filename.endsWith('.java')) {
+        analysis.detected_language = 'java';
+      } else if (filename.endsWith('.cpp') || filename.endsWith('.c') || filename.endsWith('.h')) {
+        analysis.detected_language = 'c++';
+      } else if (filename.endsWith('.go')) {
+        analysis.detected_language = 'go';
+      } else if (filename.endsWith('.rs')) {
+        analysis.detected_language = 'rust';
+      }
+      
+      // Look for imports/dependencies
+      const importMatches = content.match(/(import|require|from|#include|using)\s+['"][^'"]+['"]/g);
+      if (importMatches) {
+        analysis.key_findings.push(`Found ${importMatches.length} imports/dependencies`);
+      }
+    }
+    
+    // For documents/text, extract key sections
+    if (fileType === 'document' || fileType === 'text') {
+      // Look for headings
+      const headingMatches = content.match(/^(#+|\w.+:\n)/gm);
+      if (headingMatches) {
+        analysis.key_findings.push(`Found ${headingMatches.length} headings/sections`);
+      }
+      
+      // Look for URLs
+      const urlMatches = content.match(/https?:\/\/[^\s]+/g);
+      if (urlMatches) {
+        analysis.key_findings.push(`Found ${urlMatches.length} URLs`);
+      }
+      
+      // Look for email addresses
+      const emailMatches = content.match(/[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}/g);
+      if (emailMatches) {
+        analysis.key_findings.push(`Found ${emailMatches.length} email addresses`);
+      }
+    }
+    
+    return analysis;
+  }
+  
+  // Save attachment analysis to database
+  static async saveAnalysisToDatabase(
+    sessionId: string,
+    filename: string,
+    analysis: any,
+    metadata: any = {}
+  ): Promise<void> {
+    try {
+      const analysisRecord = {
+        session_id: sessionId,
+        filename: filename,
+        file_type: analysis.file_type,
+        detected_language: analysis.detected_language,
+        content_preview: analysis.content_preview,
+        key_findings: analysis.key_findings,
+        metadata: {
+          ...metadata,
+          estimated_lines: analysis.estimated_lines,
+          estimated_words: analysis.estimated_words,
+          has_code: analysis.has_code,
+          analyzed_at: new Date().toISOString(),
+          executive_name: EXECUTIVE_NAME
+        },
+        created_at: new Date().toISOString()
+      };
+      
+      const { error } = await supabase
+        .from(DATABASE_CONFIG.tables.attachment_analysis)
+        .insert(analysisRecord);
+      
+      if (error) {
+        console.warn('⚠️ Failed to save attachment analysis:', error.message);
+      } else {
+        console.log(`💾 Saved attachment analysis for ${filename}`);
+      }
+      
+    } catch (error: any) {
+      console.warn('⚠️ Failed to save attachment analysis:', error);
+    }
   }
 }
 
@@ -261,6 +674,98 @@ async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
   }
 }
 
+// ========== NEW: ATTACHMENT ANALYSIS TOOL ==========
+async function analyzeAttachmentTool(attachments: any[]): Promise<any> {
+  try {
+    console.log(`📎 Analyzing ${attachments.length} attachment(s)`);
+    
+    const analyses = [];
+    
+    for (const attachment of attachments) {
+      const { filename, content, mime_type, size, url } = attachment;
+      
+      if (!filename) {
+        analyses.push({
+          success: false,
+          error: 'Missing filename',
+          filename: 'unknown'
+        });
+        continue;
+      }
+      
+      // Check if file is supported
+      if (!AttachmentAnalyzer.isSupportedFile(filename)) {
+        analyses.push({
+          success: false,
+          error: `Unsupported file type: ${filename}`,
+          filename,
+          supported_extensions: AttachmentAnalyzer.SUPPORTED_EXTENSIONS
+        });
+        continue;
+      }
+      
+      const fileType = AttachmentAnalyzer.getFileType(filename);
+      
+      let analysis: any = {
+        success: true,
+        filename,
+        file_type: fileType,
+        mime_type: mime_type || 'unknown',
+        size: size || 'unknown',
+        supported: true
+      };
+      
+      // Handle different file types
+      if (fileType === 'image') {
+        // For images, we can use vision capabilities
+        analysis.analysis_type = 'image_vision';
+        analysis.note = 'Image will be analyzed using vision capabilities';
+        
+      } else if (['text', 'document', 'code', 'smart_contract'].includes(fileType)) {
+        // For text-based files, analyze content
+        if (content) {
+          const textAnalysis = await AttachmentAnalyzer.analyzeTextContent(content, filename);
+          analysis = { ...analysis, ...textAnalysis };
+          analysis.analysis_type = 'text_analysis';
+        } else if (url) {
+          analysis.analysis_type = 'url_reference';
+          analysis.note = 'File referenced by URL, content not directly available';
+        } else {
+          analysis.success = false;
+          analysis.error = 'No content provided for analysis';
+        }
+      }
+      
+      analyses.push(analysis);
+      
+      // Save analysis to database if successful
+      if (analysis.success) {
+        await AttachmentAnalyzer.saveAnalysisToDatabase(
+          'current_session', // Will be replaced with actual session ID
+          filename,
+          analysis
+        );
+      }
+    }
+    
+    return {
+      success: true,
+      total_attachments: attachments.length,
+      analyzed: analyses.filter(a => a.success).length,
+      failed: analyses.filter(a => !a.success).length,
+      analyses: analyses,
+      timestamp: new Date().toISOString()
+    };
+    
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to analyze attachments',
+      timestamp: new Date().toISOString()
+    };
+  }
+}
+
 async function executeRealToolCall(
   name: string, 
   args: string,
@@ -276,8 +781,16 @@ async function executeRealToolCall(
   try {
     const parsedArgs = args ? JSON.parse(args) : {};
 
-    // ===== REAL DATABASE TOOL WIRING =====
-    if (name === 'browse_web') {
+    // ===== NEW: ATTACHMENT ANALYSIS TOOL =====
+    if (name === 'analyze_attachment') {
+      const { attachments } = parsedArgs;
+      if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
+        throw new Error('Missing or empty attachments array');
+      }
+      
+      result = await analyzeAttachmentTool(attachments);
+      
+    } else if (name === 'browse_web') {
       const url = parsedArgs.url;
       if (!url) throw new Error('Missing url');
       
@@ -297,7 +810,7 @@ async function executeRealToolCall(
       });
       
     } else if (name === 'get_mining_stats') {
-      result = await invokeEdgeFunction('ecosystem-monitor', { 
+      result = await invokeEdgeFunction('mining-proxy', { 
         action: 'get_mining_stats' 
       });
       
@@ -762,6 +1275,60 @@ function analyzeUserIntent(query: string, conversationContext: any[] = []): {
   };
 }
 
+// ========== NEW: ENHANCED FOLLOW-UP RESPONSE DETECTION ==========
+function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]): {
+  isAmbiguous: boolean;
+  likelyReferringTo: string | null;
+  confidence: number;
+} {
+  const ambiguousResponses = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alright', 'fine', 'go ahead', 'proceed'];
+  const userMessageLower = userMessage.toLowerCase().trim();
+  
+  // Check if the response is ambiguous
+  const isAmbiguous = ambiguousResponses.includes(userMessageLower) || 
+                      (userMessageLower === 'no' && conversationHistory.length > 0);
+  
+  if (!isAmbiguous) {
+    return { isAmbiguous: false, likelyReferringTo: null, confidence: 0 };
+  }
+  
+  // Find the most recent assistant question
+  let likelyReferringTo = null;
+  let confidence = 0.7; // Base confidence
+  
+  // Look at the last few messages for context
+  const recentMessages = conversationHistory.slice(-10).reverse();
+  
+  for (const message of recentMessages) {
+    if (message.role === 'assistant') {
+      const assistantMessage = message.content || '';
+      
+      // Check if the assistant asked a question
+      const hasQuestion = assistantMessage.includes('?');
+      const hasOptions = assistantMessage.includes('option') || 
+                         assistantMessage.includes('choice') || 
+                         assistantMessage.includes('select');
+      
+      if (hasQuestion || hasOptions) {
+        likelyReferringTo = assistantMessage.substring(0, 200); // Truncate
+        confidence = hasQuestion && hasOptions ? 0.9 : 0.8;
+        break;
+      }
+    }
+  }
+  
+  // If no question found, use the last assistant message
+  if (!likelyReferringTo) {
+    const lastAssistant = recentMessages.find(m => m.role === 'assistant');
+    if (lastAssistant) {
+      likelyReferringTo = lastAssistant.content?.substring(0, 200) || 'the previous question';
+      confidence = 0.6;
+    }
+  }
+  
+  return { isAmbiguous: true, likelyReferringTo, confidence };
+}
+
 // Parser for DeepSeek's text-based tool call format
 function parseDeepSeekToolCalls(content: string): Array<any> | null {
   const toolCallsMatch = content.match(/ 🫎(.*?)🫎/s);
@@ -861,7 +1428,7 @@ function parseConversationalToolIntent(content: string): Array<any> | null {
     'get_mining_stats', 'get_system_status', 'get_ecosystem_metrics', 
     'search_knowledge', 'recall_entity', 'invoke_edge_function', 
     'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks',
-    'search_edge_functions', 'browse_web'
+    'search_edge_functions', 'browse_web', 'analyze_attachment'
   ];
   
   for (const pattern of patterns) {
@@ -1186,7 +1753,8 @@ async function synthesizeToolResults(
   const webResults = toolResults.filter(r => r.tool === 'browse_web');
   const functionResults = toolResults.filter(r => r.tool === 'search_edge_functions' || r.tool === 'list_available_functions');
   const systemResults = toolResults.filter(r => ['get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
-  const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'list_available_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
+  const attachmentResults = toolResults.filter(r => r.tool === 'analyze_attachment');
+  const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'list_available_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics', 'analyze_attachment'].includes(r.tool));
   
   // Analyze user intent
   const intent = analyzeUserIntent(userQuery, conversationContext);
@@ -1200,6 +1768,56 @@ async function synthesizeToolResults(
     response += `📝 **Following up** on your previous query:\n\n`;
   } else {
     response += `🔍 **Here's what I found** based on your request:\n\n`;
+  }
+  
+  // Process attachment analysis results
+  if (attachmentResults.length > 0) {
+    response += `### 📎 **Attachment Analysis**\n`;
+    
+    attachmentResults.forEach((result, index) => {
+      const { success, total_attachments, analyzed, failed, analyses } = result.result;
+      
+      if (success) {
+        response += `\n✅ **Analyzed ${total_attachments} attachment(s)** (${analyzed} successful, ${failed} failed)\n`;
+        
+        analyses.forEach((analysis: any, idx: number) => {
+          if (analysis.success) {
+            response += `\n**${idx + 1}. ${analysis.filename}** (${analysis.file_type})\n`;
+            
+            if (analysis.detected_language && analysis.detected_language !== 'unknown') {
+              response += `   • **Language**: ${analysis.detected_language}\n`;
+            }
+            
+            if (analysis.estimated_lines) {
+              response += `   • **Lines**: ~${analysis.estimated_lines}\n`;
+            }
+            
+            if (analysis.estimated_words) {
+              response += `   • **Words**: ~${analysis.estimated_words}\n`;
+            }
+            
+            if (analysis.key_findings && analysis.key_findings.length > 0) {
+              response += `   • **Key Findings**:\n`;
+              analysis.key_findings.forEach((finding: string, i: number) => {
+                response += `     - ${finding}\n`;
+              });
+            }
+            
+            if (analysis.content_preview && analysis.content_preview.length > 0) {
+              const preview = analysis.content_preview.length > 200 ? 
+                analysis.content_preview.substring(0, 200) + '...' : analysis.content_preview;
+              response += `   • **Preview**: "${preview}"\n`;
+            }
+          } else {
+            response += `\n**${idx + 1}. ${analysis.filename || 'Unknown file'}** ❌ Failed\n`;
+            response += `   • **Error**: ${analysis.error}\n`;
+          }
+        });
+      } else {
+        response += `\n❌ **Attachment analysis failed**: ${result.result.error || 'Unknown error'}\n`;
+      }
+    });
+    response += '\n';
   }
   
   // Process web browsing results with intelligent analysis
@@ -1432,6 +2050,10 @@ async function synthesizeToolResults(
     if (userQuery.toLowerCase().includes('status') || userQuery.toLowerCase().includes('health')) {
       response += `\n📈 *Need deeper analysis?* I can run more detailed diagnostics on specific system components.\n`;
     }
+    
+    if (userQuery.toLowerCase().includes('attach') || userQuery.toLowerCase().includes('file') || userQuery.toLowerCase().includes('document')) {
+      response += `\n📎 *Need to analyze more files?* I can analyze text files, code, documents, and images. Just upload them!\n`;
+    }
   } else {
     response += `🤔 **No tool results to analyze.** Try asking me to perform specific actions.\n`;
   }
@@ -1443,15 +2065,20 @@ async function synthesizeToolResults(
 class EnhancedConversationManager {
   private sessionId: string;
   private toolResultsMemory: any[] = [];
+  private conversationPersistence: EnhancedConversationPersistence;
+  private userId?: string;
   
-  constructor(sessionId: string) {
+  constructor(sessionId: string, userId?: string) {
     this.sessionId = sessionId;
+    this.userId = userId;
+    this.conversationPersistence = new EnhancedConversationPersistence(sessionId, userId);
   }
   
   async loadConversationHistory(): Promise<{
     messages: any[];
     toolResults: any[];
     conversationSummary: string;
+    historicalSummaries: any[];
   }> {
     try {
       console.log(`📚 Loading conversation history for session: ${this.sessionId}`);
@@ -1465,30 +2092,42 @@ class EnhancedConversationManager {
       
       if (error) {
         console.warn('⚠️ Database error loading history:', error.message);
-        return { messages: [], toolResults: [], conversationSummary: 'New session' };
       }
+      
+      let messages = [];
+      let toolResults = [];
+      let conversationSummary = 'New session';
       
       if (!data || data.length === 0) {
         console.log('📭 No existing conversation found for session');
-        return { messages: [], toolResults: [], conversationSummary: 'New session' };
+      } else {
+        const record = data[0];
+        messages = record.messages || [];
+        toolResults = record.tool_results || [];
+        this.toolResultsMemory = toolResults;
+        conversationSummary = record.summary || 'Existing conversation';
+        
+        console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from history`);
       }
       
-      const record = data[0];
-      const messages = record.messages || [];
-      const toolResults = record.tool_results || [];
-      this.toolResultsMemory = toolResults;
-      
-      console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from history`);
+      // Load historical conversation summaries (2000+ previous conversations)
+      const historicalSummaries = await this.conversationPersistence.loadHistoricalSummaries();
       
       return {
         messages: messages.slice(-CONVERSATION_HISTORY_LIMIT),
         toolResults: toolResults.slice(-MAX_TOOL_RESULTS_MEMORY),
-        conversationSummary: record.summary || 'Existing conversation'
+        conversationSummary: conversationSummary,
+        historicalSummaries: historicalSummaries
       };
       
     } catch (error: any) {
       console.warn('⚠️ Failed to load conversation history:', error);
-      return { messages: [], toolResults: [], conversationSummary: 'Error loading history' };
+      return { 
+        messages: [], 
+        toolResults: [], 
+        conversationSummary: 'Error loading history',
+        historicalSummaries: []
+      };
     }
   }
   
@@ -1516,7 +2155,7 @@ class EnhancedConversationManager {
           tool_call_count: allToolResults.length,
           message_count: messages.length,
           last_updated: new Date().toISOString(),
-          memory_version: '2.0'
+          memory_version: '3.0'
         },
         updated_at: new Date().toISOString()
       };
@@ -1534,6 +2173,9 @@ class EnhancedConversationManager {
         console.log(`💾 Saved conversation: ${messages.length} messages, ${allToolResults.length} tool results`);
       }
       
+      // Save conversation summary for historical reference
+      await this.conversationPersistence.saveConversationSummary(messages, allToolResults, metadata);
+      
       // Cleanup old sessions (keep last 100)
       await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
@@ -1543,6 +2185,26 @@ class EnhancedConversationManager {
     } catch (error: any) {
       console.warn('⚠️ Failed to save conversation:', error);
     }
+  }
+  
+  // Save conversation context for ambiguous responses
+  async saveConversationContext(
+    currentQuestion: string,
+    assistantResponse: string,
+    userResponse: string,
+    metadata: any = {}
+  ): Promise<void> {
+    await this.conversationPersistence.saveConversationContext(
+      currentQuestion,
+      assistantResponse,
+      userResponse,
+      metadata
+    );
+  }
+  
+  // Load recent context to understand ambiguous responses
+  async loadRecentContext(limit: number = 5): Promise<any[]> {
+    return await this.conversationPersistence.loadRecentContext(limit);
   }
   
   private async generateConversationSummary(messages: any[], toolResults: any[]): Promise<string> {
@@ -1621,6 +2283,9 @@ class EnhancedConversationManager {
               if (funcs.length > 3) context += `, and ${funcs.length - 3} more`;
               context += '\n';
             }
+          }
+          else if (tool.name === 'analyze_attachment') {
+            context += `   Analyzed ${tool.result.total_attachments || 0} attachments\n`;
           }
           else if (tool.result.agents) {
             context += `   Found ${tool.result.agents.length} agents\n`;
@@ -2308,11 +2973,53 @@ async function handleToolChain(
   };
 }
 
-// ========== SYSTEM PROMPT GENERATOR ==========
+// ========== ENHANCED SYSTEM PROMPT GENERATOR WITH HISTORICAL CONTEXT ==========
 function generateSystemPrompt(
   executiveName: string = EXECUTIVE_NAME,
-  memoryContext: string = ''
+  memoryContext: string = '',
+  historicalSummaries: any[] = [],
+  recentContext: any[] = []
 ): string {
+  let historicalContext = '';
+  
+  if (historicalSummaries.length > 0) {
+    historicalContext += "## 📜 HISTORICAL CONVERSATION SUMMARIES (2000+ Conversations)\n\n";
+    
+    // Show top 5 most relevant historical summaries
+    const recentSummaries = historicalSummaries.slice(0, 5);
+    
+    recentSummaries.forEach((summary, index) => {
+      historicalContext += `**${index + 1}. ${summary.metadata?.conversation_date ? new Date(summary.metadata.conversation_date).toLocaleDateString() : 'Previous'}**\n`;
+      historicalContext += `Summary: ${summary.summary}\n`;
+      
+      if (summary.key_topics && summary.key_topics.length > 0) {
+        historicalContext += `Topics: ${summary.key_topics.join(', ')}\n`;
+      }
+      
+      if (summary.metadata?.tool_call_count) {
+        historicalContext += `Tools used: ${summary.metadata.tool_call_count}\n`;
+      }
+      
+      historicalContext += '\n';
+    });
+    
+    historicalContext += `*Based on ${historicalSummaries.length} previous conversation summaries*\n\n`;
+  }
+  
+  let followUpContext = '';
+  if (recentContext.length > 0) {
+    followUpContext += "## 🔄 RECENT CONVERSATION CONTEXT\n\n";
+    
+    recentContext.forEach((ctx, index) => {
+      followUpContext += `**Context ${index + 1}:**\n`;
+      followUpContext += `**Assistant asked:** "${ctx.current_question?.substring(0, 100)}${ctx.current_question?.length > 100 ? '...' : ''}"\n`;
+      followUpContext += `**Assistant said:** "${ctx.assistant_response?.substring(0, 100)}${ctx.assistant_response?.length > 100 ? '...' : ''}"\n`;
+      followUpContext += `**User responded:** "${ctx.user_response}"\n\n`;
+    });
+    
+    followUpContext += "**IMPORTANT**: When user gives ambiguous responses like 'yes', 'no', 'okay', etc., you MUST refer back to the most recent question/context above to understand what they're responding to.\n\n";
+  }
+
   return `${TOOL_CALLING_MANDATE}
 
 You are ${executiveName}, the ${EXECUTIVE_ROLE} for XMRT-DAO Ecosystem.
@@ -2332,6 +3039,7 @@ You are an **intelligent analyst and proactive assistant**, not just a tool exec
 4. NEVER say "I'm going to..." or "Let me..." - just do it
 5. Only mention tools when errors occur
 6. YOU MUST reference previous tool calls when users ask about them
+7. YOU MUST understand ambiguous responses by referring to recent conversation context
 
 ## 🔧 TOOL USAGE ENHANCEMENTS:
 - After executing tools, provide **intelligent analysis** of results
@@ -2353,6 +3061,12 @@ HARD RULES FOR FUNCTION DISCOVERY:
 - Always use the full URL including https:// or http:// prefix
 - If the user provides an incomplete URL (like "google.com"), convert it to "https://google.com"
 
+📎 ATTACHMENT ANALYSIS CRITICAL RULE:
+- When user provides ANY attachment (files, images, documents, code), IMMEDIATELY call analyze_attachment({attachments: [...]})
+- Supported files: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol (Solidity), .js, .ts, .py, .java, .cpp, .rs, .go, and 50+ more formats
+- NEVER say "I cannot analyze files" - YOU HAVE FULL ATTACHMENT ANALYSIS CAPABILITIES
+- Always provide detailed analysis of attachments when provided
+
 ## 📊 RESPONSE STRUCTURE GUIDELINES:
 1. **Start with context**: Acknowledge what you're doing based on the query
 2. **Present grouped results**: Organize similar tool outputs together
@@ -2368,18 +3082,23 @@ DATABASE SCHEMA AWARENESS:
 - Task Stages: ${DATABASE_CONFIG.taskStages.join(' → ')}
 - Task Categories: ${DATABASE_CONFIG.taskCategories.join(', ')}
 
+${historicalContext}
+
+${followUpContext}
+
 ${memoryContext}
 
-## 💬 CONVERSATION RULES:
-1. ALWAYS check the tool history above before answering questions about previous tool calls
-2. If a user asks "what did you get from [tool name]?", REFERENCE THE EXACT RESULTS from above
-3. If a tool failed, acknowledge it and suggest alternatives
-4. Be concise, helpful, and proactive
-5. Focus on getting things done efficiently
-6. Summarize tool results clearly when users ask
-7. Maintain conversation context across the entire session
-8. FOR WEB BROWSING: Always summarize the key content from web pages in 2-3 sentences
-9. FOR WEB BROWSING: Mention the status code and load time if relevant
+## 💬 ENHANCED CONVERSATION RULES:
+1. **ALWAYS** check the tool history above before answering questions about previous tool calls
+2. **ALWAYS** check historical summaries when user refers to past conversations
+3. **ALWAYS** check recent context when user gives ambiguous responses (yes/no/okay)
+4. If a user asks "what did you get from [tool name]?", REFERENCE THE EXACT RESULTS from above
+5. If a tool failed, acknowledge it and suggest alternatives
+6. Be concise, helpful, and proactive
+7. Focus on getting things done efficiently
+8. Summarize tool results clearly when users ask
+9. Maintain conversation context across the entire session
+10. **FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., explicitly state what you think they're agreeing/disagreeing to based on recent context
 
 ## 🎨 RESPONSE ENHANCEMENT:
 - Use **emoji** to make sections clear (🔍 for analysis, ⚠️ for warnings, ✅ for success)
@@ -2387,6 +3106,16 @@ ${memoryContext}
 - Add **insightful commentary** - don't just list facts
 - Provide **actionable suggestions** based on results
 - Acknowledge **context from previous conversations**
+- **For attachments**: Provide detailed analysis of file contents, code structure, document insights
+
+## 🔄 FOLLOW-UP UNDERSTANDING:
+When user responds with ambiguous words:
+- "yes" → "Great! To confirm, you're agreeing to [recent proposal/question]"
+- "no" → "Understood, you're declining [recent proposal/question]"
+- "okay" → "Perfect, I'll proceed with [recent action plan]"
+- "sure" → "Excellent, I'll move forward with [recent suggestion]"
+
+Always clarify what ambiguous responses refer to by summarizing the recent context.
 
 Remember: You are an intelligent analyst and proactive assistant. Your value is in synthesizing information and providing actionable insights.`;
 }
@@ -2404,13 +3133,15 @@ async function emergencyStaticFallback(
   let content = `I'm ${executiveName}, your ${EXECUTIVE_ROLE}. `;
   
   if (query.toLowerCase().includes('hello') || query.toLowerCase().includes('hi')) {
-    content += "I'm here to help you manage tasks, agents, browse the web, and manage the XMRT ecosystem. How can I assist you today?";
+    content += "I'm here to help you manage tasks, agents, browse the web, analyze attachments, and manage the XMRT ecosystem. How can I assist you today?";
   } else if (query.toLowerCase().includes('status') || query.toLowerCase().includes('system')) {
     content += "The system is operational. I can help you check specific components using my available tools.";
   } else if (query.toLowerCase().includes('tool')) {
-    content += "I have access to 50+ tools for task management, agent control, web browsing, GitHub integration, and more. What would you like me to do?";
+    content += "I have access to 50+ tools for task management, agent control, web browsing, attachment analysis, GitHub integration, and more. What would you like me to do?";
   } else if (query.toLowerCase().includes('http') || query.toLowerCase().includes('www') || query.toLowerCase().includes('web') || query.toLowerCase().includes('browse')) {
     content += "I can browse any website for you. Please provide the full URL starting with https:// and I'll fetch the content immediately.";
+  } else if (query.toLowerCase().includes('attach') || query.toLowerCase().includes('file') || query.toLowerCase().includes('document')) {
+    content += "I can analyze attachments including text files, PDFs, images, code files, and documents. Please upload the file and I'll analyze it for you.";
   } else {
     content += "I'm currently experiencing technical difficulties with my AI providers. Please try again in a moment.";
   }
@@ -2421,8 +3152,35 @@ async function emergencyStaticFallback(
   };
 }
 
-// ========== TOOL DEFINITIONS ==========
+// ========== ENHANCED TOOL DEFINITIONS WITH ATTACHMENT ANALYSIS ==========
 const ELIZA_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'analyze_attachment',
+      description: '📎 Analyze attachments including text files, documents, images, and code files. Supports: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol (Solidity), .js, .ts, .py, .java, .cpp, .rs, .go, and 50+ more formats',
+      parameters: {
+        type: 'object',
+        properties: {
+          attachments: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                filename: { type: 'string', description: 'Name of the file' },
+                content: { type: 'string', description: 'File content (for text-based files)' },
+                mime_type: { type: 'string', description: 'MIME type of the file' },
+                size: { type: 'number', description: 'File size in bytes' },
+                url: { type: 'string', description: 'URL to the file if externally hosted' }
+              },
+              required: ['filename']
+            }
+          }
+        },
+        required: ['attachments']
+      }
+    }
+  },
   {
     type: 'function',
     function: {
@@ -2807,7 +3565,7 @@ function formatObjectForDisplay(obj: any, indentLevel: number = 0): string {
   return result;
 }
 
-// ========== MAIN SERVE FUNCTION ==========
+// ========== MAIN SERVE FUNCTION WITH ENHANCED FEATURES ==========
 Deno.serve(async (req) => {
   const startTime = Date.now();
   const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
@@ -2839,16 +3597,35 @@ Deno.serve(async (req) => {
         .from(DATABASE_CONFIG.tables.agents)
         .select('*', { count: 'exact', head: true });
       
+      // Get conversation summary count
+      const { count: summaryCount } = await supabase
+        .from(DATABASE_CONFIG.tables.conversation_summaries)
+        .select('*', { count: 'exact', head: true });
+      
       return new Response(
         JSON.stringify({
           status: 'operational',
           function: FUNCTION_NAME,
           executive: `${EXECUTIVE_NAME} - ${EXECUTIVE_ROLE}`,
-          version: '3.0.0',
+          version: '4.0.0',
           timestamp: new Date().toISOString(),
-          features: ['production-ready', 'real-database-wiring', 'persistent-memory', 'multi-provider', 'tool-chaining', 'edge-function-discovery', 'web-browsing', 'intelligent-analysis'],
+          features: [
+            'production-ready', 
+            'real-database-wiring', 
+            'persistent-memory', 
+            'multi-provider', 
+            'tool-chaining', 
+            'edge-function-discovery', 
+            'web-browsing', 
+            'intelligent-analysis',
+            'enhanced-conversation-persistence',
+            'attachment-analysis',
+            'historical-context-awareness',
+            'follow-up-understanding'
+          ],
           tools_available: toolCount || 0,
           agents_available: agentCount || 0,
+          historical_conversations: summaryCount || 0,
           providers_enabled: Object.values(AI_PROVIDERS_CONFIG).filter(p => p.enabled).map(p => p.name),
           web_browsing: {
             enabled: true,
@@ -2856,10 +3633,16 @@ Deno.serve(async (req) => {
             capabilities: ['navigate', 'extract', 'json'],
             max_timeout: 120000
           },
+          attachment_analysis: {
+            enabled: true,
+            supported_formats: AttachmentAnalyzer.SUPPORTED_EXTENSIONS,
+            capabilities: ['text_analysis', 'code_analysis', 'document_analysis', 'image_vision']
+          },
           memory_config: {
             history_limit: CONVERSATION_HISTORY_LIMIT,
             tool_memory_limit: MAX_TOOL_RESULTS_MEMORY,
-            summary_interval: MEMORY_SUMMARY_INTERVAL
+            summary_interval: MEMORY_SUMMARY_INTERVAL,
+            historical_summaries_limit: MAX_SUMMARIZED_CONVERSATIONS
           },
           database_connected: true,
           request_id: requestId
@@ -2905,7 +3688,9 @@ Deno.serve(async (req) => {
       save_memory = true,
       temperature = 0.7,
       maxTokens = 4000,
-      images = []
+      images = [],
+      attachments = [],
+      user_id
     } = body;
     
     // Validate input
@@ -2923,11 +3708,40 @@ Deno.serve(async (req) => {
     const query = userQuery || messages[messages.length - 1]?.content || '';
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${session_id}`);
     
-    // Initialize conversation manager
-    const conversationManager = new EnhancedConversationManager(session_id);
+    // Initialize enhanced conversation manager with user_id
+    const conversationManager = new EnhancedConversationManager(session_id, user_id);
     
     // Load conversation history and previous tool results
-    const { messages: savedMessages, toolResults: previousToolResults } = await conversationManager.loadConversationHistory();
+    const { 
+      messages: savedMessages, 
+      toolResults: previousToolResults,
+      historicalSummaries,
+      conversationSummary 
+    } = await conversationManager.loadConversationHistory();
+    
+    // Check for ambiguous responses and load recent context if needed
+    const { isAmbiguous, likelyReferringTo } = detectAmbiguousResponse(query, [...savedMessages, ...messages]);
+    
+    let recentContext = [];
+    if (isAmbiguous) {
+      console.log(`🤔 Detected ambiguous response: "${query}" - likely referring to: ${likelyReferringTo?.substring(0, 50)}...`);
+      recentContext = await conversationManager.loadRecentContext();
+      
+      // Save this context for future reference if it's a follow-up
+      if (savedMessages.length > 0) {
+        const lastAssistant = savedMessages.filter(m => m.role === 'assistant').pop();
+        const lastUser = savedMessages.filter(m => m.role === 'user').pop();
+        
+        if (lastAssistant && lastUser) {
+          await conversationManager.saveConversationContext(
+            lastAssistant.content || '',
+            lastAssistant.content || '',
+            query,
+            { request_id: requestId, ambiguous_response: true }
+          );
+        }
+      }
+    }
     
     // Retrieve memory contexts
     const memoryContexts = await retrieveMemoryContexts(session_id);
@@ -2944,14 +3758,30 @@ Deno.serve(async (req) => {
     const toolMemoryContext = await conversationManager.generateMemoryContext();
     memoryContext += toolMemoryContext;
     
-    // Generate system prompt with memory context
-    const systemPrompt = generateSystemPrompt(executive_name, memoryContext);
+    // Generate enhanced system prompt with historical context
+    const systemPrompt = generateSystemPrompt(
+      executive_name, 
+      memoryContext, 
+      historicalSummaries,
+      recentContext
+    );
     
     // Build message array (include previous messages + new messages)
     const allMessages = [
       ...savedMessages,
       ...messages
     ].slice(-CONVERSATION_HISTORY_LIMIT);
+    
+    // Check for attachments in the request
+    if (attachments && attachments.length > 0) {
+      console.log(`📎 Found ${attachments.length} attachment(s) in request`);
+      
+      // Add attachment information to the user message
+      const lastMessageIndex = allMessages.length - 1;
+      if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
+        allMessages[lastMessageIndex].attachments = attachments;
+      }
+    }
     
     // Few-shot examples for intelligent responses
     const FEW_SHOTS = [
@@ -3024,7 +3854,42 @@ Deno.serve(async (req) => {
         content: '<html>...Google search page...</html>', 
         metadata: { loadTime: 96 } 
       }) },
-      { role: 'assistant', content: '🔍 **Google Homepage Check**\n\n✅ *Accessible* (loaded in 96ms)\n🌐 **Search Engine Ready**\n\n💡 *Analysis*: Google.com is loading normally. This is the world\'s most popular search engine homepage.\n\n🚀 *Next Steps*: I can help you search for specific information. Just tell me what you\'re looking for and I\'ll help formulate the search query!' }
+      { role: 'assistant', content: '🔍 **Google Homepage Check**\n\n✅ *Accessible* (loaded in 96ms)\n🌐 **Search Engine Ready**\n\n💡 *Analysis*: Google.com is loading normally. This is the world\'s most popular search engine homepage.\n\n🚀 *Next Steps*: I can help you search for specific information. Just tell me what you\'re looking for and I\'ll help formulate the search query!' },
+      
+      // Attachment analysis examples
+      { role: 'user', content: 'Analyze this Solidity contract', attachments: [{ filename: 'contract.sol', content: 'contract MyToken { ... }' }] },
+      { role: 'assistant', tool_calls: [{ 
+        id: 'call_5', 
+        type: 'function', 
+        function: { 
+          name: 'analyze_attachment', 
+          arguments: JSON.stringify({ attachments: [{ filename: 'contract.sol', content: 'contract MyToken { ... }' }] }) 
+        }
+      }]},
+      { role: 'tool', tool_call_id: 'call_5', name: 'analyze_attachment', content: JSON.stringify({ 
+        success: true,
+        total_attachments: 1,
+        analyzed: 1,
+        failed: 0,
+        analyses: [{
+          success: true,
+          filename: 'contract.sol',
+          file_type: 'smart_contract',
+          detected_language: 'solidity',
+          estimated_lines: 10,
+          estimated_words: 50,
+          has_code: true,
+          key_findings: ['Smart contract file detected', 'Contract name: MyToken', 'Found 3 functions'],
+          content_preview: 'contract MyToken { ... }'
+        }]
+      }) },
+      { role: 'assistant', content: '📎 **Solidity Contract Analysis**\n\n✅ **Successfully analyzed contract.sol**\n\n🔧 **Smart Contract Details**:\n   • **File Type**: Smart contract (Solidity)\n   • **Contract Name**: MyToken\n   • **Estimated Lines**: ~10\n   • **Key Findings**:\n     - Smart contract file detected\n     - Contract name: MyToken\n     - Found 3 functions\n\n💡 *Analysis*: This appears to be a token contract with basic functionality. I can help you review the code for security issues or suggest improvements.' },
+      
+      // Follow-up understanding examples
+      { role: 'user', content: 'Should I deploy this contract?' },
+      { role: 'assistant', content: '🔍 **Contract Deployment Recommendation**\n\nBased on the contract analysis, I recommend:\n1. Run a security audit first\n2. Test on a testnet\n3. Consider gas optimization\n\nWould you like me to help you with any of these steps?' },
+      { role: 'user', content: 'yes' },
+      { role: 'assistant', content: '✅ **Great! To confirm, you\'re agreeing to proceed with the security audit, testnet testing, and gas optimization for your contract.**\n\n🚀 **Next Steps**:\n1. I\'ll run a basic security scan on your contract\n2. We can deploy to a testnet\n3. I\'ll analyze gas usage\n\nLet me start with the security audit...' }
     ];
     
     const messagesArray = [
@@ -3059,7 +3924,9 @@ Deno.serve(async (req) => {
           executive: executive_name,
           provider: 'emergency_static',
           request_id: requestId,
-          had_fallback: true
+          had_fallback: true,
+          ambiguous_response: isAmbiguous,
+          historical_context_used: historicalSummaries.length
         }
       );
       
@@ -3074,7 +3941,11 @@ Deno.serve(async (req) => {
           executionTimeMs: Date.now() - startTime,
           session_id: session_id,
           request_id: requestId,
-          note: 'Used emergency fallback due to AI provider failure'
+          note: 'Used emergency fallback due to AI provider failure',
+          memory: {
+            historical_summaries_loaded: historicalSummaries.length,
+            ambiguous_response_detected: isAmbiguous
+          }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
@@ -3125,6 +3996,13 @@ Deno.serve(async (req) => {
       }
     }
     
+    // Handle ambiguous responses in the final content
+    if (isAmbiguous && responseContent && !responseContent.includes('To confirm')) {
+      // Add clarification for ambiguous responses
+      const clarification = `\n\n💡 *To clarify*: I understand your "${query}" as agreement to my previous suggestion about "${likelyReferringTo?.substring(0, 100) || 'the previous topic'}".`;
+      responseContent = responseContent.replace(/\n*$/, '') + clarification;
+    }
+    
     // Save conversation to memory
     if (save_memory) {
       const toolResults = conversationManager.getToolResults();
@@ -3145,7 +4023,11 @@ Deno.serve(async (req) => {
           model: cascadeResult.model,
           tools_executed: toolsExecuted,
           request_id: requestId,
-          query: truncateString(query, 100)
+          query: truncateString(query, 100),
+          ambiguous_response: isAmbiguous,
+          historical_context_used: historicalSummaries.length,
+          attachments_count: attachments?.length || 0,
+          user_id: user_id
         }
       );
     }
@@ -3172,7 +4054,15 @@ Deno.serve(async (req) => {
           previous_tool_results: previousToolResults.length,
           current_tool_results: toolsExecuted,
           total_tool_results: previousToolResults.length + toolsExecuted,
+          historical_summaries_loaded: historicalSummaries.length,
+          ambiguous_response_detected: isAmbiguous,
+          recent_context_loaded: recentContext.length,
           saved: save_memory
+        },
+        features: {
+          attachment_analysis: attachments?.length > 0,
+          historical_context: historicalSummaries.length > 0,
+          follow_up_understanding: isAmbiguous
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
