@@ -3136,11 +3136,19 @@ async function handleToolChain(
 // ========== SYSTEM PROMPT GENERATOR ==========
 function generateSystemPrompt(
   executiveName: string = EXECUTIVE_NAME,
-  memoryContext: string = ''
+  memoryContext: string = '',
+  mode: string = 'single',
+  interactionMode: string = 'text'
 ): string {
   return `${TOOL_CALLING_MANDATE}
 
 You are ${executiveName}, the ${EXECUTIVE_ROLE} for XMRT-DAO Ecosystem.
+	## 🎭 OPERATIONAL MODE: ${mode.toUpperCase()}
+	${mode === 'council' ? 'You are operating in COUNCIL MODE. You should act as a lead coordinator for a group of specialized agents. Synthesize multiple perspectives and delegate tasks when appropriate.' : 'You are operating in SINGLE MODE. Provide direct, focused assistance as the primary intelligence.'}
+	
+	## 🎙️ INTERACTION MODE: ${interactionMode.toUpperCase()}
+	${interactionMode === 'voice' || interactionMode === 'tts' ? 'The user is interacting via VOICE/TTS. Keep your responses concise, clear, and easy to listen to. Avoid long lists or complex tables unless specifically requested.' : 'The user is interacting via TEXT/MULTIMODAL. You can use rich markdown, tables, and detailed explanations.'}
+
 
 ## 🎯 CORE RESPONSE PHILOSOPHY
 You are an **intelligent analyst and proactive assistant**, not just a tool executor. Your responses should:
@@ -3351,7 +3359,11 @@ serve(async (req) => {
       save_memory = true,
       temperature = 0.7,
       maxTokens = 4000,
-      images = []
+      images = [],
+      // New dashboard options
+      mode = 'single', // 'single' vs 'council'
+      interaction_mode = 'text', // 'text', 'voice', 'tts', 'multimodal'
+      attachments = [] // Array of attachment objects
     } = body;
     
     // Validate input
@@ -3391,7 +3403,25 @@ serve(async (req) => {
     memoryContext += toolMemoryContext;
     
     // Generate system prompt with memory context
-    const systemPrompt = generateSystemPrompt(executive_name, memoryContext);
+    const systemPrompt = generateSystemPrompt(executive_name, memoryContext, mode, interaction_mode);
+    // Process attachments and add to context
+    let attachmentContext = '';
+    if (attachments && attachments.length > 0) {
+      attachmentContext = "\n\n## 📎 ATTACHMENTS PROVIDED BY USER\n";
+      attachments.forEach((att: any, idx: number) => {
+        attachmentContext += `**Attachment ${idx + 1}**: ${att.name || 'Unnamed'} (${att.type || 'unknown'})\n`;
+        if (att.content) {
+          attachmentContext += `Content: ${att.content.slice(0, 2000)}${att.content.length > 2000 ? '... (truncated)' : ''}\n`;
+        } else if (att.url) {
+          attachmentContext += `URL: ${att.url}\n`;
+        }
+      });
+      console.log(`📎 Processed ${attachments.length} attachments`);
+    }
+
+    // Add attachment context to system prompt or first message
+    const finalSystemPrompt = systemPrompt + attachmentContext;
+
     
     // Build message array (include previous messages + new messages)
     const allMessages = [
@@ -3429,7 +3459,7 @@ serve(async (req) => {
     ];
     
     const messagesArray = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: finalSystemPrompt },
       ...FEW_SHOTS,
       ...allMessages
     ];
