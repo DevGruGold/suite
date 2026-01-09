@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { Trophy, GitCommit, DollarSign, TrendingUp, Cpu, Battery, Zap, ExternalLink, CheckCircle, XCircle, Clock, RefreshCw, Coins } from 'lucide-react';
-import { GitHubPATInput } from './GitHubContributorRegistration';
+import { GitHubOAuthIntegration } from './GitHubOAuthIntegration';
 import { SkeletonCard } from './ui/skeleton-card';
 import MiningLeaderboard from './MiningLeaderboard';
 import XMRTChargerLeaderboard from './XMRTChargerLeaderboard';
@@ -353,7 +353,7 @@ export const ContributorDashboard = () => {
               </CardContent>
             </Card>
           ) : (
-            <GitHubPATInput onKeyValidated={() => setShowPATInput(false)} />
+            <GitHubOAuthIntegration onConnected={() => setShowPATInput(false)} />
           )}
 
           {/* GitHub Leaderboard */}

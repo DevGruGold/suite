@@ -39,7 +39,7 @@ serve(async (req) => {
     // Check if contributor is banned
     const { data: contributor } = await supabase
       .from('github_contributors')
-      .select('is_banned, ban_reason')
+      .select('is_banned, ban_reason, harmful_contribution_count')
       .eq('github_username', contribution.github_username)
       .single();
 
@@ -149,7 +149,41 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
     const base = baseRewards[contribution.contribution_type as keyof typeof baseRewards] || 0;
     const scoreMultiplier = validation.validation_score / 100;
     const excellenceBonus = validation.validation_score >= 90 ? 1.5 : 1.0;
-    const xmrtReward = validation.is_harmful ? 0 : Math.floor(base * scoreMultiplier * excellenceBonus);
+    
+    // PoP Points to XMRT Conversion (100 PoP = 1 XMRT)
+    const POP_CONVERSION_RATE = 0.01;
+    
+    // Fetch user's current PoP points if they have a wallet linked
+    let popXmrtBonus = 0;
+    if (contribution.wallet_address) {
+      const { data: popData } = await supabase
+        .from('pop_events_ledger')
+        .select('pop_points')
+        .eq('wallet_address', contribution.wallet_address)
+        .eq('is_paid_out', false);
+      
+      const totalUnpaidPop = popData?.reduce((sum: number, p: any) => sum + (p.pop_points || 0), 0) || 0;
+      
+      if (totalUnpaidPop > 0) {
+        popXmrtBonus = Math.floor(totalUnpaidPop * POP_CONVERSION_RATE);
+        console.log(`[PoP Activation] Converting ${totalUnpaidPop} PoP points to ${popXmrtBonus} XMRT for ${contribution.wallet_address}`);
+        
+        // Mark these PoP points as paid out
+        if (popXmrtBonus > 0) {
+          await supabase
+            .from('pop_events_ledger')
+            .update({ 
+              is_paid_out: true, 
+              paid_out_at: new Date().toISOString(),
+              transaction_hash: `pop-conv-${contribution_id}`
+            })
+            .eq('wallet_address', contribution.wallet_address)
+            .eq('is_paid_out', false);
+        }
+      }
+    }
+
+    const xmrtReward = validation.is_harmful ? 0 : Math.floor(base * scoreMultiplier * excellenceBonus) + popXmrtBonus;
 
     // Update contribution
     await supabase.from('github_contributions').update({
@@ -195,6 +229,7 @@ CRITICAL: Be strict about harmful contributions. Default to rejecting anything s
         contribution_id,
         validation_score: validation.validation_score,
         xmrt_earned: xmrtReward,
+        pop_bonus_included: popXmrtBonus,
         is_harmful: validation.is_harmful,
         ai_provider: aiProvider
       },
