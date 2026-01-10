@@ -25,6 +25,7 @@ interface Profile {
   total_pop_points: number;
   total_mining_shares: number;
   github_contributions_count: number;
+  selected_organization_id: string | null;
 }
 
 interface AuthContextType {

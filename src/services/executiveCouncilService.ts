@@ -154,6 +154,7 @@ class ExecutiveCouncilService {
               userContext: context.userContext,
               miningStats: context.miningStats,
               emotionalContext: context.emotionalContext, // Pass real-time emotional data from Hume
+              organizationContext: context.organizationContext,
               councilMode: true // Signal that this is a council deliberation
             }
           });
@@ -228,9 +229,18 @@ Consider the user's emotional state when synthesizing the response. If they appe
 
     const synthesisPrompt = `You are facilitating an AI Executive Council meeting for XMRT DAO. 
 
-The user asked: "${originalQuestion}"
-${emotionalSection}
-Here are the perspectives from the different C-suite executives:
+	The user asked: "${originalQuestion}"
+	${emotionalSection}
+	${context.organizationContext ? `
+**ORGANIZATION CONTEXT:**
+- Name: ${context.organizationContext.name}
+- Website: ${context.organizationContext.website || 'N/A'}
+- GitHub: ${context.organizationContext.github_repo || 'N/A'}
+- MCP Server: ${context.organizationContext.mcp_server_address || 'N/A'}
+
+Focus your analysis on information related to this business.
+` : ''}
+	Here are the perspectives from the different C-suite executives:
 
 ${responses.map(r => `
 **${r.executiveTitle}** (${r.executiveIcon}):

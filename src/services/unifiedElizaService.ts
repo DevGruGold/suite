@@ -23,6 +23,15 @@ export interface ElizaContext {
   targetExecutive?: string;
   councilMode?: boolean;
   messages?: any[];
+  organizationContext?: {
+    name: string;
+    website?: string;
+    email?: string;
+    whatsapp_number?: string;
+    github_repo?: string;
+    mcp_server_address?: string;
+    connections?: any;
+  };
 }
 
 export class UnifiedElizaService {
@@ -153,6 +162,7 @@ export class UnifiedElizaService {
             role: 'user', 
             content: userInput || 'Hello' 
           }],
+          organizationContext: context.organizationContext,
           timestamp: new Date().toISOString()
         };
         

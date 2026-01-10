@@ -18,6 +18,7 @@ import { Navigate } from "react-router-dom";
 import { MiningSessionsList } from "@/components/MiningSessionsList";
 import { ChargerSessionsList } from "@/components/ChargerSessionsList";
 import { ClaimedDevicesSection } from "@/components/ClaimedDevicesSection";
+import { OrganizationProfile } from "@/components/OrganizationProfile";
 
 interface UserEarnings {
   github_xmrt: number;
@@ -256,6 +257,9 @@ const Profile = () => {
               )}
             </CardContent>
           </Card>
+
+          {/* Business & Organizations Section */}
+          <OrganizationProfile />
 
           {/* Earnings Summary */}
           <Card>

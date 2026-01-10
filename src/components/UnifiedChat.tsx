@@ -6,6 +6,7 @@ import { Badge } from './ui/badge';
 import { ScrollArea } from './ui/scroll-area';
 import { AdaptiveAvatar } from './AdaptiveAvatar';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { ReasoningSteps, type ReasoningStep } from './ReasoningSteps';
 // 🎤 TTS is now language-aware: English (en) / Spanish (es)
 import { GitHubPATInput } from './GitHubContributorRegistration';
@@ -105,6 +106,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 }) => {
   // Core state
   const { language } = useLanguage();
+  const { profile } = useAuth();
   const [messages, setMessages] = useState<UnifiedMessage[]>([]);
   const [conversationSummaries, setConversationSummaries] = useState<Array<{ summaryText: string; messageCount: number; createdAt: Date }>>([]);
   const [hasMoreMessages, setHasMoreMessages] = useState(false);
@@ -159,6 +161,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // XMRT context state - using unified service
   const [miningStats, setMiningStats] = useState<MiningStats | null>(externalMiningStats || null);
   const [userContext, setUserContext] = useState<UserContext | null>(null);
+  const [organizationContext, setOrganizationContext] = useState<any>(null);
   const [lastElizaMessage, setLastElizaMessage] = useState<string>("");
   
   // Council mode state - initialize from prop
@@ -539,6 +542,27 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     
     initialize();
   }, []);
+
+  // Fetch organization context when profile changes
+  useEffect(() => {
+    const fetchOrgContext = async () => {
+      if (profile?.selected_organization_id) {
+        const { data, error } = await supabase
+          .from('organizations')
+          .select('*')
+          .eq('id', profile.selected_organization_id)
+          .single();
+        
+        if (!error && data) {
+          setOrganizationContext(data);
+          console.log('🏢 Organization context loaded:', data.name);
+        }
+      } else {
+        setOrganizationContext(null);
+      }
+    };
+    fetchOrgContext();
+  }, [profile?.selected_organization_id]);
 
   // Set up realtime subscriptions for live updates
   useEffect(() => {
@@ -976,6 +1000,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const response = await UnifiedElizaService.generateResponse(transcript, {
         miningStats,
         userContext,
+        organizationContext,
         inputMode,
         shouldSpeak: true,
         enableBrowsing: true,
@@ -1239,6 +1264,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const response = await UnifiedElizaService.generateResponse(messageText, {
         miningStats,
         userContext,
+        organizationContext,
         inputMode: imageBase64Array.length > 0 ? 'vision' : 'text',
         shouldSpeak: false,
         enableBrowsing: true,
