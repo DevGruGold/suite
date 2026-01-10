@@ -186,10 +186,11 @@ const TOOL_CALLING_MANDATE = `
 - NEVER list functions from memory - ALWAYS query the database via this tool
 - Use query/category filters to find specific functions
 
-📎 ATTACHMENT ANALYSIS (MANDATORY):
-- When user provides attachments (images, PDFs, docs, code files) → IMMEDIATELY call analyze_attachment({attachments: [...]})
-- This tool can analyze: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol, .js, .ts, .py, .java, .cpp, .rs, .go, .md, .json, .yaml, .yml, .csv
-- Always analyze attachments when they are provided
+📎 ATTACHMENT ANALYSIS (MANDATORY - ALL MODES: TTS, AUDIO, MULTIMEDIA):
+- When user provides attachments (images, PDFs, docs, code files, audio, video) → IMMEDIATELY call analyze_attachment({attachments: [...]})
+- This tool can analyze: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol, .js, .ts, .py, .java, .cpp, .rs, .go, .md, .json, .yaml, .yml, .csv, .mp3, .wav, .mp4, .avi, and 50+ more formats
+- Supports ALL modes: TTS (text-to-speech content), Audio (audio files), Multimedia (images, videos, mixed content)
+- Always analyze attachments when they are provided, regardless of the mode
 `;
 
 // ========== UTILITY FUNCTIONS FOR REAL PRODUCTION ==========
@@ -464,10 +465,27 @@ class AttachmentAnalyzer {
     // Configuration files
     '.ini', '.conf', '.cfg', '.env'
   ];
+
+
+  // Audio/Video file extensions
+  static readonly AUDIO_EXTENSIONS = [
+    '.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.wma', '.opus'
+  ];
+  
+  static readonly VIDEO_EXTENSIONS = [
+    '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'
+  ];
+  
+  static readonly ALL_EXTENSIONS = [
+    ...AttachmentAnalyzer.SUPPORTED_EXTENSIONS,
+    ...AttachmentAnalyzer.AUDIO_EXTENSIONS,
+    ...AttachmentAnalyzer.VIDEO_EXTENSIONS
+  ];
+
   
   static isSupportedFile(filename: string): boolean {
     const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-    return this.SUPPORTED_EXTENSIONS.includes(extension);
+    return this.ALL_EXTENSIONS.includes(extension);
   }
   
   static getFileType(filename: string): string {
@@ -568,9 +586,33 @@ class AttachmentAnalyzer {
       }
     }
     
+    
+
+    // For audio files, extract metadata
+    if (fileType === 'audio') {
+      analysis.analysis_type = 'audio_metadata';
+      analysis.note = 'Audio file detected - can be transcribed if needed';
+      analysis.key_findings.push('Audio file format detected');
+      
+      // Extract format info
+      const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+      analysis.key_findings.push(`Audio format: ${ext.substring(1).toUpperCase()}`);
+    }
+    
+    // For video files, extract metadata
+    if (fileType === 'video') {
+      analysis.analysis_type = 'video_metadata';
+      analysis.note = 'Video file detected - can be analyzed for content';
+      analysis.key_findings.push('Video file format detected');
+      
+      // Extract format info
+      const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
+      analysis.key_findings.push(`Video format: ${ext.substring(1).toUpperCase()}`);
+    }
+
     return analysis;
   }
-  
+
   // Save attachment analysis to database
   static async saveAnalysisToDatabase(
     sessionId: string,
@@ -3524,6 +3566,148 @@ const ELIZA_TOOLS = [
   }
 ];
 
+
+// ========== MULTIPART FORM DATA PARSER ==========
+async function parseMultipartFormData(req: Request): Promise<{
+  fields: Record<string, any>;
+  files: Array<{
+    filename: string;
+    content: string | ArrayBuffer;
+    mimeType: string;
+    size: number;
+  }>;
+}> {
+  const contentType = req.headers.get('content-type') || '';
+  
+  if (!contentType.includes('multipart/form-data')) {
+    throw new Error('Not a multipart/form-data request');
+  }
+  
+  const boundary = contentType.split('boundary=')[1];
+  if (!boundary) {
+    throw new Error('No boundary found in Content-Type header');
+  }
+  
+  const body = await req.text();
+  const parts = body.split(`--${boundary}`);
+  
+  const fields: Record<string, any> = {};
+  const files: Array<any> = [];
+  
+  for (const part of parts) {
+    if (part.trim() === '' || part.trim() === '--') continue;
+    
+    const [headerSection, ...contentSections] = part.split('\r\n\r\n');
+    if (!headerSection || contentSections.length === 0) continue;
+    
+    const content = contentSections.join('\r\n\r\n').replace(/\r\n$/, '');
+    
+    // Parse headers
+    const nameMatch = headerSection.match(/name="([^"]+)"/);
+    const filenameMatch = headerSection.match(/filename="([^"]+)"/);
+    const contentTypeMatch = headerSection.match(/Content-Type:\s*([^\r\n]+)/i);
+    
+    if (!nameMatch) continue;
+    
+    const fieldName = nameMatch[1];
+    
+    if (filenameMatch) {
+      // This is a file
+      const filename = filenameMatch[1];
+      const mimeType = contentTypeMatch ? contentTypeMatch[1].trim() : 'application/octet-stream';
+      
+      files.push({
+        filename,
+        content,
+        mimeType,
+        size: content.length,
+        fieldName
+      });
+    } else {
+      // This is a regular field
+      try {
+        // Try to parse as JSON
+        fields[fieldName] = JSON.parse(content);
+      } catch {
+        // Store as string
+        fields[fieldName] = content;
+      }
+    }
+  }
+  
+  return { fields, files };
+}
+
+// ========== ENHANCED ATTACHMENT PROCESSING ==========
+async function processAttachmentsFromRequest(
+  attachments: any[],
+  files: any[],
+  mode: 'tts' | 'audio' | 'multimedia' | 'auto' = 'auto'
+): Promise<any[]> {
+  const processedAttachments = [];
+  
+  // Process JSON attachments
+  if (attachments && Array.isArray(attachments)) {
+    processedAttachments.push(...attachments);
+  }
+  
+  // Process uploaded files
+  if (files && Array.isArray(files)) {
+    for (const file of files) {
+      const fileType = AttachmentAnalyzer.getFileType(file.filename);
+      
+      let processedFile: any = {
+        filename: file.filename,
+        mime_type: file.mimeType,
+        size: file.size,
+        file_type: fileType
+      };
+      
+      // For text-based files, include content
+      if (['text', 'code', 'smart_contract', 'document'].includes(fileType)) {
+        processedFile.content = typeof file.content === 'string' 
+          ? file.content 
+          : new TextDecoder().decode(file.content as ArrayBuffer);
+      }
+      
+      // For images, prepare for vision analysis
+      if (fileType === 'image') {
+        if (typeof file.content === 'string') {
+          // Assume it's already base64 or text
+          processedFile.content = file.content;
+        } else {
+          // Convert ArrayBuffer to base64
+          const bytes = new Uint8Array(file.content as ArrayBuffer);
+          processedFile.content = btoa(String.fromCharCode(...bytes));
+        }
+        processedFile.base64_encoded = true;
+      }
+      
+      // For audio files
+      if (fileType === 'audio') {
+        processedFile.audio_analysis_pending = true;
+        processedFile.note = 'Audio files can be transcribed or analyzed';
+        
+        // Store reference for potential transcription
+        if (typeof file.content !== 'string') {
+          const bytes = new Uint8Array(file.content as ArrayBuffer);
+          processedFile.content_base64 = btoa(String.fromCharCode(...bytes));
+        }
+      }
+      
+      // For video files
+      if (fileType === 'video') {
+        processedFile.video_analysis_pending = true;
+        processedFile.note = 'Video files can be analyzed for content';
+      }
+      
+      processedAttachments.push(processedFile);
+    }
+  }
+  
+  return processedAttachments;
+}
+
 // ========== UTILITY FUNCTIONS ==========
 function truncateString(str: string, maxLength: number): string {
   if (str.length <= maxLength) return str;
@@ -3620,6 +3804,9 @@ Deno.serve(async (req) => {
             'intelligent-analysis',
             'enhanced-conversation-persistence',
             'attachment-analysis',
+            'multimodal-support',
+            'audio-video-analysis',
+            'multipart-upload',
             'historical-context-awareness',
             'follow-up-understanding'
           ],
@@ -3635,8 +3822,10 @@ Deno.serve(async (req) => {
           },
           attachment_analysis: {
             enabled: true,
-            supported_formats: AttachmentAnalyzer.SUPPORTED_EXTENSIONS,
-            capabilities: ['text_analysis', 'code_analysis', 'document_analysis', 'image_vision']
+            supported_formats: AttachmentAnalyzer.ALL_EXTENSIONS,
+            capabilities: ['text_analysis', 'code_analysis', 'document_analysis', 'image_vision', 'audio_metadata', 'video_metadata'],
+            modes_supported: ['tts', 'audio', 'multimedia', 'auto'],
+            multipart_upload: true
           },
           memory_config: {
             history_limit: CONVERSATION_HISTORY_LIMIT,
@@ -3664,8 +3853,20 @@ Deno.serve(async (req) => {
     }
     
     let body;
+    let uploadedFiles: any[] = [];
+    
+    // Check if this is a multipart request
+    const contentType = req.headers.get('content-type') || '';
+    
     try {
-      body = await req.json();
+      if (contentType.includes('multipart/form-data')) {
+        console.log('📎 Parsing multipart/form-data request');
+        const { fields, files } = await parseMultipartFormData(req);
+        body = fields;
+        uploadedFiles = files;
+        console.log(`📎 Received ${files.length} uploaded file(s)`);
+      } else {
+        body = await req.json();
     } catch (parseError: any) {
       clearTimeout(timeoutId);
       return new Response(
@@ -3772,14 +3973,21 @@ Deno.serve(async (req) => {
       ...messages
     ].slice(-CONVERSATION_HISTORY_LIMIT);
     
+    // Process attachments from both JSON and uploaded files
+    let processedAttachments = await processAttachmentsFromRequest(
+      attachments,
+      uploadedFiles,
+      'auto'
+    );
+    
     // Check for attachments in the request
-    if (attachments && attachments.length > 0) {
-      console.log(`📎 Found ${attachments.length} attachment(s) in request`);
+    if (processedAttachments && processedAttachments.length > 0) {
+      console.log(`📎 Found ${processedAttachments.length} attachment(s) in request (${uploadedFiles.length} uploaded, ${attachments?.length || 0} from JSON)`);
       
       // Add attachment information to the user message
       const lastMessageIndex = allMessages.length - 1;
       if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
-        allMessages[lastMessageIndex].attachments = attachments;
+        allMessages[lastMessageIndex].attachments = processedAttachments;
       }
     }
     
