@@ -33,15 +33,15 @@ export function MobileNavOverlay({ isOpen, onClose }: MobileNavOverlayProps) {
   const { isAdmin } = useAuth();
 
   const baseNavItems = [
-    { to: "/", label: t('nav.home'), icon: Home },
-    { to: "/council", label: "Board", icon: Users },
-    { to: "/earn", label: "Earn", icon: Coins },
-    { to: "/governance", label: "Governance", icon: Scale },
-    { to: "/licensing", label: "Enterprise", icon: Building2 },
+    { to: "/", label: "nav.home", icon: Home },
+    { to: "/council", label: "nav.board", icon: Users },
+    { to: "/earn", label: "nav.earn", icon: Coins },
+    { to: "/governance", label: "nav.governance", icon: Scale },
+    { to: "/licensing", label: "nav.enterprise", icon: Building2 },
   ];
 
   const navItems = isAdmin
-    ? [...baseNavItems, { to: "/admin", label: "Admin", icon: Shield }]
+    ? [...baseNavItems, { to: "/admin", label: "nav.admin", icon: Shield }]
     : baseNavItems;
 
   if (!isOpen) return null;
@@ -57,7 +57,7 @@ export function MobileNavOverlay({ isOpen, onClose }: MobileNavOverlayProps) {
             onClick={onClose}
           >
             <item.icon className="h-5 w-5" />
-            {item.label}
+            {t(item.label)}
           </Link>
         ))}
       </nav>

@@ -4,6 +4,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { SuiteLogo } from '@/components/SuiteLogo';
 import { AuthModal } from '@/components/AuthModal';
+import { LanguageToggle } from '@/components/LanguageToggle';
 import { Menu, X, LogIn, Sparkles, Shield, FileText } from 'lucide-react';
 import {
   DropdownMenu,
@@ -42,6 +43,9 @@ export function LandingNav() {
           <SuiteLogo size="md" />
 
           <div className="flex items-center gap-3">
+            {/* Language Toggle */}
+            <LanguageToggle />
+            
             {/* CTA Button */}
             <Button 
               onClick={handleGetStarted}

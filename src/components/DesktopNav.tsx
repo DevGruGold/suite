@@ -2,21 +2,23 @@ import { NavLink, useLocation } from "react-router-dom";
 import { Home, Users, Coins, Scale, Building2, Shield } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const navItems = [
-  { to: "/", label: "Home", icon: Home },
-  { to: "/council", label: "Board", icon: Users },
-  { to: "/earn", label: "Earn", icon: Coins },
-  { to: "/governance", label: "Governance", icon: Scale },
-  { to: "/licensing", label: "Enterprise", icon: Building2 },
+  { to: "/", label: "nav.home", icon: Home },
+  { to: "/council", label: "nav.board", icon: Users },
+  { to: "/earn", label: "nav.earn", icon: Coins },
+  { to: "/governance", label: "nav.governance", icon: Scale },
+  { to: "/licensing", label: "nav.enterprise", icon: Building2 },
 ];
 
 export const DesktopNav = () => {
   const location = useLocation();
   const { isAdmin } = useAuth();
+  const { t } = useLanguage();
 
   const allNavItems = isAdmin 
-    ? [...navItems, { to: "/admin", label: "Admin", icon: Shield }]
+    ? [...navItems, { to: "/admin", label: "nav.admin", icon: Shield }]
     : navItems;
 
   return (
@@ -37,7 +39,7 @@ export const DesktopNav = () => {
             )}
           >
             <Icon className="w-4 h-4" />
-            <span>{item.label}</span>
+            <span>{t(item.label)}</span>
           </NavLink>
         );
       })}
