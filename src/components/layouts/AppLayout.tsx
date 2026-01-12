@@ -3,6 +3,7 @@ import { MobileNavTrigger, MobileNavOverlay } from "@/components/MobileNav";
 import { DesktopNav } from "@/components/DesktopNav";
 import { Footer } from "@/components/Footer";
 import { UserMenu } from "@/components/UserMenu";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Activity } from "lucide-react";
 import { useState } from "react";
 
@@ -39,11 +40,14 @@ export const AppLayout = () => {
                 <span>120+</span>
               </div>
               <div className="w-px h-4 bg-border" />
+              <LanguageToggle />
+              <div className="w-px h-4 bg-border" />
               <UserMenu />
             </div>
 
             {/* Mobile: User Menu + Hamburger side-by-side */}
             <div className="md:hidden flex items-center gap-2">
+              <LanguageToggle />
               <UserMenu />
               <MobileNavTrigger isOpen={mobileNavOpen} onToggle={() => setMobileNavOpen(!mobileNavOpen)} />
             </div>

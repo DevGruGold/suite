@@ -1,20 +1,40 @@
-import { Languages } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { useLanguage } from '@/contexts/LanguageContext';
+import { Button } from '@/components/ui/button';
+import { Languages } from 'lucide-react';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 
 export function LanguageToggle() {
   const { language, setLanguage } = useLanguage();
 
   return (
-    <div className="fixed top-4 left-4 z-50 flex items-center gap-2 bg-card/80 backdrop-blur-sm border border-border rounded-full px-3 py-2 shadow-lg">
-      <Languages className="h-4 w-4 text-muted-foreground" />
-      <span className="text-sm font-medium text-foreground">EN</span>
-      <Switch
-        checked={language === 'es'}
-        onCheckedChange={(checked) => setLanguage(checked ? 'es' : 'en')}
-        className="data-[state=checked]:bg-primary"
-      />
-      <span className="text-sm font-medium text-foreground">ES</span>
-    </div>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="h-9 w-9">
+          <Languages className="h-4 w-4" />
+          <span className="sr-only">Toggle language</span>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem
+          onClick={() => setLanguage('en')}
+          className={language === 'en' ? 'bg-accent' : ''}
+        >
+          <span className="mr-2">🇺🇸</span>
+          English
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => setLanguage('es')}
+          className={language === 'es' ? 'bg-accent' : ''}
+        >
+          <span className="mr-2">🇪🇸</span>
+          Español
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
