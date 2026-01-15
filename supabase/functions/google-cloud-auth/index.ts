@@ -53,7 +53,32 @@ interface TokenResponse {
 async function getAccessToken(): Promise<string | null> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
+  let refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
+
+  // Fallback to database if not in env
+  if (!refreshToken) {
+    try {
+      const supabaseUrl = Deno.env.get('SUPABASE_URL');
+      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+      if (supabaseUrl && supabaseKey) {
+        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+        const supabase = createClient(supabaseUrl, supabaseKey);
+        const { data } = await supabase
+          .from('oauth_connections')
+          .select('refresh_token')
+          .eq('provider', 'google_cloud')
+          .eq('is_active', true)
+          .order('connected_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        if (data?.refresh_token) {
+          refreshToken = data.refresh_token;
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching refresh token from DB in getAccessToken:', err);
+    }
+  }
 
   if (!clientId || !clientSecret || !refreshToken) {
     console.error('Missing Google OAuth credentials');
@@ -528,9 +553,60 @@ serve(async (req) => {
 
         const tokens: TokenResponse = await tokenResponse.json();
 
+        // Store in oauth_connections table if we have a refresh token
+        if (tokens.refresh_token) {
+          try {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL');
+            const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+            
+            if (supabaseUrl && supabaseKey) {
+              const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+              const supabase = createClient(supabaseUrl, supabaseKey);
+              
+              // Get user info to store email
+              const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
+                headers: { Authorization: `Bearer ${tokens.access_token}` }
+              });
+              const userInfo = await userInfoResponse.json();
+
+              // Deactivate existing Google Cloud connections
+              await supabase
+                .from('oauth_connections')
+                .update({ is_active: false })
+                .eq('provider', 'google_cloud');
+
+              // Insert new connection
+              await supabase
+                .from('oauth_connections')
+                .insert({
+                  provider: 'google_cloud',
+                  provider_user_id: userInfo.id || null,
+                  provider_email: userInfo.email || null,
+                  access_token: tokens.access_token,
+                  refresh_token: tokens.refresh_token,
+                  token_type: tokens.token_type || 'Bearer',
+                  expires_at: new Date(Date.now() + (tokens.expires_in * 1000)).toISOString(),
+                  scopes: tokens.scope ? tokens.scope.split(' ') : SCOPES.split(' '),
+                  is_active: true,
+                  connected_at: new Date().toISOString(),
+                  last_refreshed_at: new Date().toISOString(),
+                  metadata: {
+                    user_info: userInfo,
+                    granted_scopes: tokens.scope
+                  }
+                });
+              
+              console.log('✅ OAuth connection saved to database from google-cloud-auth');
+            }
+          } catch (dbErr) {
+            console.error('Failed to save token to database:', dbErr);
+            // Continue anyway as we return the tokens to the UI
+          }
+        }
+
         return new Response(JSON.stringify({
           success: true,
-          message: 'Authorization successful! Store refresh_token in Supabase secrets as GOOGLE_REFRESH_TOKEN',
+          message: 'Authorization successful! Refresh token has been saved to the database.',
           refresh_token: tokens.refresh_token,
           access_token: tokens.access_token,
           expires_in: tokens.expires_in,
@@ -563,16 +639,38 @@ serve(async (req) => {
       }
 
       case 'status': {
+        let hasRefreshToken = !!refreshToken;
+        if (!hasRefreshToken) {
+          try {
+            const supabaseUrl = Deno.env.get('SUPABASE_URL');
+            const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+            if (supabaseUrl && supabaseKey) {
+              const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+              const supabase = createClient(supabaseUrl, supabaseKey);
+              const { data } = await supabase
+                .from('oauth_connections')
+                .select('id')
+                .eq('provider', 'google_cloud')
+                .eq('is_active', true)
+                .limit(1)
+                .maybeSingle();
+              hasRefreshToken = !!data;
+            }
+          } catch (err) {
+            console.error('Error checking refresh token in DB for status:', err);
+          }
+        }
+
         return new Response(JSON.stringify({
           success: true,
           configured: {
             client_id: !!clientId,
             client_secret: !!clientSecret,
-            refresh_token: !!refreshToken
+            refresh_token: hasRefreshToken
           },
-          ready: !!(clientId && clientSecret && refreshToken),
+          ready: !!(clientId && clientSecret && hasRefreshToken),
           available_services: ['gmail', 'drive', 'sheets', 'calendar', 'gemini'],
-          message: !refreshToken 
+          message: !hasRefreshToken 
             ? 'GOOGLE_REFRESH_TOKEN not set. Run authorization flow to obtain it.'
             : 'Google Cloud OAuth fully configured with Gmail, Drive, Sheets, Calendar access'
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
