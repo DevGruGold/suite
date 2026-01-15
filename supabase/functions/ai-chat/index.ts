@@ -717,9 +717,9 @@ async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
 }
 
 // ========== NEW: ATTACHMENT ANALYSIS TOOL ==========
-async function analyzeAttachmentTool(attachments: any[]): Promise<any> {
+async function analyzeAttachmentTool(attachments: any[], sessionId: string = 'unknown'): Promise<any> {
   try {
-    console.log(`📎 Analyzing ${attachments.length} attachment(s)`);
+    console.log(`📎 Analyzing ${attachments.length} attachment(s) for session ${sessionId}`);
     
     const analyses = [];
     
@@ -783,7 +783,7 @@ async function analyzeAttachmentTool(attachments: any[]): Promise<any> {
       // Save analysis to database if successful
       if (analysis.success) {
         await AttachmentAnalyzer.saveAnalysisToDatabase(
-          'current_session', // Will be replaced with actual session ID
+          sessionId,
           filename,
           analysis
         );
@@ -830,7 +830,7 @@ async function executeRealToolCall(
         throw new Error('Missing or empty attachments array');
       }
       
-      result = await analyzeAttachmentTool(attachments);
+      result = await analyzeAttachmentTool(attachments, sessionId);
       
     } else if (name === 'browse_web') {
       const url = parsedArgs.url;
@@ -3988,6 +3988,27 @@ Deno.serve(async (req) => {
       const lastMessageIndex = allMessages.length - 1;
       if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
         allMessages[lastMessageIndex].attachments = processedAttachments;
+        
+        // CRITICAL FIX: Update message content to inform AI about attachments
+        const attachmentList = processedAttachments.map(a => `• ${a.filename} (${a.file_type})`).join('\n');
+        const attachmentPrompt = `\n\n[📎 ATTACHMENTS PROVIDED]\nThe user has provided the following attachments:\n${attachmentList}\n\nI MUST use the 'analyze_attachment' tool to examine these files before responding if I need to understand their content.`;
+        
+        if (typeof allMessages[lastMessageIndex].content === 'string') {
+          allMessages[lastMessageIndex].content += attachmentPrompt;
+        }
+        
+        // Also add images to the images array for vision models
+        for (const att of processedAttachments) {
+          if (att.file_type === 'image' && att.content && att.base64_encoded) {
+            const imageBase64 = att.content.startsWith('data:') 
+              ? att.content 
+              : `data:${att.mime_type || 'image/png'};base64,${att.content}`;
+            
+            if (!images.includes(imageBase64)) {
+              images.push(imageBase64);
+            }
+          }
+        }
       }
     }
     
