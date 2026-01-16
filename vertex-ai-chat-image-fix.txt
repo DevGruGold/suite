@@ -1,0 +1,129 @@
+// Fix for vertex-ai-chat: Update to handle image generation correctly
+
+// Replace lines 91-120 in vertex-ai-chat/index.ts with this corrected implementation:
+
+const VertexAI = {
+  async generateImage(accessToken: string, prompt: string, options: any = {}) {
+    const GOOGLE_CLOUD_PROJECT_ID = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID') || 'xmrt-dao';
+    const GOOGLE_CLOUD_LOCATION = Deno.env.get('GOOGLE_CLOUD_LOCATION') || 'us-central1';
+    
+    const IMAGEN_ENDPOINT = `https://${GOOGLE_CLOUD_LOCATION}-aiplatform.googleapis.com/v1/projects/${GOOGLE_CLOUD_PROJECT_ID}/locations/${GOOGLE_CLOUD_LOCATION}/publishers/google/models/imagen-3.0-generate-001:predict`;
+
+    const requestBody = {
+      instances: [
+        {
+          prompt: prompt,
+        }
+      ],
+      parameters: {
+        sampleCount: options.numberOfImages || 1,
+        aspectRatio: options.aspectRatio || "1:1",
+        negativePrompt: options.negativePrompt || "",
+        safetyFilterLevel: options.safetyFilterLevel || "block_some",
+        personGeneration: options.personGeneration || "dont_allow"
+      }
+    };
+
+    console.log('🎨 Generating image with Vertex AI Imagen 3 via vertex-ai-chat');
+
+    const response = await fetch(IMAGEN_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Vertex AI Imagen generation failed:', response.status, errorText);
+      throw new Error(`Imagen generation failed: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    const predictions = result.predictions || [];
+    
+    return {
+      success: true,
+      images: predictions.map((pred: any) => ({
+        bytesBase64Encoded: pred.bytesBase64Encoded,
+        mimeType: pred.mimeType || 'image/png',
+        imageSize: pred.imageSize,
+      })),
+      prompt: prompt,
+      modelUsed: 'imagen-3.0-generate-001',
+      timestamp: new Date().toISOString()
+    };
+  },
+
+  async analyzeImage(accessToken: string, imageContent: string, features: string[] = []) {
+    const VISION_ENDPOINT = `https://vision.googleapis.com/v1/images:annotate`;
+    
+    // Remove data URL prefix if present
+    if (imageContent.includes('base64,')) {
+      imageContent = imageContent.split('base64,')[1];
+    }
+
+    const defaultFeatures = [
+      'LABEL_DETECTION',
+      'TEXT_DETECTION',
+      'SAFE_SEARCH_DETECTION',
+      'IMAGE_PROPERTIES'
+    ];
+
+    const requestBody = {
+      requests: [
+        {
+          image: { content: imageContent },
+          features: (features.length > 0 ? features : defaultFeatures).map(feature => ({
+            type: feature,
+            maxResults: 10
+          }))
+        }
+      ]
+    };
+
+    console.log('🔍 Analyzing image with Google Cloud Vision API via vertex-ai-chat');
+
+    const response = await fetch(VISION_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Vision API analysis failed:', response.status, errorText);
+      throw new Error(`Vision API failed: ${response.status} ${errorText}`);
+    }
+
+    const result = await response.json();
+    const analysis = result.responses?.[0] || {};
+
+    return {
+      success: true,
+      labels: (analysis.labelAnnotations || []).map((label: any) => ({
+        description: label.description,
+        score: label.score,
+        topicality: label.topicality
+      })),
+      textDetections: (analysis.textAnnotations || []).map((text: any) => ({
+        description: text.description,
+        locale: text.locale
+      })),
+      safeSearch: analysis.safeSearchAnnotation || {},
+      imageProperties: {
+        dominantColors: analysis.imagePropertiesAnnotation?.dominantColors?.colors?.map((color: any) => ({
+          color: color.color,
+          score: color.score,
+          pixelFraction: color.pixelFraction
+        })) || []
+      },
+      timestamp: new Date().toISOString()
+    };
+  }
+};
