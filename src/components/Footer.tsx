@@ -1,8 +1,10 @@
 import { Github, Twitter, Mail } from "lucide-react";
 import { Button } from "./ui/button";
 import { Link } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function Footer() {
+  const { t } = useLanguage();
   const openEmail = () => {
     const subject = "XMRT-DAO Inquiry";
     const body = "Hello,\n\nI'm interested in learning more about XMRT-DAO and Suite.\n\nBest regards,";
@@ -18,7 +20,7 @@ export function Footer() {
           {/* Top row: Copyright and Social Links */}
           <div className="flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-4">
             <div className="text-muted-foreground text-xs sm:text-sm text-center sm:text-left">
-              © 2026 XMRT-DAO. All rights reserved.
+              {t('footer.copyright')}
             </div>
             <div className="flex gap-3 sm:gap-4 items-center">
               <Button
@@ -57,14 +59,14 @@ export function Footer() {
               to="/privacy" 
               className="text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
             >
-              Privacy Policy
+              {t('footer.privacy')}
             </Link>
             <span className="text-muted-foreground">•</span>
             <Link 
               to="/terms" 
               className="text-muted-foreground hover:text-primary transition-colors underline-offset-4 hover:underline"
             >
-              Terms of Service
+              {t('footer.terms')}
             </Link>
           </div>
         </div>

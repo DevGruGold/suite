@@ -4,10 +4,12 @@ import { DesktopNav } from "@/components/DesktopNav";
 import { Footer } from "@/components/Footer";
 import { UserMenu } from "@/components/UserMenu";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { Activity } from "lucide-react";
 import { useState } from "react";
 
 export const AppLayout = () => {
+  const { t } = useLanguage();
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
 
   return (
@@ -32,7 +34,7 @@ export const AppLayout = () => {
             <div className="hidden md:flex items-center gap-3">
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                 <div className="w-1.5 h-1.5 rounded-full bg-suite-success animate-pulse" />
-                <span>Active</span>
+                <span>{t('label.active')}</span>
               </div>
               <div className="w-px h-4 bg-border" />
               <div className="flex items-center gap-1.5 text-xs text-muted-foreground">

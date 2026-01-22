@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { SuiteLogo } from '@/components/SuiteLogo';
 import { AuthModal } from '@/components/AuthModal';
 import { LanguageToggle } from '@/components/LanguageToggle';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Menu, X, LogIn, Sparkles, Shield, FileText } from 'lucide-react';
 import {
   DropdownMenu,
@@ -18,6 +19,7 @@ import { toast } from 'sonner';
 export function LandingNav() {
   const navigate = useNavigate();
   const { signInWithGoogle, isAuthenticated } = useAuth();
+  const { t } = useLanguage();
   const [authModalOpen, setAuthModalOpen] = useState(false);
   const [isSigningIn, setIsSigningIn] = useState(false);
 
@@ -67,33 +69,33 @@ export function LandingNav() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuItem onClick={() => document.getElementById('executives')?.scrollIntoView({ behavior: 'smooth' })}>
-                  AI Executives
+                  {t('nav.council')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => document.getElementById('benefits')?.scrollIntoView({ behavior: 'smooth' })}>
-                  Benefits
+                  {t('landing.benefits.title')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => document.getElementById('how-it-works')?.scrollIntoView({ behavior: 'smooth' })}>
-                  How It Works
+                  {t('landing.how.title')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={() => navigate('/privacy')}>
                   <Shield className="w-4 h-4 mr-2" />
-                  Privacy Policy
+                  {t('footer.privacy')}
                 </DropdownMenuItem>
                 <DropdownMenuItem onClick={() => navigate('/terms')}>
                   <FileText className="w-4 h-4 mr-2" />
-                  Terms of Service
+                  {t('footer.terms')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 {isAuthenticated ? (
                   <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                     <Sparkles className="w-4 h-4 mr-2" />
-                    Go to Dashboard
+                    {t('button.dashboard')}
                   </DropdownMenuItem>
                 ) : (
                   <DropdownMenuItem onClick={() => setAuthModalOpen(true)}>
                     <LogIn className="w-4 h-4 mr-2" />
-                    Sign In
+                    {t('button.signin')}
                   </DropdownMenuItem>
                 )}
               </DropdownMenuContent>

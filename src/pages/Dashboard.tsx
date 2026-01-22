@@ -8,9 +8,11 @@ import { Activity, Bot } from "lucide-react";
 import { HeroSection } from "@/components/HeroSection";
 import { SEOHead } from "@/components/SEOHead";
 import { useAudio } from "@/contexts/AudioContext";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const Index = () => {
   const { playWelcomeOnce } = useAudio();
+  const { t } = useLanguage();
 
   // Play welcome audio once per session when dashboard loads (handles post-login)
   useEffect(() => {
@@ -49,7 +51,7 @@ const Index = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Bot className="w-4 h-4 text-primary" />
-                Agent & Task Visualizer
+                {t('dashboard.visualizer.title')}
               </CardTitle>
             </div>
           </CardHeader>
@@ -64,10 +66,10 @@ const Index = () => {
             <div className="flex items-center justify-between">
               <CardTitle className="text-sm font-medium flex items-center gap-2">
                 <Activity className="w-4 h-4 text-primary" />
-                System Activity
+                {t('dashboard.activity.title')}
               </CardTitle>
               <Badge variant="outline" className="text-xs font-normal">
-                Live
+                {t('dashboard.activity.live')}
               </Badge>
             </div>
           </CardHeader>

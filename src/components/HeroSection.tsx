@@ -5,29 +5,9 @@ import { AgentStatusGrid } from './AgentStatusGrid';
 import { supabase } from '@/integrations/supabase/client';
 import { Zap, Bot, Activity, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { useLanguage } from '@/contexts/LanguageContext';
 
-const marketingBanners = [
-  {
-    title: "Enterprise AI Automation",
-    subtitle: "Intelligent systems that work while you sleep",
-    gradient: "from-primary/20 to-primary/5"
-  },
-  {
-    title: "120+ Edge Functions",
-    subtitle: "Self-healing, self-optimizing infrastructure",
-    gradient: "from-emerald-500/20 to-emerald-500/5"
-  },
-  {
-    title: "Real-Time Monitoring",
-    subtitle: "Complete visibility into every operation",
-    gradient: "from-violet-500/20 to-violet-500/5"
-  },
-  {
-    title: "AI Executive Council",
-    subtitle: "Autonomous governance and decision-making",
-    gradient: "from-amber-500/20 to-amber-500/5"
-  }
-];
+
 
 interface Stats {
   totalExecutions: number;
@@ -39,7 +19,31 @@ interface Stats {
 }
 
 export const HeroSection = () => {
+  const { t } = useLanguage();
   const [currentBanner, setCurrentBanner] = useState(0);
+
+  const marketingBanners = [
+    {
+      title: t('hero.banner.enterprise.title'),
+      subtitle: t('hero.banner.enterprise.subtitle'),
+      gradient: "from-primary/20 to-primary/5"
+    },
+    {
+      title: t('hero.banner.functions.title'),
+      subtitle: t('hero.banner.functions.subtitle'),
+      gradient: "from-emerald-500/20 to-emerald-500/5"
+    },
+    {
+      title: t('hero.banner.monitoring.title'),
+      subtitle: t('hero.banner.monitoring.subtitle'),
+      gradient: "from-violet-500/20 to-violet-500/5"
+    },
+    {
+      title: t('hero.banner.council.title'),
+      subtitle: t('hero.banner.council.subtitle'),
+      gradient: "from-amber-500/20 to-amber-500/5"
+    }
+  ];
   const [isPaused, setIsPaused] = useState(false);
   const [stats, setStats] = useState<Stats>({
     totalExecutions: 0,
@@ -208,23 +212,24 @@ export const HeroSection = () => {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <StatCard 
             icon={<Zap className="w-5 h-5 text-primary" />}
-            label="Total Executions"
+            label={t('hero.stats.executions')}
             value={stats.totalExecutions}
             suffix="+"
           />
           <StatCard 
             icon={<Bot className="w-5 h-5 text-emerald-500" />}
-            label="Active Agents"
+            label={t('hero.stats.agents')}
             value={stats.activeAgents}
           />
           <HealthStatCard 
             healthScore={stats.healthScore}
             healthStatus={stats.healthStatus}
             healthIssues={stats.healthIssues}
+            label={t('hero.stats.health')}
           />
           <StatCard 
             icon={<Activity className="w-5 h-5 text-amber-500" />}
-            label="Active Tasks"
+            label={t('hero.stats.tasks')}
             value={stats.activeTasks}
           />
         </div>
@@ -237,8 +242,8 @@ export const HeroSection = () => {
                 <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
                 <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
               </span>
-              <h3 className="text-sm font-semibold text-foreground">Live Activity Feed</h3>
-              <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">Real-time</span>
+              <h3 className="text-sm font-semibold text-foreground">{t('hero.activity.title')}</h3>
+              <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">{t('hero.activity.realtime')}</span>
             </div>
             <AgentStatusGrid />
           </div>
@@ -282,9 +287,10 @@ interface HealthStatCardProps {
   healthScore: number;
   healthStatus: 'healthy' | 'degraded' | 'critical';
   healthIssues: string[];
+  label: string;
 }
 
-const HealthStatCard = ({ healthScore, healthStatus, healthIssues }: HealthStatCardProps) => {
+const HealthStatCard = ({ healthScore, healthStatus, healthIssues, label }: HealthStatCardProps) => {
   const getHealthColor = () => {
     if (healthScore >= 95) return 'text-emerald-500';
     if (healthScore >= 80) return 'text-amber-500';
@@ -312,7 +318,7 @@ const HealthStatCard = ({ healthScore, healthStatus, healthIssues }: HealthStatC
       <div className={cn("text-2xl md:text-3xl font-bold", getHealthColor())}>
         <AnimatedCounter end={healthScore} suffix="%" />
       </div>
-      <p className="text-xs text-muted-foreground mt-1">System Health</p>
+      <p className="text-xs text-muted-foreground mt-1">{label}</p>
       {healthIssues.length > 0 && (
         <p className="text-[10px] text-amber-500 mt-1 truncate">{healthIssues[0]}</p>
       )}

@@ -6,6 +6,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { SuiteLogo } from '@/components/SuiteLogo';
 import { DemoVideoModal } from '@/components/DemoVideoModal';
 import { LandingNav } from '@/components/LandingNav';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { 
   Target, Code, BarChart3, FileText, Settings,
   Users, Bot, Shield,
@@ -66,6 +67,7 @@ const steps = [
 export default function Landing() {
   const navigate = useNavigate();
   const { signInWithGoogle, isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
   const [demoOpen, setDemoOpen] = useState(false);
 
   // Redirect authenticated users to dashboard
@@ -103,17 +105,16 @@ export default function Landing() {
       <section className="pt-24 pb-10 px-4">
         <div className="container mx-auto text-center max-w-5xl">
           <h1 className="text-4xl md:text-6xl lg:text-7xl font-bold mb-6 leading-tight">
-            Replace Your{' '}
+            {t('landing.hero.title.part1')}{' '}
             <span className="bg-gradient-to-r from-primary via-primary/80 to-primary bg-clip-text text-transparent">
-              C-Suite
+              {t('landing.hero.title.part2')}
             </span>
             <br />
-            <span className="text-foreground/90">Not Your Workers</span>
+            <span className="text-foreground/90">{t('landing.hero.title.part3')}</span>
           </h1>
           
           <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
-            AI Executive Council that saves <span className="text-primary font-semibold">$12.4M</span> annually 
-            while enabling <span className="text-primary font-semibold">41% salary increases</span> for your employees.
+            {t('landing.hero.subtitle')}
           </p>
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
@@ -122,7 +123,7 @@ export default function Landing() {
               onClick={handleGetStarted}
               className="text-lg px-8 py-6 bg-primary hover:bg-primary/90"
             >
-              Start Free Trial
+              {t('landing.hero.start.trial')}
               <ArrowRight className="ml-2 w-5 h-5" />
             </Button>
             <Button 
@@ -132,13 +133,18 @@ export default function Landing() {
               onClick={() => setDemoOpen(true)}
             >
               <Play className="mr-2 w-5 h-5" />
-              Watch Demo
+              {t('landing.hero.watch.demo')}
             </Button>
           </div>
 
           {/* Stats Row - show final values immediately for fast scrollers */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 max-w-3xl mx-auto">
-            {benefits.map((benefit, i) => (
+            {[
+              { icon: Zap, value: '$12.4M', label: t('landing.stats.savings') },
+              { icon: Users, value: '41%', label: t('landing.stats.salary') },
+              { icon: Bot, value: '120+', label: t('landing.stats.functions') },
+              { icon: Shield, value: '24/7', label: t('landing.stats.operations') },
+            ].map((benefit, i) => (
               <div 
                 key={i} 
                 className="p-5 rounded-2xl bg-card/50 border border-border/50 hover:border-primary/40 hover:bg-card/80 transition-colors"
@@ -160,9 +166,9 @@ export default function Landing() {
         
         <div className="container mx-auto max-w-6xl relative">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Meet Your AI Executive Council</h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{t('landing.executives.title')}</h2>
             <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
-              Five specialized AI executives work together 24/7, making strategic decisions and executing autonomous workflows.
+              {t('landing.executives.subtitle')}
             </p>
           </div>
 
@@ -194,16 +200,16 @@ export default function Landing() {
       <section id="benefits" className="py-12 px-4 scroll-mt-20">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">Why Choose Suite AI?</h2>
-            <p className="text-muted-foreground text-lg">Ethical AI that empowers workers, not replaces them.</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{t('landing.benefits.title')}</h2>
+            <p className="text-muted-foreground text-lg">{t('landing.benefits.subtitle')}</p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
               {[
-                { title: 'Massive Cost Savings', desc: 'Average $12.4M saved by replacing expensive C-suite salaries with AI executives.' },
-                { title: 'Employee Empowerment', desc: 'Savings redistributed as 41% average salary increases for workers.' },
-                { title: 'Autonomous Operations', desc: '120+ edge functions execute tasks 24/7 without human intervention.' },
+                { title: t('landing.benefits.cost.title'), desc: t('landing.benefits.cost.desc') },
+                { title: t('landing.benefits.empowerment.title'), desc: t('landing.benefits.empowerment.desc') },
+                { title: t('landing.benefits.autonomous.title'), desc: t('landing.benefits.autonomous.desc') },
               ].map((item, i) => (
                 <div 
                   key={i} 
@@ -226,10 +232,10 @@ export default function Landing() {
               <div className="relative bg-card border border-border/50 rounded-3xl p-8 text-center">
                 <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-green-500 animate-pulse" />
                 <div className="text-6xl md:text-7xl font-bold text-primary mb-3">$0</div>
-                <div className="text-xl text-muted-foreground mb-4">to start your free trial</div>
-                <div className="text-sm text-muted-foreground mb-6">No credit card required</div>
+                <div className="text-xl text-muted-foreground mb-4">{t('landing.trial.title')}</div>
+                <div className="text-sm text-muted-foreground mb-6">{t('landing.trial.no.card')}</div>
                 <Button onClick={handleGetStarted} className="w-full" size="lg">
-                  Get Started Now
+                  {t('landing.trial.cta')}
                   <ArrowRight className="ml-2 w-4 h-4" />
                 </Button>
               </div>
@@ -244,12 +250,16 @@ export default function Landing() {
         
         <div className="container mx-auto max-w-4xl relative">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">How It Works</h2>
-            <p className="text-muted-foreground text-lg">Get started in minutes, not months.</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{t('landing.how.title')}</h2>
+            <p className="text-muted-foreground text-lg">{t('landing.how.subtitle')}</p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
-            {steps.map((step, i) => (
+            {[
+              { number: '01', title: t('landing.how.step1.title'), description: t('landing.how.step1.desc') },
+              { number: '02', title: t('landing.how.step2.title'), description: t('landing.how.step2.desc') },
+              { number: '03', title: t('landing.how.step3.title'), description: t('landing.how.step3.desc') },
+            ].map((step, i) => (
               <div key={i} className="text-center group">
                 <div className="relative mx-auto mb-6">
                   {i < steps.length - 1 && (

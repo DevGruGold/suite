@@ -1,6 +1,7 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +17,7 @@ import { LogIn, LogOut, User, Shield, Settings, Crown } from 'lucide-react';
 
 export function UserMenu() {
   const { user, profile, isAuthenticated, isAdmin, isSuperadmin, signOut, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   if (isLoading) {
     return (
@@ -28,7 +30,7 @@ export function UserMenu() {
       <Button asChild variant="outline" size="sm" className="gap-2">
         <Link to="/">
           <LogIn className="h-4 w-4" />
-          Sign In
+          {t('button.signin')}
         </Link>
       </Button>
     );
@@ -98,13 +100,13 @@ export function UserMenu() {
         <DropdownMenuItem asChild>
           <Link to="/profile" className="cursor-pointer">
             <User className="mr-2 h-4 w-4" />
-            Profile
+            {t('nav.profile')}
           </Link>
         </DropdownMenuItem>
         <DropdownMenuItem asChild>
           <Link to="/credentials" className="cursor-pointer">
             <Settings className="mr-2 h-4 w-4" />
-            Settings
+            {t('nav.credentials')}
           </Link>
         </DropdownMenuItem>
         {isAdmin && (
@@ -113,7 +115,7 @@ export function UserMenu() {
             <DropdownMenuItem asChild>
               <Link to="/admin" className="cursor-pointer">
                 <Shield className="mr-2 h-4 w-4" />
-                Admin Dashboard
+                {t('nav.admin')}
               </Link>
             </DropdownMenuItem>
           </>
@@ -124,7 +126,7 @@ export function UserMenu() {
           onClick={() => signOut()}
         >
           <LogOut className="mr-2 h-4 w-4" />
-          Sign Out
+          {t('button.logout')}
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
