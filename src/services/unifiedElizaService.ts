@@ -163,7 +163,10 @@ export class UnifiedElizaService {
             content: userInput || 'Hello' 
           }],
           organizationContext: context.organizationContext,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          // ✅ CRITICAL FIX: Include images if they exist in the context
+          images: context.images || undefined, // Pass the images array (Base64 strings)
+          isLiveCameraFeed: context.isLiveCameraFeed || undefined // Pass the live camera feed flag
         };
         
         const { data, error } = await supabase.functions.invoke(executive, {
