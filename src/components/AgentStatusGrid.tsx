@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 interface Agent {
   id: string;
@@ -54,25 +55,50 @@ export const AgentStatusGrid = () => {
     }
   };
 
+  const getAgentInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2);
+  };
+
   return (
     <TooltipProvider>
-      <div className="flex flex-wrap gap-1.5 justify-center">
+      <div className="flex flex-wrap gap-2 justify-end">
         {agents.map((agent) => (
           <Tooltip key={agent.id}>
             <TooltipTrigger asChild>
-              <div 
-                className={`w-3 h-3 rounded-full ${getStatusColor(agent.status)} shadow-lg animate-pulse cursor-pointer transition-transform hover:scale-125`}
-              />
+              <div className="relative group cursor-pointer transition-all hover:scale-110">
+                <div className={cn(
+                  "w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold text-white shadow-sm transition-all",
+                  getStatusColor(agent.status),
+                  agent.status?.toLowerCase() === 'busy' && "animate-pulse"
+                )}>
+                  {getAgentInitials(agent.name)}
+                </div>
+                <div className={cn(
+                  "absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full border-2 border-background",
+                  getStatusColor(agent.status)
+                )} />
+              </div>
             </TooltipTrigger>
-            <TooltipContent side="top" className="text-xs">
-              <p className="font-medium">{agent.name}</p>
-              <p className="text-muted-foreground capitalize">{agent.status}</p>
+            <TooltipContent side="top" className="text-xs p-2">
+              <div className="space-y-1">
+                <p className="font-bold">{agent.name}</p>
+                <p className="text-[10px] text-muted-foreground leading-tight">{agent.role}</p>
+                <div className="flex items-center gap-1.5 mt-1">
+                  <div className={cn("w-1.5 h-1.5 rounded-full", getStatusColor(agent.status))} />
+                  <span className="text-[10px] font-medium capitalize">{agent.status}</span>
+                </div>
+              </div>
             </TooltipContent>
           </Tooltip>
         ))}
         {agents.length === 0 && (
-          Array.from({ length: 8 }).map((_, i) => (
-            <div key={i} className="w-3 h-3 rounded-full bg-muted animate-pulse" />
+          Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="w-7 h-7 rounded-lg bg-muted animate-pulse" />
           ))
         )}
       </div>

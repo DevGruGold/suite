@@ -1,7 +1,7 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { AlertCircle, CheckCircle2, Zap, Brain, Wrench, Activity, Clock, ExternalLink, User, ListTodo } from 'lucide-react';
+import { AlertCircle, CheckCircle2, Zap, Brain, Wrench, Activity, Clock, ExternalLink, User, ListTodo, ShieldCheck, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 
 interface ActivityItem {
@@ -232,24 +232,38 @@ export const ActivityPulse = ({
         </Badge>
       </div>
 
-      {/* Visual pulse bar - color changes with health */}
-      <div className="relative h-2 w-full mb-3 rounded-full overflow-hidden bg-muted/30">
-        <div 
-          className={cn(
-            "absolute inset-0 rounded-full animate-pulse-bar transition-all duration-500",
-            healthScore >= 95 ? "bg-gradient-to-r from-emerald-500/50 via-emerald-400 to-emerald-500/50" :
-            healthScore >= 80 ? "bg-gradient-to-r from-amber-500/50 via-amber-400 to-amber-500/50" :
-            "bg-gradient-to-r from-destructive/50 via-destructive to-destructive/50"
-          )}
-          style={{ width: `${healthScore}%` }}
-        />
-        {/* Health score badge on pulse bar */}
-        <div 
-          className="absolute top-1/2 -translate-y-1/2 px-1.5 py-0.5 rounded text-[10px] font-bold bg-background/90 backdrop-blur-sm border border-border/50"
-          style={{ left: `${Math.max(10, healthScore - 8)}%` }}
-        >
-          {healthScore}%
+      {/* System Health Status Line - REPLACED abstract pulse bar */}
+      <div className="flex items-center gap-3 mb-3 px-1">
+        <div className={cn(
+          "flex items-center gap-2 px-3 py-1 rounded-full text-xs font-bold border shadow-sm transition-all",
+          healthScore >= 95 ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" :
+          healthScore >= 80 ? "bg-amber-500/10 text-amber-500 border-amber-500/20" :
+          "bg-destructive/10 text-destructive border-destructive/20"
+        )}>
+          {healthScore >= 95 ? <ShieldCheck className="w-3.5 h-3.5" /> : <AlertTriangle className="w-3.5 h-3.5" />}
+          System Health: {healthScore >= 95 ? 'HEALTHY' : healthScore >= 80 ? 'DEGRADED' : 'CRITICAL'}
         </div>
+        
+        <div className="flex-1 h-1.5 rounded-full bg-muted/30 overflow-hidden">
+          <div 
+            className={cn(
+              "h-full transition-all duration-1000 ease-out",
+              healthScore >= 95 ? "bg-emerald-500" :
+              healthScore >= 80 ? "bg-amber-500" :
+              "bg-destructive"
+            )}
+            style={{ width: `${healthScore}%` }}
+          />
+        </div>
+        
+        <span className={cn(
+          "text-xs font-bold tabular-nums",
+          healthScore >= 95 ? "text-emerald-500" :
+          healthScore >= 80 ? "text-amber-500" :
+          "text-destructive"
+        )}>
+          {healthScore}%
+        </span>
       </div>
 
       {/* Activity ticker - ENHANCED with click functionality */}
