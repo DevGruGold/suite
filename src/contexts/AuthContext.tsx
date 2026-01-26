@@ -123,7 +123,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           }, 0);
           
           // Only store Google Cloud token if we have a refresh token (from extended scopes)
-          if (event === 'SIGNED_IN' && session.provider_refresh_token) {
+          // Check for both SIGNED_IN and INITIAL_SESSION as the token might arrive in either
+          if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session.provider_refresh_token) {
             const userEmail = session.user.email || '';
             setTimeout(() => {
               storeGoogleCloudToken(session.user.id, session.provider_refresh_token!, userEmail);
@@ -214,10 +215,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       options: {
         redirectTo: redirectUrl,
         scopes: isAdminEmail ? GOOGLE_CLOUD_SCOPES : BASIC_SCOPES,
-        queryParams: isAdminEmail ? {
-          access_type: 'offline',
-          prompt: 'consent',
-        } : undefined
+        queryParams: {
+          ...(isAdminEmail ? {
+            access_type: 'offline',
+            prompt: 'consent',
+          } : {}),
+          ...(email ? { login_hint: email } : {}),
+        }
       },
     });
 
