@@ -38,7 +38,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isSuperadmin: boolean;
   hasGoogleCloudConnection: boolean;
-  signInWithGoogle: () => Promise<void>;
+  signInWithGoogle: (email?: string) => Promise<void>;
   connectGoogleCloud: () => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<{ error: Error | null }>;
   signUpWithEmail: (email: string, password: string, fullName?: string) => Promise<{ error: Error | null }>;
@@ -201,14 +201,23 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   ].join(' ');
 
   // Standard sign-in for all users - simple OAuth with basic scopes
-  const signInWithGoogle = async () => {
+  // If an admin email is provided, it uses extended Google Cloud scopes
+  const signInWithGoogle = async (email?: string) => {
     const redirectUrl = getRedirectUrl();
+    const adminEmails = ['xmrtnet@gmail.com', 'xmrtsolutions@gmail.com'];
+    const isAdminEmail = email && adminEmails.includes(email.toLowerCase());
     
+    console.log(`Signing in with Google. Email: ${email}, IsAdmin: ${isAdminEmail}`);
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
         redirectTo: redirectUrl,
-        scopes: BASIC_SCOPES,
+        scopes: isAdminEmail ? GOOGLE_CLOUD_SCOPES : BASIC_SCOPES,
+        queryParams: isAdminEmail ? {
+          access_type: 'offline',
+          prompt: 'consent',
+        } : undefined
       },
     });
 

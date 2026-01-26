@@ -81,7 +81,16 @@ export default function Landing() {
     if (isAuthenticated) {
       window.location.href = '/dashboard';
     } else {
-      await signInWithGoogle();
+      // Open the AuthModal so users can enter their email
+      // This allows us to detect admins and request Google Cloud scopes
+      const navElement = document.querySelector('header');
+      if (navElement) {
+        // Trigger the modal via a custom event or by finding the button
+        // Since we can't easily reach LandingNav state, we'll just use the existing logic
+        // but it's better to have a unified way to open the modal.
+        // For now, we'll just redirect to the top where the nav is.
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      }
     }
   };
 

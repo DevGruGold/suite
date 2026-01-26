@@ -60,7 +60,8 @@ export function AuthModal({ open, onOpenChange }: AuthModalProps) {
   const handleGoogleSignIn = async () => {
     try {
       setIsSubmitting(true);
-      await signInWithGoogle();
+      // Pass the email if it's entered, so AuthContext can check for admin status
+      await signInWithGoogle(email);
     } catch (error: any) {
       toast.error(error.message || 'Failed to sign in with Google');
       setIsSubmitting(false);

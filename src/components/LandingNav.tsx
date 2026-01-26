@@ -29,13 +29,9 @@ export function LandingNav() {
       return;
     }
     
-    try {
-      setIsSigningIn(true);
-      await signInWithGoogle();
-    } catch (error: any) {
-      toast.error(error.message || 'Failed to sign in');
-      setIsSigningIn(false);
-    }
+    // If we're on the landing page, we don't have the email yet
+    // The AuthModal will handle the email-specific scope request
+    setAuthModalOpen(true);
   };
 
   return (

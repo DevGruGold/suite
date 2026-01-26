@@ -6,7 +6,7 @@ import { RefreshCw, ExternalLink, AlertCircle, CheckCircle, Clock } from 'lucide
 import { useAPIKeyHealth } from '@/services/credentialManager';
 import { UnifiedAPIKeyInput } from '@/components/UnifiedAPIKeyInput';
 import { SEOHead } from '@/components/SEOHead';
-import { GoogleCloudConnect } from '@/components/GoogleCloudConnect';
+// GoogleCloudConnect removed - now part of unified login flow
 export default function Credentials() {
   const { health, loading, refresh } = useAPIKeyHealth();
 
@@ -205,14 +205,17 @@ export default function Credentials() {
           />
         </div>
 
-        {/* Google Cloud OAuth */}
+        {/* Google Cloud OAuth - Now part of unified login flow */}
         <div className="space-y-4">
           <h3 className="text-xl font-semibold">Google Cloud Services</h3>
+          <div className="p-4 bg-muted/50 rounded-lg border border-dashed border-border">
+            <p className="text-sm text-muted-foreground">
+              Google Cloud authorization is now automatically handled during the initial sign-in for admins and super admins.
+            </p>
+          </div>
           <p className="text-muted-foreground text-sm">
-            Connect Google Cloud to enable Eliza to send emails, manage files, update spreadsheets, and schedule calendar events.
+            Admins are automatically prompted for Gmail, Drive, Sheets, and Calendar access when logging in with Google.
           </p>
-          
-          <GoogleCloudConnect />
         </div>
       </div>
 

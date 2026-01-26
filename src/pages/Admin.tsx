@@ -12,7 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Shield, Users, Settings, Crown, UserCog, Key, Cloud, Plug } from 'lucide-react';
 import { CredentialsManager } from '@/components/admin/CredentialsManager';
-import { GoogleCloudConnect } from '@/components/GoogleCloudConnect';
+// GoogleCloudConnect removed - now part of unified login flow
 
 type AppRole = 'user' | 'contributor' | 'moderator' | 'admin' | 'superadmin';
 
@@ -441,16 +441,19 @@ export default function Admin() {
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
-                {/* Google Cloud OAuth */}
+                {/* Google Cloud OAuth - Now part of unified login flow */}
                 <div>
                   <h4 className="text-sm font-medium mb-3 flex items-center gap-2">
                     <Cloud className="h-4 w-4" />
                     Google Cloud Services
                   </h4>
-                  <GoogleCloudConnect className="max-w-md" />
+                  <div className="p-4 bg-muted/50 rounded-lg border border-dashed border-border">
+                    <p className="text-sm text-muted-foreground">
+                      Google Cloud authorization is now automatically handled during the initial sign-in for admins and super admins.
+                    </p>
+                  </div>
                   <p className="text-xs text-muted-foreground mt-2 max-w-md">
-                    Authorizes Eliza to access Gmail, Google Drive, Sheets, and Calendar 
-                    for xmrtsolutions@gmail.com. Required for email automation and document management.
+                    Admins are automatically prompted for Gmail, Drive, Sheets, and Calendar access when logging in with Google.
                   </p>
                 </div>
 
