@@ -1,3 +1,7 @@
+// ⚠️ DEPRECATED: This file creates a duplicate Supabase client which causes "Multiple GoTrueClient instances" warnings.
+// Use '@/integrations/supabase/client' instead for all Supabase operations.
+// This file is kept for backward compatibility only but should not be imported in new code.
+
 // Supabase Client Configuration
 // This connects the frontend to your Supabase backend functions
 

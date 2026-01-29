@@ -26,7 +26,8 @@ export interface FounderValidation {
 }
 
 // Known founder IP - this is the primary identification signal
-const FOUNDER_IP = '190.211.120.214';
+// Updated to current IP from console logs: 190.211.121.35
+const FOUNDER_IP = '190.211.121.35';
 
 class UnifiedDataService {
   private miningStatsCache: { data: MiningStats | null; timestamp: number } = { data: null, timestamp: 0 };

@@ -48,7 +48,7 @@ class ConsolidatedAIService {
         }
 
         const model = this.geminiClient.getGenerativeModel({ 
-          model: 'gemini-1.5-flash',
+          model: 'gemini-2.0-flash-exp',
           generationConfig: {
             temperature: options?.temperature || 0.7,
             maxOutputTokens: options?.maxTokens || 2048
@@ -200,7 +200,7 @@ class ConsolidatedAIService {
     }
 
     if (this.geminiClient) {
-      const model = this.geminiClient.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = this.geminiClient.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
       const lastMessage = messages[messages.length - 1];
       
       const result = await model.generateContentStream(lastMessage.content);
