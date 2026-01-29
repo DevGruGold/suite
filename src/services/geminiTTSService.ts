@@ -28,7 +28,7 @@ export class GeminiTTSService {
 
     try {
       // Use Gemini to optimize the text for better speech synthesis
-      const model = this.genAI.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash-exp' });
       
       const optimizationPrompt = `
         Optimize this text for natural speech synthesis. Make it more conversational and add appropriate pauses with commas and periods. Keep the meaning exactly the same but make it flow better when spoken aloud:

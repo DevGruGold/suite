@@ -1,5 +1,5 @@
 // FIXED VERSION - Proper response extraction for frontend compatibility
-import { supabase } from '../lib/supabase'
+import { supabase } from '@/integrations/supabase/client'
 import { executiveCouncilService } from './executiveCouncilService'
 import { FallbackAIService } from './fallbackAIService'
 import { IntelligentErrorHandler } from './intelligentErrorHandler'

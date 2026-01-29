@@ -65,7 +65,7 @@ export class APIKeyManager {
     try {
       // Test the API key by making a simple request
       const genAI = new GoogleGenerativeAI(apiKey.trim());
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
       
       // Simple test prompt
       const result = await model.generateContent("Hello");
@@ -168,7 +168,7 @@ export class APIKeyManager {
     try {
       console.log('🧪 Testing current API key...');
       const genAI = new GoogleGenerativeAI(apiKey);
-      const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+      const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
       
       const result = await model.generateContent("Test");
       const response = result.response.text();
