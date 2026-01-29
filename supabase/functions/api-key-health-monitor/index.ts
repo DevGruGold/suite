@@ -192,7 +192,7 @@ async function checkOpenRouterHealth() {
         'X-Title': 'XMRT DAO'
       },
       body: JSON.stringify({
-        model: 'google/gemini-2.0-flash-exp:free',
+        model: 'google/gemini-1.5-flash:free',
         messages: [{ role: 'user', content: 'test' }],
         max_tokens: 5
       })
@@ -207,7 +207,7 @@ async function checkOpenRouterHealth() {
       days_until_expiry: null,
       metadata: { 
         note: response.status === 402 ? 'Credits depleted' : '',
-        model: 'google/gemini-2.0-flash-exp:free'
+        model: 'google/gemini-1.5-flash:free'
       }
     };
   } catch (error) {

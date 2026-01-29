@@ -1,11 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from '@/integrations/supabase/client';
 import { Smartphone, Laptop, Tablet, Monitor, Activity, TrendingUp, MapPin, Clock } from 'lucide-react';
 
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-);
+// Using shared supabase client from @/integrations/supabase/client
 
 interface SessionInfo {
   session_id: string;

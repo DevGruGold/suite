@@ -119,7 +119,7 @@ serve(async (req) => {
               executive: 'lovable-chat',
               executiveTitle: 'Lovable Development Executive [Vision]',
               provider: 'gemini',
-              model: 'gemini-2.0-flash-exp',
+              model: 'gemini-1.5-flash',
               vision_analysis: true
             }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -133,7 +133,7 @@ serve(async (req) => {
             executive: 'lovable-chat',
             executiveTitle: 'Lovable Development Executive [Vision]',
             provider: 'gemini',
-            model: 'gemini-2.0-flash-exp',
+            model: 'gemini-1.5-flash',
             vision_analysis: true
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -183,7 +183,7 @@ serve(async (req) => {
             executive: 'lovable-chat',
             executiveTitle: 'Lovable Development Executive',
             provider: 'gemini',
-            model: 'gemini-2.0-flash-exp'
+            model: 'gemini-1.5-flash'
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
@@ -196,7 +196,7 @@ serve(async (req) => {
           executive: 'lovable-chat',
           executiveTitle: 'Lovable Development Executive',
           provider: 'gemini',
-          model: 'gemini-2.0-flash-exp'
+          model: 'gemini-1.5-flash'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );

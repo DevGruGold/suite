@@ -24,7 +24,7 @@ export class GeminiImageService {
     if (apiKey) {
       const genAI = new GoogleGenerativeAI(apiKey);
       this.model = genAI.getGenerativeModel({ 
-        model: "gemini-2.0-flash-exp",
+        model: "gemini-1.5-flash"  // Updated to stable model (was gemini-2.0-flash-exp),
         generationConfig: {
           temperature: 0.8,
           topP: 0.9,

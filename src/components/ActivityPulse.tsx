@@ -37,6 +37,12 @@ export const ActivityPulse = ({
     [activities]
   );
 
+  // Retry state for subscription stability
+  const [retryCount, setRetryCount] = useState(0);
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 2000;
+  const channelRef = useRef<any>(null);
+
   useEffect(() => {
     // Fetch recent activities - REAL DATA ONLY with task_id and agent_id
     const fetchRecent = async () => {
@@ -63,35 +69,84 @@ export const ActivityPulse = ({
 
     fetchRecent();
 
-    // Subscribe to new activities - REAL-TIME
-    const channel = supabase
-      .channel('activity-pulse-live')
-      .on('postgres_changes', {
-        event: 'INSERT',
-        schema: 'public',
-        table: 'eliza_activity_log'
-      }, (payload) => {
-        const newActivity: ActivityItem = {
-          id: payload.new.id,
-          type: payload.new.activity_type || 'system',
-          title: payload.new.title,
-          description: payload.new.description || 'Activity completed',
-          timestamp: payload.new.created_at,
-          status: payload.new.status,
-          metadata: payload.new.metadata,
-          task_id: payload.new.task_id,
-          agent_id: payload.new.agent_id
-        };
+    // Setup subscription with retry mechanism
+    const setupSubscription = () => {
+      // Small delay to prevent race conditions with auth initialization
+      const initTimer = setTimeout(() => {
+        console.log('🔌 Initializing activity-pulse-live subscription...');
         
-        setActivities(prev => [newActivity, ...prev.slice(0, 14)]);
-        setIsLive(true);
-      })
-      .subscribe();
+        const channel = supabase
+          .channel('activity-pulse-live')
+          .on('postgres_changes', {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'eliza_activity_log'
+          }, (payload) => {
+            const newActivity: ActivityItem = {
+              id: payload.new.id,
+              type: payload.new.activity_type || 'system',
+              title: payload.new.title,
+              description: payload.new.description || 'Activity completed',
+              timestamp: payload.new.created_at,
+              status: payload.new.status,
+              metadata: payload.new.metadata,
+              task_id: payload.new.task_id,
+              agent_id: payload.new.agent_id
+            };
+            
+            setActivities(prev => [newActivity, ...prev.slice(0, 14)]);
+            setIsLive(true);
+          })
+          .subscribe((status, err) => {
+            console.log(`📡 Subscription status: ${status}`, err || '');
+            
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Successfully subscribed to activity-pulse-live');
+              setIsLive(true);
+              setRetryCount(0); // Reset retry count on success
+            } else if (status === 'CHANNEL_ERROR') {
+              console.error('⚠️ Channel error:', err);
+              setIsLive(false);
+              
+              // Retry logic
+              if (retryCount < MAX_RETRIES) {
+                const nextRetry = retryCount + 1;
+                const delay = RETRY_DELAY_MS * Math.pow(2, retryCount); // Exponential backoff
+                console.log(`🔄 Scheduling retry ${nextRetry}/${MAX_RETRIES} in ${delay}ms...`);
+                
+                setTimeout(() => {
+                  if (channelRef.current) {
+                    supabase.removeChannel(channelRef.current);
+                  }
+                  setRetryCount(nextRetry);
+                }, delay);
+              } else {
+                console.error('❌ Max retries reached for activity-pulse-live subscription');
+              }
+            } else if (status === 'CLOSED') {
+              console.warn('⚠️ Channel closed');
+              setIsLive(false);
+            } else if (status === 'TIMED_OUT') {
+              console.error('⏱️ Subscription timed out');
+              setIsLive(false);
+            }
+          });
+
+        channelRef.current = channel;
+      }, 500); // 500ms delay to allow auth to initialize
+
+      return initTimer;
+    };
+
+    const timer = setupSubscription();
 
     return () => {
-      supabase.removeChannel(channel);
+      clearTimeout(timer);
+      if (channelRef.current) {
+        supabase.removeChannel(channelRef.current);
+      }
     };
-  }, []);
+  }, [retryCount]); // Re-run when retryCount changes
 
   // Handle activity click - navigate to task or agent
   const handleActivityClick = (activity: ActivityItem) => {

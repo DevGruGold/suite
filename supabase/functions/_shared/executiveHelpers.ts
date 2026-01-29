@@ -362,7 +362,7 @@ export async function callGeminiFallback(
     console.log(`📊 Gemini fallback: Passing ${tools?.length || 0} tools (full array)`);
     
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -393,7 +393,7 @@ export async function callGeminiFallback(
             }
           })),
           provider: 'gemini',
-          model: 'gemini-2.0-flash-exp'
+          model: 'gemini-1.5-flash'
         };
       }
       
@@ -401,7 +401,7 @@ export async function callGeminiFallback(
       const text = responseParts.find((p: any) => p.text)?.text;
       if (text) {
         console.log('✅ Gemini fallback successful');
-        return { content: text, tool_calls: [], provider: 'gemini', model: 'gemini-2.0-flash-exp' };
+        return { content: text, tool_calls: [], provider: 'gemini', model: 'gemini-1.5-flash' };
       }
     } else {
       const errorText = await response.text();
@@ -437,7 +437,7 @@ Synthesize these results into a natural, helpful response. Be concise (1-3 sente
     };
 
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },

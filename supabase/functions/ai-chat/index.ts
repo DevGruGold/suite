@@ -96,8 +96,8 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     name: 'Google Gemini',
     enabled: !!GEMINI_API_KEY,
     apiKey: GEMINI_API_KEY,
-    endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent`,
-    models: ['gemini-2.0-flash-exp', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`,
+    models: ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
     supportsTools: true,
     timeoutMs: 30000,
     priority: 2,
@@ -1728,7 +1728,7 @@ async function callGeminiFallback(
     console.log(`📊 Gemini fallback: Passing ${tools?.length || 0} tools (full array)`);
     
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1762,7 +1762,7 @@ async function callGeminiFallback(
             }
           })),
           provider: 'gemini',
-          model: 'gemini-2.0-flash-exp'
+          model: 'gemini-1.5-flash'
         };
       }
       
@@ -1770,7 +1770,7 @@ async function callGeminiFallback(
       const text = responseParts.find((p: any) => p.text)?.text;
       if (text) {
         console.log('✅ Gemini fallback successful');
-        return { content: text, tool_calls: [], provider: 'gemini', model: 'gemini-2.0-flash-exp' };
+        return { content: text, tool_calls: [], provider: 'gemini', model: 'gemini-1.5-flash' };
       }
     } else {
       const errorText = await response.text();
@@ -2753,7 +2753,7 @@ class EnhancedProviderCascade {
     }
     
     const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent?key=${GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
       {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -2800,7 +2800,7 @@ class EnhancedProviderCascade {
         success: true,
         tool_calls: toolCalls,
         provider: 'gemini',
-        model: 'gemini-2.0-flash-exp'
+        model: 'gemini-1.5-flash'
       };
     }
     
@@ -2813,7 +2813,7 @@ class EnhancedProviderCascade {
       success: true,
       content: text,
       provider: 'gemini',
-      model: 'gemini-2.0-flash-exp'
+      model: 'gemini-1.5-flash'
     };
   }
   

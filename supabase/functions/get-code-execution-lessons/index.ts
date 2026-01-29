@@ -139,7 +139,7 @@ Deno.serve(async (req) => {
     ).length;
 
     // Generate AI insights using all data
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
 
     const prompt = `Analyze these code execution statistics and provide actionable insights:
 
