@@ -9,37 +9,32 @@ const FUNCTION_NAME = 'github-integration';
 const GITHUB_CLIENT_ID = Deno.env.get('GITHUB_CLIENT_ID');
 const GITHUB_CLIENT_SECRET = Deno.env.get('GITHUB_CLIENT_SECRET');
 const GITHUB_OWNER = Deno.env.get('GITHUB_OWNER') || 'DevGruGold';
-const GITHUB_REPO = Deno.env.get('GITHUB_REPO') || 'XMRT-Ecosystem';
+const DEFAULT_GITHUB_REPO_NAME = Deno.env.get('DEFAULT_GITHUB_REPO_NAME') || 'XMRT-Ecosystem';
 
-// Helper to normalize repo parameter (handles both "owner/repo" and "repo" formats)
 function normalizeRepo(repoInput: string | undefined, defaultRepo: string): string {
   if (!repoInput) return defaultRepo;
-  // If the input contains a slash, extract just the repo name
   if (repoInput.includes('/')) {
     const parts = repoInput.split('/');
-    return parts[parts.length - 1]; // Return last part (repo name)
+    return parts[parts.length - 1];
   }
   return repoInput;
 }
 
-// Validate required environment variables
 function validateGitHubConfig(): void {
   const hasOAuth = GITHUB_CLIENT_ID && GITHUB_CLIENT_SECRET;
   const hasPAT = Deno.env.get('GITHUB_TOKEN') || Deno.env.get('GITHUB_TOKEN_PROOF_OF_LIFE');
-  
+
   if (!hasOAuth && !hasPAT) {
     throw new Error('GitHub authentication not configured. Need either (GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET) or GITHUB_TOKEN');
   }
-  
+
   if (hasOAuth) {
-    console.log(`✅ GitHub OAuth configured (5,000 req/hr) - Owner: ${GITHUB_OWNER}, Repo: ${GITHUB_REPO}`);
+    console.log(`✅ GitHub OAuth configured (5,000 req/hr) - Owner: ${GITHUB_OWNER}`);
   } else {
-    console.warn(`⚠️ Using PAT fallback (60 req/hr) - Owner: ${GITHUB_OWNER}, Repo: ${GITHUB_REPO}`);
-    console.warn(`⚠️ For production, configure GITHUB_CLIENT_ID + GITHUB_CLIENT_SECRET for higher rate limits`);
+    console.warn(`⚠️ Using PAT fallback (60 req/hr) - Owner: ${GITHUB_OWNER}`);
   }
 }
 
-// Exchange OAuth code for access token
 async function getAccessToken(code: string): Promise<string> {
   const response = await fetch('https://github.com/login/oauth/access_token', {
     method: 'POST',
@@ -55,16 +50,33 @@ async function getAccessToken(code: string): Promise<string> {
   });
 
   const data = await response.json();
-  
+
   if (data.error) {
     throw new Error(`OAuth error: ${data.error_description || data.error}`);
   }
-  
+
   if (!data.access_token) {
     throw new Error('No access token received from GitHub');
   }
-  
+
   return data.access_token;
+}
+
+function getRepoName(data: any): string {
+  return normalizeRepo(data?.repo, DEFAULT_GITHUB_REPO_NAME);
+}
+
+function validateRepoForWriteAction(actionName: string, data: any): { repo: string; error?: string } {
+  const repo = getRepoName(data);
+
+  if (!repo) {
+    return {
+      repo: '',
+      error: `No repository could be determined for action '${actionName}'. Please ensure DEFAULT_GITHUB_REPO_NAME is set or specify 'repo' in the request.`
+    };
+  }
+
+  return { repo };
 }
 
 serve(async (req) => {
@@ -75,80 +87,71 @@ serve(async (req) => {
   const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
 
   try {
-    // Validate GitHub configuration
     validateGitHubConfig();
 
     const requestBody = await req.json();
     const { action, data, code, session_credentials } = requestBody;
-    
+
     console.log(`🔧 GitHub Integration - Action: ${action}`, data);
 
-    // Handle OAuth callback
     if (action === 'oauth_callback') {
-      // Check if OAuth is configured
       if (!GITHUB_CLIENT_ID || !GITHUB_CLIENT_SECRET) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'OAuth not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.' 
+          JSON.stringify({
+            success: false,
+            error: 'OAuth not configured. Please set GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET.'
           }),
-          { 
+          {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
       }
-      
+
       if (!code) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Missing OAuth code' 
+          JSON.stringify({
+            success: false,
+            error: 'Missing OAuth code'
           }),
-          { 
+          {
             status: 400,
-            headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
       }
 
       const accessToken = await getAccessToken(code);
-      
+
       return new Response(
-        JSON.stringify({ 
-          success: true, 
+        JSON.stringify({
+          success: true,
           access_token: accessToken,
-          message: 'OAuth authentication successful' 
+          message: 'OAuth authentication successful'
         }),
-        { 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        {
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
 
-    // Validate action exists
     if (!action) {
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: 'Missing required field: action' 
+        JSON.stringify({
+          success: false,
+          error: 'Missing required field: action'
         }),
-        { 
+        {
           status: 400,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
 
-    // Sanitize session credentials for auth: exclude github_pat to prevent it from being used
-    // for general GitHub operations. PAT should only be used explicitly for XMRT/health flows.
     const authSessionCredentials = session_credentials ? {
       github_oauth_token: session_credentials.github_oauth_token,
-      // Exclude github_pat intentionally - it should not be used for general operations
-      // PAT is only for explicit XMRT reward tracking and health monitoring
     } : undefined;
 
-    // Intelligent credential cascade: OAuth → Backend tokens (excludes session PAT)
     const accessToken = await getGitHubCredential(data, authSessionCredentials);
     if (!accessToken) {
       console.error('🔐 All GitHub credential sources exhausted');
@@ -160,18 +163,16 @@ serve(async (req) => {
           'https://github.com/settings/tokens/new?scopes=repo,read:org',
           ['repo', 'read:org', 'read:discussion']
         )),
-        { 
+        {
           status: 401,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
 
-    // Handle different credential types
     let headers: Record<string, string>;
-    
+
     if (accessToken.startsWith('oauth_app:')) {
-      // OAuth app credentials - use client_credentials flow
       const [, clientId, clientSecret] = accessToken.split(':');
       const basicAuth = btoa(`${clientId}:${clientSecret}`);
       headers = {
@@ -182,7 +183,6 @@ serve(async (req) => {
       };
       console.log('🔐 Using OAuth app credentials (high rate limit)');
     } else {
-      // Regular OAuth token or PAT
       const isOAuthToken = accessToken.startsWith('gho_');
       const authPrefix = isOAuthToken ? 'Bearer' : 'token';
       headers = {
@@ -195,17 +195,266 @@ serve(async (req) => {
     }
 
     let result;
+    let responseData;
 
     switch (action) {
-      case 'list_issues':
+      case 'list_issues': {
+        const repo = getRepoName(data);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/issues?state=${data?.state || 'open'}&per_page=${data?.per_page || 30}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues?state=${data?.state || 'open'}&per_page=${data?.per_page || 30}`,
           { headers }
         );
         break;
+      }
 
-      case 'create_issue':
-        // Apply executive attribution if specified
+      case 'list_discussions': {
+        const repo = getRepoName(data);
+        result = await fetch('https://api.github.com/graphql', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            query: `
+              query {
+                repository(owner: "${GITHUB_OWNER}", name: "${repo}") {
+                  discussions(first: ${data?.first || 20}) {
+                    nodes {
+                      id
+                      title
+                      body
+                      createdAt
+                      author { login }
+                      comments(first: 5) {
+                        nodes {
+                          body
+                          author { login }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `,
+          }),
+        });
+        break;
+      }
+
+      case 'get_repo_info': {
+        const repo = getRepoName(data);
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'list_pull_requests': {
+        const repo = getRepoName(data);
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/pulls?state=${data?.state || 'open'}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'get_file_content': {
+        const repo = getRepoName(data);
+        const fileResult = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${data.path}${data.branch ? `?ref=${data.branch}` : ''}`,
+          { headers }
+        );
+        
+        if (!fileResult.ok) {
+          const errorData = await fileResult.json();
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: `File not found: ${data.path}`,
+              details: errorData
+            }),
+            { 
+              status: fileResult.status,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        const fileData = await fileResult.json();
+        
+        if (fileData.content && fileData.encoding === 'base64') {
+          try {
+            const decodedContent = atob(fileData.content.replace(/\n/g, ''));
+            const lines = decodedContent.split('\n').length;
+            const sizeKB = (decodedContent.length / 1024).toFixed(2);
+            
+            fileData.userFriendly = {
+              summary: `📄 Retrieved file: **${fileData.name}**\n\n` +
+                       `📁 Path: \`${fileData.path}\`\n` +
+                       `📏 Size: ${sizeKB} KB (${lines} lines)\n` +
+                       `🔗 [View on GitHub](${fileData.html_url || `https://github.com/${GITHUB_OWNER}/${repo}/blob/${data.branch || 'main'}/${data.path}`})`,
+              content: decodedContent,
+              metadata: {
+                lines,
+                sizeKB,
+                path: fileData.path,
+                name: fileData.name
+              }
+            };
+            fileData.decodedContent = decodedContent;
+          } catch (e) {
+            console.warn('Failed to decode file content:', e);
+          }
+        }
+        
+        result = { ok: true, json: async () => fileData };
+        break;
+      }
+
+      case 'search_code': {
+        const repo = getRepoName(data);
+        if (!data.query) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Missing required field: query' 
+            }),
+            { 
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        result = await fetch(
+          `https://api.github.com/search/code?q=${encodeURIComponent(data.query)}+repo:${GITHUB_OWNER}/${repo}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'list_files': {
+        const repo = getRepoName(data);
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${data?.path || ''}${data?.branch ? `?ref=${data.branch}` : ''}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'get_branch_info': {
+        const repo = getRepoName(data);
+        if (!data.branch_name) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Missing required field: branch_name' 
+            }),
+            { 
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/branches/${data.branch_name}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'list_branches': {
+        const repo = getRepoName(data);
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/branches?per_page=${data?.per_page || 30}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'get_issue_comments': {
+        const repo = getRepoName(data);
+        if (!data.issue_number) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Missing required field: issue_number' 
+            }),
+            { 
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}/comments?per_page=${data.per_page || 30}`,
+          { headers }
+        );
+        break;
+      }
+
+      case 'get_discussion_comments': {
+        const repo = getRepoName(data);
+        if (!data.discussion_number) {
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: 'Missing required field: discussion_number' 
+            }),
+            { 
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+            }
+          );
+        }
+        
+        result = await fetch('https://api.github.com/graphql', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            query: `
+              query {
+                repository(owner: "${GITHUB_OWNER}", name: "${repo}") {
+                  discussion(number: ${data.discussion_number}) {
+                    id
+                    title
+                    body
+                    comments(first: ${data.first || 30}) {
+                      nodes {
+                        id
+                        body
+                        createdAt
+                        author { login }
+                        replies(first: 10) {
+                          nodes {
+                            id
+                            body
+                            createdAt
+                            author { login }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            `,
+          }),
+        });
+        break;
+      }
+
+      case 'create_issue': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         let issueBody = data.body || '';
         const issueExecutive = data.executive || 'eliza';
         
@@ -217,13 +466,12 @@ serve(async (req) => {
           });
         }
         
-        // Add user attribution if we have username (in addition to executive attribution)
         if (session_credentials?.github_username) {
           issueBody += `\n\n_User: @${session_credentials.github_username}_`;
         }
           
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues`,
           {
             method: 'POST',
             headers,
@@ -236,10 +484,19 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'comment_on_issue':
-        // Apply executive attribution if specified
-        let commentBody = data.comment || '';
+      case 'comment_on_issue': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
+        let commentBody = data.body || '';
         const commentExecutive = data.executive || 'eliza';
         
         if (isValidExecutive(commentExecutive)) {
@@ -251,7 +508,7 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}/comments`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}/comments`,
           {
             method: 'POST',
             headers,
@@ -259,16 +516,129 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'trigger_workflow':
+      case 'comment_on_discussion': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+
+        if (!data.discussion_number || !data.body) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Missing required fields: discussion_number, body'
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+
+        const discussionIdQuery = await fetch('https://api.github.com/graphql', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            query: `
+                query {
+                    repository(owner: "${GITHUB_OWNER}", name: "${repo}") {
+                        discussion(number: ${data.discussion_number}) {
+                            id
+                        }
+                    }
+                }
+            `,
+          }),
+        });
+        const discussionIdResponse = await discussionIdQuery.json();
+
+        if (discussionIdResponse.errors || !discussionIdResponse.data?.repository?.discussion?.id) {
+          console.error('❌ GraphQL Error fetching discussion ID:', discussionIdResponse.errors);
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Failed to find discussion ID for the given number',
+              details: discussionIdResponse.errors || 'Discussion not found'
+            }),
+            {
+              status: 404,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+
+        const discussionNodeId = discussionIdResponse.data.repository.discussion.id;
+
+        let discussionCommentBody = data.body || '';
+        const discussionExecutive = data.executive || 'eliza';
+
+        if (isValidExecutive(discussionExecutive)) {
+          discussionCommentBody = applyExecutiveAttribution(discussionCommentBody, discussionExecutive, 'comment', {
+            includeHeader: true,
+            includeFooter: true,
+            includeTimestamp: true
+          });
+        }
+
+        result = await fetch('https://api.github.com/graphql', {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            query: `
+                mutation {
+                    addDiscussionComment(input: {
+                        discussionId: "${discussionNodeId}",
+                        body: "${discussionCommentBody.replace(/"/g, '\\"').replace(/\n/g, '\\n')}"
+                    }) {
+                        comment {
+                            id
+                            body
+                            url
+                            author { login }
+                        }
+                    }
+                }
+            `,
+          }),
+        });
+        const rawGraphQLCommentResponse = await result.json();
+        console.log('📊 GitHub GraphQL Discussion Comment Response:', JSON.stringify(rawGraphQLCommentResponse, null, 2));
+
+        if (rawGraphQLCommentResponse.errors) {
+          console.error('❌ GraphQL Errors:', rawGraphQLCommentResponse.errors);
+        }
+
+        result = {
+          ok: result.ok && !rawGraphQLCommentResponse.errors,
+          json: async () => rawGraphQLCommentResponse
+        } as Response;
+        break;
+      }
+
+      case 'trigger_workflow': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         const workflowFile = data.workflow_file;
         const ref = data.ref || 'main';
         const inputs = data.inputs || {};
         
-        console.log(`🚀 Triggering workflow: ${workflowFile} on ${GITHUB_OWNER}/${data.repo || GITHUB_REPO}@${ref}`);
+        console.log(`🚀 Triggering workflow: ${workflowFile} on ${GITHUB_OWNER}/${repo}@${ref}`);
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/actions/workflows/${workflowFile}/dispatches`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/actions/workflows/${workflowFile}/dispatches`,
           {
             method: 'POST',
             headers,
@@ -291,47 +661,25 @@ serve(async (req) => {
           throw new Error(`Failed to trigger workflow: ${result.status} ${errorText}`);
         }
         break;
+      }
 
-      case 'list_discussions':
-        // GraphQL query for discussions
-        result = await fetch('https://api.github.com/graphql', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            query: `
-              query {
-                repository(owner: "${GITHUB_OWNER}", name: "${data?.repo || GITHUB_REPO}") {
-                  discussions(first: ${data?.first || 20}) {
-                    nodes {
-                      id
-                      title
-                      body
-                      createdAt
-                      author { login }
-                      comments(first: 5) {
-                        nodes {
-                          body
-                          author { login }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            `,
-          }),
-        });
-        break;
-
-      case 'create_discussion':
-        // Step 1: Get repository ID and available discussion categories
+      case 'create_discussion': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         const repoInfoQuery = await fetch('https://api.github.com/graphql', {
           method: 'POST',
           headers,
           body: JSON.stringify({
             query: `
               query {
-                repository(owner: "${GITHUB_OWNER}", name: "${data.repo || GITHUB_REPO}") {
+                repository(owner: "${GITHUB_OWNER}", name: "${repo}") {
                   id
                   discussionCategories(first: 20) {
                     nodes {
@@ -367,7 +715,7 @@ serve(async (req) => {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: `Repository ${GITHUB_OWNER}/${data.repo || GITHUB_REPO} not found or discussions not enabled`
+              error: `Repository ${GITHUB_OWNER}/${repo} not found or discussions not enabled`
             }),
             { 
               status: 404,
@@ -379,13 +727,12 @@ serve(async (req) => {
         const repositoryId = repository.id;
         const categories = repository.discussionCategories.nodes;
         
-        // Step 2: Find matching category (case-insensitive match)
         const categoryName = (data.category || 'General').toLowerCase();
         const matchedCategory = categories.find(
           (cat: { name: string }) => cat.name.toLowerCase() === categoryName
         ) || categories.find(
           (cat: { name: string }) => cat.name.toLowerCase().includes('general')
-        ) || categories[0]; // Fallback to first category
+        ) || categories[0];
         
         if (!matchedCategory) {
           return new Response(
@@ -403,12 +750,10 @@ serve(async (req) => {
         
         console.log(`📝 Creating discussion in category: ${matchedCategory.name} (${matchedCategory.id})`);
         
-        // Step 3: Create the discussion with escaped strings and executive attribution
         const discussionTitle = (data.title || 'Untitled Discussion').replace(/"/g, '\\"');
         let rawBody = data.body || 'No description provided.';
         const discussionExecutive = data.executive || 'eliza';
         
-        // Apply executive attribution if specified
         if (isValidExecutive(discussionExecutive)) {
           rawBody = applyExecutiveAttribution(rawBody, discussionExecutive, 'discussion', {
             includeHeader: true,
@@ -417,7 +762,6 @@ serve(async (req) => {
           });
         }
         
-        // Add user attribution if we have username
         if (session_credentials?.github_username) {
           rawBody += `\n\n_User: @${session_credentials.github_username}_`;
         }
@@ -450,37 +794,30 @@ serve(async (req) => {
           }),
         });
 
-        // ✅ Log the raw GraphQL response for debugging
         const rawGraphQLResponse = await result.json();
         console.log('📊 GitHub GraphQL Response:', JSON.stringify(rawGraphQLResponse, null, 2));
 
-        // Check for GraphQL errors immediately
         if (rawGraphQLResponse.errors) {
           console.error('❌ GraphQL Errors:', rawGraphQLResponse.errors);
         }
 
-        // Wrap the response back into result format
         result = {
           ok: result.ok && !rawGraphQLResponse.errors,
           json: async () => rawGraphQLResponse
         } as Response;
         break;
+      }
 
-      case 'get_repo_info':
-        result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}`,
-          { headers }
-        );
-        break;
-
-      case 'list_pull_requests':
-        result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/pulls?state=${data?.state || 'open'}`,
-          { headers }
-        );
-        break;
-
-      case 'create_pull_request':
+      case 'create_pull_request': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.title || !data.head || !data.base) {
           return new Response(
             JSON.stringify({ 
@@ -495,7 +832,7 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/pulls`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/pulls`,
           {
             method: 'POST',
             headers,
@@ -509,70 +846,25 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'get_file_content':
-        const fileResult = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/contents/${data.path}${data.branch ? `?ref=${data.branch}` : ''}`,
-          { headers }
-        );
-        
-        if (!fileResult.ok) {
-          const errorData = await fileResult.json();
+      case 'commit_file': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
           return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: `File not found: ${data.path}`,
-              details: errorData
-            }),
-            { 
-              status: fileResult.status,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+        const repo = repoValidation.repo;
         
-        const fileData = await fileResult.json();
-        
-        // Decode base64 content and format for user display
-        if (fileData.content && fileData.encoding === 'base64') {
-          try {
-            const decodedContent = atob(fileData.content.replace(/\n/g, ''));
-            const lines = decodedContent.split('\n').length;
-            const sizeKB = (decodedContent.length / 1024).toFixed(2);
-            
-            // Return user-friendly summary instead of raw data
-            fileData.userFriendly = {
-              summary: `📄 Retrieved file: **${fileData.name}**\n\n` +
-                       `📁 Path: \`${fileData.path}\`\n` +
-                       `📏 Size: ${sizeKB} KB (${lines} lines)\n` +
-                       `🔗 [View on GitHub](${fileData.html_url || `https://github.com/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/blob/${data.branch || 'main'}/${data.path}`})`,
-              content: decodedContent,
-              metadata: {
-                lines,
-                sizeKB,
-                path: fileData.path,
-                name: fileData.name
-              }
-            };
-            // Keep raw content for programmatic access
-            fileData.decodedContent = decodedContent;
-          } catch (e) {
-            console.warn('Failed to decode file content:', e);
-          }
-        }
-        
-        result = { ok: true, json: async () => fileData };
-        break;
-
-      case 'commit_file':
-        // First, try to get the existing file to get its SHA (for updates)
         let fileSha = data.sha;
         let isUpdate = false;
         
         if (!fileSha) {
           try {
             const existingFile = await fetch(
-              `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/contents/${data.path}${data.branch ? `?ref=${data.branch}` : ''}`,
+              `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${data.path}${data.branch ? `?ref=${data.branch}` : ''}`,
               { headers }
             );
             
@@ -591,17 +883,16 @@ serve(async (req) => {
         
         const commitBody: { message: string, content: string, branch: string, sha?: string } = {
           message: data.message,
-          content: btoa(data.content), // Base64 encode
+          content: btoa(data.content),
           branch: data.branch || 'main',
         };
         
-        // Only include SHA if we're updating an existing file
         if (fileSha) {
           commitBody.sha = fileSha;
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/contents/${data.path}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${data.path}`,
           {
             method: 'PUT',
             headers,
@@ -609,7 +900,6 @@ serve(async (req) => {
           }
         );
         
-        // Add user-friendly formatting to commit result
         if (result.ok) {
           const commitData = await result.json();
           const contentLines = data.content.split('\n').length;
@@ -621,7 +911,7 @@ serve(async (req) => {
                      `📏 Size: ${contentSize} KB (${contentLines} lines)\n` +
                      `🌿 Branch: \`${data.branch || 'main'}\`\n` +
                      `💬 Commit: "${data.message}"\n` +
-                     `🔗 [View commit](${commitData.commit?.html_url || `https://github.com/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}`})`,
+                     `🔗 [View commit](${commitData.commit?.html_url || `https://github.com/${GITHUB_OWNER}/${repo}`})`,
             action: isUpdate ? 'updated' : 'created',
             metadata: {
               path: data.path,
@@ -634,28 +924,18 @@ serve(async (req) => {
           result = { ok: true, json: async () => commitData };
         }
         break;
+      }
 
-      case 'search_code':
-        if (!data.query) {
+      case 'update_issue': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
           return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Missing required field: query' 
-            }),
-            { 
-              status: 400,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+        const repo = repoValidation.repo;
         
-        result = await fetch(
-          `https://api.github.com/search/code?q=${encodeURIComponent(data.query)}+repo:${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}`,
-          { headers }
-        );
-        break;
-
-      case 'update_issue':
         if (!data.issue_number) {
           return new Response(
             JSON.stringify({ 
@@ -677,7 +957,7 @@ serve(async (req) => {
         if (data.assignees) updateBody.assignees = data.assignees;
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}`,
           {
             method: 'PATCH',
             headers,
@@ -685,8 +965,18 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'close_issue':
+      case 'close_issue': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.issue_number) {
           return new Response(
             JSON.stringify({ 
@@ -701,7 +991,7 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}`,
           {
             method: 'PATCH',
             headers,
@@ -709,13 +999,23 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'add_comment':
-        if (!data.issue_number || !data.comment) {
+      case 'add_comment': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
+        if (!data.issue_number || !data.body) {
           return new Response(
             JSON.stringify({ 
               success: false, 
-              error: 'Missing required fields: issue_number, comment' 
+              error: 'Missing required fields: issue_number, body' 
             }),
             { 
               status: 400,
@@ -725,16 +1025,26 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}/comments`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}/comments`,
           {
             method: 'POST',
             headers,
-            body: JSON.stringify({ body: data.comment }),
+            body: JSON.stringify({ body: data.body }),
           }
         );
         break;
+      }
 
-      case 'merge_pull_request':
+      case 'merge_pull_request': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.pull_number) {
           return new Response(
             JSON.stringify({ 
@@ -749,20 +1059,30 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/pulls/${data.pull_number}/merge`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/pulls/${data.pull_number}/merge`,
           {
             method: 'PUT',
             headers,
             body: JSON.stringify({
               commit_title: data.commit_title,
               commit_message: data.commit_message,
-              merge_method: data.merge_method || 'merge', // merge, squash, or rebase
+              merge_method: data.merge_method || 'merge',
             }),
           }
         );
         break;
+      }
 
-      case 'close_pull_request':
+      case 'close_pull_request': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.pull_number) {
           return new Response(
             JSON.stringify({ 
@@ -777,7 +1097,7 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/pulls/${data.pull_number}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/pulls/${data.pull_number}`,
           {
             method: 'PATCH',
             headers,
@@ -785,8 +1105,18 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'delete_file':
+      case 'delete_file': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.path || !data.message) {
           return new Response(
             JSON.stringify({ 
@@ -800,11 +1130,10 @@ serve(async (req) => {
           );
         }
         
-        // Get file SHA first (required for deletion)
         let deleteFileSha = data.sha;
         if (!deleteFileSha) {
           const existingFileForDelete = await fetch(
-            `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/contents/${data.path}${data.branch ? `?ref=${data.branch}` : ''}`,
+            `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${data.path}${data.branch ? `?ref=${data.branch}` : ''}`,
             { headers }
           );
           
@@ -826,7 +1155,7 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/contents/${data.path}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contents/${data.path}`,
           {
             method: 'DELETE',
             headers,
@@ -838,15 +1167,18 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'list_files':
-        result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/contents/${data?.path || ''}${data?.branch ? `?ref=${data.branch}` : ''}`,
-          { headers }
-        );
-        break;
-
-      case 'create_branch':
+      case 'create_branch': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.branch_name || !data.from_branch) {
           return new Response(
             JSON.stringify({ 
@@ -860,9 +1192,8 @@ serve(async (req) => {
           );
         }
         
-        // Get the SHA of the source branch
         const refResult = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/git/refs/heads/${data.from_branch}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/git/refs/heads/${data.from_branch}`,
           { headers }
         );
         
@@ -882,9 +1213,8 @@ serve(async (req) => {
         const refData = await refResult.json();
         const sha = refData.object.sha;
         
-        // Create new branch
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/git/refs`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/git/refs`,
           {
             method: 'POST',
             headers,
@@ -895,105 +1225,18 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'get_branch_info':
-        if (!data.branch_name) {
+      case 'create_issue_comment_reply': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
           return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Missing required field: branch_name' 
-            }),
-            { 
-              status: 400,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
           );
         }
+        const repo = repoValidation.repo;
         
-        result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/branches/${data.branch_name}`,
-          { headers }
-        );
-        break;
-
-      case 'list_branches':
-        result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/branches?per_page=${data?.per_page || 30}`,
-          { headers }
-        );
-        break;
-
-      case 'get_issue_comments':
-        if (!data.issue_number) {
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Missing required field: issue_number' 
-            }),
-            { 
-              status: 400,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          );
-        }
-        
-        result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}/comments?per_page=${data.per_page || 30}`,
-          { headers }
-        );
-        break;
-
-      case 'get_discussion_comments':
-        if (!data.discussion_number) {
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Missing required field: discussion_number' 
-            }),
-            { 
-              status: 400,
-              headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-            }
-          );
-        }
-        
-        // GraphQL query to get discussion comments
-        result = await fetch('https://api.github.com/graphql', {
-          method: 'POST',
-          headers,
-          body: JSON.stringify({
-            query: `
-              query {
-                repository(owner: "${GITHUB_OWNER}", name: "${data.repo || GITHUB_REPO}") {
-                  discussion(number: ${data.discussion_number}) {
-                    id
-                    title
-                    body
-                    comments(first: ${data.first || 30}) {
-                      nodes {
-                        id
-                        body
-                        createdAt
-                        author { login }
-                        replies(first: 10) {
-                          nodes {
-                            id
-                            body
-                            createdAt
-                            author { login }
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            `,
-          }),
-        });
-        break;
-
-      case 'create_issue_comment_reply':
         if (!data.issue_number || !data.body) {
           return new Response(
             JSON.stringify({ 
@@ -1008,7 +1251,7 @@ serve(async (req) => {
         }
         
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/issues/${data.issue_number}/comments`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}/comments`,
           {
             method: 'POST',
             headers,
@@ -1016,8 +1259,18 @@ serve(async (req) => {
           }
         );
         break;
+      }
 
-      case 'create_discussion_comment_reply':
+      case 'create_discussion_comment_reply': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.discussion_id || !data.body) {
           return new Response(
             JSON.stringify({ 
@@ -1031,7 +1284,6 @@ serve(async (req) => {
           );
         }
         
-        // GraphQL mutation to add discussion comment
         result = await fetch('https://api.github.com/graphql', {
           method: 'POST',
           headers,
@@ -1054,8 +1306,18 @@ serve(async (req) => {
           }),
         });
         break;
+      }
 
-      case 'reply_to_discussion_comment':
+      case 'reply_to_discussion_comment': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+        
         if (!data.comment_id || !data.body) {
           return new Response(
             JSON.stringify({ 
@@ -1069,7 +1331,6 @@ serve(async (req) => {
           );
         }
         
-        // GraphQL mutation to reply to a specific comment
         result = await fetch('https://api.github.com/graphql', {
           method: 'POST',
           headers,
@@ -1093,12 +1354,11 @@ serve(async (req) => {
           }),
         });
         break;
+      }
 
-      // ====================================================================
-      // 📊 EVENT MONITORING ACTIONS
-      // ====================================================================
-      case 'list_commits':
-        const commitsUrl = new URL(`https://api.github.com/repos/${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}/commits`);
+      case 'list_commits': {
+        const repo = getRepoName(data);
+        const commitsUrl = new URL(`https://api.github.com/repos/${GITHUB_OWNER}/${repo}/commits`);
         if (data?.sha) commitsUrl.searchParams.set('sha', data.sha);
         if (data?.author) commitsUrl.searchParams.set('author', data.author);
         if (data?.since) commitsUrl.searchParams.set('since', data.since);
@@ -1108,8 +1368,10 @@ serve(async (req) => {
         
         result = await fetch(commitsUrl.toString(), { headers });
         break;
+      }
 
-      case 'get_commit_details':
+      case 'get_commit_details': {
+        const repo = getRepoName(data);
         if (!data?.commit_sha) {
           return new Response(
             JSON.stringify({ success: false, error: 'Missing required field: commit_sha' }),
@@ -1117,57 +1379,75 @@ serve(async (req) => {
           );
         }
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${data.repo || GITHUB_REPO}/commits/${data.commit_sha}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/commits/${data.commit_sha}`,
           { headers }
         );
         break;
+      }
 
-      case 'list_repo_events':
-        const eventsRepo = normalizeRepo(data?.repo, GITHUB_REPO);
+      case 'list_repo_events': {
+        const repo = getRepoName(data);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${eventsRepo}/events?per_page=${data?.per_page || 30}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/events?per_page=${data?.per_page || 30}`,
           { headers }
         );
         break;
+      }
 
-      case 'list_releases':
-        const releasesRepo = normalizeRepo(data?.repo, GITHUB_REPO);
+      case 'list_releases': {
+        const repo = getRepoName(data);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${releasesRepo}/releases?per_page=${data?.per_page || 30}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/releases?per_page=${data?.per_page || 30}`,
           { headers }
         );
         break;
+      }
 
-      case 'get_release_details':
-        const releaseDetailsRepo = normalizeRepo(data?.repo, GITHUB_REPO);
+      case 'get_release_details': {
+        const repo = getRepoName(data);
         const releaseId = data?.release_id || 'latest';
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${releaseDetailsRepo}/releases/${releaseId}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/releases/${releaseId}`,
           { headers }
         );
         break;
+      }
 
-      case 'list_contributors':
-        const contribRepo = normalizeRepo(data?.repo, GITHUB_REPO);
+      case 'list_contributors': {
+        const repo = getRepoName(data);
         result = await fetch(
-          `https://api.github.com/repos/${GITHUB_OWNER}/${contribRepo}/contributors?per_page=${data?.per_page || 30}&anon=${data?.include_anonymous || 'false'}`,
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/contributors?per_page=${data?.per_page || 30}&anon=${data?.include_anonymous || 'false'}`,
           { headers }
         );
         break;
+      }
+
+      case 'list_repositories': {
+        const type = data?.type || 'all';
+        const sort = data?.sort || 'full_name';
+        const direction = data?.direction || 'asc';
+        
+        result = await fetch(
+          `https://api.github.com/orgs/${GITHUB_OWNER}/repos?type=${type}&sort=${sort}&direction=${direction}&per_page=${data?.per_page || 30}`,
+          { headers }
+        );
+        break;
+      }
 
       default:
         throw new Error(`Unknown action: ${action}`);
     }
 
-    // Handle special case where we manually created the result object
-    let responseData;
-    if (result.json) {
-      responseData = await result.json();
-    } else {
-      responseData = result;
+    // Process the response
+    if (!responseData) {
+      if (result.json) {
+        responseData = await result.json();
+      } else {
+        responseData = result;
+      }
     }
 
-    // ✅ Check for GraphQL errors (GraphQL always returns 200, errors are in body)
+    // Handle GraphQL errors
     if (responseData.errors && responseData.errors.length > 0) {
       console.error('❌ GitHub GraphQL Error:', responseData.errors);
       
@@ -1186,99 +1466,110 @@ serve(async (req) => {
       );
     }
 
+    // FIXED: Handle non-ok responses without consuming the body twice
     if (!result.ok) {
-      console.error('GitHub API Error:', responseData);
-      
-      // Return detailed error info instead of throwing
+      // Use the already parsed responseData instead of calling result.text()
+      const errorDetails = responseData ? JSON.stringify(responseData) : 'No error details available';
+      console.error('❌ GitHub API Error:', errorDetails);
+
       return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: responseData.message || responseData.error || 'GitHub API request failed',
+        JSON.stringify({
+          success: false,
+          error: responseData?.message || responseData?.error || 'GitHub API request failed',
           status: result.status,
           needsAuth: result.status === 401,
-          details: responseData
+          details: errorDetails,
+          githubApiError: errorDetails
         }),
-        { 
+        {
           status: result.status,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
 
     console.log(`✅ GitHub Integration - Success: ${action}`);
 
-    // Format response for user-friendly display
+    const repo = getRepoName(data);
+
     let userFriendlyMessage = '';
     switch (action) {
       case 'create_issue':
-        userFriendlyMessage = `✅ Created issue #${responseData.number}: "${responseData.title}" in ${GITHUB_OWNER}/${data?.repo || GITHUB_REPO}`;
+        userFriendlyMessage = `✅ Created issue #${responseData.number}: "${responseData.title}" in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'create_discussion':
-        // ✅ FIX: Access the correct nested structure from GraphQL response
         const discussion = responseData.data?.createDiscussion?.discussion;
         userFriendlyMessage = discussion 
           ? `✅ Created discussion: "${discussion.title}" in category ${discussion.category?.name}`
           : `⚠️ Discussion creation returned no data (check permissions and repository settings)`;
         break;
       case 'commit_file':
-        userFriendlyMessage = `✅ Successfully committed "${data.path}" to ${data.branch || 'main'} branch`;
+        userFriendlyMessage = `✅ Successfully committed "${data.path}" to ${data.branch || 'main'} branch in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'create_pull_request':
-        userFriendlyMessage = `✅ Created pull request #${responseData.number}: "${responseData.title}" (${responseData.head.ref} → ${responseData.base.ref})`;
+        userFriendlyMessage = `✅ Created pull request #${responseData.number}: "${responseData.title}" (${responseData.head.ref} → ${responseData.base.ref}) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'get_repo_info':
         userFriendlyMessage = `📊 Repository: ${responseData.full_name}\n⭐ Stars: ${responseData.stargazers_count} | 🍴 Forks: ${responseData.forks_count} | 🐛 Open Issues: ${responseData.open_issues_count}`;
         break;
       case 'get_file_content':
-        userFriendlyMessage = `📄 Retrieved file: ${responseData.path} (${responseData.size} bytes)`;
+        userFriendlyMessage = `📄 Retrieved file: ${responseData.path} (${responseData.size} bytes) from ${GITHUB_OWNER}/${repo}`;
         break;
       case 'list_issues':
-        userFriendlyMessage = `📋 Found ${responseData.length} issue(s)`;
+        userFriendlyMessage = `📋 Found ${responseData.length} issue(s) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'list_pull_requests':
-        userFriendlyMessage = `🔀 Found ${responseData.length} pull request(s)`;
+        userFriendlyMessage = `🔀 Found ${responseData.length} pull request(s) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'search_code':
-        userFriendlyMessage = `🔍 Found ${responseData.total_count} code match(es)`;
+        userFriendlyMessage = `🔍 Found ${responseData.total_count} code match(es) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'get_issue_comments':
-        userFriendlyMessage = `💬 Found ${responseData.length} comment(s) on issue #${data.issue_number}`;
+        userFriendlyMessage = `💬 Found ${responseData.length} comment(s) on issue #${data.issue_number} in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'get_discussion_comments':
-        userFriendlyMessage = `💬 Found ${responseData.data?.repository?.discussion?.comments?.nodes?.length || 0} comment(s) on discussion #${data.discussion_number}`;
+        userFriendlyMessage = `💬 Found ${responseData.data?.repository?.discussion?.comments?.nodes?.length || 0} comment(s) on discussion #${data.discussion_number} in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'create_issue_comment_reply':
-        userFriendlyMessage = `✅ Posted comment on issue #${data.issue_number}`;
+        userFriendlyMessage = `✅ Posted comment on issue #${data.issue_number} in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'create_discussion_comment_reply':
-        userFriendlyMessage = `✅ Posted comment on discussion`;
+        userFriendlyMessage = `✅ Posted comment on discussion in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'reply_to_discussion_comment':
-        userFriendlyMessage = `✅ Posted reply to comment`;
+        userFriendlyMessage = `✅ Posted reply to comment in ${GITHUB_OWNER}/${repo}`;
+        break;
+      case 'comment_on_discussion':
+        const discussionComment = responseData.data?.addDiscussionComment?.comment;
+        userFriendlyMessage = discussionComment
+            ? `✅ Posted comment on discussion #${data.discussion_number} in ${GITHUB_OWNER}/${repo}`
+            : `⚠️ Discussion comment creation returned no data (check permissions and discussion ID)`;
         break;
       case 'list_commits':
-        userFriendlyMessage = `📝 Found ${responseData.length} commit(s)${data?.author ? ` by ${data.author}` : ''}${data?.since ? ` since ${data.since}` : ''}`;
+        userFriendlyMessage = `📝 Found ${responseData.length} commit(s) in ${GITHUB_OWNER}/${repo}${data?.author ? ` by ${data.author}` : ''}${data?.since ? ` since ${data.since}` : ''}`;
         break;
       case 'get_commit_details':
-        userFriendlyMessage = `📦 Commit: ${responseData.sha?.slice(0,7)} by ${responseData.commit?.author?.name}\n📁 ${responseData.stats?.total || 0} changes (+${responseData.stats?.additions || 0}/-${responseData.stats?.deletions || 0})`;
+        userFriendlyMessage = `📦 Commit: ${responseData.sha?.slice(0,7)} by ${responseData.commit?.author?.name}\n📁 ${responseData.stats?.total || 0} changes (+${responseData.stats?.additions || 0}/-${responseData.stats?.deletions || 0}) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'list_repo_events':
-        userFriendlyMessage = `📊 Found ${responseData.length} recent event(s) in repository activity`;
+        userFriendlyMessage = `📊 Found ${responseData.length} recent event(s) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'list_releases':
-        userFriendlyMessage = `🏷️ Found ${responseData.length} release(s)`;
+        userFriendlyMessage = `🏷️ Found ${responseData.length} release(s) in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'get_release_details':
-        userFriendlyMessage = `🏷️ Release: ${responseData.tag_name} - ${responseData.name || 'No name'}`;
+        userFriendlyMessage = `🏷️ Release: ${responseData.tag_name} - ${responseData.name || 'No name'} in ${GITHUB_OWNER}/${repo}`;
         break;
       case 'list_contributors':
-        userFriendlyMessage = `👥 Found ${responseData.length} contributor(s)`;
+        userFriendlyMessage = `👥 Found ${responseData.length} contributor(s) in ${GITHUB_OWNER}/${repo}`;
+        break;
+      case 'list_repositories':
+        userFriendlyMessage = `📚 Found ${responseData.length} repository(s) in organization ${GITHUB_OWNER}`;
         break;
       default:
-        userFriendlyMessage = `✅ Successfully completed: ${action}`;
+        userFriendlyMessage = `✅ Successfully completed: ${action} in ${GITHUB_OWNER}/${repo}`;
     }
 
-    // ✅ FIX: Extract nested GraphQL data for create_discussion
     let finalData = responseData;
     if (action === 'create_discussion' && responseData.data?.createDiscussion?.discussion) {
       finalData = responseData.data.createDiscussion.discussion;
@@ -1289,7 +1580,8 @@ serve(async (req) => {
         success: true, 
         data: finalData,
         userFriendlyMessage,
-        action
+        action,
+        repository: repo
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
