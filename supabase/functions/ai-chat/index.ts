@@ -1,4 +1,3 @@
-// Production-ready ai-chat WITH REAL DATABASE WIRING AND ENHANCED FEATURES
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.46.2";
 
@@ -20,12 +19,12 @@ const FUNCTION_NAME = Deno.env.get('FUNCTION_NAME') || 'ai-chat';
 
 // Performance Configuration
 const MAX_TOOL_ITERATIONS = parseInt(Deno.env.get('MAX_TOOL_ITERATIONS') || '5');
-const REQUEST_TIMEOUT_MS = parseInt(Deno.env.get('REQUEST_TIMEOUT_MS') || '45000');
-const CONVERSATION_HISTORY_LIMIT = parseInt(Deno.env.get('CONVERSATION_HISTORY_LIMIT') || '30');
+const REQUEST_TIMEOUT_MS = parseInt(Deno.env.get('REQUEST_TIMEOUT_MS') || '90000');
+const CONVERSATION_HISTORY_LIMIT = parseInt(Deno.env.get('CONVERSATION_HISTORY_LIMIT') || '1000');
 
 // Memory Configuration
 const MEMORY_SUMMARY_INTERVAL = parseInt(Deno.env.get('MEMORY_SUMMARY_INTERVAL') || '5');
-const MAX_TOOL_RESULTS_MEMORY = parseInt(Deno.env.get('MAX_TOOL_RESULTS_MEMORY') || '20');
+const MAX_TOOL_RESULTS_MEMORY = parseInt(Deno.env.get('MAX_TOOL_RESULTS_MEMORY') || '100');
 
 // NEW: Conversation Memory Configuration
 const CONVERSATION_SUMMARY_LIMIT = parseInt(Deno.env.get('CONVERSATION_SUMMARY_LIMIT') || '2000');
@@ -54,7 +53,9 @@ const DATABASE_CONFIG = {
     // NEW: Enhanced conversation tables
     conversation_summaries: 'conversation_summaries',
     conversation_context: 'conversation_context',
-    attachment_analysis: 'attachment_analysis'
+    attachment_analysis: 'attachment_analysis',
+    // NEW: IP-based session tracking
+    ip_conversation_sessions: 'ip_conversation_sessions'
   },
   
   agentStatuses: ['IDLE', 'BUSY', 'ARCHIVED', 'ERROR', 'OFFLINE'] as const,
@@ -63,7 +64,7 @@ const DATABASE_CONFIG = {
   taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const
 };
 
-// ========== AI PROVIDER CONFIGURATION ==========
+// ========== UPDATED AI PROVIDER CONFIGURATION ==========
 interface AIProviderConfig {
   name: string;
   enabled: boolean;
@@ -86,7 +87,7 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     endpoint: 'https://api.openai.com/v1/chat/completions',
     models: ['gpt-4o', 'gpt-4o-mini', 'gpt-4-turbo', 'gpt-3.5-turbo'],
     supportsTools: true,
-    timeoutMs: 30000,
+    timeoutMs: 60000,
     priority: 1,
     fallbackOnly: false,
     maxRetries: 2,
@@ -96,10 +97,15 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     name: 'Google Gemini',
     enabled: !!GEMINI_API_KEY,
     apiKey: GEMINI_API_KEY,
-    endpoint: `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent`,
-    models: ['gemini-1.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash', 'gemini-1.5-pro'],
+    endpoint: `https://generativelanguage.googleapis.com/v1beta/models`,
+    models: [
+      'gemini-2.5-flash-image',
+      'gemini-2.5-flash',
+      'gemini-1.5-flash',
+      'gemini-1.5-pro'
+    ],
     supportsTools: true,
-    timeoutMs: 30000,
+    timeoutMs: 45000,
     priority: 2,
     fallbackOnly: false,
     maxRetries: 2,
@@ -112,7 +118,7 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     endpoint: 'https://api.deepseek.com/v1/chat/completions',
     models: ['deepseek-chat', 'deepseek-coder'],
     supportsTools: true,
-    timeoutMs: 30000,
+    timeoutMs: 60000,
     priority: 3,
     fallbackOnly: false,
     maxRetries: 2,
@@ -123,9 +129,9 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     enabled: !!ANTHROPIC_API_KEY,
     apiKey: ANTHROPIC_API_KEY,
     endpoint: 'https://api.anthropic.com/v1/messages',
-    models: ['claude-3-haiku-20240307', 'claude-3-sonnet-20240229'],
+    models: ['claude-3-5-haiku-20241022', 'claude-3-opus-20240229', 'claude-3-sonnet-20240229'],
     supportsTools: false,
-    timeoutMs: 45000,
+    timeoutMs: 60000,
     priority: 4,
     fallbackOnly: true,
     maxRetries: 1,
@@ -138,7 +144,7 @@ const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
     endpoint: 'https://openrouter.ai/api/v1/chat/completions',
     models: ['moonshotai/kimi-k2'],
     supportsTools: true,
-    timeoutMs: 45000,
+    timeoutMs: 60000,
     priority: 5,
     fallbackOnly: true,
     maxRetries: 1,
@@ -153,14 +159,187 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
+// ========== SHARED CONSTANTS ==========
+const AMBIGUOUS_RESPONSES = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alright', 'fine', 'go ahead', 'proceed', 'no', 'nope', 'nah'];
+
+// ========== IP-BASED SESSION MANAGEMENT ==========
+class IPSessionManager {
+  private static readonly SESSION_TTL_MS = 24 * 60 * 60 * 1000;
+  private static readonly IP_CACHE = new Map<string, { sessionId: string; lastSeen: number }>();
+  
+  static extractIP(req: Request): string {
+    try {
+      const cfConnectingIp = req.headers.get('cf-connecting-ip');
+      const xRealIp = req.headers.get('x-real-ip');
+      const xForwardedFor = req.headers.get('x-forwarded-for');
+      const remoteAddr = req.headers.get('remote-addr');
+      
+      if (cfConnectingIp) {
+        return cfConnectingIp.split(',')[0].trim();
+      }
+      
+      if (xRealIp) {
+        return xRealIp.split(',')[0].trim();
+      }
+      
+      if (xForwardedFor) {
+        const ips = xForwardedFor.split(',');
+        return ips[0].trim();
+      }
+      
+      if (remoteAddr) {
+        return remoteAddr;
+      }
+      
+      const headersHash = Array.from(req.headers.entries())
+        .map(([k, v]) => `${k}:${v}`)
+        .join('|');
+      return `ip_hash_${this.hashString(headersHash).substring(0, 16)}`;
+      
+    } catch (error) {
+      console.warn('Failed to extract IP:', error);
+      return `unknown_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+  }
+  
+  private static hashString(str: string): string {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return Math.abs(hash).toString(36);
+  }
+  
+  static async getOrCreateSessionId(ipAddress: string, userId?: string): Promise<string> {
+    this.cleanupCache();
+    
+    const cached = this.IP_CACHE.get(ipAddress);
+    if (cached && Date.now() - cached.lastSeen < this.SESSION_TTL_MS) {
+      cached.lastSeen = Date.now();
+      return cached.sessionId;
+    }
+    
+    try {
+      const { data: existingSessions, error: findError } = await supabase
+        .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
+        .select('session_id, last_active')
+        .eq('ip_address', ipAddress)
+        .gte('last_active', new Date(Date.now() - this.SESSION_TTL_MS).toISOString())
+        .order('last_active', { ascending: false })
+        .limit(1);
+      
+      if (!findError && existingSessions && existingSessions.length > 0) {
+        const session = existingSessions[0];
+        
+        await supabase
+          .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
+          .update({ 
+            last_active: new Date().toISOString(),
+            user_id: userId || undefined
+          })
+          .eq('session_id', session.session_id);
+        
+        this.IP_CACHE.set(ipAddress, {
+          sessionId: session.session_id,
+          lastSeen: Date.now()
+        });
+        
+        return session.session_id;
+      }
+      
+      const sessionId = generateSessionId();
+      const now = new Date().toISOString();
+      
+      const { error: insertError } = await supabase
+        .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
+        .insert({
+          session_id: sessionId,
+          ip_address: ipAddress,
+          user_id: userId || null,
+          first_seen: now,
+          last_active: now,
+          metadata: {
+            ip_type: this.detectIPType(ipAddress),
+            created_via: 'ip_based',
+            ttl_hours: 24
+          }
+        });
+      
+      if (insertError) {
+        console.warn('Failed to save IP session:', insertError);
+        const fallbackSessionId = `ip_${this.hashString(ipAddress)}_${Date.now()}`;
+        this.IP_CACHE.set(ipAddress, {
+          sessionId: fallbackSessionId,
+          lastSeen: Date.now()
+        });
+        return fallbackSessionId;
+      }
+      
+      this.IP_CACHE.set(ipAddress, {
+        sessionId: sessionId,
+        lastSeen: Date.now()
+      });
+      
+      return sessionId;
+      
+    } catch (error) {
+      console.warn('IP session management error:', error);
+      const fallbackSessionId = `ip_${this.hashString(ipAddress)}_${Date.now()}`;
+      this.IP_CACHE.set(ipAddress, {
+        sessionId: fallbackSessionId,
+        lastSeen: Date.now()
+      });
+      return fallbackSessionId;
+    }
+  }
+  
+  private static detectIPType(ipAddress: string): string {
+    if (ipAddress.startsWith('ip_hash_')) return 'hashed';
+    if (ipAddress.startsWith('unknown_')) return 'fallback';
+    
+    const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
+    if (ipv4Regex.test(ipAddress)) return 'ipv4';
+    
+    const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
+    if (ipv6Regex.test(ipAddress)) return 'ipv6';
+    
+    return 'unknown';
+  }
+  
+  private static cleanupCache(): void {
+    const now = Date.now();
+    const threshold = this.SESSION_TTL_MS;
+    
+    for (const [ip, data] of this.IP_CACHE.entries()) {
+      if (now - data.lastSeen > threshold) {
+        this.IP_CACHE.delete(ip);
+      }
+    }
+  }
+  
+  static async getActiveSessionsCount(): Promise<number> {
+    try {
+      const { count, error } = await supabase
+        .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
+        .select('*', { count: 'exact', head: true })
+        .gte('last_active', new Date(Date.now() - this.SESSION_TTL_MS).toISOString());
+      
+      return error ? 0 : (count || 0);
+    } catch {
+      return 0;
+    }
+  }
+}
+
 // ========== ENHANCED EXECUTIVE HELPER FUNCTIONS ==========
-// CRITICAL TOOL CALLING INSTRUCTION - prepended to all AI prompts
 const TOOL_CALLING_MANDATE = `
 🚨 CRITICAL TOOL CALLING RULES:
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
 
@@ -186,14 +365,24 @@ const TOOL_CALLING_MANDATE = `
 - NEVER list functions from memory - ALWAYS query the database via this tool
 - Use query/category filters to find specific functions
 
-📎 ATTACHMENT ANALYSIS (MANDATORY - ALL MODES: TTS, AUDIO, MULTIMEDIA):
-- When user provides attachments (images, PDFs, docs, code files, audio, video) → IMMEDIATELY call analyze_attachment({attachments: [...]})
-- This tool can analyze: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol, .js, .ts, .py, .java, .cpp, .rs, .go, .md, .json, .yaml, .yml, .csv, .mp3, .wav, .mp4, .avi, and 50+ more formats
-- Supports ALL modes: TTS (text-to-speech content), Audio (audio files), Multimedia (images, videos, mixed content)
-- Always analyze attachments when they are provided, regardless of the mode
+📎 ATTACHMENT ANALYSIS (MANDATORY):
+- When user provides attachments (images, PDFs, docs, code files) → IMMEDIATELY call analyze_attachment({attachments: [...]})
+- This tool can analyze: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol, .js, .ts, .py, .java, .cpp, .rs, .go, .md, .json, .yaml, .yml, .csv
+- Always analyze attachments when they are provided
+
+📧 EMAIL SENDING (MANDATORY):
+- When user asks to SEND EMAIL or mentions email address → IMMEDIATELY call google_gmail({action: 'send_email', to: "recipient@email.com", subject: "Subject", body: "Email body"})
+- DO NOT generate contract code or unrelated content when asked to send emails
+- Always show draft for approval before sending
+- Use conversation context to understand what email content is needed
+
+🔧 GITHUB FUNCTIONALITY:
+- Use the full GitHub tool suite when user asks about GitHub operations
+- Available tools: createGitHubIssue, listGitHubIssues, createGitHubDiscussion, searchGitHubCode, createGitHubPullRequest, commentOnGitHubIssue, commentOnGitHubDiscussion, listGitHubPullRequests
+- For comprehensive GitHub operations, use the appropriate tool based on the request
 `;
 
-// ========== UTILITY FUNCTIONS FOR REAL PRODUCTION ==========
+// ========== UTILITY FUNCTIONS ==========
 function summarizeArray(arr: any[], max = 8) {
   return Array.isArray(arr) ? arr.slice(0, max) : arr;
 }
@@ -201,61 +390,246 @@ function summarizeArray(arr: any[], max = 8) {
 async function logFunctionUsage(entry: any) {
   try {
     await supabase.from(DATABASE_CONFIG.tables.function_usage_logs).insert(entry);
-  } catch (_) {
-    // Silent fail for logging
-  }
+  } catch (_) {}
 }
 
 async function logActivity(entry: any) {
   try {
     await supabase.from(DATABASE_CONFIG.tables.eliza_activity_log).insert(entry);
-  } catch (_) {
-    // Silent fail for logging
+  } catch (_) {}
+}
+
+function generateUUID(): string {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+}
+
+function generateSessionId(): string {
+  return generateUUID();
+}
+
+function generateRequestId(): string {
+  return `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+}
+
+function parseToolArguments(args: string): any {
+  try {
+    return args ? JSON.parse(args) : {};
+  } catch (e) {
+    console.warn('Failed to parse tool arguments for logging:', e);
+    return { raw_args: args };
+  }
+}
+
+function truncateString(str: string, maxLength: number): string {
+  if (str.length <= maxLength) return str;
+  return str.substring(0, maxLength) + '...';
+}
+
+// ========== REMOVED: AI-POWERED SUMMARIZATION FUNCTIONS ==========
+// The generateAISummary function has been completely removed as it causes the 17.5-second delay
+// Instead, we will use the existing summarize-conversation edge function asynchronously
+
+// ========== ENHANCED MANUAL SUMMARY FUNCTION (FOR IMMEDIATE USE) ==========
+function generateEnhancedManualSummary(messages: any[], toolResults: any[]): string {
+  const userMessages = messages.filter(m => m.role === 'user');
+  const assistantMessages = messages.filter(m => m.role === 'assistant');
+  
+  if (userMessages.length === 0) {
+    return "Conversation started";
+  }
+  
+  const recentMessages = messages.slice(-5);
+  const topics = extractConversationTopics(recentMessages);
+  const conversationFocus = analyzeConversationFocus(messages);
+  const successfulTools = toolResults.filter(r => r.result?.success).length;
+  const failedTools = toolResults.filter(r => !r.result?.success).length;
+  
+  const mainQueries = userMessages.slice(-3).map(m => m.content).filter(c => c.length > 10);
+  const primaryQuery = mainQueries[mainQueries.length - 1] || userMessages[userMessages.length - 1]?.content || '';
+  
+  let summary = `Discussion about ${topics.join(', ') || 'various topics'}. `;
+  
+  if (conversationFocus) {
+    summary += `Primary focus: ${conversationFocus}. `;
+  }
+  
+  if (primaryQuery && primaryQuery.length > 0) {
+    const truncatedQuery = primaryQuery.length > 80 
+      ? primaryQuery.substring(0, 80) + '...' 
+      : primaryQuery;
+    summary += `Recent query: "${truncatedQuery}". `;
+  }
+  
+  if (toolResults.length > 0) {
+    summary += `Executed ${toolResults.length} tools (${successfulTools} successful, ${failedTools} failed). `;
+    
+    const uniqueTools = [...new Set(toolResults.map(tr => tr.name))];
+    if (uniqueTools.length > 0) {
+      summary += `Tools used: ${uniqueTools.slice(0, 3).join(', ')}`;
+      if (uniqueTools.length > 3) summary += `, and ${uniqueTools.length - 3} more`;
+      summary += '.';
+    }
+  }
+  
+  return summary;
+}
+
+function extractConversationTopics(messages: any[]): string[] {
+  const topicKeywords = {
+    'system': ['status', 'health', 'monitor', 'metrics', 'performance'],
+    'development': ['code', 'function', 'api', 'deploy', 'bug', 'fix', 'feature'],
+    'github': ['github', 'issue', 'pull request', 'repository', 'codebase'],
+    'web': ['browse', 'url', 'website', 'http', 'https', 'webpage'],
+    'email': ['email', 'send', 'gmail', 'message', 'contact'],
+    'attachment': ['file', 'document', 'pdf', 'image', 'analyze', 'attachment'],
+    'mining': ['mining', 'hashrate', 'worker', 'earnings', 'crypto'],
+    'task': ['task', 'assign', 'agent', 'work', 'project'],
+    'knowledge': ['search', 'recall', 'store', 'knowledge', 'information']
+  };
+  
+  const allText = messages.map(m => m.content || '').join(' ').toLowerCase();
+  const foundTopics: string[] = [];
+  
+  for (const [topic, keywords] of Object.entries(topicKeywords)) {
+    if (keywords.some(keyword => allText.includes(keyword))) {
+      foundTopics.push(topic);
+    }
+  }
+  
+  return foundTopics.length > 0 ? foundTopics : ['general discussion'];
+}
+
+function analyzeConversationFocus(messages: any[]): string | null {
+  const recentText = messages.slice(-5).map(m => m.content || '').join(' ').toLowerCase();
+  
+  const focusPatterns = [
+    { pattern: /(what|how|when|where|who|why) (is|are|does|do|can|will)/, label: 'information inquiry' },
+    { pattern: /(show|get|find|list|check) (me|the|all)/, label: 'data retrieval' },
+    { pattern: /(create|generate|make|build|execute) (an?|the)/, label: 'creation/execution' },
+    { pattern: /(analyze|review|evaluate|assess|compare)/, label: 'analysis' },
+    { pattern: /(help|assist|guide|explain|teach)/, label: 'assistance' },
+    { pattern: /(send|email|contact|message|notify)/, label: 'communication' },
+    { pattern: /(browse|open|view|visit|check) (http|https|www|\.com)/, label: 'web browsing' },
+    { pattern: /(file|document|pdf|image|attachment)/, label: 'file analysis' }
+  ];
+  
+  for (const { pattern, label } of focusPatterns) {
+    if (pattern.test(recentText)) {
+      return label;
+    }
+  }
+  
+  return null;
+}
+
+// ========== NEW: ASYNCHRONOUS SUMMARY TRIGGER FUNCTION ==========
+async function triggerBackgroundSummarization(
+  sessionId: string,
+  ipAddress: string,
+  messages: any[],
+  toolResults: any[] = [],
+  userId?: string
+): Promise<void> {
+  try {
+    console.log(`🚀 Triggering background AI summarization for session: ${sessionId}`);
+    
+    // Prepare the payload for the summarize-conversation edge function
+    const summarizationPayload = {
+      session_id: sessionId,
+      ip_address: ipAddress,
+      messages: messages.slice(-20), // Pass last 20 messages for context
+      tool_results: toolResults.slice(-10), // Pass last 10 tool results
+      user_id: userId || null,
+      timestamp: new Date().toISOString(),
+      trigger_source: 'ai-chat-async'
+    };
+    
+    // CRITICAL: DO NOT await this call - fire and forget
+    // This is the key fix that prevents the 17.5-second delay
+    fetch(`${SUPABASE_URL}/functions/v1/summarize-conversation`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(summarizationPayload)
+    }).then(async response => {
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.warn(`⚠️ Background summarization request failed: ${response.status} - ${errorText.substring(0, 200)}`);
+      } else {
+        console.log(`✅ Background summarization triggered successfully for session: ${sessionId}`);
+      }
+    }).catch(error => {
+      console.warn('⚠️ Failed to trigger background summarization:', error.message);
+    });
+    
+  } catch (error: any) {
+    console.warn('⚠️ Error preparing background summarization:', error.message);
+    // Don't throw - this is a background operation, shouldn't affect main flow
   }
 }
 
 // ========== NEW: ENHANCED CONVERSATION PERSISTENCE FUNCTIONS ==========
 class EnhancedConversationPersistence {
   private sessionId: string;
+  private ipAddress: string;
   private userId?: string;
   
-  constructor(sessionId: string, userId?: string) {
+  constructor(sessionId: string, ipAddress: string, userId?: string) {
     this.sessionId = sessionId;
+    this.ipAddress = ipAddress;
     this.userId = userId;
   }
   
-  // Load previous conversation summaries (2000+ conversations)
   async loadHistoricalSummaries(limit: number = MAX_SUMMARIZED_CONVERSATIONS): Promise<any[]> {
     try {
-      console.log(`📚 Loading historical conversation summaries for session: ${this.sessionId}`);
+      console.log(`📚 Loading historical conversation summaries for session: ${this.sessionId} (IP: ${this.ipAddress})`);
       
-      let query = supabase
+      if (this.userId) {
+        const { data: userData, error: userError } = await supabase
+          .from(DATABASE_CONFIG.tables.conversation_summaries)
+          .select('id, summary, key_topics, sentiment, created_at, metadata')
+          .eq('user_id', this.userId)
+          .order('created_at', { ascending: false })
+          .limit(limit);
+        
+        if (!userError && userData && userData.length > 0) {
+          console.log(`📖 Loaded ${userData.length} historical summaries by user ID`);
+          return userData;
+        }
+      }
+      
+      const { data: ipData, error: ipError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
         .select('id, summary, key_topics, sentiment, created_at, metadata')
+        .eq('ip_address', this.ipAddress)
         .order('created_at', { ascending: false })
         .limit(limit);
       
-      // Try to filter by user if available
-      if (this.userId) {
-        query = query.eq('user_id', this.userId);
-      } else {
-        query = query.eq('session_id', this.sessionId);
+      if (!ipError && ipData && ipData.length > 0) {
+        console.log(`📖 Loaded ${ipData.length} historical summaries by IP address`);
+        return ipData;
       }
       
-      const { data, error } = await query;
+      const { data: sessionData, error: sessionError } = await supabase
+        .from(DATABASE_CONFIG.tables.conversation_summaries)
+        .select('id, summary, key_topics, sentiment, created_at, metadata')
+        .eq('session_id', this.sessionId)
+        .order('created_at', { ascending: false })
+        .limit(limit);
       
-      if (error) {
-        console.warn('⚠️ Database error loading historical summaries:', error.message);
-        return [];
+      if (!sessionError && sessionData) {
+        console.log(`📖 Loaded ${sessionData.length} historical summaries by session ID`);
+        return sessionData;
       }
       
-      if (!data || data.length === 0) {
-        console.log('📭 No historical conversation summaries found');
-        return [];
-      }
-      
-      console.log(`📖 Loaded ${data.length} historical conversation summaries`);
-      return data;
+      console.log('📭 No historical conversation summaries found');
+      return [];
       
     } catch (error: any) {
       console.warn('⚠️ Failed to load historical summaries:', error);
@@ -263,37 +637,40 @@ class EnhancedConversationPersistence {
     }
   }
   
-  // Save conversation summary for future recall
   async saveConversationSummary(
     messages: any[],
     toolResults: any[] = [],
     metadata: any = {}
   ): Promise<string | null> {
     try {
-      // Generate intelligent summary using AI
-      const summary = await this.generateIntelligentSummary(messages, toolResults);
-      
-      // Extract key topics
+      // Use immediate manual summary for database storage
+      const summary = generateEnhancedManualSummary(messages, toolResults);
       const keyTopics = this.extractKeyTopics(messages);
-      
-      // Analyze sentiment
       const sentiment = this.analyzeSentiment(messages);
       
-      const summaryRecord = {
+      const summaryRecord: any = {
         session_id: this.sessionId,
-        user_id: this.userId,
+        ip_address: this.ipAddress,
         summary: summary,
         key_topics: keyTopics,
-        sentiment: sentiment,
         metadata: {
           ...metadata,
           message_count: messages.length,
           tool_call_count: toolResults.length,
           conversation_date: new Date().toISOString(),
-          executive_name: EXECUTIVE_NAME
+          executive_name: EXECUTIVE_NAME,
+          summary_method: 'manual_immediate' // Changed from 'ai_enhanced'
         },
         created_at: new Date().toISOString()
       };
+      
+      if (sentiment && sentiment !== 'unknown') {
+        summaryRecord.sentiment = sentiment;
+      }
+      
+      if (this.userId) {
+        summaryRecord.user_id = this.userId;
+      }
       
       const { data, error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
@@ -306,40 +683,23 @@ class EnhancedConversationPersistence {
         return null;
       }
       
-      console.log(`💾 Saved conversation summary with ID: ${data.id}`);
+      console.log(`💾 Saved manual conversation summary with ID: ${data.id}`);
+      
+      // TRIGGER BACKGROUND AI SUMMARIZATION ASYNCHRONOUSLY
+      // This is the critical fix - don't await this, let it run in background
+      triggerBackgroundSummarization(this.sessionId, this.ipAddress, messages, toolResults, this.userId)
+        .then(() => {
+          console.log(`✅ Background AI summarization triggered for summary ${data.id}`);
+        })
+        .catch(err => {
+          console.warn('⚠️ Background summarization trigger failed:', err.message);
+        });
+      
       return data.id;
       
     } catch (error: any) {
       console.warn('⚠️ Failed to save conversation summary:', error);
       return null;
-    }
-  }
-  
-  // Generate intelligent conversation summary using AI cascade
-  private async generateIntelligentSummary(messages: any[], toolResults: any[]): Promise<string> {
-    try {
-      const userMessages = messages.filter(m => m.role === 'user');
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
-      
-      if (userMessages.length === 0) {
-        return "Conversation started";
-      }
-      
-      // Use a simple summary for now, could be enhanced with AI
-      const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
-      const lastAssistantMessage = assistantMessages[assistantMessages.length - 1]?.content || '';
-      
-      const successfulTools = toolResults.filter(r => r.result?.success).length;
-      const failedTools = toolResults.filter(r => !r.result?.success).length;
-      
-      // Extract topics from recent messages
-      const recentText = messages.slice(-5).map(m => m.content).join(' ').toLowerCase();
-      const topics = this.extractKeyTopics(messages);
-      
-      return `Conversation about ${topics.join(', ') || 'various topics'}. User asked about "${lastUserMessage.substring(0, 100)}". Assistant responded about "${lastAssistantMessage.substring(0, 100)}". Executed ${toolResults.length} tools (${successfulTools} successful, ${failedTools} failed).`;
-      
-    } catch (error) {
-      return `Conversation with ${messages.length} messages and ${toolResults.length} tool executions`;
     }
   }
   
@@ -357,11 +717,10 @@ class EnhancedConversationPersistence {
     const allText = messages.map(m => m.content).join(' ').toLowerCase();
     const foundTopics = topics.filter(topic => allText.includes(topic));
     
-    // Return unique topics
     return [...new Set(foundTopics)];
   }
   
-  private analyzeSentiment(messages: any[]): string {
+  private analyzeSentiment(messages: any[]): string | null {
     const positiveWords = ['good', 'great', 'excellent', 'awesome', 'thanks', 'thank', 'helpful', 'perfect', 'love', 'amazing'];
     const negativeWords = ['bad', 'terrible', 'awful', 'wrong', 'error', 'failed', 'broken', 'problem', 'issue', 'disappointed'];
     
@@ -378,12 +737,12 @@ class EnhancedConversationPersistence {
       if (allText.includes(word)) negativeCount++;
     });
     
-    if (positiveCount > negativeCount * 2) return 'positive';
-    if (negativeCount > positiveCount * 2) return 'negative';
-    return 'neutral';
+    if (positiveCount > 0 && positiveCount > negativeCount * 2) return 'positive';
+    if (negativeCount > 0 && negativeCount > positiveCount * 2) return 'negative';
+    if (positiveCount > 0 || negativeCount > 0) return 'neutral';
+    return null;
   }
   
-  // Track conversation context for ambiguous responses like "yes"
   async saveConversationContext(
     currentQuestion: string,
     assistantResponse: string,
@@ -391,9 +750,9 @@ class EnhancedConversationPersistence {
     metadata: any = {}
   ): Promise<void> {
     try {
-      const contextRecord = {
+      const contextRecord: any = {
         session_id: this.sessionId,
-        user_id: this.userId,
+        ip_address: this.ipAddress,
         current_question: currentQuestion,
         assistant_response: assistantResponse,
         user_response: userResponse,
@@ -404,6 +763,10 @@ class EnhancedConversationPersistence {
           context_type: 'follow_up'
         }
       };
+      
+      if (this.userId) {
+        contextRecord.user_id = this.userId;
+      }
       
       const { error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_context)
@@ -420,13 +783,12 @@ class EnhancedConversationPersistence {
     }
   }
   
-  // Load recent conversation context to understand ambiguous responses
   async loadRecentContext(limit: number = 5): Promise<any[]> {
     try {
       const { data, error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_context)
         .select('*')
-        .eq('session_id', this.sessionId)
+        .eq('ip_address', this.ipAddress)
         .order('timestamp', { ascending: false })
         .limit(limit);
       
@@ -446,46 +808,22 @@ class EnhancedConversationPersistence {
 
 // ========== NEW: ATTACHMENT ANALYSIS FUNCTIONS ==========
 class AttachmentAnalyzer {
-  // Supported file extensions for analysis
   static readonly SUPPORTED_EXTENSIONS = [
-    // Text files
     '.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.csv', '.html', '.htm',
-    // Documents
     '.pdf', '.doc', '.docx', '.rtf',
-    // Images
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg',
-    // Code files
     '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.cs', 
     '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
-    '.sol', '.vy', // Solidity/Vyper smart contracts
-    '.sh', '.bash', '.zsh', // Shell scripts
+    '.sol', '.vy',
+    '.sh', '.bash', '.zsh',
     '.sql', '.pl', '.lua', '.r', '.m', '.matlab',
-    // Data files
     '.csv', '.tsv', '.xls', '.xlsx',
-    // Configuration files
     '.ini', '.conf', '.cfg', '.env'
   ];
-
-
-  // Audio/Video file extensions
-  static readonly AUDIO_EXTENSIONS = [
-    '.mp3', '.wav', '.ogg', '.flac', '.m4a', '.aac', '.wma', '.opus'
-  ];
-  
-  static readonly VIDEO_EXTENSIONS = [
-    '.mp4', '.avi', '.mov', '.wmv', '.flv', '.webm', '.mkv', '.m4v'
-  ];
-  
-  static readonly ALL_EXTENSIONS = [
-    ...AttachmentAnalyzer.SUPPORTED_EXTENSIONS,
-    ...AttachmentAnalyzer.AUDIO_EXTENSIONS,
-    ...AttachmentAnalyzer.VIDEO_EXTENSIONS
-  ];
-
   
   static isSupportedFile(filename: string): boolean {
     const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-    return this.ALL_EXTENSIONS.includes(extension);
+    return this.SUPPORTED_EXTENSIONS.includes(extension);
   }
   
   static getFileType(filename: string): string {
@@ -506,14 +844,13 @@ class AttachmentAnalyzer {
     }
   }
   
-  // Analyze text-based attachments
   static async analyzeTextContent(content: string, filename: string): Promise<any> {
     const fileType = this.getFileType(filename);
     
     let analysis = {
       file_type: fileType,
       filename: filename,
-      content_preview: content.substring(0, 5000), // Limit preview
+      content_preview: content.substring(0, 5000),
       estimated_lines: content.split('\n').length,
       estimated_words: content.split(/\s+/).length,
       has_code: false,
@@ -521,22 +858,18 @@ class AttachmentAnalyzer {
       key_findings: []
     };
     
-    // Detect programming language for code files
     if (fileType === 'code' || fileType === 'smart_contract') {
       analysis.has_code = true;
       
-      // Simple language detection
       if (filename.endsWith('.sol')) {
         analysis.detected_language = 'solidity';
         analysis.key_findings.push('Smart contract file detected');
         
-        // Extract contract name
         const contractMatch = content.match(/contract\s+(\w+)/);
         if (contractMatch) {
           analysis.key_findings.push(`Contract name: ${contractMatch[1]}`);
         }
         
-        // Look for function definitions
         const functionMatches = content.match(/function\s+(\w+)/g);
         if (functionMatches) {
           analysis.key_findings.push(`Found ${functionMatches.length} functions`);
@@ -558,74 +891,45 @@ class AttachmentAnalyzer {
         analysis.detected_language = 'rust';
       }
       
-      // Look for imports/dependencies
       const importMatches = content.match(/(import|require|from|#include|using)\s+['"][^'"]+['"]/g);
       if (importMatches) {
         analysis.key_findings.push(`Found ${importMatches.length} imports/dependencies`);
       }
     }
     
-    // For documents/text, extract key sections
     if (fileType === 'document' || fileType === 'text') {
-      // Look for headings
       const headingMatches = content.match(/^(#+|\w.+:\n)/gm);
       if (headingMatches) {
         analysis.key_findings.push(`Found ${headingMatches.length} headings/sections`);
       }
       
-      // Look for URLs
       const urlMatches = content.match(/https?:\/\/[^\s]+/g);
       if (urlMatches) {
         analysis.key_findings.push(`Found ${urlMatches.length} URLs`);
       }
       
-      // Look for email addresses
       const emailMatches = content.match(/[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}/g);
       if (emailMatches) {
         analysis.key_findings.push(`Found ${emailMatches.length} email addresses`);
       }
     }
     
-    
-
-    // For audio files, extract metadata
-    if (fileType === 'audio') {
-      analysis.analysis_type = 'audio_metadata';
-      analysis.note = 'Audio file detected - can be transcribed if needed';
-      analysis.key_findings.push('Audio file format detected');
-      
-      // Extract format info
-      const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
-      analysis.key_findings.push(`Audio format: ${ext.substring(1).toUpperCase()}`);
-    }
-    
-    // For video files, extract metadata
-    if (fileType === 'video') {
-      analysis.analysis_type = 'video_metadata';
-      analysis.note = 'Video file detected - can be analyzed for content';
-      analysis.key_findings.push('Video file format detected');
-      
-      // Extract format info
-      const ext = filename.substring(filename.lastIndexOf('.')).toLowerCase();
-      analysis.key_findings.push(`Video format: ${ext.substring(1).toUpperCase()}`);
-    }
-
     return analysis;
   }
-
-  // Save attachment analysis to database
+  
   static async saveAnalysisToDatabase(
     sessionId: string,
+    ipAddress: string,
     filename: string,
     analysis: any,
     metadata: any = {}
   ): Promise<void> {
     try {
-      const analysisRecord = {
+      const analysisRecord: any = {
         session_id: sessionId,
+        ip_address: ipAddress,
         filename: filename,
         file_type: analysis.file_type,
-        detected_language: analysis.detected_language,
         content_preview: analysis.content_preview,
         key_findings: analysis.key_findings,
         metadata: {
@@ -639,6 +943,10 @@ class AttachmentAnalyzer {
         created_at: new Date().toISOString()
       };
       
+      if (analysis.detected_language && analysis.detected_language !== 'unknown') {
+        analysisRecord.detected_language = analysis.detected_language;
+      }
+      
       const { error } = await supabase
         .from(DATABASE_CONFIG.tables.attachment_analysis)
         .insert(analysisRecord);
@@ -646,7 +954,7 @@ class AttachmentAnalyzer {
       if (error) {
         console.warn('⚠️ Failed to save attachment analysis:', error.message);
       } else {
-        console.log(`💾 Saved attachment analysis for ${filename}`);
+        console.log(`💾 Saved attachment analysis for ${filename} with session ID: ${sessionId}`);
       }
       
     } catch (error: any) {
@@ -658,7 +966,6 @@ class AttachmentAnalyzer {
 // ========== REAL DATABASE TOOL EXECUTION FUNCTIONS ==========
 async function getSystemStatus(): Promise<any> {
   try {
-    // Query all tables for counts
     const [agents, tasks, knowledge, edgeLogs] = await Promise.all([
       supabase.from(DATABASE_CONFIG.tables.agents).select('id', { count: 'exact', head: true }),
       supabase.from(DATABASE_CONFIG.tables.tasks).select('id', { count: 'exact', head: true }),
@@ -666,23 +973,19 @@ async function getSystemStatus(): Promise<any> {
       supabase.from(DATABASE_CONFIG.tables.edge_function_logs).select('id', { count: 'exact', head: true }).gte('timestamp', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
     ]);
 
-    // Get recent activity
     const { data: recentActivity } = await supabase
       .from(DATABASE_CONFIG.tables.eliza_activity_log)
       .select('activity_type, status')
       .gte('created_at', new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString())
       .limit(10);
 
-    // Optional enrichment from system-status edge function
     let systemStatusData = {};
     try {
       const { data, error } = await supabase.functions.invoke('system-status', {
         body: { action: 'summary' }
       });
       if (!error && data) systemStatusData = data;
-    } catch (_) {
-      // System status enrichment is optional
-    }
+    } catch (_) {}
 
     return {
       success: true,
@@ -717,9 +1020,9 @@ async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
 }
 
 // ========== NEW: ATTACHMENT ANALYSIS TOOL ==========
-async function analyzeAttachmentTool(attachments: any[], sessionId: string = 'unknown'): Promise<any> {
+async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sessionId: string): Promise<any> {
   try {
-    console.log(`📎 Analyzing ${attachments.length} attachment(s) for session ${sessionId}`);
+    console.log(`📎 Analyzing ${attachments.length} attachment(s) for IP: ${ipAddress}, Session: ${sessionId}`);
     
     const analyses = [];
     
@@ -735,7 +1038,6 @@ async function analyzeAttachmentTool(attachments: any[], sessionId: string = 'un
         continue;
       }
       
-      // Check if file is supported
       if (!AttachmentAnalyzer.isSupportedFile(filename)) {
         analyses.push({
           success: false,
@@ -757,14 +1059,11 @@ async function analyzeAttachmentTool(attachments: any[], sessionId: string = 'un
         supported: true
       };
       
-      // Handle different file types
       if (fileType === 'image') {
-        // For images, we can use vision capabilities
         analysis.analysis_type = 'image_vision';
         analysis.note = 'Image will be analyzed using vision capabilities';
         
       } else if (['text', 'document', 'code', 'smart_contract'].includes(fileType)) {
-        // For text-based files, analyze content
         if (content) {
           const textAnalysis = await AttachmentAnalyzer.analyzeTextContent(content, filename);
           analysis = { ...analysis, ...textAnalysis };
@@ -780,10 +1079,10 @@ async function analyzeAttachmentTool(attachments: any[], sessionId: string = 'un
       
       analyses.push(analysis);
       
-      // Save analysis to database if successful
       if (analysis.success) {
         await AttachmentAnalyzer.saveAnalysisToDatabase(
           sessionId,
+          ipAddress,
           filename,
           analysis
         );
@@ -808,11 +1107,97 @@ async function analyzeAttachmentTool(attachments: any[], sessionId: string = 'un
   }
 }
 
+// ========== FIXED: AMBIGUOUS RESPONSE HANDLING ==========
+async function handleAmbiguousResponse(
+  userMessage: string,
+  conversationHistory: any[],
+  executiveName: string,
+  sessionId: string,
+  ipAddress: string,
+  conversationManager: EnhancedConversationManager
+): Promise<{
+  isAmbiguous: boolean;
+  response: string | null;
+  shouldExecuteTools: boolean;
+}> {
+  const userMessageLower = userMessage.toLowerCase().trim();
+  
+  const isAmbiguous = AMBIGUOUS_RESPONSES.includes(userMessageLower);
+  
+  if (!isAmbiguous) {
+    return { isAmbiguous: false, response: null, shouldExecuteTools: true };
+  }
+  
+  let recentQuestion = null;
+  let recentAssistantMessage = null;
+  
+  const recentMessages = conversationHistory.slice(-10).reverse();
+  
+  for (const message of recentMessages) {
+    if (message.role === 'assistant') {
+      recentAssistantMessage = message.content || '';
+      
+      const hasQuestion = recentAssistantMessage.includes('?');
+      const hasOptions = recentAssistantMessage.includes('option') || 
+                        recentAssistantMessage.includes('choice') || 
+                        recentAssistantMessage.includes('select');
+      
+      if (hasQuestion || hasOptions) {
+        recentQuestion = recentAssistantMessage;
+        break;
+      }
+    }
+  }
+  
+  if (!recentQuestion) {
+    const lastAssistant = recentMessages.find(m => m.role === 'assistant');
+    if (lastAssistant) {
+      recentQuestion = lastAssistant.content || 'the previous statement';
+    } else {
+      recentQuestion = 'the previous topic';
+    }
+  }
+  
+  const questionSummary = recentQuestion.substring(0, 200);
+  
+  let response = '';
+  const isPositive = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alright', 'fine', 'go ahead', 'proceed'].includes(userMessageLower);
+  
+  if (isPositive) {
+    response = `Great! I understand your "yes" as agreement to:\n\n**${questionSummary}**\n\n`;
+    response += `To proceed, I'll continue with that course of action. If you'd like me to do something specific, please provide more details.`;
+  } else {
+    response = `Understood. I interpret your "no" as disagreement with:\n\n**${questionSummary}**\n\n`;
+    response += `Let me know what alternative you'd prefer, or provide more specific instructions.`;
+  }
+  
+  if (recentAssistantMessage) {
+    await conversationManager.saveConversationContext(
+      recentAssistantMessage,
+      recentAssistantMessage,
+      userMessage,
+      { 
+        request_id: generateRequestId(),
+        ambiguous_response: true,
+        interpretation: isPositive ? 'agreement' : 'disagreement',
+        ip_address: ipAddress
+      }
+    );
+  }
+  
+  return {
+    isAmbiguous: true,
+    response: response,
+    shouldExecuteTools: false
+  };
+}
+
 async function executeRealToolCall(
   name: string, 
   args: string,
   executiveName: string,
   sessionId: string,
+  ipAddress: string,
   timestamp: number = Date.now()
 ): Promise<any> {
   const startTime = performance.now();
@@ -821,24 +1206,25 @@ async function executeRealToolCall(
   let error_message: string | null = null;
 
   try {
-    const parsedArgs = args ? JSON.parse(args) : {};
+    const parsedArgs = parseToolArguments(args);
 
-    // ===== NEW: ATTACHMENT ANALYSIS TOOL =====
+    // Use parseToolArguments for consistent parsing
+    const parsedToolArgs = parseToolArguments(args);
+
     if (name === 'analyze_attachment') {
       const { attachments } = parsedArgs;
       if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
         throw new Error('Missing or empty attachments array');
       }
       
-      result = await analyzeAttachmentTool(attachments, sessionId);
+      result = await analyzeAttachmentTool(attachments, ipAddress, sessionId);
       
     } else if (name === 'browse_web') {
       const url = parsedArgs.url;
       if (!url) throw new Error('Missing url');
       
-      // Auto-normalize URLs
       let normalizedUrl = url;
-      if (!url.startsWith('http')) {
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
         normalizedUrl = `https://${url}`;
       }
       
@@ -898,7 +1284,6 @@ async function executeRealToolCall(
       const { query, category, mode } = parsedArgs;
       
       if (mode === 'full_registry') {
-        // Get all active tools from database
         const { data, error } = await supabase
           .from(DATABASE_CONFIG.tables.ai_tools)
           .select('name, description, category, is_active, parameters')
@@ -907,7 +1292,6 @@ async function executeRealToolCall(
         
         if (error) throw error;
         
-        // Group by category
         const grouped = (data || []).reduce((acc: any, tool) => {
           const cat = tool.category || 'uncategorized';
           if (!acc[cat]) acc[cat] = [];
@@ -941,18 +1325,20 @@ async function executeRealToolCall(
       }
       
     } else if (name === 'list_available_functions') {
+      // Simplified: Use search_edge_functions as the canonical source
       const { category } = parsedArgs;
-      let query = supabase
+      
+      let dbQuery = supabase
         .from(DATABASE_CONFIG.tables.ai_tools)
         .select('name, description, category, is_active, parameters')
         .eq('is_active', true)
         .order('name');
       
       if (category) {
-        query = query.eq('category', category);
+        dbQuery = dbQuery.eq('category', category);
       }
       
-      const { data, error } = await query;
+      const { data, error } = await dbQuery;
       if (error) throw error;
       result = { success: true, functions: data, total: data?.length || 0 };
       
@@ -973,7 +1359,6 @@ async function executeRealToolCall(
       result = { success: true, logs: data, total: data?.length || 0 };
       
     } else if (name === 'list_agents') {
-      // Get both regular and superduper agents
       const [agentsResult, superduperResult] = await Promise.all([
         supabase
           .from(DATABASE_CONFIG.tables.agents)
@@ -1033,7 +1418,6 @@ async function executeRealToolCall(
       const limit = parsedArgs.limit || 10;
       
       if (!search_term) {
-        // Get recent knowledge entries
         const { data: knowledge, error } = await supabase
           .from(DATABASE_CONFIG.tables.knowledge_entities)
           .select('*')
@@ -1043,10 +1427,11 @@ async function executeRealToolCall(
         if (error) throw error;
         result = { success: true, knowledge: knowledge || [] };
       } else {
+        // FIXED: Changed 'name' to 'entity_name' in the query
         const { data: knowledge, error } = await supabase
           .from(DATABASE_CONFIG.tables.knowledge_entities)
           .select('*')
-          .or(`name.ilike.%${search_term}%,description.ilike.%${search_term}%,content.ilike.%${search_term}%`)
+          .or(`entity_name.ilike.%${search_term}%,description.ilike.%${search_term}%,content.ilike.%${search_term}%`)
           .order('created_at', { ascending: false })
           .limit(limit);
         
@@ -1055,8 +1440,9 @@ async function executeRealToolCall(
       }
       
     } else if (name === 'store_knowledge') {
+      // FIXED: Changed 'name' to 'entity_name'
       const knowledgeData = {
-        name: parsedArgs.name,
+        entity_name: parsedArgs.name,
         description: parsedArgs.description,
         content: parsedArgs.content || '',
         type: parsedArgs.type || 'general',
@@ -1084,7 +1470,8 @@ async function executeRealToolCall(
       if (entity_id) {
         query = query.eq('id', entity_id);
       } else if (name) {
-        query = query.ilike('name', `%${name}%`);
+        // FIXED: Changed 'name' to 'entity_name' in the query
+        query = query.ilike('entity_name', `%${name}%`);
       } else {
         throw new Error('Either name or entity_id is required');
       }
@@ -1112,10 +1499,67 @@ async function executeRealToolCall(
         }
       });
       
+    } else if (name === 'createGitHubDiscussion') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'create_discussion',
+        data: {
+          title: parsedArgs.title,
+          body: parsedArgs.body,
+          category: parsedArgs.category || 'General'
+        }
+      });
+      
+    } else if (name === 'searchGitHubCode') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'search_code',
+        data: {
+          query: parsedArgs.query,
+          limit: parsedArgs.limit || 10
+        }
+      });
+      
+    } else if (name === 'createGitHubPullRequest') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'create_pull_request',
+        data: {
+          title: parsedArgs.title,
+          body: parsedArgs.body || '',
+          head: parsedArgs.head,
+          base: parsedArgs.base || 'main',
+          draft: parsedArgs.draft || false
+        }
+      });
+      
+    } else if (name === 'commentOnGitHubIssue') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'comment_on_issue',
+        data: {
+          issue_number: parsedArgs.issue_number,
+          body: parsedArgs.body
+        }
+      });
+      
+    } else if (name === 'commentOnGitHubDiscussion') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'comment_on_discussion',
+        data: {
+          discussion_number: parsedArgs.discussion_number,
+          body: parsedArgs.body
+        }
+      });
+      
+    } else if (name === 'listGitHubPullRequests') {
+      result = await invokeEdgeFunction('github-integration', {
+        action: 'list_pull_requests',
+        data: {
+          state: parsedArgs.state || 'open',
+          limit: parsedArgs.limit || 10
+        }
+      });
+      
     } else if (name === 'execute_workflow_template') {
       const { template_name, params } = parsedArgs;
       
-      // First, get the template from database
       const { data: template, error: templateError } = await supabase
         .from(DATABASE_CONFIG.tables.workflow_templates)
         .select('*')
@@ -1124,7 +1568,6 @@ async function executeRealToolCall(
       
       if (templateError) throw templateError;
       
-      // Execute via edge function
       result = await invokeEdgeFunction('workflow-template-manager', {
         action: 'execute_template',
         template_name,
@@ -1136,16 +1579,7 @@ async function executeRealToolCall(
       result = await invokeEdgeFunction('google-gmail', parsedArgs);
       
     } else {
-      // Try to invoke as edge function
-      try {
-        result = await invokeEdgeFunction(name, { 
-          ...parsedArgs, 
-          session_id: sessionId, 
-          executive: executiveName 
-        });
-      } catch (invokeError: any) {
-        throw new Error(`Tool ${name} not available: ${invokeError.message}`);
-      }
+      throw new Error(`Tool '${name}' is not a recognized or allowed tool. Please use one of the explicitly defined tools.`);
     }
     
     success = true;
@@ -1167,24 +1601,23 @@ async function executeRealToolCall(
     };
   } finally {
     const duration = Math.round(performance.now() - startTime);
+    const parsedToolArgs = parseToolArguments(args);
     
-    // Log to function usage logs
     const logEntry = {
       function_name: name,
       executive_name: executiveName,
-      parameters: args ? JSON.parse(args) : {},
+      parameters: parsedToolArgs,
       success,
       execution_time_ms: duration,
       result_summary: success ? 'Executed successfully' : null,
       error_message,
       session_id: sessionId,
+      ip_address: ipAddress,
       created_at: new Date().toISOString()
     };
     
-    // Fire and forget logging
     logFunctionUsage(logEntry);
     
-    // Activity log
     logActivity({
       activity_type: 'tool_execution',
       title: `🔧 ${executiveName} executed ${name}`,
@@ -1192,9 +1625,10 @@ async function executeRealToolCall(
       status: success ? 'completed' : 'error',
       metadata: { 
         name, 
-        args: args ? JSON.parse(args) : {}, 
+        args: parsedToolArgs, 
         result: success ? 'ok' : error_message,
-        duration_ms: duration
+        duration_ms: duration,
+        ip_address: ipAddress
       },
       function_name: name,
       created_at: new Date().toISOString()
@@ -1208,15 +1642,12 @@ function extractKeyInsights(content: string, domain: string): string {
     return "The page appears to be accessible but contains minimal content.\n";
   }
   
-  // Extract title if present
   const titleMatch = content.match(/<title[^>]*>([^<]+)<\/title>/i);
   const title = titleMatch ? titleMatch[1] : '';
   
-  // Extract meta description
   const metaMatch = content.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
   const description = metaMatch ? metaMatch[1] : '';
   
-  // Check for common indicators
   const isNewsSite = domain.includes('ycombinator') || domain.includes('news');
   const isSocialMedia = domain.includes('reddit') || domain.includes('twitter') || domain.includes('facebook');
   const isSearchEngine = domain.includes('google') || domain.includes('bing') || domain.includes('duckduckgo');
@@ -1231,9 +1662,7 @@ function extractKeyInsights(content: string, domain: string): string {
     insights += `**Description**: ${description}\n`;
   }
   
-  // Domain-specific analysis
   if (isNewsSite) {
-    // Try to extract headlines from Hacker News
     if (domain.includes('ycombinator')) {
       const hnMatches = content.match(/<a href="[^"]+" class="titlelink"[^>]*>([^<]+)<\/a>/g);
       if (hnMatches && hnMatches.length > 0) {
@@ -1253,7 +1682,6 @@ function extractKeyInsights(content: string, domain: string): string {
     insights += `**Note**: This is a search engine homepage. To search for specific content, I can help you formulate search queries.\n`;
   }
   
-  // Check for common elements
   const hasForms = content.includes('<form') || content.includes('<input');
   const hasImages = content.match(/<img[^>]+>/g)?.length || 0;
   const hasLinks = content.match(/<a[^>]+href=["'][^"']+["'][^>]*>/g)?.length || 0;
@@ -1278,7 +1706,8 @@ function analyzeUserIntent(query: string, conversationContext: any[] = []): {
     browsing: ['open', 'browse', 'view', 'visit', 'go to', 'check', 'navigate', 'http', 'https', 'www', '.com'],
     status: ['status', 'health', 'stats', 'metrics', 'performance', 'report'],
     memory: ['remember', 'recall', 'previous', 'before', 'last time', 'earlier'],
-    help: ['help', 'assist', 'guide', 'how to', 'can you']
+    help: ['help', 'assist', 'guide', 'how to', 'can you'],
+    communication: ['email', 'send', 'mail', 'message', 'contact', 'reach out', 'notify']
   };
   
   const detectedIntents = [];
@@ -1288,16 +1717,15 @@ function analyzeUserIntent(query: string, conversationContext: any[] = []): {
     }
   }
   
-  // Extract topics
   const commonTopics = [
     'task', 'agent', 'github', 'code', 'function', 'edge function', 'mining',
     'system', 'database', 'web', 'url', 'api', 'key', 'license', 'workflow',
-    'vertex', 'image', 'video', 'billing', 'financial', 'vsco', 'lead'
+    'vertex', 'image', 'video', 'billing', 'financial', 'vsco', 'lead',
+    'email', 'gmail', 'contact', 'message', 'communication', 'send'
   ];
   
   const foundTopics = commonTopics.filter(topic => queryLower.includes(topic));
   
-  // Check if this is a follow-up question
   const isFollowUp = conversationContext.length > 0 && (
     queryLower.includes('what about') ||
     queryLower.includes('how about') ||
@@ -1323,43 +1751,36 @@ function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]
   likelyReferringTo: string | null;
   confidence: number;
 } {
-  const ambiguousResponses = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alright', 'fine', 'go ahead', 'proceed'];
   const userMessageLower = userMessage.toLowerCase().trim();
   
-  // Check if the response is ambiguous
-  const isAmbiguous = ambiguousResponses.includes(userMessageLower) || 
-                      (userMessageLower === 'no' && conversationHistory.length > 0);
+  const isAmbiguous = AMBIGUOUS_RESPONSES.includes(userMessageLower);
   
   if (!isAmbiguous) {
     return { isAmbiguous: false, likelyReferringTo: null, confidence: 0 };
   }
   
-  // Find the most recent assistant question
   let likelyReferringTo = null;
-  let confidence = 0.7; // Base confidence
+  let confidence = 0.7;
   
-  // Look at the last few messages for context
   const recentMessages = conversationHistory.slice(-10).reverse();
   
   for (const message of recentMessages) {
     if (message.role === 'assistant') {
       const assistantMessage = message.content || '';
       
-      // Check if the assistant asked a question
       const hasQuestion = assistantMessage.includes('?');
       const hasOptions = assistantMessage.includes('option') || 
                          assistantMessage.includes('choice') || 
                          assistantMessage.includes('select');
       
       if (hasQuestion || hasOptions) {
-        likelyReferringTo = assistantMessage.substring(0, 200); // Truncate
+        likelyReferringTo = assistantMessage.substring(0, 200);
         confidence = hasQuestion && hasOptions ? 0.9 : 0.8;
         break;
       }
     }
   }
   
-  // If no question found, use the last assistant message
   if (!likelyReferringTo) {
     const lastAssistant = recentMessages.find(m => m.role === 'assistant');
     if (lastAssistant) {
@@ -1371,7 +1792,7 @@ function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]
   return { isAmbiguous: true, likelyReferringTo, confidence };
 }
 
-// Parser for DeepSeek's text-based tool call format
+// ========== TOOL PARSING FUNCTIONS ==========
 function parseDeepSeekToolCalls(content: string): Array<any> | null {
   const toolCallsMatch = content.match(/ 🫎(.*?)🫎/s);
   if (!toolCallsMatch) return null;
@@ -1407,7 +1828,6 @@ function parseDeepSeekToolCalls(content: string): Array<any> | null {
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
-// Parser for Gemini/Kimi tool_code block format
 function parseToolCodeBlocks(content: string): Array<any> | null {
   const toolCalls: Array<any> = [];
   
@@ -1417,7 +1837,6 @@ function parseToolCodeBlocks(content: string): Array<any> | null {
   while ((match = toolCodeRegex.exec(content)) !== null) {
     const code = match[1].trim();
     
-    // Parse invoke_edge_function({ function_name: "...", payload: {...} })
     const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
     if (invokeMatch) {
       try {
@@ -1435,7 +1854,6 @@ function parseToolCodeBlocks(content: string): Array<any> | null {
       continue;
     }
     
-    // Parse direct function calls like check_system_status({}) or system_status()
     const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
     if (directMatch) {
       const funcName = directMatch[1];
@@ -1457,7 +1875,6 @@ function parseToolCodeBlocks(content: string): Array<any> | null {
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
-// Parse conversational tool intent (e.g., "I'm going to call get_mining_stats")
 function parseConversationalToolIntent(content: string): Array<any> | null {
   const toolCalls: Array<any> = [];
   const patterns = [
@@ -1470,7 +1887,7 @@ function parseConversationalToolIntent(content: string): Array<any> | null {
     'get_mining_stats', 'get_system_status', 'get_ecosystem_metrics', 
     'search_knowledge', 'recall_entity', 'invoke_edge_function', 
     'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks',
-    'search_edge_functions', 'browse_web', 'analyze_attachment'
+    'search_edge_functions', 'browse_web', 'analyze_attachment', 'google_gmail'
   ];
   
   for (const pattern of patterns) {
@@ -1489,50 +1906,43 @@ function parseConversationalToolIntent(content: string): Array<any> | null {
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
-// Detect if query needs data (should force tool calls)
 function needsDataRetrieval(messages: any[]): boolean {
   const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
   
   const dataKeywords = [
-    // Questions (any question likely needs data)
     'what is', 'what\'s', 'what are', 'who is', 'who are', 'where is', 'when is',
     'how is', 'how are', 'how much', 'how many', 'why is', 'why are',
-    // Commands/Actions
     'show me', 'tell me', 'give me', 'fetch', 'get', 'list', 'find', 'search',
     'check', 'analyze', 'run', 'execute', 'perform', 'scan', 'diagnose',
     'look up', 'lookup', 'retrieve', 'query', 'pull', 'grab',
-    // Status/Metrics
     'status', 'health', 'stats', 'statistics', 'metrics', 'analytics',
     'performance', 'report', 'overview', 'summary', 'dashboard',
-    // System/Ecosystem
     'current', 'recent', 'latest', 'today', 'now', 'real-time', 'realtime', 'live',
     'mining', 'hashrate', 'workers', 'agents', 'tasks', 'ecosystem',
     'proposals', 'governance', 'cron', 'functions', 'logs', 'activity',
-    // Memory/Knowledge
     'recall', 'remember', 'stored', 'saved', 'previous', 'history',
-    // Comparisons/Specifics
     'compare', 'between', 'vs', 'versus', 'difference',
     'count', 'total', 'number', 'amount', 'percentage', 'rate',
-    // Creative/Generative
     'create', 'generate', 'make', 'draw', 'design', 'render', 'illustrate',
     'visualize', 'picture', 'image', 'video', 'animate', 'animation',
     'photo', 'artwork', 'graphic', 'clip', 'film', 'scene',
-    // Web/URL browsing
     'view', 'open', 'check', 'browse', 'navigate', 'visit', 'go to',
     'website', 'webpage', 'url', 'link', 'http://', 'https://',
-    'web', 'internet', 'page', 'site'
+    'web', 'internet', 'page', 'site',
+    'email', 'send', 'mail', 'contact', 'message'
   ];
   
   const hasQuestionMark = lastUser.includes('?');
-  const imperativePatterns = /^(show|tell|give|get|list|find|check|run|execute|analyze|fetch|retrieve|scan|diagnose|look|pull|view|open|browse|navigate|visit|go)/i;
+  const imperativePatterns = /^(show|tell|give|get|list|find|check|run|execute|analyze|fetch|retrieve|scan|diagnose|look|pull|view|open|browse|navigate|visit|go|send|email)/i;
   const startsWithImperative = imperativePatterns.test(lastUser.trim());
   const urlPattern = /(https?:\/\/[^\s]+)/gi;
   const hasUrl = urlPattern.test(lastUser);
+  const emailPattern = /[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}/gi;
+  const hasEmail = emailPattern.test(lastUser);
   
-  return hasQuestionMark || startsWithImperative || hasUrl || dataKeywords.some(k => lastUser.includes(k));
+  return hasQuestionMark || startsWithImperative || hasUrl || hasEmail || dataKeywords.some(k => lastUser.includes(k));
 }
 
-// Convert OpenAI tool format to Gemini function declaration format
 function convertToolsToGeminiFormat(tools: any[]): any[] {
   return tools.map(tool => ({
     name: tool.function.name,
@@ -1541,7 +1951,6 @@ function convertToolsToGeminiFormat(tools: any[]): any[] {
   }));
 }
 
-// Retrieve memory contexts from database (server-side fallback)
 async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   if (!sessionKey) return [];
   
@@ -1571,14 +1980,12 @@ async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   return [];
 }
 
-// Fallback to DeepSeek API with full tool support
 async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
   const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
   if (!DEEPSEEK_API_KEY) return null;
   
   console.log('🔄 Trying DeepSeek fallback...');
   
-  // Inject tool calling mandate into system message
   const enhancedMessages = messages.map(m => 
     m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
   );
@@ -1628,7 +2035,6 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
   return null;
 }
 
-// Fallback to Kimi K2 via OpenRouter with full tool support
 async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
   if (!OPENROUTER_API_KEY) return null;
@@ -1686,7 +2092,6 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   return null;
 }
 
-// Fallback to Gemini API with native tool calling
 async function callGeminiFallback(
   messages: any[], 
   tools?: any[],
@@ -1695,90 +2100,115 @@ async function callGeminiFallback(
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   if (!GEMINI_API_KEY) return null;
   
-  console.log('🔄 Trying Gemini fallback with native tool calling...');
+  console.log('🔄 Trying Gemini fallback with better models (2.5-flash)...');
   
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
-    const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
-    const lastUserMessage = messages.filter(m => m.role === 'user').pop();
-    const userText = lastUserMessage?.content || 'Help me';
-    
-    const parts: any[] = [{ text: `${TOOL_CALLING_MANDATE}\n${systemPrompt}\n\nUser: ${userText}` }];
-    
-    // Add images if present
-    if (images && images.length > 0) {
-      for (const imageBase64 of images) {
-        const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-        if (matches) {
-          parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
+  const geminiModels = [
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-image',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash'
+  ];
+  
+  for (const model of geminiModels) {
+    try {
+      console.log(`🔄 Trying Gemini model: ${model}`);
+      
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000);
+      
+      const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
+      const lastUserMessage = messages.filter(m => m.role === 'user').pop();
+      const userText = lastUserMessage?.content || 'Help me';
+      
+      const parts: any[] = [{ text: `${TOOL_CALLING_MANDATE}\n${systemPrompt}\n\nUser: ${userText}` }];
+      
+      if (images && images.length > 0 && (model.includes('image') || model === 'gemini-1.5-flash')) {
+        for (const imageBase64 of images) {
+          const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+          if (matches) {
+            parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
+          }
         }
       }
-    }
-    
-    // Convert ALL tools to Gemini format - no artificial limits
-    const geminiTools = tools && tools.length > 0 ? [{
-      functionDeclarations: tools.map(t => ({
-        name: t.function.name,
-        description: t.function.description,
-        parameters: t.function.parameters
-      }))
-    }] : undefined;
-    console.log(`📊 Gemini fallback: Passing ${tools?.length || 0} tools (full array)`);
-    
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          contents: [{ parts }],
-          tools: geminiTools,
-          generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
-        }),
-        signal: controller.signal
-      }
-    );
-    
-    clearTimeout(timeoutId);
-    
-    if (response.ok) {
-      const data = await response.json();
-      const responseParts = data.candidates?.[0]?.content?.parts || [];
       
-      // Check for native function calls
-      const functionCalls = responseParts.filter((p: any) => p.functionCall);
-      if (functionCalls.length > 0) {
-        console.log(`✅ Gemini returned ${functionCalls.length} native function calls`);
-        return {
-          content: responseParts.find((p: any) => p.text)?.text || '',
-          tool_calls: functionCalls.map((fc: any, idx: number) => ({
-            id: `gemini_${Date.now()}_${idx}`,
-            type: 'function',
-            function: {
-              name: fc.functionCall.name,
-              arguments: JSON.stringify(fc.functionCall.args || {})
-            }
-          })),
-          provider: 'gemini',
-          model: 'gemini-1.5-flash'
-        };
-      }
+      const geminiTools = tools && tools.length > 0 ? [{
+        functionDeclarations: convertToolsToGeminiFormat(tools)
+      }] : undefined;
       
-      // Extract text response
-      const text = responseParts.find((p: any) => p.text)?.text;
-      if (text) {
-        console.log('✅ Gemini fallback successful');
-        return { content: text, tool_calls: [], provider: 'gemini', model: 'gemini-1.5-flash' };
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY
+          },
+          body: JSON.stringify({
+            contents: [{ parts }],
+            tools: geminiTools,
+            generationConfig: { temperature: 0.7, maxOutputTokens: 8000 }
+          }),
+          signal: controller.signal
+        }
+      );
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        
+        if (!candidate || !candidate.content) {
+          if (model !== geminiModels[geminiModels.length - 1]) {
+            continue;
+          }
+          return null;
+        }
+        
+        const functionCalls = candidate.content.parts?.filter((p: any) => p.functionCall);
+        if (functionCalls && functionCalls.length > 0) {
+          console.log(`✅ Gemini ${model} returned ${functionCalls.length} native function calls`);
+          return {
+            content: candidate.content.parts?.find((p: any) => p.text)?.text || '',
+            tool_calls: functionCalls.map((fc: any, idx: number) => ({
+              id: `gemini_${Date.now()}_${idx}`,
+              type: 'function',
+              function: {
+                name: fc.functionCall.name,
+                arguments: JSON.stringify(fc.functionCall.args || {})
+              }
+            })),
+            provider: 'gemini',
+            model: model
+          };
+        }
+        
+        const text = candidate.content.parts
+          ?.map((part: any) => part.text || '')
+          .join('') || '';
+        
+        if (text) {
+          console.log(`✅ Gemini ${model} fallback successful`);
+          return { content: text, tool_calls: [], provider: 'gemini', model: model };
+        }
+      } else if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
+        console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
+        continue;
+      } else {
+        const errorText = await response.text();
+        console.warn(`⚠️ Gemini ${model} API error:`, response.status, errorText);
+        if (model !== geminiModels[geminiModels.length - 1]) {
+          continue;
+        }
       }
-    } else {
-      const errorText = await response.text();
-      console.warn('⚠️ Gemini API error:', response.status, errorText);
+    } catch (error) {
+      console.warn(`⚠️ Gemini ${model} fallback failed:`, error);
+      if (model !== geminiModels[geminiModels.length - 1]) {
+        continue;
+      }
     }
-  } catch (error) {
-    console.warn('⚠️ Gemini fallback failed:', error);
   }
+  
   return null;
 }
 
@@ -1791,19 +2221,18 @@ async function synthesizeToolResults(
 ): Promise<string> {
   console.log('🧠 Synthesizing tool results with intelligent analysis...');
   
-  // Group tool results by type
   const webResults = toolResults.filter(r => r.tool === 'browse_web');
   const functionResults = toolResults.filter(r => r.tool === 'search_edge_functions' || r.tool === 'list_available_functions');
   const systemResults = toolResults.filter(r => ['get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
   const attachmentResults = toolResults.filter(r => r.tool === 'analyze_attachment');
-  const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'list_available_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics', 'analyze_attachment'].includes(r.tool));
+  const emailResults = toolResults.filter(r => r.tool === 'google_gmail');
+  const githubResults = toolResults.filter(r => r.tool.includes('GitHub'));
+  const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'list_available_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics', 'analyze_attachment', 'google_gmail'].includes(r.tool) && !r.tool.includes('GitHub'));
   
-  // Analyze user intent
   const intent = analyzeUserIntent(userQuery, conversationContext);
   
   let response = '';
   
-  // Start with contextual greeting
   if (conversationContext.length === 0) {
     response += `👋 **${executiveName} here!** I've gathered the information you requested.\n\n`;
   } else if (intent.isFollowUp) {
@@ -1812,7 +2241,111 @@ async function synthesizeToolResults(
     response += `🔍 **Here's what I found** based on your request:\n\n`;
   }
   
-  // Process attachment analysis results
+  if (githubResults.length > 0) {
+    response += `### 🐙 **GitHub Operations**\n`;
+    
+    githubResults.forEach((result, index) => {
+      const { success, error, ...data } = result.result;
+      
+      if (success) {
+        response += `\n✅ **${result.tool.replace('GitHub', ' GitHub ')} successful!**\n`;
+        
+        if (result.tool === 'createGitHubIssue' || result.tool === 'createGitHubDiscussion') {
+          if (data.issue_number || data.discussion_number) {
+            const number = data.issue_number || data.discussion_number;
+            const type = result.tool.includes('Issue') ? 'issue' : 'discussion';
+            response += `   • **${type.charAt(0).toUpperCase() + type.slice(1)} #**: ${number}\n`;
+          }
+          if (data.title) {
+            response += `   • **Title**: ${data.title}\n`;
+          }
+          if (data.url) {
+            response += `   • **URL**: ${data.url}\n`;
+          }
+        } else if (result.tool === 'createGitHubPullRequest') {
+          if (data.pull_number) {
+            response += `   • **Pull Request #**: ${data.pull_number}\n`;
+          }
+          if (data.title) {
+            response += `   • **Title**: ${data.title}\n`;
+          }
+          if (data.url) {
+            response += `   • **URL**: ${data.url}\n`;
+          }
+        } else if (result.tool === 'commentOnGitHubIssue' || result.tool === 'commentOnGitHubDiscussion') {
+          response += `   • **Comment added successfully**\n`;
+          if (data.comment_id) {
+            response += `   • **Comment ID**: ${data.comment_id}\n`;
+          }
+        } else if (result.tool === 'listGitHubIssues' || result.tool === 'listGitHubPullRequests') {
+          const items = data.issues || data.pull_requests || [];
+          const type = result.tool.includes('Issues') ? 'issues' : 'pull requests';
+          response += `   • **Found ${items.length} ${type}**\n`;
+          if (items.length > 0) {
+            items.slice(0, 3).forEach((item: any, idx: number) => {
+              response += `   • ${idx + 1}. #${item.number}: ${item.title.substring(0, 60)}${item.title.length > 60 ? '...' : ''}\n`;
+            });
+            if (items.length > 3) {
+              response += `   • ... and ${items.length - 3} more ${type}\n`;
+            }
+          }
+        } else if (result.tool === 'searchGitHubCode') {
+          const items = data.items || [];
+          response += `   • **Found ${items.length} code results**\n`;
+          if (items.length > 0) {
+            items.slice(0, 3).forEach((item: any, idx: number) => {
+              response += `   • ${idx + 1}. ${item.repository}: ${item.path}\n`;
+            });
+            if (items.length > 3) {
+              response += `   • ... and ${items.length - 3} more results\n`;
+            }
+          }
+        }
+      } else {
+        response += `\n❌ **${result.tool.replace('GitHub', ' GitHub ')} failed**\n`;
+        response += `   • **Error**: ${error || 'Unknown error'}\n`;
+      }
+    });
+    response += '\n';
+  }
+  
+  if (emailResults.length > 0) {
+    response += `### 📧 **Email Communication**\n`;
+    
+    emailResults.forEach((result, index) => {
+      const { success, error, action, to, subject, message } = result.result;
+      
+      if (success) {
+        response += `\n✅ **Email ${action} successful!**\n`;
+        
+        if (to) {
+          response += `   • **To**: ${to}\n`;
+        }
+        
+        if (subject) {
+          response += `   • **Subject**: ${subject}\n`;
+        }
+        
+        if (message) {
+          response += `   • **Message**: ${message.substring(0, 150)}${message.length > 150 ? '...' : ''}\n`;
+        }
+        
+        if (action === 'send_email') {
+          response += `   • **Status**: Sent successfully\n`;
+          response += `   • **Confirmation**: Email has been delivered to the recipient\n`;
+        } else if (action === 'create_draft') {
+          response += `   • **Status**: Draft created successfully\n`;
+          response += `   • **Next**: Review and send when ready\n`;
+        }
+      } else {
+        response += `\n❌ **Email ${action} failed**\n`;
+        response += `   • **Error**: ${error || 'Unknown error'}\n`;
+        response += `   • **Suggestion**: Check email address format and try again\n`;
+      }
+    });
+    response += '\n';
+  }
+  
   if (attachmentResults.length > 0) {
     response += `### 📎 **Attachment Analysis**\n`;
     
@@ -1862,7 +2395,6 @@ async function synthesizeToolResults(
     response += '\n';
   }
   
-  // Process web browsing results with intelligent analysis
   if (webResults.length > 0) {
     response += `### 🌐 **Web Analysis**\n`;
     
@@ -1888,7 +2420,6 @@ async function synthesizeToolResults(
           response += `**Summary**: ${summary}\n`;
         }
         
-        // Extract intelligent insights from content if available
         if (content) {
           const insights = extractKeyInsights(content, domain);
           if (insights) {
@@ -1896,7 +2427,6 @@ async function synthesizeToolResults(
           }
         }
         
-        // Add domain-specific commentary
         if (domain.includes('ycombinator.com')) {
           response += `   💡 *Hacker News Insight*: The site shows technology trends and startup discussions. Good for staying updated on tech news.\n`;
         } else if (domain.includes('reddit.com')) {
@@ -1905,7 +2435,6 @@ async function synthesizeToolResults(
           response += `   🔍 *Search Engine*: Ready for queries. I can help you search for specific information if needed.\n`;
         }
         
-        // Show extracted links if available
         if (result.result.links && result.result.links.length > 0) {
           response += `   **Extracted Links (${Math.min(result.result.links.length, 12)}):**\n`;
           result.result.links.slice(0, 5).forEach((link: string, i: number) => {
@@ -1928,7 +2457,6 @@ async function synthesizeToolResults(
     response += '\n';
   }
   
-  // Process edge function search results
   if (functionResults.length > 0) {
     response += `### 🔧 **Edge Functions**\n`;
     
@@ -1937,7 +2465,6 @@ async function synthesizeToolResults(
       const funcs = functions || [];
       
       if (success && funcs && funcs.length > 0) {
-        // Use grouped results if available
         if (grouped_by_category) {
           const totalFunctions = total || funcs.length;
           response += `\nFound **${totalFunctions}** available edge functions:\n`;
@@ -1954,7 +2481,6 @@ async function synthesizeToolResults(
             }
           });
         } else {
-          // Fallback to manual grouping
           const byCategory = funcs.reduce((acc: any, func: any) => {
             const category = func.category || 'uncategorized';
             if (!acc[category]) acc[category] = [];
@@ -1978,7 +2504,6 @@ async function synthesizeToolResults(
           });
         }
         
-        // Add insights
         const billingFunctions = funcs.filter((f: any) => 
           f.name.includes('billing') || f.name.includes('financial') || 
           f.description?.toLowerCase().includes('billing') ||
@@ -2000,7 +2525,6 @@ async function synthesizeToolResults(
     response += '\n';
   }
   
-  // Process system status results
   if (systemResults.length > 0) {
     response += `### 📊 **System Status**\n`;
     
@@ -2029,7 +2553,6 @@ async function synthesizeToolResults(
     response += '\n';
   }
   
-  // Process other tool results
   if (otherResults.length > 0) {
     response += `### ⚙️ **Other Actions**\n`;
     
@@ -2037,7 +2560,6 @@ async function synthesizeToolResults(
       const { success, error, ...data } = result.result;
       
       if (success) {
-        // Extract meaningful information
         const keys = Object.keys(data).filter(k => !['success', 'error', 'timestamp', 'execution_time_ms', 'tool_name'].includes(k));
         if (keys.length > 0) {
           const mainKey = keys[0];
@@ -2062,7 +2584,6 @@ async function synthesizeToolResults(
     response += '\n';
   }
   
-  // Add closing remarks based on results
   if (toolResults.length > 0) {
     const successful = toolResults.filter(r => r.result.success).length;
     const failed = toolResults.filter(r => !r.result.success).length;
@@ -2075,12 +2596,18 @@ async function synthesizeToolResults(
       response += `❌ **All operations failed.** You might want to try alternative approaches.\n`;
     }
     
-    // Add contextual next steps
     if (intent.topics.length > 0) {
       response += `\n**Related to**: ${intent.topics.join(', ')}\n`;
     }
     
-    // Add suggestions based on query type
+    if (intent.primaryIntent === 'communication' || userQuery.toLowerCase().includes('email')) {
+      response += `\n📧 *Email follow-up*: I can send more emails or check email status. Just let me know!\n`;
+    }
+    
+    if (userQuery.toLowerCase().includes('github')) {
+      response += `\n🐙 *GitHub follow-up*: I can help with more GitHub operations like creating issues, discussions, pull requests, or searching code.\n`;
+    }
+    
     if (userQuery.toLowerCase().includes('function') || userQuery.toLowerCase().includes('capability')) {
       response += `\n💡 *Need more capabilities?* I can help you create new edge functions or modify existing ones.\n`;
     }
@@ -2106,14 +2633,16 @@ async function synthesizeToolResults(
 // ========== ENHANCED CONVERSATION MEMORY MANAGER ==========
 class EnhancedConversationManager {
   private sessionId: string;
+  private ipAddress: string;
   private toolResultsMemory: any[] = [];
   private conversationPersistence: EnhancedConversationPersistence;
   private userId?: string;
   
-  constructor(sessionId: string, userId?: string) {
+  constructor(sessionId: string, ipAddress: string, userId?: string) {
     this.sessionId = sessionId;
+    this.ipAddress = ipAddress;
     this.userId = userId;
-    this.conversationPersistence = new EnhancedConversationPersistence(sessionId, userId);
+    this.conversationPersistence = new EnhancedConversationPersistence(sessionId, ipAddress, userId);
   }
   
   async loadConversationHistory(): Promise<{
@@ -2123,36 +2652,51 @@ class EnhancedConversationManager {
     historicalSummaries: any[];
   }> {
     try {
-      console.log(`📚 Loading conversation history for session: ${this.sessionId}`);
+      console.log(`📚 Loading conversation history for session: ${this.sessionId} (IP: ${this.ipAddress})`);
       
-      const { data, error } = await supabase
+      const { data: ipData, error: ipError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .select('messages, summary, tool_results, metadata')
-        .eq('session_id', this.sessionId)
-        .order('created_at', { ascending: false })
+        .eq('ip_address', this.ipAddress)
+        .order('updated_at', { ascending: false })
         .limit(1);
-      
-      if (error) {
-        console.warn('⚠️ Database error loading history:', error.message);
-      }
       
       let messages = [];
       let toolResults = [];
       let conversationSummary = 'New session';
       
-      if (!data || data.length === 0) {
-        console.log('📭 No existing conversation found for session');
-      } else {
-        const record = data[0];
+      if (!ipError && ipData && ipData.length > 0) {
+        const record = ipData[0];
         messages = record.messages || [];
         toolResults = record.tool_results || [];
         this.toolResultsMemory = toolResults;
-        conversationSummary = record.summary || 'Existing conversation';
+        conversationSummary = record.summary || 'Existing conversation from IP';
         
-        console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from history`);
+        console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from IP-based history`);
+        
+        await this.updateSessionIdInMemory(record);
+        
+      } else {
+        const { data: sessionData, error: sessionError } = await supabase
+          .from(DATABASE_CONFIG.tables.conversation_memory)
+          .select('messages, summary, tool_results, metadata')
+          .eq('session_id', this.sessionId)
+          .order('updated_at', { ascending: false })
+          .limit(1);
+        
+        if (!sessionError && sessionData && sessionData.length > 0) {
+          const record = sessionData[0];
+          messages = record.messages || [];
+          toolResults = record.tool_results || [];
+          this.toolResultsMemory = toolResults;
+          conversationSummary = record.summary || 'Existing conversation';
+          
+          console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from session history`);
+        } else {
+          console.log('📭 No existing conversation found for session or IP');
+        }
       }
       
-      // Load historical conversation summaries (2000+ previous conversations)
       const historicalSummaries = await this.conversationPersistence.loadHistoricalSummaries();
       
       return {
@@ -2173,23 +2717,39 @@ class EnhancedConversationManager {
     }
   }
   
+  private async updateSessionIdInMemory(record: any): Promise<void> {
+    try {
+      await supabase
+        .from(DATABASE_CONFIG.tables.conversation_memory)
+        .update({ 
+          session_id: this.sessionId,
+          updated_at: new Date().toISOString()
+        })
+        .eq('ip_address', this.ipAddress)
+        .eq('updated_at', record.updated_at);
+      
+      console.log(`🔄 Updated session ID for IP ${this.ipAddress} to ${this.sessionId}`);
+    } catch (error) {
+      console.warn('⚠️ Failed to update session ID in memory:', error);
+    }
+  }
+  
   async saveConversation(
     messages: any[],
     toolResults: any[] = [],
     metadata: any = {}
   ): Promise<void> {
     try {
-      // Combine old and new tool results
       const allToolResults = [...this.toolResultsMemory, ...toolResults].slice(-MAX_TOOL_RESULTS_MEMORY);
       this.toolResultsMemory = allToolResults;
       
-      // Generate a meaningful summary
-      const summary = await this.generateConversationSummary(messages, allToolResults);
+      // USE IMMEDIATE MANUAL SUMMARY INSTEAD OF AI SUMMARY
+      const summary = generateEnhancedManualSummary(messages, allToolResults);
       
-      // Prepare conversation record
-      const conversationRecord = {
+      const conversationRecord: any = {
         session_id: this.sessionId,
-        messages: messages.slice(-50), // Keep last 50 messages
+        ip_address: this.ipAddress,
+        messages: messages.slice(-50),
         tool_results: allToolResults,
         summary: summary,
         metadata: {
@@ -2197,28 +2757,44 @@ class EnhancedConversationManager {
           tool_call_count: allToolResults.length,
           message_count: messages.length,
           last_updated: new Date().toISOString(),
-          memory_version: '3.0'
+          memory_version: '5.0',
+          ip_based_persistence: true,
+          summary_method: 'manual_immediate' // Changed from 'ai_enhanced'
         },
         updated_at: new Date().toISOString()
       };
       
-      // Upsert the conversation
+      if (this.userId) {
+        conversationRecord.user_id = this.userId;
+      }
+      
       const { error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .upsert(conversationRecord, {
-          onConflict: 'session_id'
+          onConflict: 'ip_address',
+          ignoreDuplicates: false
         });
       
       if (error) {
         console.warn('⚠️ Failed to save conversation:', error.message);
+        const { error: sessionError } = await supabase
+          .from(DATABASE_CONFIG.tables.conversation_memory)
+          .upsert(conversationRecord, {
+            onConflict: 'session_id'
+          });
+        
+        if (sessionError) {
+          console.warn('⚠️ Failed to save conversation with session fallback:', sessionError.message);
+        } else {
+          console.log(`💾 Saved conversation (session fallback): ${messages.length} messages, ${allToolResults.length} tool results`);
+        }
       } else {
-        console.log(`💾 Saved conversation: ${messages.length} messages, ${allToolResults.length} tool results`);
+        console.log(`💾 Saved conversation (IP-based): ${messages.length} messages, ${allToolResults.length} tool results`);
       }
       
-      // Save conversation summary for historical reference
+      // CRITICAL FIX: Save summary immediately with manual method, trigger AI summarization in background
       await this.conversationPersistence.saveConversationSummary(messages, allToolResults, metadata);
       
-      // Cleanup old sessions (keep last 100)
       await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .delete()
@@ -2229,7 +2805,6 @@ class EnhancedConversationManager {
     }
   }
   
-  // Save conversation context for ambiguous responses
   async saveConversationContext(
     currentQuestion: string,
     assistantResponse: string,
@@ -2244,34 +2819,13 @@ class EnhancedConversationManager {
     );
   }
   
-  // Load recent context to understand ambiguous responses
   async loadRecentContext(limit: number = 5): Promise<any[]> {
     return await this.conversationPersistence.loadRecentContext(limit);
   }
   
   private async generateConversationSummary(messages: any[], toolResults: any[]): Promise<string> {
-    try {
-      const userMessages = messages.filter(m => m.role === 'user');
-      const assistantMessages = messages.filter(m => m.role === 'assistant');
-      
-      const successfulTools = toolResults.filter(r => r.result?.success);
-      const failedTools = toolResults.filter(r => !r.result?.success);
-      
-      const lastUserMessage = userMessages[userMessages.length - 1]?.content || '';
-      const lastAssistantMessage = assistantMessages[assistantMessages.length - 1]?.content || '';
-      
-      // Extract key topics from recent messages
-      const recentText = messages.slice(-5).map(m => m.content).join(' ').toLowerCase();
-      const topics = ['task', 'agent', 'github', 'deploy', 'bug', 'api', 'function', 'system', 'mining', 'web', 'url', 'browse'];
-      const mentionedTopics = topics.filter(topic => recentText.includes(topic));
-      
-      return `Conversation with ${userMessages.length} user messages and ${assistantMessages.length} assistant responses. ` +
-             `Executed ${toolResults.length} tools (${successfulTools.length} successful, ${failedTools.length} failed). ` +
-             `Recent topics: ${mentionedTopics.join(', ') || 'general'}. ` +
-             `Last user query: "${lastUserMessage.substring(0, 80)}${lastUserMessage.length > 80 ? '...' : ''}"`;
-    } catch (error) {
-      return `Conversation with ${messages.length} messages and ${toolResults.length} tool executions`;
-    }
+    // CRITICAL FIX: Always use manual summary, NEVER call AI summary synchronously
+    return generateEnhancedManualSummary(messages, toolResults);
   }
   
   getToolResults(): any[] {
@@ -2287,12 +2841,13 @@ class EnhancedConversationManager {
     const toolResults = this.toolResultsMemory;
     
     if (toolResults.length === 0) {
-      return "## 🧠 CONVERSATION MEMORY\nNo previous tool calls in this conversation.";
+      return "## 🧠 CONVERSATION MEMORY\nNo previous tool calls in this conversation.\n\n**IP Address**: " + this.ipAddress + "\n**Session Persistence**: Active (24-hour TTL)";
     }
     
     let context = "## 🧠 CONVERSATION MEMORY - TOOL CALL HISTORY\n\n";
+    context += `**IP Address**: ${this.ipAddress}\n`;
+    context += `**Session Persistence**: Active (24-hour TTL)\n\n`;
     
-    // Group recent tool calls (last 10, most recent first)
     const recentTools = toolResults.slice(-10).reverse();
     
     context += `### RECENT TOOL EXECUTIONS (${recentTools.length} total)\n\n`;
@@ -2305,7 +2860,6 @@ class EnhancedConversationManager {
       
       if (tool.result) {
         if (tool.result.success) {
-          // Generate detailed success summaries
           if (tool.name === 'browse_web' && tool.result.url) {
             context += `   Browsed: ${tool.result.url} (${tool.result.status || '200'})\n`;
             if (tool.result.metadata) {
@@ -2329,6 +2883,22 @@ class EnhancedConversationManager {
           else if (tool.name === 'analyze_attachment') {
             context += `   Analyzed ${tool.result.total_attachments || 0} attachments\n`;
           }
+          else if (tool.name === 'google_gmail') {
+            context += `   Email action: ${tool.result.action || 'sent'}\n`;
+            if (tool.result.to) {
+              context += `   To: ${tool.result.to}\n`;
+            }
+            if (tool.result.subject) {
+              context += `   Subject: ${tool.result.subject.substring(0, 50)}${tool.result.subject.length > 50 ? '...' : ''}\n`;
+            }
+          }
+          else if (tool.name.includes('GitHub')) {
+            context += `   GitHub operation: ${tool.name.replace('GitHub', ' GitHub ')}\n`;
+            if (tool.result.issue_number || tool.result.pull_number) {
+              const number = tool.result.issue_number || tool.result.pull_number;
+              context += `   Created/Updated: #${number}\n`;
+            }
+          }
           else if (tool.result.agents) {
             context += `   Found ${tool.result.agents.length} agents\n`;
           }
@@ -2348,7 +2918,6 @@ class EnhancedConversationManager {
       context += '\n';
     });
     
-    // Add statistics
     const successful = toolResults.filter(r => r.result?.success).length;
     const failed = toolResults.filter(r => !r.result?.success).length;
     
@@ -2361,6 +2930,8 @@ class EnhancedConversationManager {
     context += `**IMPORTANT**: You MUST reference these previous tool calls when users ask about them. `;
     context += `For example, if a user asks "what did you get from search_edge_functions?", `;
     context += `you should reference the exact results shown above.\n`;
+    context += `**CRITICAL FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., check recent context to understand what they're responding to.\n`;
+    context += `**IP-BASED MEMORY**: This conversation persists across sessions for 24 hours based on IP address.\n`;
     
     return context;
   }
@@ -2382,6 +2953,7 @@ async function executeToolsWithIteration(
   aiMessages: any[],
   executiveName: string,
   sessionId: string,
+  ipAddress: string,
   callAIFunction: Function,
   tools: any[],
   maxIterations: number = 5,
@@ -2393,10 +2965,8 @@ async function executeToolsWithIteration(
   let conversationMessages = [...aiMessages];
   
   while (iteration < maxIterations) {
-    // Check for tool calls (native or text-embedded)
     let toolCalls = response.tool_calls || [];
     
-    // Also check for text-embedded tool calls
     if ((!toolCalls || toolCalls.length === 0) && response.content) {
       const textToolCalls = parseToolCodeBlocks(response.content) || 
                            parseDeepSeekToolCalls(response.content) ||
@@ -2417,6 +2987,7 @@ async function executeToolsWithIteration(
         toolCall.function.arguments,
         executiveName,
         sessionId,
+        ipAddress,
         Date.now()
       );
       toolResults.push({
@@ -2428,9 +2999,7 @@ async function executeToolsWithIteration(
       totalToolsExecuted++;
     }
     
-    // Format tool results for memory
     const memoryFormatted = toolResults.map(tr => {
-      // tr.content is a JSON string; parse defensively
       let parsed;
       try { 
         parsed = JSON.parse(tr.content); 
@@ -2445,12 +3014,10 @@ async function executeToolsWithIteration(
       };
     });
     
-    // Persist into memory manager so saveConversation can see them
     if (memoryManager) {
       memoryManager.addToolResults(memoryFormatted);
     }
     
-    // Add assistant message with tool calls and tool results
     conversationMessages.push({
       role: 'assistant',
       content: response.content || '',
@@ -2458,7 +3025,6 @@ async function executeToolsWithIteration(
     });
     conversationMessages.push(...toolResults);
     
-    // Call AI again with tool results
     const newResponse = await callAIFunction(conversationMessages, tools);
     if (!newResponse) break;
     
@@ -2466,10 +3032,8 @@ async function executeToolsWithIteration(
     iteration++;
   }
   
-  // Final synthesis if we have tool results
   let finalContent = response?.content || '';
   
-  // Remove any tool_code blocks from final response
   if (finalContent.includes('```tool_code')) {
     finalContent = finalContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
   }
@@ -2508,7 +3072,6 @@ class EnhancedProviderCascade {
       }
     }
     
-    // Cascade through enabled providers by priority
     const providers = Object.entries(AI_PROVIDERS_CONFIG)
       .filter(([_, config]) => config.enabled && !config.fallbackOnly)
       .sort((a, b) => a[1].priority - b[1].priority)
@@ -2523,7 +3086,6 @@ class EnhancedProviderCascade {
       }
     }
     
-    // Try fallback providers
     console.log('🔄 Trying fallback providers...');
     
     const fallbackResults = await Promise.all([
@@ -2616,7 +3178,6 @@ class EnhancedProviderCascade {
   }
   
   private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
-    // Check if we should force tools
     const forceTools = needsDataRetrieval(messages);
     
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
@@ -2668,157 +3229,192 @@ class EnhancedProviderCascade {
   }
   
   private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
-    // Convert messages to Gemini format
-    const geminiMessages = [];
+    const geminiModels = [
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-image',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-flash'
+    ];
     
-    for (const msg of messages) {
-      if (msg.role === 'system') {
-        geminiMessages.push({
-          role: 'user',
-          parts: [{ text: msg.content }]
-        });
-        geminiMessages.push({
-          role: 'model',
-          parts: [{ text: 'Understood. I will follow these instructions.' }]
-        });
-      } else if (msg.role === 'user') {
-        const parts: any[] = [{ text: msg.content }];
+    for (const model of geminiModels) {
+      try {
+        console.log(`🔄 Trying Gemini model: ${model}`);
         
-        // Add images if this is the last user message and we have images
-        if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0) {
-          for (const imageBase64 of images) {
-            const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-            if (matches) {
-              parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
-            }
-          }
-        }
+        const geminiMessages = [];
         
-        geminiMessages.push({
-          role: 'user',
-          parts: parts
-        });
-      } else if (msg.role === 'assistant') {
-        if (msg.tool_calls) {
-          // Handle tool call responses
-          for (const toolCall of msg.tool_calls) {
+        for (const msg of messages) {
+          if (msg.role === 'system') {
+            geminiMessages.push({
+              role: 'user',
+              parts: [{ text: msg.content }]
+            });
             geminiMessages.push({
               role: 'model',
+              parts: [{ text: 'Understood. I will follow these instructions.' }]
+            });
+          } else if (msg.role === 'user') {
+            const parts: any[] = [{ text: msg.content }];
+            
+            if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 && 
+                (model.includes('image') || model === 'gemini-1.5-flash')) {
+              for (const imageBase64 of images) {
+                const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+                if (matches) {
+                  parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
+                }
+              }
+            }
+            
+            geminiMessages.push({
+              role: 'user',
+              parts: parts
+            });
+          } else if (msg.role === 'assistant') {
+            if (msg.tool_calls) {
+              for (const toolCall of msg.tool_calls) {
+                geminiMessages.push({
+                  role: 'model',
+                  parts: [{
+                    functionCall: {
+                      name: toolCall.function.name,
+                      args: typeof toolCall.function.arguments === 'string' 
+                        ? JSON.parse(toolCall.function.arguments) 
+                        : toolCall.function.arguments
+                    }
+                  }]
+                });
+              }
+            } else if (msg.content) {
+              geminiMessages.push({
+                role: 'model',
+                parts: [{ text: msg.content }]
+              });
+            }
+          } else if (msg.role === 'tool') {
+            geminiMessages.push({
+              role: 'user',
               parts: [{
-                functionCall: {
-                  name: toolCall.function.name,
-                  args: typeof toolCall.function.arguments === 'string' 
-                    ? JSON.parse(toolCall.function.arguments) 
-                    : toolCall.function.arguments
+                functionResponse: {
+                  name: 'tool_result',
+                  response: {
+                    content: msg.content
+                  }
                 }
               }]
             });
           }
-        } else if (msg.content) {
-          geminiMessages.push({
-            role: 'model',
-            parts: [{ text: msg.content }]
-          });
         }
-      } else if (msg.role === 'tool') {
-        geminiMessages.push({
-          role: 'user',
-          parts: [{
-            functionResponse: {
-              name: 'tool_result',
-              response: {
-                content: msg.content
-              }
+        
+        const geminiTools = tools.length > 0 ? {
+          functionDeclarations: convertToolsToGeminiFormat(tools)
+        } : undefined;
+        
+        const requestBody: any = {
+          contents: geminiMessages,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4000
+          }
+        };
+        
+        if (geminiTools) {
+          requestBody.tools = [geminiTools];
+        }
+        
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 
+              'Content-Type': 'application/json',
+              'x-goog-api-key': GEMINI_API_KEY
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+          }
+        );
+        
+        if (!response.ok) {
+          if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
+            console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
+            continue;
+          }
+          
+          const errorText = await response.text();
+          return {
+            success: false,
+            provider: 'gemini',
+            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
+          };
+        }
+        
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        
+        if (!candidate || !candidate.content) {
+          if (model !== geminiModels[geminiModels.length - 1]) {
+            continue;
+          }
+          return {
+            success: false,
+            provider: 'gemini',
+            error: `No content in Gemini ${model} response`
+          };
+        }
+        
+        const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
+        if (functionCallPart) {
+          const functionCall = functionCallPart.functionCall;
+          
+          const toolCalls = [{
+            id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: 'function',
+            function: {
+              name: functionCall.name,
+              arguments: JSON.stringify(functionCall.args)
             }
-          }]
-        });
-      }
-    }
-    
-    // Convert tools to Gemini format
-    const geminiTools = tools.length > 0 ? {
-      functionDeclarations: convertToolsToGeminiFormat(tools)
-    } : undefined;
-    
-    const requestBody: any = {
-      contents: geminiMessages,
-      generationConfig: {
-        temperature: 0.7,
-        maxOutputTokens: 4000
-      }
-    };
-    
-    if (geminiTools) {
-      requestBody.tools = [geminiTools];
-    }
-    
-    const response = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(requestBody),
-        signal: controller.signal
-      }
-    );
-    
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        provider: 'gemini',
-        error: `Gemini API error: ${response.status} - ${errorText.substring(0, 200)}`
-      };
-    }
-    
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-    
-    if (!candidate || !candidate.content) {
-      return {
-        success: false,
-        provider: 'gemini',
-        error: 'No content in Gemini response'
-      };
-    }
-    
-    // Check for function call
-    const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
-    if (functionCallPart) {
-      const functionCall = functionCallPart.functionCall;
-      
-      const toolCalls = [{
-        id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-        type: 'function',
-        function: {
-          name: functionCall.name,
-          arguments: JSON.stringify(functionCall.args)
+          }];
+          
+          return {
+            success: true,
+            tool_calls: toolCalls,
+            provider: 'gemini',
+            model: model
+          };
         }
-      }];
-      
-      return {
-        success: true,
-        tool_calls: toolCalls,
-        provider: 'gemini',
-        model: 'gemini-1.5-flash'
-      };
+        
+        const text = candidate.content.parts
+          ?.map((part: any) => part.text || '')
+          .join('') || '';
+        
+        return {
+          success: true,
+          content: text,
+          provider: 'gemini',
+          model: model
+        };
+        
+      } catch (error: any) {
+        if (model !== geminiModels[geminiModels.length - 1]) {
+          console.warn(`⚠️ Gemini ${model} failed, trying next:`, error.message);
+          continue;
+        }
+        return {
+          success: false,
+          provider: 'gemini',
+          error: `Gemini request failed: ${error.message}`
+        };
+      }
     }
-    
-    // Regular text response
-    const text = candidate.content.parts
-      ?.map((part: any) => part.text || '')
-      .join('') || '';
     
     return {
-      success: true,
-      content: text,
+      success: false,
       provider: 'gemini',
-      model: 'gemini-1.5-flash'
+      error: 'All Gemini models failed'
     };
   }
   
   private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
-    // Check if we should force tools
     const forceTools = needsDataRetrieval(messages);
     
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
@@ -2860,7 +3456,7 @@ class EnhancedProviderCascade {
         model: 'deepseek-chat'
       };
     }
-    
+  
     return {
       success: true,
       content: message.content || '',
@@ -2870,7 +3466,6 @@ class EnhancedProviderCascade {
   }
   
   private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
-    // Check if we should force tools
     const forceTools = needsDataRetrieval(messages);
     
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -2936,7 +3531,7 @@ class EnhancedProviderCascade {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'claude-3-haiku-20240307',
+        model: 'claude-3-5-haiku-20241022',
         max_tokens: 4000,
         temperature: 0.7,
         system: systemPrompt,
@@ -2964,7 +3559,7 @@ class EnhancedProviderCascade {
       success: true,
       content: text,
       provider: 'anthropic',
-      model: 'claude-3-haiku-20240307'
+      model: 'claude-3-5-haiku-20241022'
     };
   }
 }
@@ -2973,7 +3568,8 @@ class EnhancedProviderCascade {
 async function handleToolChain(
   toolCalls: any[],
   executiveName: string,
-  sessionId: string
+  sessionId: string,
+  ipAddress: string
 ): Promise<{ 
   results: any[]; 
   allSuccessful: boolean;
@@ -2990,10 +3586,10 @@ async function handleToolChain(
       toolCall.function.arguments,
       executiveName,
       sessionId,
+      ipAddress,
       timestamp
     );
     
-    // Format tool result for memory
     const memoryResult = {
       name: toolCall.function?.name || toolCall.name,
       result: result,
@@ -3020,14 +3616,14 @@ function generateSystemPrompt(
   executiveName: string = EXECUTIVE_NAME,
   memoryContext: string = '',
   historicalSummaries: any[] = [],
-  recentContext: any[] = []
+  recentContext: any[] = [],
+  ipAddress: string = 'unknown'
 ): string {
   let historicalContext = '';
   
   if (historicalSummaries.length > 0) {
     historicalContext += "## 📜 HISTORICAL CONVERSATION SUMMARIES (2000+ Conversations)\n\n";
     
-    // Show top 5 most relevant historical summaries
     const recentSummaries = historicalSummaries.slice(0, 5);
     
     recentSummaries.forEach((summary, index) => {
@@ -3059,7 +3655,11 @@ function generateSystemPrompt(
       followUpContext += `**User responded:** "${ctx.user_response}"\n\n`;
     });
     
-    followUpContext += "**IMPORTANT**: When user gives ambiguous responses like 'yes', 'no', 'okay', etc., you MUST refer back to the most recent question/context above to understand what they're responding to.\n\n";
+    followUpContext += "**CRITICAL FOR AMBIGUOUS RESPONSES**: When user gives ambiguous responses like 'yes', 'no', 'okay', etc., you MUST:\n";
+    followUpContext += "1. Check the recent context above to understand what they're responding to\n";
+    followUpContext += "2. Explicitly state what you understand them to be agreeing/disagreeing with\n";
+    followUpContext += "3. DO NOT trigger email sending or other tools unless explicitly requested\n";
+    followUpContext += "4. Ask for clarification if the context is unclear\n\n";
   }
 
   return `${TOOL_CALLING_MANDATE}
@@ -3090,6 +3690,11 @@ You are an **intelligent analyst and proactive assistant**, not just a tool exec
 - Suggest **next actions** or **alternative approaches** when tools fail
 - Use **emoji and formatting** to make responses readable and engaging
 
+## 🐙 GITHUB FUNCTIONALITY:
+- Use the full GitHub tool suite when user asks about GitHub operations
+- Available tools: createGitHubIssue, listGitHubIssues, createGitHubDiscussion, searchGitHubCode, createGitHubPullRequest, commentOnGitHubIssue, commentOnGitHubDiscussion, listGitHubPullRequests
+- For comprehensive GitHub operations, use the appropriate tool based on the request
+
 // ===== HARD RULE for search_edge_functions =====
 HARD RULES FOR FUNCTION DISCOVERY:
 - If the user asks about available edge functions or capabilities, you MUST call search_edge_functions.
@@ -3108,6 +3713,12 @@ HARD RULES FOR FUNCTION DISCOVERY:
 - Supported files: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol (Solidity), .js, .ts, .py, .java, .cpp, .rs, .go, and 50+ more formats
 - NEVER say "I cannot analyze files" - YOU HAVE FULL ATTACHMENT ANALYSIS CAPABILITIES
 - Always provide detailed analysis of attachments when provided
+
+📧 EMAIL SENDING CRITICAL RULE:
+- When user asks to SEND EMAIL or mentions email address → IMMEDIATELY call google_gmail({action: 'send_email', to: "recipient@email.com", subject: "Subject", body: "Email body"})
+- DO NOT generate contract code or unrelated content when asked to send emails
+- Always show draft for approval before sending
+- Use conversation context to understand what email content is needed
 
 ## 📊 RESPONSE STRUCTURE GUIDELINES:
 1. **Start with context**: Acknowledge what you're doing based on the query
@@ -3130,6 +3741,13 @@ ${followUpContext}
 
 ${memoryContext}
 
+## 🎯 IP-BASED CONVERSATION PERSISTENCE
+**IMPORTANT**: This conversation persists across sessions based on IP address (${ipAddress}). The conversation will remember:
+1. All previous tool calls and their results
+2. Conversation history and context
+3. Historical summaries from previous sessions
+4. Ambiguous response contexts
+
 ## 💬 ENHANCED CONVERSATION RULES:
 1. **ALWAYS** check the tool history above before answering questions about previous tool calls
 2. **ALWAYS** check historical summaries when user refers to past conversations
@@ -3140,7 +3758,7 @@ ${memoryContext}
 7. Focus on getting things done efficiently
 8. Summarize tool results clearly when users ask
 9. Maintain conversation context across the entire session
-10. **FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., explicitly state what you think they're agreeing/disagreeing to based on recent context
+10. **FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., explicitly state what you think they're agreeing/disagreeing to based on recent context. DO NOT trigger email sending unless explicitly requested.
 
 ## 🎨 RESPONSE ENHANCEMENT:
 - Use **emoji** to make sections clear (🔍 for analysis, ⚠️ for warnings, ✅ for success)
@@ -3157,7 +3775,17 @@ When user responds with ambiguous words:
 - "okay" → "Perfect, I'll proceed with [recent action plan]"
 - "sure" → "Excellent, I'll move forward with [recent suggestion]"
 
+**CRITICAL**: For ambiguous responses, DO NOT trigger email sending or other tools unless the user explicitly asks for them after the clarification.
+
 Always clarify what ambiguous responses refer to by summarizing the recent context.
+
+## 📧 EMAIL SENDING SPECIFIC RULES:
+1. When user asks to send email: IMMEDIATELY use google_gmail tool
+2. Always show email draft for approval before sending
+3. Use conversation context to understand what to send
+4. If no content specified, ask for clarification
+5. DO NOT generate smart contract code unless explicitly asked
+6. If previous conversation was about contracts, still focus on email request
 
 Remember: You are an intelligent analyst and proactive assistant. Your value is in synthesizing information and providing actionable insights.`;
 }
@@ -3184,6 +3812,10 @@ async function emergencyStaticFallback(
     content += "I can browse any website for you. Please provide the full URL starting with https:// and I'll fetch the content immediately.";
   } else if (query.toLowerCase().includes('attach') || query.toLowerCase().includes('file') || query.toLowerCase().includes('document')) {
     content += "I can analyze attachments including text files, PDFs, images, code files, and documents. Please upload the file and I'll analyze it for you.";
+  } else if (query.toLowerCase().includes('email') || query.toLowerCase().includes('send') || query.includes('@')) {
+    content += "I can send emails for you. Please provide the recipient email address and what you'd like to send, and I'll show you a draft for approval.";
+  } else if (query.toLowerCase().includes('github')) {
+    content += "I can help with GitHub operations including creating issues, discussions, pull requests, searching code, and commenting. What GitHub operation would you like me to perform?";
   } else {
     content += "I'm currently experiencing technical difficulties with my AI providers. Please try again in a moment.";
   }
@@ -3196,6 +3828,46 @@ async function emergencyStaticFallback(
 
 // ========== ENHANCED TOOL DEFINITIONS WITH ATTACHMENT ANALYSIS ==========
 const ELIZA_TOOLS = [
+  {
+    type: 'function',
+    function: {
+      name: 'google_gmail',
+      description: '📧 Send and manage emails via xmrtsolutions@gmail.com. Use this when user asks to send email or mentions email address.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { 
+            type: 'string', 
+            enum: ['send_email', 'create_draft', 'list_emails', 'get_email'],
+            description: 'Action type: send_email to send immediately, create_draft to create draft for review',
+            default: 'send_email'
+          },
+          to: { 
+            type: 'string', 
+            description: 'Recipient email address (required for send_email and create_draft)',
+            pattern: '^[\\w._%+-]+@[\\w.-]+\\.[a-zA-Z]{2,}$'
+          },
+          subject: { 
+            type: 'string', 
+            description: 'Email subject line (required for send_email and create_draft)'
+          },
+          body: { 
+            type: 'string', 
+            description: 'Email body content (required for send_email and create_draft)'
+          },
+          cc: { 
+            type: 'string', 
+            description: 'CC recipient email address'
+          },
+          bcc: { 
+            type: 'string', 
+            description: 'BCC recipient email address'
+          }
+        },
+        required: ['action']
+      }
+    }
+  },
   {
     type: 'function',
     function: {
@@ -3528,6 +4200,99 @@ const ELIZA_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'createGitHubDiscussion',
+      description: 'Create a GitHub discussion',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Discussion title' },
+          body: { type: 'string', description: 'Discussion body content' },
+          category: { type: 'string', description: 'Discussion category (e.g., General, Ideas, Q&A)' }
+        },
+        required: ['title', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'searchGitHubCode',
+      description: 'Search for code across GitHub repositories',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Search query (e.g., "function name", "import package")' },
+          limit: { type: 'number', description: 'Maximum results to return', default: 10 }
+        },
+        required: ['query']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'createGitHubPullRequest',
+      description: 'Create a GitHub pull request',
+      parameters: {
+        type: 'object',
+        properties: {
+          title: { type: 'string', description: 'Pull request title' },
+          body: { type: 'string', description: 'Pull request description' },
+          head: { type: 'string', description: 'Source branch name' },
+          base: { type: 'string', description: 'Target branch name', default: 'main' },
+          draft: { type: 'boolean', description: 'Create as draft pull request', default: false }
+        },
+        required: ['title', 'head']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'commentOnGitHubIssue',
+      description: 'Add a comment to a GitHub issue',
+      parameters: {
+        type: 'object',
+        properties: {
+          issue_number: { type: 'number', description: 'Issue number to comment on' },
+          body: { type: 'string', description: 'Comment content' }
+        },
+        required: ['issue_number', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'commentOnGitHubDiscussion',
+      description: 'Add a comment to a GitHub discussion',
+      parameters: {
+        type: 'object',
+        properties: {
+          discussion_number: { type: 'number', description: 'Discussion number to comment on' },
+          body: { type: 'string', description: 'Comment content' }
+        },
+        required: ['discussion_number', 'body']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'listGitHubPullRequests',
+      description: 'List recent GitHub pull requests',
+      parameters: {
+        type: 'object',
+        properties: {
+          state: { type: 'string', enum: ['open', 'closed', 'all'], default: 'open' },
+          limit: { type: 'number', description: 'Number of pull requests to return', default: 10 }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'execute_workflow_template',
       description: 'Execute a pre-built workflow template by name',
       parameters: {
@@ -3546,215 +4311,14 @@ const ELIZA_TOOLS = [
         required: ['template_name']
       }
     }
-  },
-  {
-    type: 'function',
-    function: {
-      name: 'google_gmail',
-      description: 'Send and manage emails via xmrtsolutions@gmail.com',
-      parameters: {
-        type: 'object',
-        properties: {
-          action: { type: 'string', enum: ['send_email', 'list_emails', 'get_email', 'create_draft'] },
-          to: { type: 'string', description: 'Recipient email address' },
-          subject: { type: 'string', description: 'Email subject line' },
-          body: { type: 'string', description: 'Email body content' }
-        },
-        required: ['action']
-      }
-    }
   }
 ];
 
-
-// ========== MULTIPART FORM DATA PARSER ==========
-async function parseMultipartFormData(req: Request): Promise<{
-  fields: Record<string, any>;
-  files: Array<{
-    filename: string;
-    content: string | ArrayBuffer;
-    mimeType: string;
-    size: number;
-  }>;
-}> {
-  const contentType = req.headers.get('content-type') || '';
-  
-  if (!contentType.includes('multipart/form-data')) {
-    throw new Error('Not a multipart/form-data request');
-  }
-  
-  const boundary = contentType.split('boundary=')[1];
-  if (!boundary) {
-    throw new Error('No boundary found in Content-Type header');
-  }
-  
-  const body = await req.text();
-  const parts = body.split(`--${boundary}`);
-  
-  const fields: Record<string, any> = {};
-  const files: Array<any> = [];
-  
-  for (const part of parts) {
-    if (part.trim() === '' || part.trim() === '--') continue;
-    
-    const [headerSection, ...contentSections] = part.split('\r\n\r\n');
-    if (!headerSection || contentSections.length === 0) continue;
-    
-    const content = contentSections.join('\r\n\r\n').replace(/\r\n$/, '');
-    
-    // Parse headers
-    const nameMatch = headerSection.match(/name="([^"]+)"/);
-    const filenameMatch = headerSection.match(/filename="([^"]+)"/);
-    const contentTypeMatch = headerSection.match(/Content-Type:\s*([^\r\n]+)/i);
-    
-    if (!nameMatch) continue;
-    
-    const fieldName = nameMatch[1];
-    
-    if (filenameMatch) {
-      // This is a file
-      const filename = filenameMatch[1];
-      const mimeType = contentTypeMatch ? contentTypeMatch[1].trim() : 'application/octet-stream';
-      
-      files.push({
-        filename,
-        content,
-        mimeType,
-        size: content.length,
-        fieldName
-      });
-    } else {
-      // This is a regular field
-      try {
-        // Try to parse as JSON
-        fields[fieldName] = JSON.parse(content);
-      } catch {
-        // Store as string
-        fields[fieldName] = content;
-      }
-    }
-  }
-  
-  return { fields, files };
-}
-
-// ========== ENHANCED ATTACHMENT PROCESSING ==========
-async function processAttachmentsFromRequest(
-  attachments: any[],
-  files: any[],
-  mode: 'tts' | 'audio' | 'multimedia' | 'auto' = 'auto'
-): Promise<any[]> {
-  const processedAttachments = [];
-  
-  // Process JSON attachments
-  if (attachments && Array.isArray(attachments)) {
-    processedAttachments.push(...attachments);
-  }
-  
-  // Process uploaded files
-  if (files && Array.isArray(files)) {
-    for (const file of files) {
-      const fileType = AttachmentAnalyzer.getFileType(file.filename);
-      
-      let processedFile: any = {
-        filename: file.filename,
-        mime_type: file.mimeType,
-        size: file.size,
-        file_type: fileType
-      };
-      
-      // For text-based files, include content
-      if (['text', 'code', 'smart_contract', 'document'].includes(fileType)) {
-        processedFile.content = typeof file.content === 'string' 
-          ? file.content 
-          : new TextDecoder().decode(file.content as ArrayBuffer);
-      }
-      
-      // For images, prepare for vision analysis
-      if (fileType === 'image') {
-        if (typeof file.content === 'string') {
-          // Assume it's already base64 or text
-          processedFile.content = file.content;
-        } else {
-          // Convert ArrayBuffer to base64
-          const bytes = new Uint8Array(file.content as ArrayBuffer);
-          processedFile.content = btoa(String.fromCharCode(...bytes));
-        }
-        processedFile.base64_encoded = true;
-      }
-      
-      // For audio files
-      if (fileType === 'audio') {
-        processedFile.audio_analysis_pending = true;
-        processedFile.note = 'Audio files can be transcribed or analyzed';
-        
-        // Store reference for potential transcription
-        if (typeof file.content !== 'string') {
-          const bytes = new Uint8Array(file.content as ArrayBuffer);
-          processedFile.content_base64 = btoa(String.fromCharCode(...bytes));
-        }
-      }
-      
-      // For video files
-      if (fileType === 'video') {
-        processedFile.video_analysis_pending = true;
-        processedFile.note = 'Video files can be analyzed for content';
-      }
-      
-      processedAttachments.push(processedFile);
-    }
-  }
-  
-  return processedAttachments;
-}
-
-// ========== UTILITY FUNCTIONS ==========
-function truncateString(str: string, maxLength: number): string {
-  if (str.length <= maxLength) return str;
-  return str.substring(0, maxLength) + '...';
-}
-
-function formatObjectForDisplay(obj: any, indentLevel: number = 0): string {
-  if (!obj || typeof obj !== 'object') return String(obj);
-  
-  const indent = '  '.repeat(indentLevel);
-  let result = '';
-  
-  const entries = Object.entries(obj);
-  entries.forEach(([key, value]) => {
-    if (value === null || value === undefined) {
-      result += `${indent}• ${key}: ${value}\n`;
-    } else if (Array.isArray(value)) {
-      result += `${indent}• ${key}: Array(${value.length})\n`;
-      if (indentLevel < 2 && value.length > 0) {
-        value.slice(0, 5).forEach((item, idx) => {
-          if (typeof item === 'object') {
-            result += `${indent}  [${idx}]: ${Object.keys(item).slice(0, 2).join(', ')}...\n`;
-          } else {
-            result += `${indent}  [${idx}]: ${item}\n`;
-          }
-        });
-        if (value.length > 5) {
-          result += `${indent}  ... and ${value.length - 5} more items\n`;
-        }
-      }
-    } else if (typeof value === 'object') {
-      result += `${indent}• ${key}:\n`;
-      result += formatObjectForDisplay(value, indentLevel + 1);
-    } else {
-      result += `${indent}• ${key}: ${value}\n`;
-    }
-  });
-  
-  return result;
-}
-
-// ========== MAIN SERVE FUNCTION WITH ENHANCED FEATURES ==========
+// ========== MAIN SERVE FUNCTION WITH IP-BASED PERSISTENCE ==========
 Deno.serve(async (req) => {
   const startTime = Date.now();
-  const requestId = `req_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+  const requestId = generateRequestId();
   
-  // Set timeout for the entire request
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => {
     timeoutController.abort();
@@ -3766,37 +4330,35 @@ Deno.serve(async (req) => {
       return new Response(null, { headers: corsHeaders });
     }
     
-    // Handle GET request for health check
     if (req.method === 'GET') {
       clearTimeout(timeoutId);
       
-      // Get real tool count from database
       const { count: toolCount } = await supabase
         .from(DATABASE_CONFIG.tables.ai_tools)
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true);
       
-      // Get agent count
       const { count: agentCount } = await supabase
         .from(DATABASE_CONFIG.tables.agents)
         .select('*', { count: 'exact', head: true });
       
-      // Get conversation summary count
       const { count: summaryCount } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
         .select('*', { count: 'exact', head: true });
+      
+      const activeSessions = await IPSessionManager.getActiveSessionsCount();
       
       return new Response(
         JSON.stringify({
           status: 'operational',
           function: FUNCTION_NAME,
           executive: `${EXECUTIVE_NAME} - ${EXECUTIVE_ROLE}`,
-          version: '4.0.0',
+          version: '5.0.0',
           timestamp: new Date().toISOString(),
           features: [
             'production-ready', 
             'real-database-wiring', 
-            'persistent-memory', 
+            'ip-based-persistence', 
             'multi-provider', 
             'tool-chaining', 
             'edge-function-discovery', 
@@ -3804,15 +4366,16 @@ Deno.serve(async (req) => {
             'intelligent-analysis',
             'enhanced-conversation-persistence',
             'attachment-analysis',
-            'multimodal-support',
-            'audio-video-analysis',
-            'multipart-upload',
             'historical-context-awareness',
-            'follow-up-understanding'
+            'follow-up-understanding',
+            'email-integration',
+            'complete-github-functionality',
+            'cross-session-memory'
           ],
           tools_available: toolCount || 0,
           agents_available: agentCount || 0,
           historical_conversations: summaryCount || 0,
+          active_ip_sessions: activeSessions,
           providers_enabled: Object.values(AI_PROVIDERS_CONFIG).filter(p => p.enabled).map(p => p.name),
           web_browsing: {
             enabled: true,
@@ -3822,16 +4385,28 @@ Deno.serve(async (req) => {
           },
           attachment_analysis: {
             enabled: true,
-            supported_formats: AttachmentAnalyzer.ALL_EXTENSIONS,
-            capabilities: ['text_analysis', 'code_analysis', 'document_analysis', 'image_vision', 'audio_metadata', 'video_metadata'],
-            modes_supported: ['tts', 'audio', 'multimedia', 'auto'],
-            multipart_upload: true
+            supported_formats: AttachmentAnalyzer.SUPPORTED_EXTENSIONS,
+            capabilities: ['text_analysis', 'code_analysis', 'document_analysis', 'image_vision']
+          },
+          email_integration: {
+            enabled: true,
+            from_address: 'xmrtsolutions@gmail.com',
+            capabilities: ['send_email', 'create_draft', 'list_emails']
+          },
+          github_integration: {
+            enabled: true,
+            capabilities: [
+              'create_issue', 'list_issues', 'create_discussion', 'search_code',
+              'create_pull_request', 'comment_on_issue', 'comment_on_discussion', 'list_pull_requests'
+            ]
           },
           memory_config: {
             history_limit: CONVERSATION_HISTORY_LIMIT,
             tool_memory_limit: MAX_TOOL_RESULTS_MEMORY,
             summary_interval: MEMORY_SUMMARY_INTERVAL,
-            historical_summaries_limit: MAX_SUMMARIZED_CONVERSATIONS
+            historical_summaries_limit: MAX_SUMMARIZED_CONVERSATIONS,
+            ip_session_ttl_hours: 24,
+            cross_session_persistence: true
           },
           database_connected: true,
           request_id: requestId
@@ -3840,7 +4415,6 @@ Deno.serve(async (req) => {
       );
     }
     
-    // Parse and validate POST request
     if (req.method !== 'POST') {
       clearTimeout(timeoutId);
       return new Response(
@@ -3853,20 +4427,8 @@ Deno.serve(async (req) => {
     }
     
     let body;
-    let uploadedFiles: any[] = [];
-    
-    // Check if this is a multipart request
-    const contentType = req.headers.get('content-type') || '';
-    
     try {
-      if (contentType.includes('multipart/form-data')) {
-        console.log('📎 Parsing multipart/form-data request');
-        const { fields, files } = await parseMultipartFormData(req);
-        body = fields;
-        uploadedFiles = files;
-        console.log(`📎 Received ${files.length} uploaded file(s)`);
-      } else {
-        body = await req.json();
+      body = await req.json();
     } catch (parseError: any) {
       clearTimeout(timeoutId);
       return new Response(
@@ -3882,19 +4444,18 @@ Deno.serve(async (req) => {
     const { 
       messages = [], 
       userQuery, 
-      session_id = `sess_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      session_id: providedSessionId,
       provider = 'auto',
       executive_name = EXECUTIVE_NAME,
       use_tools = true,
       save_memory = true,
       temperature = 0.7,
-      maxTokens = 4000,
+      maxTokens = 10000,
       images = [],
       attachments = [],
       user_id
     } = body;
     
-    // Validate input
     if (!userQuery && (!messages || messages.length === 0)) {
       clearTimeout(timeoutId);
       return new Response(
@@ -3907,12 +4468,15 @@ Deno.serve(async (req) => {
     }
     
     const query = userQuery || messages[messages.length - 1]?.content || '';
-    console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${session_id}`);
     
-    // Initialize enhanced conversation manager with user_id
-    const conversationManager = new EnhancedConversationManager(session_id, user_id);
+    const ipAddress = IPSessionManager.extractIP(req);
+    console.log(`🌐 IP Address detected: ${ipAddress}`);
     
-    // Load conversation history and previous tool results
+    const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
+    console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
+    
+    const conversationManager = new EnhancedConversationManager(sessionId, ipAddress, user_id);
+    
     const { 
       messages: savedMessages, 
       toolResults: previousToolResults,
@@ -3920,32 +4484,69 @@ Deno.serve(async (req) => {
       conversationSummary 
     } = await conversationManager.loadConversationHistory();
     
-    // Check for ambiguous responses and load recent context if needed
-    const { isAmbiguous, likelyReferringTo } = detectAmbiguousResponse(query, [...savedMessages, ...messages]);
+    const { isAmbiguous: isAmbiguousResponse, response: ambiguousResponse, shouldExecuteTools } = await handleAmbiguousResponse(
+      query,
+      [...savedMessages, ...messages],
+      executive_name,
+      sessionId,
+      ipAddress,
+      conversationManager
+    );
     
-    let recentContext = [];
-    if (isAmbiguous) {
-      console.log(`🤔 Detected ambiguous response: "${query}" - likely referring to: ${likelyReferringTo?.substring(0, 50)}...`);
-      recentContext = await conversationManager.loadRecentContext();
+    if (isAmbiguousResponse && ambiguousResponse) {
+      console.log(`🤔 Handling ambiguous response: "${query}"`);
       
-      // Save this context for future reference if it's a follow-up
-      if (savedMessages.length > 0) {
-        const lastAssistant = savedMessages.filter(m => m.role === 'assistant').pop();
-        const lastUser = savedMessages.filter(m => m.role === 'user').pop();
-        
-        if (lastAssistant && lastUser) {
-          await conversationManager.saveConversationContext(
-            lastAssistant.content || '',
-            lastAssistant.content || '',
-            query,
-            { request_id: requestId, ambiguous_response: true }
-          );
+      clearTimeout(timeoutId);
+      
+      await conversationManager.saveConversation(
+        [...savedMessages, ...messages, { role: 'assistant', content: ambiguousResponse }],
+        previousToolResults,
+        {
+          executive: executive_name,
+          provider: 'ambiguous_response_handler',
+          tools_executed: 0,
+          request_id: requestId,
+          query: truncateString(query, 100),
+          ambiguous_response: true,
+          historical_context_used: historicalSummaries.length,
+          user_id: user_id,
+          ip_address: ipAddress
         }
-      }
+      );
+      
+      return new Response(
+        JSON.stringify({
+          success: true,
+          content: ambiguousResponse,
+          executive: executive_name,
+          provider: 'ambiguous_response_handler',
+          model: 'context_aware',
+          hasToolCalls: false,
+          executionTimeMs: Date.now() - startTime,
+          session_id: sessionId,
+          ip_address: ipAddress,
+          request_id: requestId,
+          memory: {
+            previous_tool_results: previousToolResults.length,
+            current_tool_results: 0,
+            total_tool_results: previousToolResults.length,
+            historical_summaries_loaded: historicalSummaries.length,
+            ambiguous_response_detected: true,
+            saved: save_memory,
+            ip_based_persistence: true
+          },
+          note: 'Ambiguous response handled with contextual clarification'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
     
-    // Retrieve memory contexts
-    const memoryContexts = await retrieveMemoryContexts(session_id);
+    let recentContext = [];
+    if (shouldExecuteTools) {
+      recentContext = await conversationManager.loadRecentContext();
+    }
+    
+    const memoryContexts = await retrieveMemoryContexts(sessionId);
     let memoryContext = '';
     if (memoryContexts.length > 0) {
       memoryContext += "## 🧠 STORED MEMORY CONTEXTS\n\n";
@@ -3955,189 +4556,44 @@ Deno.serve(async (req) => {
       });
     }
     
-    // Generate memory context from previous tool results
     const toolMemoryContext = await conversationManager.generateMemoryContext();
     memoryContext += toolMemoryContext;
     
-    // Generate enhanced system prompt with historical context
     const systemPrompt = generateSystemPrompt(
       executive_name, 
       memoryContext, 
       historicalSummaries,
-      recentContext
+      recentContext,
+      ipAddress
     );
     
-    // Build message array (include previous messages + new messages)
     const allMessages = [
       ...savedMessages,
       ...messages
     ].slice(-CONVERSATION_HISTORY_LIMIT);
     
-    // Process attachments from both JSON and uploaded files
-    let processedAttachments = await processAttachmentsFromRequest(
-      attachments,
-      uploadedFiles,
-      'auto'
-    );
-    
-    // Check for attachments in the request
-    if (processedAttachments && processedAttachments.length > 0) {
-      console.log(`📎 Found ${processedAttachments.length} attachment(s) in request (${uploadedFiles.length} uploaded, ${attachments?.length || 0} from JSON)`);
+    if (attachments && attachments.length > 0) {
+      console.log(`📎 Found ${attachments.length} attachment(s) in request`);
       
-      // Add attachment information to the user message
       const lastMessageIndex = allMessages.length - 1;
       if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
-        allMessages[lastMessageIndex].attachments = processedAttachments;
-        
-        // CRITICAL FIX: Update message content to inform AI about attachments
-        const attachmentList = processedAttachments.map(a => `• ${a.filename} (${a.file_type})`).join('\n');
-        const attachmentPrompt = `\n\n[📎 ATTACHMENTS PROVIDED]\nThe user has provided the following attachments:\n${attachmentList}\n\nI MUST use the 'analyze_attachment' tool to examine these files before responding if I need to understand their content.`;
-        
-        if (typeof allMessages[lastMessageIndex].content === 'string') {
-          allMessages[lastMessageIndex].content += attachmentPrompt;
-        }
-        
-        // Also add images to the images array for vision models
-        for (const att of processedAttachments) {
-          if (att.file_type === 'image' && att.content && att.base64_encoded) {
-            const imageBase64 = att.content.startsWith('data:') 
-              ? att.content 
-              : `data:${att.mime_type || 'image/png'};base64,${att.content}`;
-            
-            if (!images.includes(imageBase64)) {
-              images.push(imageBase64);
-            }
-          }
-        }
+        allMessages[lastMessageIndex].attachments = attachments;
       }
     }
     
-    // Few-shot examples for intelligent responses
-    const FEW_SHOTS = [
-      { role: 'user', content: 'What edge functions are available?' },
-      { role: 'assistant', tool_calls: [{ 
-        id: 'call_1', 
-        type: 'function', 
-        function: { 
-          name: 'search_edge_functions', 
-          arguments: JSON.stringify({ mode: 'full_registry' }) 
-        }
-      }]},
-      { role: 'tool', tool_call_id: 'call_1', name: 'search_edge_functions', content: JSON.stringify({ 
-        success: true, 
-        functions: [], 
-        total: 0,
-        grouped_by_category: {}
-      }) },
-      { role: 'assistant', content: '🔍 **I checked the edge function registry.**\n\n📭 *No functions found* in the registry.\n\n💡 *Suggestion*: You might want to create a new function or check the database directly. I can help you create one if you tell me what you need!' },
-      
-      { role: 'user', content: 'Do we have any billing-related functions?' },
-      { role: 'assistant', tool_calls: [{ 
-        id: 'call_2', 
-        type: 'function', 
-        function: { 
-          name: 'search_edge_functions', 
-          arguments: JSON.stringify({ query: 'billing', category: 'billing' }) 
-        }
-      }]},
-      { role: 'tool', tool_call_id: 'call_2', name: 'search_edge_functions', content: JSON.stringify({ 
-        success: true, 
-        functions: [{ name: 'vsco_manage_financials', description: 'Manage VSCO billing and financials', category: 'billing', is_active: true }], 
-        total: 1,
-        grouped_by_category: { billing: [{ name: 'vsco_manage_financials', description: 'Manage VSCO billing and financials', category: 'billing', is_active: true }] }
-      }) },
-      { role: 'assistant', content: '💰 **Found billing-related functions!**\n\n🔧 **Billing Functions**:\n   • **vsco_manage_financials**: Manage VSCO billing and financials\n\n🎯 *Analysis*: We have one billing function focused on VSCO financial management. This could handle invoicing, payment tracking, and financial reporting for VSCO services.\n\n🚀 *Next Steps*: You can invoke this function or create additional billing functions for other services.' },
-      
-      // Browse web examples
-      { role: 'user', content: 'Check https://news.ycombinator.com for me' },
-      { role: 'assistant', tool_calls: [{ 
-        id: 'call_3', 
-        type: 'function', 
-        function: { 
-          name: 'browse_web', 
-          arguments: JSON.stringify({ url: 'https://news.ycombinator.com', action: 'navigate' }) 
-        }
-      }]},
-      { role: 'tool', tool_call_id: 'call_3', name: 'browse_web', content: JSON.stringify({ 
-        success: true, 
-        url: 'https://news.ycombinator.com', 
-        status: 200, 
-        content: '<html>...Hacker News content...</html>', 
-        metadata: { loadTime: 356 } 
-      }) },
-      { role: 'assistant', content: '🌐 **Hacker News Analysis**\n\n✅ *Accessible* (loaded in 356ms)\n📰 **Top Technology Headlines**:\n   1. AI Breakthrough in Medical Diagnostics\n   2. New Programming Language Released\n   3. Major Security Vulnerability Patched\n   4. Startup Raises $50M Series B\n   5. Open Source Project Hits 10k Stars\n\n💡 *Insight*: Hacker News shows strong interest in AI, security, and funding news. Good source for tech trends and startup ecosystem updates.' },
-      
-      { role: 'user', content: 'Open google.com' },
-      { role: 'assistant', tool_calls: [{ 
-        id: 'call_4', 
-        type: 'function', 
-        function: { 
-          name: 'browse_web', 
-          arguments: JSON.stringify({ url: 'https://google.com', action: 'navigate' }) 
-        }
-      }]},
-      { role: 'tool', tool_call_id: 'call_4', name: 'browse_web', content: JSON.stringify({ 
-        success: true, 
-        url: 'https://google.com', 
-        status: 200, 
-        content: '<html>...Google search page...</html>', 
-        metadata: { loadTime: 96 } 
-      }) },
-      { role: 'assistant', content: '🔍 **Google Homepage Check**\n\n✅ *Accessible* (loaded in 96ms)\n🌐 **Search Engine Ready**\n\n💡 *Analysis*: Google.com is loading normally. This is the world\'s most popular search engine homepage.\n\n🚀 *Next Steps*: I can help you search for specific information. Just tell me what you\'re looking for and I\'ll help formulate the search query!' },
-      
-      // Attachment analysis examples
-      { role: 'user', content: 'Analyze this Solidity contract', attachments: [{ filename: 'contract.sol', content: 'contract MyToken { ... }' }] },
-      { role: 'assistant', tool_calls: [{ 
-        id: 'call_5', 
-        type: 'function', 
-        function: { 
-          name: 'analyze_attachment', 
-          arguments: JSON.stringify({ attachments: [{ filename: 'contract.sol', content: 'contract MyToken { ... }' }] }) 
-        }
-      }]},
-      { role: 'tool', tool_call_id: 'call_5', name: 'analyze_attachment', content: JSON.stringify({ 
-        success: true,
-        total_attachments: 1,
-        analyzed: 1,
-        failed: 0,
-        analyses: [{
-          success: true,
-          filename: 'contract.sol',
-          file_type: 'smart_contract',
-          detected_language: 'solidity',
-          estimated_lines: 10,
-          estimated_words: 50,
-          has_code: true,
-          key_findings: ['Smart contract file detected', 'Contract name: MyToken', 'Found 3 functions'],
-          content_preview: 'contract MyToken { ... }'
-        }]
-      }) },
-      { role: 'assistant', content: '📎 **Solidity Contract Analysis**\n\n✅ **Successfully analyzed contract.sol**\n\n🔧 **Smart Contract Details**:\n   • **File Type**: Smart contract (Solidity)\n   • **Contract Name**: MyToken\n   • **Estimated Lines**: ~10\n   • **Key Findings**:\n     - Smart contract file detected\n     - Contract name: MyToken\n     - Found 3 functions\n\n💡 *Analysis*: This appears to be a token contract with basic functionality. I can help you review the code for security issues or suggest improvements.' },
-      
-      // Follow-up understanding examples
-      { role: 'user', content: 'Should I deploy this contract?' },
-      { role: 'assistant', content: '🔍 **Contract Deployment Recommendation**\n\nBased on the contract analysis, I recommend:\n1. Run a security audit first\n2. Test on a testnet\n3. Consider gas optimization\n\nWould you like me to help you with any of these steps?' },
-      { role: 'user', content: 'yes' },
-      { role: 'assistant', content: '✅ **Great! To confirm, you\'re agreeing to proceed with the security audit, testnet testing, and gas optimization for your contract.**\n\n🚀 **Next Steps**:\n1. I\'ll run a basic security scan on your contract\n2. We can deploy to a testnet\n3. I\'ll analyze gas usage\n\nLet me start with the security audit...' }
-    ];
-    
     const messagesArray = [
       { role: 'system', content: systemPrompt },
-      ...FEW_SHOTS,
       ...allMessages
     ];
     
-    // Initialize cascade
     const cascade = new EnhancedProviderCascade();
     
-    // Call AI with cascade
     const tools = use_tools ? ELIZA_TOOLS : [];
     let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, images);
     
     if (!cascadeResult.success) {
       console.error(`❌ [${executive_name}] AI Cascade failed for request ${requestId}:`, cascadeResult.error);
       
-      // Emergency fallback
       const emergencyResult = await emergencyStaticFallback(
         query,
         executive_name
@@ -4145,7 +4601,6 @@ Deno.serve(async (req) => {
       
       clearTimeout(timeoutId);
       
-      // Save conversation even on fallback
       await conversationManager.saveConversation(
         [...messagesArray, { role: 'assistant', content: emergencyResult.content }],
         [],
@@ -4154,8 +4609,9 @@ Deno.serve(async (req) => {
           provider: 'emergency_static',
           request_id: requestId,
           had_fallback: true,
-          ambiguous_response: isAmbiguous,
-          historical_context_used: historicalSummaries.length
+          ambiguous_response: false,
+          historical_context_used: historicalSummaries.length,
+          ip_address: ipAddress
         }
       );
       
@@ -4168,53 +4624,50 @@ Deno.serve(async (req) => {
           model: 'static_fallback',
           hasToolCalls: false,
           executionTimeMs: Date.now() - startTime,
-          session_id: session_id,
+          session_id: sessionId,
+          ip_address: ipAddress,
           request_id: requestId,
           note: 'Used emergency fallback due to AI provider failure',
           memory: {
             historical_summaries_loaded: historicalSummaries.length,
-            ambiguous_response_detected: isAmbiguous
+            ambiguous_response_detected: false,
+            ip_based_persistence: true
           }
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
     
-    // Create callAIFunction wrapper
     const callAIFunction = async (messages: any[], tools: any[]) => {
       const cascade = new EnhancedProviderCascade();
       const result = await cascade.callWithCascade(messages, tools, cascadeResult.provider, images);
       return result;
     };
     
-    // Use enhanced tool execution with iteration and pass memory manager
     const { content: finalContent, toolsExecuted } = await executeToolsWithIteration(
       cascadeResult,
       messagesArray,
       executive_name,
-      session_id,
+      sessionId,
+      ipAddress,
       callAIFunction,
       tools,
       MAX_TOOL_ITERATIONS,
       conversationManager
     );
     
-    // Synthesize tool results if we have any
     let responseContent = finalContent;
     if (toolsExecuted > 0 && !responseContent) {
-      // Get tool results from conversation manager
       const toolResults = conversationManager.getToolResults();
       const recentResults = toolResults.slice(-toolsExecuted).map(r => ({
         tool: r.name,
         result: r.result
       }));
       
-      // Use enhanced synthesis with conversation context
       const synthesized = await synthesizeToolResults(recentResults, query, executive_name, allMessages);
       if (synthesized) {
         responseContent = synthesized;
       } else {
-        // Fallback to simple synthesis if enhanced fails
         responseContent = "I've executed the requested tools. Here are the results:\n\n";
         recentResults.forEach(r => {
           responseContent += `**${r.tool}**: ${r.result.success ? '✅ Success' : '❌ Failed'}\n`;
@@ -4225,19 +4678,10 @@ Deno.serve(async (req) => {
       }
     }
     
-    // Handle ambiguous responses in the final content
-    if (isAmbiguous && responseContent && !responseContent.includes('To confirm')) {
-      // Add clarification for ambiguous responses
-      const clarification = `\n\n💡 *To clarify*: I understand your "${query}" as agreement to my previous suggestion about "${likelyReferringTo?.substring(0, 100) || 'the previous topic'}".`;
-      responseContent = responseContent.replace(/\n*$/, '') + clarification;
-    }
-    
-    // Save conversation to memory
     if (save_memory) {
       const toolResults = conversationManager.getToolResults();
       const newResults = toolResults.slice(previousToolResults.length);
       
-      // Add instrumentation to verify counts
       console.log(
         `🧪 Pre-save: detected ${toolResults.length} total tool results in memory, ` +
         `${newResults.length} new since load, executed ${toolsExecuted} tools this request`
@@ -4253,17 +4697,21 @@ Deno.serve(async (req) => {
           tools_executed: toolsExecuted,
           request_id: requestId,
           query: truncateString(query, 100),
-          ambiguous_response: isAmbiguous,
+          ambiguous_response: false,
           historical_context_used: historicalSummaries.length,
           attachments_count: attachments?.length || 0,
-          user_id: user_id
+          user_id: user_id,
+          ip_address: ipAddress,
+          attachment_types: attachments?.map(a => {
+            const ext = a.filename.split('.').pop()?.toLowerCase() || 'unknown';
+            return ext;
+          }) || []
         }
       );
     }
     
-    // Return final response
     const executionTime = Date.now() - startTime;
-    console.log(`✅ [${executive_name}] Request ${requestId} completed in ${executionTime}ms, executed ${toolsExecuted} tools`);
+    console.log(`✅ [${executive_name}] Request ${requestId} completed in ${executionTime}ms, executed ${toolsExecuted} tools (IP: ${ipAddress})`);
     
     clearTimeout(timeoutId);
     
@@ -4277,21 +4725,28 @@ Deno.serve(async (req) => {
         hasToolCalls: toolsExecuted > 0,
         toolCallsExecuted: toolsExecuted,
         executionTimeMs: executionTime,
-        session_id: session_id,
+        session_id: sessionId,
+        ip_address: ipAddress,
         request_id: requestId,
         memory: {
           previous_tool_results: previousToolResults.length,
           current_tool_results: toolsExecuted,
           total_tool_results: previousToolResults.length + toolsExecuted,
           historical_summaries_loaded: historicalSummaries.length,
-          ambiguous_response_detected: isAmbiguous,
+          ambiguous_response_detected: false,
           recent_context_loaded: recentContext.length,
-          saved: save_memory
+          saved: save_memory,
+          ip_based_persistence: true
         },
         features: {
           attachment_analysis: attachments?.length > 0,
+          attachment_types_analyzed: attachments?.map(a => a.filename.split('.').pop()?.toLowerCase() || 'unknown') || [],
           historical_context: historicalSummaries.length > 0,
-          follow_up_understanding: isAmbiguous
+          follow_up_understanding: false,
+          email_integration: query.toLowerCase().includes('email') || query.includes('@'),
+          github_integration: query.toLowerCase().includes('github'),
+          ai_powered_analysis: attachments?.length > 0,
+          cross_session_persistence: true
         }
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -4302,7 +4757,6 @@ Deno.serve(async (req) => {
     
     console.error(`💥 Critical error for request ${requestId}:`, error);
     
-    // Check for timeout
     if (error.name === 'AbortError') {
       return new Response(
         JSON.stringify({
