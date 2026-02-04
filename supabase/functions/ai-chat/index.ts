@@ -1,4 +1,5 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.46.2";
 
 // ========== ENVIRONMENT CONFIGURATION ==========
@@ -3077,497 +3078,497 @@ class EnhancedProviderCascade {
       }
     }
 
-  }
 
-  const providers = Object.entries(this.config)
-    .filter(([_, config]) => config.enabled && !config.fallbackOnly)
-    .sort((a, b) => a[1].priority - b[1].priority)
-    .map(([name]) => name);
 
-  for(const provider of providers) {
-    const result = await this.callProvider(provider, messages, tools, images);
-    this.attempts.push({ provider, success: result.success });
+    const providers = Object.entries(this.config)
+      .filter(([_, config]) => config.enabled && !config.fallbackOnly)
+      .sort((a, b) => a[1].priority - b[1].priority)
+      .map(([name]) => name);
 
-    if (result.success) {
-      return result;
+    for (const provider of providers) {
+      const result = await this.callProvider(provider, messages, tools, images);
+      this.attempts.push({ provider, success: result.success });
+
+      if (result.success) {
+        return result;
+      }
     }
-  }
 
     console.log('🔄 Trying fallback providers...');
 
-  const fallbackResults = await Promise.all([
-    callDeepSeekFallback(messages, tools),
-    callKimiFallback(messages, tools),
-    callGeminiFallback(messages, tools, images)
-  ]);
+    const fallbackResults = await Promise.all([
+      callDeepSeekFallback(messages, tools),
+      callKimiFallback(messages, tools),
+      callGeminiFallback(messages, tools, images)
+    ]);
 
-  for(const result of fallbackResults) {
-    if (result) {
-      return {
-        success: true,
-        content: result.content,
-        tool_calls: result.tool_calls,
-        provider: result.provider,
-        model: result.model
-      };
+    for (const result of fallbackResults) {
+      if (result) {
+        return {
+          success: true,
+          content: result.content,
+          tool_calls: result.tool_calls,
+          provider: result.provider,
+          model: result.model
+        };
+      }
     }
-  }
 
     return {
-  success: false,
-  provider: 'all',
-  error: `All providers failed after ${this.attempts.length} attempts`
-};
+      success: false,
+      provider: 'all',
+      error: `All providers failed after ${this.attempts.length} attempts`
+    };
   }
 
   private async callProvider(
-  provider: string,
-  messages: any[],
-  tools: any[],
-  images ?: string[]
-): Promise < CascadeResult > {
-  const config = this.config[provider];
-  if(!config || !config.enabled) {
-  return {
-    success: false,
-    provider,
-    error: `Provider ${provider} not configured or disabled`
-  };
-}
-
-const startTime = Date.now();
-
-try {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
-
-  let result: CascadeResult;
-
-  switch (provider) {
-    case 'openai':
-      result = await this.callOpenAI(messages, tools, controller);
-      break;
-    case 'gemini':
-      result = await this.callGemini(messages, tools, images, controller);
-      break;
-    case 'deepseek':
-      result = await this.callDeepSeek(messages, tools, controller);
-      break;
-    case 'anthropic':
-      result = await this.callAnthropic(messages, controller);
-      break;
-    case 'kimi':
-      result = await this.callKimi(messages, tools, controller);
-      break;
-    default:
-      result = {
+    provider: string,
+    messages: any[],
+    tools: any[],
+    images?: string[]
+  ): Promise<CascadeResult> {
+    const config = this.config[provider];
+    if (!config || !config.enabled) {
+      return {
         success: false,
         provider,
-        error: `Unknown provider: ${provider}`
+        error: `Provider ${provider} not configured or disabled`
       };
-  }
+    }
 
-  clearTimeout(timeoutId);
+    const startTime = Date.now();
 
-  if (result.success) {
-    result.latency = Date.now() - startTime;
-  }
-
-  return result;
-
-} catch (error: any) {
-  return {
-    success: false,
-    provider,
-    error: error instanceof Error ? error.message : `${provider} request failed`
-  };
-}
-  }
-
-  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise < CascadeResult > {
-  const forceTools = needsDataRetrieval(messages);
-
-  const response = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${this.config.openai.apiKey}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'gpt-4o-mini',
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 4000,
-      ...(tools.length > 0 && {
-        tools: tools,
-        tool_choice: forceTools ? 'required' : 'auto'
-      })
-    }),
-    signal: controller.signal
-  });
-
-  if(!response.ok) {
-  const errorText = await response.text();
-  return {
-    success: false,
-    provider: 'openai',
-    error: `OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`
-  };
-}
-
-const data = await response.json();
-const message = data.choices?.[0]?.message;
-
-if (message.tool_calls?.length > 0) {
-  return {
-    success: true,
-    tool_calls: message.tool_calls,
-    provider: 'openai',
-    model: 'gpt-4o-mini'
-  };
-}
-
-return {
-  success: true,
-  content: message.content || '',
-  provider: 'openai',
-  model: 'gpt-4o-mini'
-};
-  }
-
-  private async callGemini(messages: any[], tools: any[], images ?: string[], controller: AbortController): Promise < CascadeResult > {
-  const geminiModels = [
-    'gemini-2.5-flash',
-    'gemini-2.5-flash-image',
-    'gemini-2.0-flash-exp',
-    'gemini-1.5-flash'
-  ];
-
-  for(const model of geminiModels) {
     try {
-      console.log(`🔄 Trying Gemini model: ${model}`);
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
 
-      const geminiMessages = [];
+      let result: CascadeResult;
 
-      for (const msg of messages) {
-        if (msg.role === 'system') {
-          geminiMessages.push({
-            role: 'user',
-            parts: [{ text: msg.content }]
-          });
-          geminiMessages.push({
-            role: 'model',
-            parts: [{ text: 'Understood. I will follow these instructions.' }]
-          });
-        } else if (msg.role === 'user') {
-          const parts: any[] = [{ text: msg.content }];
-
-          if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
-            (model.includes('image') || model === 'gemini-1.5-flash')) {
-            for (const imageBase64 of images) {
-              const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-              if (matches) {
-                parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
-              }
-            }
-          }
-
-          geminiMessages.push({
-            role: 'user',
-            parts: parts
-          });
-        } else if (msg.role === 'assistant') {
-          if (msg.tool_calls) {
-            for (const toolCall of msg.tool_calls) {
-              geminiMessages.push({
-                role: 'model',
-                parts: [{
-                  functionCall: {
-                    name: toolCall.function.name,
-                    args: typeof toolCall.function.arguments === 'string'
-                      ? JSON.parse(toolCall.function.arguments)
-                      : toolCall.function.arguments
-                  }
-                }]
-              });
-            }
-          } else if (msg.content) {
-            geminiMessages.push({
-              role: 'model',
-              parts: [{ text: msg.content }]
-            });
-          }
-        } else if (msg.role === 'tool') {
-          geminiMessages.push({
-            role: 'user',
-            parts: [{
-              functionResponse: {
-                name: 'tool_result',
-                response: {
-                  content: msg.content
-                }
-              }
-            }]
-          });
-        }
+      switch (provider) {
+        case 'openai':
+          result = await this.callOpenAI(messages, tools, controller);
+          break;
+        case 'gemini':
+          result = await this.callGemini(messages, tools, images, controller);
+          break;
+        case 'deepseek':
+          result = await this.callDeepSeek(messages, tools, controller);
+          break;
+        case 'anthropic':
+          result = await this.callAnthropic(messages, controller);
+          break;
+        case 'kimi':
+          result = await this.callKimi(messages, tools, controller);
+          break;
+        default:
+          result = {
+            success: false,
+            provider,
+            error: `Unknown provider: ${provider}`
+          };
       }
 
-      const geminiTools = tools.length > 0 ? {
-        functionDeclarations: convertToolsToGeminiFormat(tools)
-      } : undefined;
+      clearTimeout(timeoutId);
 
-      const requestBody: any = {
-        contents: geminiMessages,
-        generationConfig: {
-          temperature: 0.7,
-          maxOutputTokens: 4000
-        }
-      };
-
-      if (geminiTools) {
-        requestBody.tools = [geminiTools];
+      if (result.success) {
+        result.latency = Date.now() - startTime;
       }
 
-      const response = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': this.config.gemini.apiKey
-          },
-          body: JSON.stringify(requestBody),
-          signal: controller.signal
-        }
-      );
-
-      if (!response.ok) {
-        if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
-          console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
-          continue;
-        }
-
-        const errorText = await response.text();
-        return {
-          success: false,
-          provider: 'gemini',
-          error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
-        };
-      }
-
-      const data = await response.json();
-      const candidate = data.candidates?.[0];
-
-      if (!candidate || !candidate.content) {
-        if (model !== geminiModels[geminiModels.length - 1]) {
-          continue;
-        }
-        return {
-          success: false,
-          provider: 'gemini',
-          error: `No content in Gemini ${model} response`
-        };
-      }
-
-      const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
-      if (functionCallPart) {
-        const functionCall = functionCallPart.functionCall;
-
-        const toolCalls = [{
-          id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          type: 'function',
-          function: {
-            name: functionCall.name,
-            arguments: JSON.stringify(functionCall.args)
-          }
-        }];
-
-        return {
-          success: true,
-          tool_calls: toolCalls,
-          provider: 'gemini',
-          model: model
-        };
-      }
-
-      const text = candidate.content.parts
-        ?.map((part: any) => part.text || '')
-        .join('') || '';
-
-      return {
-        success: true,
-        content: text,
-        provider: 'gemini',
-        model: model
-      };
+      return result;
 
     } catch (error: any) {
-      if (model !== geminiModels[geminiModels.length - 1]) {
-        console.warn(`⚠️ Gemini ${model} failed, trying next:`, error.message);
-        continue;
-      }
       return {
         success: false,
-        provider: 'gemini',
-        error: `Gemini request failed: ${error.message}`
+        provider,
+        error: error instanceof Error ? error.message : `${provider} request failed`
       };
     }
   }
 
+  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    const forceTools = needsDataRetrieval(messages);
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.config.openai.apiKey}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'gpt-4o-mini',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 4000,
+        ...(tools.length > 0 && {
+          tools: tools,
+          tool_choice: forceTools ? 'required' : 'auto'
+        })
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'openai',
+        error: `OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
+
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+
+    if (message.tool_calls?.length > 0) {
+      return {
+        success: true,
+        tool_calls: message.tool_calls,
+        provider: 'openai',
+        model: 'gpt-4o-mini'
+      };
+    }
+
     return {
-    success: false,
-    provider: 'gemini',
-    error: 'All Gemini models failed'
-  };
-}
-
-  private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise < CascadeResult > {
-  const forceTools = needsDataRetrieval(messages);
-
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: messages,
-      temperature: 0.7,
-      max_tokens: 4000,
-      ...(tools.length > 0 && {
-        tools: tools,
-        tool_choice: forceTools ? 'required' : 'auto'
-      })
-    }),
-    signal: controller.signal
-  });
-
-  if(!response.ok) {
-  const errorText = await response.text();
-  return {
-    success: false,
-    provider: 'deepseek',
-    error: `DeepSeek API error: ${response.status} - ${errorText.substring(0, 200)}`
-  };
-}
-
-const data = await response.json();
-const message = data.choices?.[0]?.message;
-
-if (message.tool_calls?.length > 0) {
-  return {
-    success: true,
-    tool_calls: message.tool_calls,
-    provider: 'deepseek',
-    model: 'deepseek-chat'
-  };
-}
-
-return {
-  success: true,
-  content: message.content || '',
-  provider: 'deepseek',
-  model: 'deepseek-chat'
-};
+      success: true,
+      content: message.content || '',
+      provider: 'openai',
+      model: 'gpt-4o-mini'
+    };
   }
 
-  private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise < CascadeResult > {
-  const forceTools = needsDataRetrieval(messages);
+  private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
+    const geminiModels = [
+      'gemini-2.5-flash',
+      'gemini-2.5-flash-image',
+      'gemini-2.0-flash-exp',
+      'gemini-1.5-flash'
+    ];
 
-  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-      'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://xmrt.pro',
-      'X-Title': 'XMRT Eliza'
-    },
-    body: JSON.stringify({
-      model: 'moonshotai/kimi-k2',
-      messages: messages,
-      temperature: 0.9,
-      max_tokens: 4000,
-      ...(tools.length > 0 && {
-        tools: tools,
-        tool_choice: forceTools ? 'required' : 'auto'
-      })
-    }),
-    signal: controller.signal
-  });
+    for (const model of geminiModels) {
+      try {
+        console.log(`🔄 Trying Gemini model: ${model}`);
 
-  if(!response.ok) {
-  const errorText = await response.text();
-  return {
-    success: false,
-    provider: 'kimi',
-    error: `Kimi API error: ${response.status} - ${errorText.substring(0, 200)}`
-  };
-}
+        const geminiMessages = [];
 
-const data = await response.json();
-const message = data.choices?.[0]?.message;
+        for (const msg of messages) {
+          if (msg.role === 'system') {
+            geminiMessages.push({
+              role: 'user',
+              parts: [{ text: msg.content }]
+            });
+            geminiMessages.push({
+              role: 'model',
+              parts: [{ text: 'Understood. I will follow these instructions.' }]
+            });
+          } else if (msg.role === 'user') {
+            const parts: any[] = [{ text: msg.content }];
 
-if (message.tool_calls?.length > 0) {
-  return {
-    success: true,
-    tool_calls: message.tool_calls,
-    provider: 'kimi',
-    model: 'moonshotai/kimi-k2'
-  };
-}
+            if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
+              (model.includes('image') || model === 'gemini-1.5-flash')) {
+              for (const imageBase64 of images) {
+                const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+                if (matches) {
+                  parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
+                }
+              }
+            }
 
-return {
-  success: true,
-  content: message.content || '',
-  provider: 'kimi',
-  model: 'moonshotai/kimi-k2'
-};
+            geminiMessages.push({
+              role: 'user',
+              parts: parts
+            });
+          } else if (msg.role === 'assistant') {
+            if (msg.tool_calls) {
+              for (const toolCall of msg.tool_calls) {
+                geminiMessages.push({
+                  role: 'model',
+                  parts: [{
+                    functionCall: {
+                      name: toolCall.function.name,
+                      args: typeof toolCall.function.arguments === 'string'
+                        ? JSON.parse(toolCall.function.arguments)
+                        : toolCall.function.arguments
+                    }
+                  }]
+                });
+              }
+            } else if (msg.content) {
+              geminiMessages.push({
+                role: 'model',
+                parts: [{ text: msg.content }]
+              });
+            }
+          } else if (msg.role === 'tool') {
+            geminiMessages.push({
+              role: 'user',
+              parts: [{
+                functionResponse: {
+                  name: 'tool_result',
+                  response: {
+                    content: msg.content
+                  }
+                }
+              }]
+            });
+          }
+        }
+
+        const geminiTools = tools.length > 0 ? {
+          functionDeclarations: convertToolsToGeminiFormat(tools)
+        } : undefined;
+
+        const requestBody: any = {
+          contents: geminiMessages,
+          generationConfig: {
+            temperature: 0.7,
+            maxOutputTokens: 4000
+          }
+        };
+
+        if (geminiTools) {
+          requestBody.tools = [geminiTools];
+        }
+
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': this.config.gemini.apiKey
+            },
+            body: JSON.stringify(requestBody),
+            signal: controller.signal
+          }
+        );
+
+        if (!response.ok) {
+          if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
+            console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
+            continue;
+          }
+
+          const errorText = await response.text();
+          return {
+            success: false,
+            provider: 'gemini',
+            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
+          };
+        }
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+
+        if (!candidate || !candidate.content) {
+          if (model !== geminiModels[geminiModels.length - 1]) {
+            continue;
+          }
+          return {
+            success: false,
+            provider: 'gemini',
+            error: `No content in Gemini ${model} response`
+          };
+        }
+
+        const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
+        if (functionCallPart) {
+          const functionCall = functionCallPart.functionCall;
+
+          const toolCalls = [{
+            id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: 'function',
+            function: {
+              name: functionCall.name,
+              arguments: JSON.stringify(functionCall.args)
+            }
+          }];
+
+          return {
+            success: true,
+            tool_calls: toolCalls,
+            provider: 'gemini',
+            model: model
+          };
+        }
+
+        const text = candidate.content.parts
+          ?.map((part: any) => part.text || '')
+          .join('') || '';
+
+        return {
+          success: true,
+          content: text,
+          provider: 'gemini',
+          model: model
+        };
+
+      } catch (error: any) {
+        if (model !== geminiModels[geminiModels.length - 1]) {
+          console.warn(`⚠️ Gemini ${model} failed, trying next:`, error.message);
+          continue;
+        }
+        return {
+          success: false,
+          provider: 'gemini',
+          error: `Gemini request failed: ${error.message}`
+        };
+      }
+    }
+
+    return {
+      success: false,
+      provider: 'gemini',
+      error: 'All Gemini models failed'
+    };
   }
 
-  private async callAnthropic(messages: any[], controller: AbortController): Promise < CascadeResult > {
-  const lastMessage = messages[messages.length - 1];
-  const systemMessages = messages.filter(m => m.role === 'system');
-  const systemPrompt = systemMessages.map(m => m.content).join('\n');
+  private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    const forceTools = needsDataRetrieval(messages);
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'x-api-key': this.config.anthropic.apiKey,
-      'anthropic-version': '2023-06-01',
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      model: 'claude-3-5-haiku-20241022',
-      max_tokens: 4000,
-      temperature: 0.7,
-      system: systemPrompt,
-      messages: [{
-        role: 'user',
-        content: lastMessage.content
-      }]
-    }),
-    signal: controller.signal
-  });
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: messages,
+        temperature: 0.7,
+        max_tokens: 4000,
+        ...(tools.length > 0 && {
+          tools: tools,
+          tool_choice: forceTools ? 'required' : 'auto'
+        })
+      }),
+      signal: controller.signal
+    });
 
-  if(!response.ok) {
-  const errorText = await response.text();
-  return {
-    success: false,
-    provider: 'anthropic',
-    error: `Anthropic API error: ${response.status} - ${errorText.substring(0, 200)}`
-  };
-}
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'deepseek',
+        error: `DeepSeek API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
 
-const data = await response.json();
-const text = data.content?.[0]?.text || '';
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
 
-return {
-  success: true,
-  content: text,
-  provider: 'anthropic',
-  model: 'claude-3-5-haiku-20241022'
-};
+    if (message.tool_calls?.length > 0) {
+      return {
+        success: true,
+        tool_calls: message.tool_calls,
+        provider: 'deepseek',
+        model: 'deepseek-chat'
+      };
+    }
+
+    return {
+      success: true,
+      content: message.content || '',
+      provider: 'deepseek',
+      model: 'deepseek-chat'
+    };
+  }
+
+  private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    const forceTools = needsDataRetrieval(messages);
+
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://xmrt.pro',
+        'X-Title': 'XMRT Eliza'
+      },
+      body: JSON.stringify({
+        model: 'moonshotai/kimi-k2',
+        messages: messages,
+        temperature: 0.9,
+        max_tokens: 4000,
+        ...(tools.length > 0 && {
+          tools: tools,
+          tool_choice: forceTools ? 'required' : 'auto'
+        })
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'kimi',
+        error: `Kimi API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
+
+    const data = await response.json();
+    const message = data.choices?.[0]?.message;
+
+    if (message.tool_calls?.length > 0) {
+      return {
+        success: true,
+        tool_calls: message.tool_calls,
+        provider: 'kimi',
+        model: 'moonshotai/kimi-k2'
+      };
+    }
+
+    return {
+      success: true,
+      content: message.content || '',
+      provider: 'kimi',
+      model: 'moonshotai/kimi-k2'
+    };
+  }
+
+  private async callAnthropic(messages: any[], controller: AbortController): Promise<CascadeResult> {
+    const lastMessage = messages[messages.length - 1];
+    const systemMessages = messages.filter(m => m.role === 'system');
+    const systemPrompt = systemMessages.map(m => m.content).join('\n');
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'x-api-key': this.config.anthropic.apiKey,
+        'anthropic-version': '2023-06-01',
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        model: 'claude-3-5-haiku-20241022',
+        max_tokens: 4000,
+        temperature: 0.7,
+        system: systemPrompt,
+        messages: [{
+          role: 'user',
+          content: lastMessage.content
+        }]
+      }),
+      signal: controller.signal
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      return {
+        success: false,
+        provider: 'anthropic',
+        error: `Anthropic API error: ${response.status} - ${errorText.substring(0, 200)}`
+      };
+    }
+
+    const data = await response.json();
+    const text = data.content?.[0]?.text || '';
+
+    return {
+      success: true,
+      content: text,
+      provider: 'anthropic',
+      model: 'claude-3-5-haiku-20241022'
+    };
   }
 }
 
@@ -4468,23 +4469,35 @@ async function parseMultipartFormData(req: Request): Promise<any> {
     const body: any = {};
     const attachments: any[] = [];
 
+    // Log the keys found to debug
+    const keys = Array.from(formData.keys());
+    console.log(`📎 FormData keys received: ${keys.join(', ')}`);
+
     for (const [key, value] of formData.entries()) {
       if (value instanceof File) {
-        console.log(`📎 Processing file upload: ${value.name} (${value.type})`);
+        console.log(`📎 Processing file upload: ${value.name} (${value.type}, ${value.size} bytes)`);
+
+        // Check for reasonable file size limit (Wait, Supabase limits to 6MB generally, keeping it safe here)
+        if (value.size > 6 * 1024 * 1024) {
+          console.warn(`⚠️ File ${value.name} is too large (${value.size} bytes). Skipping content.`);
+          attachments.push({
+            filename: value.name,
+            content: "",
+            mime_type: value.type,
+            size: value.size,
+            error: "File too large (max 6MB)"
+          });
+          continue;
+        }
+
         const buffer = await value.arrayBuffer();
 
-        // Use Uint8Array to handle binary data correctly for btoa
-        let binary = '';
-        const bytes = new Uint8Array(buffer);
-        const len = bytes.byteLength;
-        for (let i = 0; i < len; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        const base64 = btoa(binary);
+        // Optimized Base64 encoding using standard lib
+        const base64 = encodeBase64(buffer);
 
         attachments.push({
           filename: value.name,
-          content: base64, // Base64 encoded content
+          content: base64,
           mime_type: value.type,
           size: value.size
         });
@@ -4497,6 +4510,7 @@ async function parseMultipartFormData(req: Request): Promise<any> {
             parsedValue = JSON.parse(value);
           } catch (e) {
             // keep as string
+            console.warn(`⚠️ Failed to parse JSON for key '${key}':`, e.message);
           }
         }
         body[key] = parsedValue;
@@ -4509,9 +4523,9 @@ async function parseMultipartFormData(req: Request): Promise<any> {
     }
 
     return body;
-  } catch (e) {
-    console.error('Error parsing multipart form data:', e);
-    throw new Error('Failed to parse multipart form data');
+  } catch (e: any) {
+    console.error('❌ Error parsing multipart form data:', e);
+    throw new Error(`Failed to parse multipart form data: ${e.message}`);
   }
 }
 
