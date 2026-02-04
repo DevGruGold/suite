@@ -9,29 +9,29 @@ function analyzeLearningFromError(toolName: string, error: string, params: any):
   if (error.includes('network') || error.includes('urllib') || error.includes('requests') || error.includes('http')) {
     return `❌ Python sandbox has no network access. For API calls, use invoke_edge_function instead of execute_python. Example: invoke_edge_function({ function_name: "github-integration", payload: {...} })`;
   }
-  
+
   // Import errors
   if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
     const match = error.match(/No module named '([^']+)'/);
     const moduleName = match ? match[1] : 'unknown';
     return `❌ Module '${moduleName}' not available in sandbox. Available: math, json, datetime, random, re, collections, itertools. For external APIs, use invoke_edge_function.`;
   }
-  
+
   // Syntax errors
   if (error.includes('SyntaxError')) {
     return `❌ Python syntax error detected. Check code for typos, indentation, or invalid syntax. Validate code structure before calling execute_python.`;
   }
-  
+
   // Parameter errors
   if (error.includes('missing') || error.includes('required')) {
     return `❌ Missing required parameter for ${toolName}. Check tool definition in ELIZA_TOOLS for required fields. Example: execute_python requires both 'code' and 'purpose'.`;
   }
-  
+
   // JSON parse errors
   if (error.includes('JSON') || error.includes('parse')) {
     return `❌ Invalid JSON in tool arguments. Ensure proper escaping of quotes and valid JSON structure.`;
   }
-  
+
   return `❌ Execution failed: ${error}. Review error details and adjust approach.`;
 }
 
@@ -42,14 +42,14 @@ function analyzeLearningFromError(toolName: string, error: string, params: any):
 export async function executeToolCall(
   supabase: SupabaseClient,
   toolCall: any,
-  executiveName: 'Eliza' | 'CSO' | 'CTO' | 'CIO' | 'CAO' | 'COO',
+  executiveName: 'Eliza' | 'CSO' | 'CTO' | 'CIO' | 'CAO' | 'COO' | string,
   SUPABASE_URL: string,
   SERVICE_ROLE_KEY: string,
   session_credentials?: any
 ): Promise<any> {
   const startTime = Date.now();
   const { name, arguments: args } = toolCall.function || toolCall;
-  
+
   // Validate tool call structure
   if (!name) {
     await logFunctionUsage(supabase, {
@@ -60,13 +60,13 @@ export async function executeToolCall(
       error_message: 'Tool call missing function name',
       parameters: toolCall
     });
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: 'Invalid tool call: missing function name',
       learning_point: 'Tool calls must include a function name. Check tool call structure.'
     };
   }
-  
+
   // Parse arguments with detailed error feedback including expected schema
   let parsedArgs;
   try {
@@ -82,9 +82,9 @@ export async function executeToolCall(
       'invoke_edge_function': '{ "function_name": "string", "payload": {} }',
       'bulk_update_task_status': '{ "task_ids": ["uuid1", "uuid2"], "new_status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED" }'
     };
-    
+
     const expectedSchema = expectedSchemas[name] || 'Check tool definition for required parameters';
-    
+
     await logFunctionUsage(supabase, {
       function_name: name,
       executive_name: executiveName,
@@ -93,13 +93,13 @@ export async function executeToolCall(
       error_message: `Failed to parse tool arguments for ${name}`,
       parameters: { raw_args: args, parse_error: parseError.message, expected_schema: expectedSchema }
     });
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: `Invalid tool arguments for ${name}: JSON parse failed. Expected format: ${expectedSchema}`,
       learning_point: `Tool ${name} requires valid JSON. Expected schema: ${expectedSchema}. Ensure quotes are escaped and JSON is valid.`
     };
   }
-  
+
   // Validate execute_python specific requirements with syntax pre-checks
   if (name === 'execute_python') {
     if (!parsedArgs.code) {
@@ -113,28 +113,28 @@ export async function executeToolCall(
       console.warn(`⚠️ execute_python called without purpose parameter by ${executiveName}`);
       parsedArgs.purpose = 'No purpose specified';
     }
-    
+
     // Pre-execution Python syntax validation to catch common issues
     const code = parsedArgs.code;
     const syntaxIssues: string[] = [];
-    
+
     // Check for unterminated strings (common failure mode)
     const singleQuoteCount = (code.match(/(?<!\\)'/g) || []).length;
     const doubleQuoteCount = (code.match(/(?<!\\)"/g) || []).length;
     const tripleDoubleCount = (code.match(/"""/g) || []).length;
     const tripleSingleCount = (code.match(/'''/g) || []).length;
-    
+
     // After removing triple quotes, check if remaining quotes are balanced
     const adjustedSingle = singleQuoteCount - (tripleSingleCount * 3);
     const adjustedDouble = doubleQuoteCount - (tripleDoubleCount * 3);
-    
+
     if (adjustedSingle % 2 !== 0) {
       syntaxIssues.push("Unbalanced single quotes (') - possible unterminated string");
     }
     if (adjustedDouble % 2 !== 0) {
       syntaxIssues.push('Unbalanced double quotes (") - possible unterminated string');
     }
-    
+
     // Check for network operations that will fail
     const networkPatterns = [
       { pattern: /urllib\.request/i, msg: "urllib.request detected - WILL FAIL (no network access)" },
@@ -143,18 +143,18 @@ export async function executeToolCall(
       { pattern: /urlopen\(/i, msg: "urlopen() detected - WILL FAIL (no network access)" },
       { pattern: /http\.client/i, msg: "http.client detected - WILL FAIL (no network access)" },
     ];
-    
+
     for (const { pattern, msg } of networkPatterns) {
       if (pattern.test(code)) {
         syntaxIssues.push(msg);
       }
     }
-    
+
     // Check for missing print statement (common issue - no output)
     if (!code.includes('print(') && !code.includes('print (')) {
       syntaxIssues.push("No print() statement - output may not be captured. Add print(result) at the end.");
     }
-    
+
     // If critical issues found, return early with helpful guidance
     if (syntaxIssues.some(issue => issue.includes('WILL FAIL'))) {
       console.error(`🚫 [${executiveName}] Python pre-validation BLOCKED execution:`, syntaxIssues);
@@ -165,27 +165,27 @@ export async function executeToolCall(
         detected_issues: syntaxIssues
       };
     }
-    
+
     // Log warnings but allow execution
     if (syntaxIssues.length > 0) {
       console.warn(`⚠️ [${executiveName}] Python pre-validation warnings:`, syntaxIssues);
     }
   }
-  
+
   console.log(`🔧 [${executiveName}] Executing tool: ${name}`, parsedArgs);
-  
+
   try {
     let result: any;
-    
+
     // Route tool calls to appropriate edge functions
-    switch(name) {
+    switch (name) {
       // ====================================================================
       // CONVERSATIONAL USER ACQUISITION TOOLS
       // ====================================================================
       case 'qualify_lead':
         console.log(`🎯 [${executiveName}] Qualify Lead`);
         const qualifyResult = await supabase.functions.invoke('qualify-lead', { body: parsedArgs });
-        result = qualifyResult.error 
+        result = qualifyResult.error
           ? { success: false, error: qualifyResult.error.message }
           : { success: true, result: qualifyResult.data };
         break;
@@ -224,19 +224,19 @@ export async function executeToolCall(
           reasoning += ' Consider Pro tier as a cost-effective alternative.';
         }
 
-        result = { 
-          success: true, 
-          result: { 
-            recommended_tier: recommendedTier, 
+        result = {
+          success: true,
+          result: {
+            recommended_tier: recommendedTier,
             reasoning,
             monthly_cost: { free: 0, basic: 10, pro: 50, enterprise: 500 }[recommendedTier]
-          } 
+          }
         };
         break;
 
       case 'create_user_profile_from_session':
         console.log(`👤 [${executiveName}] Create User Profile`);
-        const profileResult = await supabase.functions.invoke('convert-session-to-user', { 
+        const profileResult = await supabase.functions.invoke('convert-session-to-user', {
           body: { action: 'create_user_profile', ...parsedArgs }
         });
         result = profileResult.error
@@ -272,7 +272,7 @@ export async function executeToolCall(
 
       case 'send_usage_alert':
         console.log(`⚠️ [${executiveName}] Send Usage Alert`);
-        const alertResult = await supabase.functions.invoke('usage-monitor', { 
+        const alertResult = await supabase.functions.invoke('usage-monitor', {
           body: { api_key: parsedArgs.api_key, alert_type: parsedArgs.alert_type }
         });
         result = alertResult.error
@@ -306,24 +306,66 @@ export async function executeToolCall(
 
         result = discountError
           ? { success: false, error: discountError.message }
-          : { 
-              success: true, 
-              result: { 
-                discount_applied: true,
-                message: `${parsedArgs.discount_percent}% discount applied for ${parsedArgs.duration_months} months`
-              } 
-            };
+          : {
+            success: true,
+            result: {
+              discount_applied: true,
+              message: `${parsedArgs.discount_percent}% discount applied for ${parsedArgs.duration_months} months`
+            }
+          };
         break;
 
       // ====================================================================
       // EXISTING TOOLS
       // ====================================================================
+      case 'delegate_to_specialist': {
+        // Map friendly roles to actual edge function names
+        const agentMap: Record<string, string> = {
+          'social-viral': 'superduper-social-viral',
+          'code-architect': 'superduper-code-architect',
+          'business-growth': 'superduper-business-growth',
+          'finance-investment': 'superduper-finance-investment',
+          'design-brand': 'superduper-design-brand',
+          'content-media': 'superduper-content-media',
+          'communication-outreach': 'superduper-communication-outreach',
+          'research-intelligence': 'superduper-research-intelligence',
+          'integration': 'superduper-integration',
+          'development-coach': 'superduper-development-coach',
+          'domain-experts': 'superduper-domain-experts'
+        };
+
+        const specialistFn = agentMap[args.specialist_role];
+        if (!specialistFn) {
+          throw new Error(`Unknown specialist role: ${args.specialist_role}`);
+        }
+
+        console.log(`🤝 Delegating task to ${specialistFn}...`);
+
+        const { data, error } = await supabase.functions.invoke(specialistFn, {
+          body: {
+            action: 'process_task', // Standard action for SuperDuper agents
+            params: {
+              instruction: args.task_description,
+              context: args.context_data || {}
+            },
+            // Pass the manager's context if available, or identity
+            context: {
+              manager: executiveName, // "Michael", "Gemmy", etc.
+              delegated_at: new Date().toISOString()
+            }
+          }
+        });
+
+        if (error) throw error;
+        return data;
+      }
+
       case 'invoke_edge_function':
       case 'call_edge_function':
         let { function_name, payload, body } = parsedArgs;
         let targetFunction = function_name || parsedArgs.function_name;
         let targetPayload = payload || body || {};
-        
+
         // Auto-correct common VSCO function name hallucinations
         // AI sometimes hallucinates "vsco-manage-events" instead of using vsco_manage_events tool
         if (targetFunction && (targetFunction.startsWith('vsco-manage-') || targetFunction.startsWith('vsco_manage_'))) {
@@ -336,10 +378,10 @@ export async function executeToolCall(
             targetPayload = { ...targetPayload, action: `list_${entityType}` };
           }
         }
-        
+
         console.log(`📡 [${executiveName}] Invoking edge function: ${targetFunction}`);
         const funcResult = await supabase.functions.invoke(targetFunction, { body: targetPayload });
-        
+
         if (funcResult.error) {
           console.error(`❌ [${executiveName}] Edge function error:`, funcResult.error);
           result = { success: false, error: funcResult.error.message || 'Function execution failed' };
@@ -347,34 +389,34 @@ export async function executeToolCall(
           result = { success: true, result: funcResult.data };
         }
         break;
-        
+
       case 'execute_python':
         const { code, purpose } = parsedArgs;
         console.log(`🐍 [${executiveName}] Execute Python - ${purpose || 'No purpose'}`);
-        
+
         const pythonResult = await supabase.functions.invoke('python-executor', {
-          body: { 
-            code, 
+          body: {
+            code,
             purpose,
             source: executiveName.toLowerCase() + '-executive',
             agent_id: executiveName.toLowerCase()
           }
         });
-        
+
         if (pythonResult.error) {
           result = { success: false, error: pythonResult.error.message || 'Python execution failed' };
         } else {
           result = { success: true, result: pythonResult.data };
         }
         break;
-        
+
       case 'get_my_feedback':
         const limit = parsedArgs.limit || 10;
         const unacknowledgedOnly = parsedArgs.unacknowledged_only !== false; // Default true
         const acknowledgeIds = parsedArgs.acknowledge_ids || [];
-        
+
         console.log(`📚 [${executiveName}] Get my feedback - limit: ${limit}, unack only: ${unacknowledgedOnly}`);
-        
+
         // Acknowledge specified feedback items first
         if (acknowledgeIds.length > 0) {
           await supabase
@@ -383,7 +425,7 @@ export async function executeToolCall(
             .in('id', acknowledgeIds);
           console.log(`✅ [${executiveName}] Acknowledged ${acknowledgeIds.length} feedback items`);
         }
-        
+
         // Fetch feedback
         let query = supabase
           .from('executive_feedback')
@@ -391,18 +433,18 @@ export async function executeToolCall(
           .eq('executive_name', executiveName)
           .order('created_at', { ascending: false })
           .limit(limit);
-        
+
         if (unacknowledgedOnly) {
           query = query.eq('acknowledged', false);
         }
-        
+
         const { data: feedback, error: feedbackError } = await query;
-        
+
         if (feedbackError) {
           result = { success: false, error: feedbackError.message };
         } else {
-          result = { 
-            success: true, 
+          result = {
+            success: true,
             result: {
               feedback: feedback || [],
               count: feedback?.length || 0,
@@ -411,17 +453,17 @@ export async function executeToolCall(
           };
         }
         break;
-        
+
       case 'createGitHubDiscussion':
         console.log(`📝 [${executiveName}] Create GitHub Discussion`);
-        
+
         // Derive executive from executiveName if not explicitly provided
-        const discussionExec = parsedArgs.executive || 
+        const discussionExec = parsedArgs.executive ||
           (executiveName?.toLowerCase()?.includes('strategy') ? 'cso' :
-           executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
-           executiveName?.toLowerCase()?.includes('information') ? 'cio' :
-           executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
-        
+            executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
+              executiveName?.toLowerCase()?.includes('information') ? 'cio' :
+                executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
+
         const discussionResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'create_discussion',
@@ -435,7 +477,7 @@ export async function executeToolCall(
             session_credentials
           }
         });
-        
+
         if (discussionResult.error) {
           result = { success: false, error: discussionResult.error.message };
         } else {
@@ -445,14 +487,14 @@ export async function executeToolCall(
 
       case 'createGitHubIssue':
         console.log(`🐛 [${executiveName}] Create GitHub Issue`);
-        
+
         // Derive executive from executiveName if not explicitly provided
-        const issueExec = parsedArgs.executive || 
+        const issueExec = parsedArgs.executive ||
           (executiveName?.toLowerCase()?.includes('strategy') ? 'cso' :
-           executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
-           executiveName?.toLowerCase()?.includes('information') ? 'cio' :
-           executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
-        
+            executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
+              executiveName?.toLowerCase()?.includes('information') ? 'cio' :
+                executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
+
         const issueResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'create_issue',
@@ -466,7 +508,7 @@ export async function executeToolCall(
             session_credentials
           }
         });
-        
+
         if (issueResult.error) {
           result = { success: false, error: issueResult.error.message };
         } else {
@@ -476,14 +518,14 @@ export async function executeToolCall(
 
       case 'commentOnGitHubIssue':
         console.log(`💬 [${executiveName}] Comment on GitHub Issue #${parsedArgs.issue_number}`);
-        
+
         // Derive executive from executiveName if not explicitly provided
-        const commentExec = parsedArgs.executive || 
+        const commentExec = parsedArgs.executive ||
           (executiveName?.toLowerCase()?.includes('strategy') ? 'cso' :
-           executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
-           executiveName?.toLowerCase()?.includes('information') ? 'cio' :
-           executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
-        
+            executiveName?.toLowerCase()?.includes('technology') ? 'cto' :
+              executiveName?.toLowerCase()?.includes('information') ? 'cio' :
+                executiveName?.toLowerCase()?.includes('analytics') ? 'cao' : 'eliza');
+
         const commentResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'comment_on_issue',
@@ -496,7 +538,7 @@ export async function executeToolCall(
             session_credentials
           }
         });
-        
+
         if (commentResult.error) {
           result = { success: false, error: commentResult.error.message };
         } else {
@@ -506,7 +548,7 @@ export async function executeToolCall(
 
       case 'listGitHubIssues':
         console.log(`📋 [${executiveName}] List GitHub Issues`);
-        
+
         const listResult = await supabase.functions.invoke('github-integration', {
           body: {
             action: 'list_issues',
@@ -518,7 +560,7 @@ export async function executeToolCall(
             session_credentials
           }
         });
-        
+
         if (listResult.error) {
           result = { success: false, error: listResult.error.message };
         } else {
@@ -997,49 +1039,49 @@ export async function executeToolCall(
         result = createWorkflowResult.error
           ? { success: false, error: createWorkflowResult.error.message }
           : { success: true, result: { ...createWorkflowResult.data, workflow_path: workflowPath } };
-        
+
       case 'list_available_functions':
         const functionsResult = await supabase.functions.invoke('list-available-functions', {
           body: { category: parsedArgs.category }
         });
         result = { success: true, result: functionsResult.data };
         break;
-        
+
       case 'get_function_usage_analytics':
         const analyticsResult = await supabase.functions.invoke('function-usage-analytics', {
           body: parsedArgs
         });
         result = { success: true, result: analyticsResult.data };
         break;
-        
+
       case 'propose_new_edge_function':
         const proposalResult = await supabase.functions.invoke('propose-new-edge-function', {
           body: { ...parsedArgs, proposed_by: executiveName }
         });
         result = { success: true, result: proposalResult.data };
         break;
-        
+
       case 'vote_on_function_proposal':
         const voteResult = await supabase.functions.invoke('vote-on-proposal', {
           body: { ...parsedArgs, executive_name: executiveName }
         });
         result = { success: true, result: voteResult.data };
         break;
-        
+
       case 'list_function_proposals':
         const proposalsResult = await supabase.functions.invoke('list-function-proposals', {
           body: parsedArgs
         });
         result = { success: true, result: proposalsResult.data };
         break;
-        
+
       // Task-Orchestrator Tools
       case 'auto_assign_tasks':
         console.log(`🤖 [${executiveName}] Auto-assigning pending tasks to idle agents`);
         const assignResult = await supabase.functions.invoke('task-orchestrator', {
           body: { action: 'auto_assign_tasks', data: {} }
         });
-        result = assignResult.error 
+        result = assignResult.error
           ? { success: false, error: assignResult.error.message }
           : { success: true, result: assignResult.data };
         break;
@@ -1215,9 +1257,9 @@ export async function executeToolCall(
       case 'route_to_superduper_agent':
         console.log(`🎯 [${executiveName}] Routing to SuperDuper specialist`);
         const routeResult = await supabase.functions.invoke('superduper-router', {
-          body: { 
+          body: {
             request: parsedArgs.request,
-            preferred_specialist: parsedArgs.preferred_specialist 
+            preferred_specialist: parsedArgs.preferred_specialist
           }
         });
         result = routeResult.error
@@ -1265,8 +1307,8 @@ export async function executeToolCall(
       case 'check_ecosystem_health':
       case 'generate_health_report':
         console.log(`🩺 [${executiveName}] System Health Check: ${name}`);
-        const healthResult = await supabase.functions.invoke('system-status', { 
-          body: { action: name, ...parsedArgs } 
+        const healthResult = await supabase.functions.invoke('system-status', {
+          body: { action: name, ...parsedArgs }
         });
         result = healthResult.error
           ? { success: false, error: healthResult.error.message }
@@ -1280,8 +1322,8 @@ export async function executeToolCall(
         // Alias for execute_python
         console.log(`🐍 [${executiveName}] Run Code (alias for execute_python)`);
         const runCodeResult = await supabase.functions.invoke('python-executor', {
-          body: { 
-            code: parsedArgs.code, 
+          body: {
+            code: parsedArgs.code,
             purpose: parsedArgs.purpose || 'Code execution via run_code',
             source: executiveName.toLowerCase() + '-executive',
             agent_id: executiveName.toLowerCase()
@@ -1426,7 +1468,7 @@ export async function executeToolCall(
       case 'deploy_approved_function':
         console.log(`🚀 [${executiveName}] Deploy Approved Function: ${parsedArgs.proposal_id}`);
         const deployResult = await supabase.functions.invoke('deploy-approved-edge-function', {
-          body: { 
+          body: {
             action: 'deploy_single',
             proposal_id: parsedArgs.proposal_id,
             auto_deploy: parsedArgs.auto_deploy ?? true,
@@ -1442,7 +1484,7 @@ export async function executeToolCall(
       case 'get_deployment_status':
         console.log(`📊 [${executiveName}] Get Deployment Status`);
         const statusDeployResult = await supabase.functions.invoke('deploy-approved-edge-function', {
-          body: { 
+          body: {
             action: 'get_deployment_status',
             proposal_id: parsedArgs.proposal_id
           }
@@ -1455,7 +1497,7 @@ export async function executeToolCall(
       case 'rollback_deployment':
         console.log(`⏮️ [${executiveName}] Rollback Deployment: ${parsedArgs.proposal_id}`);
         const rollbackResult = await supabase.functions.invoke('deploy-approved-edge-function', {
-          body: { 
+          body: {
             action: 'rollback',
             proposal_id: parsedArgs.proposal_id
           }
@@ -1468,7 +1510,7 @@ export async function executeToolCall(
       case 'process_deployment_queue':
         console.log(`📋 [${executiveName}] Process Deployment Queue`);
         const queueResult = await supabase.functions.invoke('deploy-approved-edge-function', {
-          body: { 
+          body: {
             action: 'process_queue',
             auto_deploy: parsedArgs.auto_deploy ?? true,
             run_health_check: parsedArgs.run_health_check ?? true
@@ -1478,7 +1520,7 @@ export async function executeToolCall(
           ? { success: false, error: queueResult.error.message }
           : { success: true, result: queueResult.data };
         break;
-        
+
       // ====================================================================
       // STAE - SUITE TASK AUTOMATION ENGINE TOOLS
       // ====================================================================
@@ -1684,7 +1726,7 @@ export async function executeToolCall(
       case 'sync_github_contributions':
         console.log(`🔄 [${executiveName}] Sync GitHub Contributions`);
         const syncContribResult = await supabase.functions.invoke('sync-github-contributions', {
-          body: { 
+          body: {
             repo: parsedArgs.repo || 'XMRT-Ecosystem',
             owner: parsedArgs.owner || 'DevGruGold',
             max_commits: parsedArgs.max_commits || 100
@@ -1695,208 +1737,208 @@ export async function executeToolCall(
           : { success: true, result: syncContribResult.data };
         break;
 
-      
-    // ==================== ECOSYSTEM COORDINATION TOOLS ====================
-    case 'trigger_ecosystem_coordination': {
-      try {
-        const cycleType = args.cycle_type || 'standard';
-        console.log(`🚀 Triggering ${cycleType} ecosystem coordination...`);
-        
-        const response = await fetch('https://xmrt-ecosystem.vercel.app/api/tick', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ cycle_type: cycleType }),
-          signal: AbortSignal.timeout(120000) // 2 minute timeout
-        });
-        
-        if (!response.ok) {
+
+      // ==================== ECOSYSTEM COORDINATION TOOLS ====================
+      case 'trigger_ecosystem_coordination': {
+        try {
+          const cycleType = args.cycle_type || 'standard';
+          console.log(`🚀 Triggering ${cycleType} ecosystem coordination...`);
+
+          const response = await fetch('https://xmrt-ecosystem.vercel.app/api/tick', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ cycle_type: cycleType }),
+            signal: AbortSignal.timeout(120000) // 2 minute timeout
+          });
+
+          if (!response.ok) {
+            return {
+              success: false,
+              error: `Coordination trigger failed: ${response.status} ${response.statusText}`
+            };
+          }
+
+          const data = await response.json();
+
+          return {
+            success: true,
+            message: `Ecosystem coordination cycle (${cycleType}) completed successfully`,
+            timestamp: data.timestamp,
+            agents_discovered: data.agents?.length || 0,
+            health_checks_performed: data.health_checks?.length || 0,
+            coordination_summary: data.summary || 'Coordination cycle completed',
+            details: data
+          };
+        } catch (error) {
+          console.error('Ecosystem coordination error:', error);
           return {
             success: false,
-            error: `Coordination trigger failed: ${response.status} ${response.statusText}`
+            error: `Failed to trigger coordination: ${error.message}`
           };
         }
-        
-        const data = await response.json();
-        
-        return {
-          success: true,
-          message: `Ecosystem coordination cycle (${cycleType}) completed successfully`,
-          timestamp: data.timestamp,
-          agents_discovered: data.agents?.length || 0,
-          health_checks_performed: data.health_checks?.length || 0,
-          coordination_summary: data.summary || 'Coordination cycle completed',
-          details: data
-        };
-      } catch (error) {
-        console.error('Ecosystem coordination error:', error);
-        return {
-          success: false,
-          error: `Failed to trigger coordination: ${error.message}`
-        };
       }
-    }
-    
-    case 'get_ecosystem_status': {
-      try {
-        console.log('📊 Fetching ecosystem status...');
-        
-        // Query agents endpoint
-        const agentsResponse = await fetch('https://xmrt-ecosystem.vercel.app/api/agents', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(30000)
-        });
-        
-        // Query system info
-        const systemResponse = await fetch('https://xmrt-ecosystem.vercel.app/api/index', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(30000)
-        });
-        
-        const agentsData = agentsResponse.ok ? await agentsResponse.json() : { agents: [] };
-        const systemData = systemResponse.ok ? await systemResponse.json() : { status: 'unknown' };
-        
-        return {
-          success: true,
-          ecosystem_health: systemData.status || 'healthy',
-          version: systemData.version || 'unknown',
-          total_agents: agentsData.agents?.length || 0,
-          agents: agentsData.agents || [],
-          timestamp: new Date().toISOString(),
-          deployment_url: 'https://xmrt-ecosystem.vercel.app',
-          message: `Ecosystem status: ${agentsData.agents?.length || 0} agents discovered`
-        };
-      } catch (error) {
-        console.error('Get ecosystem status error:', error);
-        return {
-          success: false,
-          error: `Failed to get ecosystem status: ${error.message}`
-        };
-      }
-    }
-    
-    case 'query_ecosystem_agents': {
-      try {
-        const filterBy = args.filter_by || 'all';
-        console.log(`🔍 Querying ecosystem agents (filter: ${filterBy})...`);
-        
-        const response = await fetch('https://xmrt-ecosystem.vercel.app/api/agents', {
-          method: 'GET',
-          headers: { 'Content-Type': 'application/json' },
-          signal: AbortSignal.timeout(30000)
-        });
-        
-        if (!response.ok) {
+
+      case 'get_ecosystem_status': {
+        try {
+          console.log('📊 Fetching ecosystem status...');
+
+          // Query agents endpoint
+          const agentsResponse = await fetch('https://xmrt-ecosystem.vercel.app/api/agents', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(30000)
+          });
+
+          // Query system info
+          const systemResponse = await fetch('https://xmrt-ecosystem.vercel.app/api/index', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(30000)
+          });
+
+          const agentsData = agentsResponse.ok ? await agentsResponse.json() : { agents: [] };
+          const systemData = systemResponse.ok ? await systemResponse.json() : { status: 'unknown' };
+
+          return {
+            success: true,
+            ecosystem_health: systemData.status || 'healthy',
+            version: systemData.version || 'unknown',
+            total_agents: agentsData.agents?.length || 0,
+            agents: agentsData.agents || [],
+            timestamp: new Date().toISOString(),
+            deployment_url: 'https://xmrt-ecosystem.vercel.app',
+            message: `Ecosystem status: ${agentsData.agents?.length || 0} agents discovered`
+          };
+        } catch (error) {
+          console.error('Get ecosystem status error:', error);
           return {
             success: false,
-            error: `Agent query failed: ${response.status}`
+            error: `Failed to get ecosystem status: ${error.message}`
           };
         }
-        
-        const data = await response.json();
-        let agents = data.agents || [];
-        
-        // Apply filters
-        if (filterBy === 'active') {
-          agents = agents.filter(a => a.status === 'active' || a.status === 'online');
-        } else if (filterBy === 'supabase') {
-          agents = agents.filter(a => a.source === 'xmrtcouncil_supabase' || a.type === 'supabase_edge_function');
-        } else if (filterBy === 'vercel') {
-          agents = agents.filter(a => a.type === 'vercel_api' || a.source?.includes('vercel'));
-        } else if (filterBy === 'priority') {
-          agents = agents.sort((a, b) => (a.priority || 5) - (b.priority || 5));
-        }
-        
-        return {
-          success: true,
-          total_agents: agents.length,
-          filter_applied: filterBy,
-          agents: agents,
-          agent_summary: agents.map(a => ({
-            name: a.name || a.display_name,
-            type: a.type,
-            status: a.status,
-            source: a.source
-          })),
-          message: `Found ${agents.length} agents matching filter: ${filterBy}`
-        };
-      } catch (error) {
-        console.error('Query ecosystem agents error:', error);
-        return {
-          success: false,
-          error: `Failed to query agents: ${error.message}`
-        };
       }
-    }
 
-    // ====================================================================
-    // ANALYTICS & LOG MANAGEMENT TOOLS
-    // ====================================================================
-    case 'sync_function_logs':
-      console.log(`🔄 [${executiveName}] Sync function logs - ${parsedArgs.hours_back || 1}h back`);
-      const syncLogResult = await supabase.functions.invoke('sync-function-logs', {
-        body: { hours_back: Math.min(parsedArgs.hours_back || 1, 24) }
-      });
-      result = syncLogResult.error
-        ? { success: false, error: syncLogResult.error.message }
-        : { success: true, result: syncLogResult.data };
-      break;
+      case 'query_ecosystem_agents': {
+        try {
+          const filterBy = args.filter_by || 'all';
+          console.log(`🔍 Querying ecosystem agents (filter: ${filterBy})...`);
 
-    case 'get_function_usage_analytics':
-      console.log(`📊 [${executiveName}] Get function usage analytics`);
-      const usageAnalyticsResult = await supabase.functions.invoke('function-usage-analytics', {
-        body: { 
-          function_name: parsedArgs.function_name,
-          time_window_hours: parsedArgs.time_window_hours || 24,
-          group_by: parsedArgs.group_by || 'function'
+          const response = await fetch('https://xmrt-ecosystem.vercel.app/api/agents', {
+            method: 'GET',
+            headers: { 'Content-Type': 'application/json' },
+            signal: AbortSignal.timeout(30000)
+          });
+
+          if (!response.ok) {
+            return {
+              success: false,
+              error: `Agent query failed: ${response.status}`
+            };
+          }
+
+          const data = await response.json();
+          let agents = data.agents || [];
+
+          // Apply filters
+          if (filterBy === 'active') {
+            agents = agents.filter(a => a.status === 'active' || a.status === 'online');
+          } else if (filterBy === 'supabase') {
+            agents = agents.filter(a => a.source === 'xmrtcouncil_supabase' || a.type === 'supabase_edge_function');
+          } else if (filterBy === 'vercel') {
+            agents = agents.filter(a => a.type === 'vercel_api' || a.source?.includes('vercel'));
+          } else if (filterBy === 'priority') {
+            agents = agents.sort((a, b) => (a.priority || 5) - (b.priority || 5));
+          }
+
+          return {
+            success: true,
+            total_agents: agents.length,
+            filter_applied: filterBy,
+            agents: agents,
+            agent_summary: agents.map(a => ({
+              name: a.name || a.display_name,
+              type: a.type,
+              status: a.status,
+              source: a.source
+            })),
+            message: `Found ${agents.length} agents matching filter: ${filterBy}`
+          };
+        } catch (error) {
+          console.error('Query ecosystem agents error:', error);
+          return {
+            success: false,
+            error: `Failed to query agents: ${error.message}`
+          };
         }
-      });
-      result = usageAnalyticsResult.error
-        ? { success: false, error: usageAnalyticsResult.error.message }
-        : { success: true, result: usageAnalyticsResult.data };
-      break;
+      }
 
-    case 'check_system_status':
-      console.log(`🏥 [${executiveName}] Check system status`);
-      const systemStatusResult = await supabase.functions.invoke('system-status', { body: {} });
-      result = systemStatusResult.error
-        ? { success: false, error: systemStatusResult.error.message }
-        : { success: true, result: systemStatusResult.data };
-      break;
+      // ====================================================================
+      // ANALYTICS & LOG MANAGEMENT TOOLS
+      // ====================================================================
+      case 'sync_function_logs':
+        console.log(`🔄 [${executiveName}] Sync function logs - ${parsedArgs.hours_back || 1}h back`);
+        const syncLogResult = await supabase.functions.invoke('sync-function-logs', {
+          body: { hours_back: Math.min(parsedArgs.hours_back || 1, 24) }
+        });
+        result = syncLogResult.error
+          ? { success: false, error: syncLogResult.error.message }
+          : { success: true, result: syncLogResult.data };
+        break;
 
-    case 'query_cron_registry':
-      console.log(`⏰ [${executiveName}] Query cron registry: ${parsedArgs?.action || 'list_all'}`);
-      const cronRegistryResult = await supabase.functions.invoke('get-cron-registry', { 
-        body: {
-          action: parsedArgs?.action || 'list_all',
-          platform: parsedArgs?.platform,
-          function_name: parsedArgs?.function_name,
-          job_name: parsedArgs?.job_name,
-          include_inactive: parsedArgs?.include_inactive,
-          time_window_hours: parsedArgs?.time_window_hours
-        }
-      });
-      result = cronRegistryResult.error
-        ? { success: false, error: cronRegistryResult.error.message }
-        : { success: true, ...cronRegistryResult.data };
-      break;
+      case 'get_function_usage_analytics':
+        console.log(`📊 [${executiveName}] Get function usage analytics`);
+        const usageAnalyticsResult = await supabase.functions.invoke('function-usage-analytics', {
+          body: {
+            function_name: parsedArgs.function_name,
+            time_window_hours: parsedArgs.time_window_hours || 24,
+            group_by: parsedArgs.group_by || 'function'
+          }
+        });
+        result = usageAnalyticsResult.error
+          ? { success: false, error: usageAnalyticsResult.error.message }
+          : { success: true, result: usageAnalyticsResult.data };
+        break;
 
-    default:
+      case 'check_system_status':
+        console.log(`🏥 [${executiveName}] Check system status`);
+        const systemStatusResult = await supabase.functions.invoke('system-status', { body: {} });
+        result = systemStatusResult.error
+          ? { success: false, error: systemStatusResult.error.message }
+          : { success: true, result: systemStatusResult.data };
+        break;
+
+      case 'query_cron_registry':
+        console.log(`⏰ [${executiveName}] Query cron registry: ${parsedArgs?.action || 'list_all'}`);
+        const cronRegistryResult = await supabase.functions.invoke('get-cron-registry', {
+          body: {
+            action: parsedArgs?.action || 'list_all',
+            platform: parsedArgs?.platform,
+            function_name: parsedArgs?.function_name,
+            job_name: parsedArgs?.job_name,
+            include_inactive: parsedArgs?.include_inactive,
+            time_window_hours: parsedArgs?.time_window_hours
+          }
+        });
+        result = cronRegistryResult.error
+          ? { success: false, error: cronRegistryResult.error.message }
+          : { success: true, ...cronRegistryResult.data };
+        break;
+
+      default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
-        result = { 
-          success: false, 
+        result = {
+          success: false,
           error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, query_cron_registry, and more.`
         };
     }
-    
+
     const executionTime = Date.now() - startTime;
-    
+
     // Add learning point if there was an error
     if (result.error && !result.learning_point) {
       result.learning_point = analyzeLearningFromError(name, result.error, parsedArgs);
     }
-    
+
     // Log function usage
     await logFunctionUsage(supabase, {
       function_name: name,
@@ -1908,16 +1950,16 @@ export async function executeToolCall(
       result_summary: result.success ? 'Tool executed successfully' : result.error,
       metadata: result.learning_point ? { learning_point: result.learning_point } : undefined
     });
-    
+
     return result;
-    
+
   } catch (error) {
     const executionTime = Date.now() - startTime;
     const errorMessage = error instanceof Error ? error.message : 'Tool execution failed';
     const learningPoint = analyzeLearningFromError(name, errorMessage, parsedArgs);
-    
+
     console.error(`❌ [${executiveName}] Tool execution error for ${name}:`, error);
-    
+
     // Log failed execution
     await logFunctionUsage(supabase, {
       function_name: name,
@@ -1929,9 +1971,9 @@ export async function executeToolCall(
       error_message: errorMessage,
       metadata: { learning_point: learningPoint }
     });
-    
-    return { 
-      success: false, 
+
+    return {
+      success: false,
       error: errorMessage,
       learning_point: learningPoint
     };
@@ -2080,7 +2122,7 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
       console.log(`📧 [${executiveName}] Google Gmail: ${parsedArgs.action}`);
       return supabase.functions.invoke('google-gmail', {
         body: parsedArgs
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message, credential_required: true }
         : res.data);
 
@@ -2088,7 +2130,7 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
       console.log(`📁 [${executiveName}] Google Drive: ${parsedArgs.action}`);
       return supabase.functions.invoke('google-drive', {
         body: parsedArgs
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message, credential_required: true }
         : res.data);
 
@@ -2096,7 +2138,7 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
       console.log(`📊 [${executiveName}] Google Sheets: ${parsedArgs.action}`);
       return supabase.functions.invoke('google-sheets', {
         body: parsedArgs
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message, credential_required: true }
         : res.data);
 
@@ -2104,7 +2146,7 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
       console.log(`📅 [${executiveName}] Google Calendar: ${parsedArgs.action}`);
       return supabase.functions.invoke('google-calendar', {
         body: parsedArgs
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message, credential_required: true }
         : res.data);
 
@@ -2112,16 +2154,16 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
       console.log(`🔐 [${executiveName}] Google Cloud Status Check`);
       return supabase.functions.invoke('google-cloud-auth', {
         body: { action: 'status' }
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message }
         : res.data);
 
     case 'introspect_function_actions':
       console.log(`🔍 [${executiveName}] Introspecting function: ${parsedArgs.function_name || 'all'}`);
       return supabase.functions.invoke('get-function-actions', {
-        body: { 
-          function_name: parsedArgs.function_name, 
-          category: parsedArgs.category 
+        body: {
+          function_name: parsedArgs.function_name,
+          category: parsedArgs.category
         }
       }).then((res: any) => res.error ? { success: false, error: res.error.message } : res.data);
 
@@ -2138,7 +2180,7 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
           maxTokens: parsedArgs.max_tokens || 4096,
           systemPrompt: parsedArgs.system_prompt
         }
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message }
         : { success: true, response: res.data?.response, model: res.data?.model, provider: 'vertex-ai-express' });
 
@@ -2164,11 +2206,11 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
         return { success: false, error: `Token count failed: ${errorText}` };
       }
       const tokenData = await tokenCountResponse.json();
-      return { 
-        success: true, 
+      return {
+        success: true,
         total_tokens: tokenData.totalTokens,
         text_length: parsedArgs.text?.length || 0,
-        model 
+        model
       };
 
     // ====================================================================
@@ -2184,15 +2226,15 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
           aspect_ratio: parsedArgs.aspect_ratio,
           count: parsedArgs.count || 1
         }
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message }
-        : { 
-            success: true, 
-            images: res.data?.images, 
-            count: res.data?.count,
-            text: res.data?.text,
-            provider: 'vertex-ai-express'
-          });
+        : {
+          success: true,
+          images: res.data?.images,
+          count: res.data?.count,
+          text: res.data?.text,
+          provider: 'vertex-ai-express'
+        });
 
     // ====================================================================
     // 🎬 VERTEX AI VIDEO GENERATION (Veo)
@@ -2207,15 +2249,15 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
           aspect_ratio: parsedArgs.aspect_ratio,
           duration_seconds: parsedArgs.duration_seconds || 5
         }
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message }
-        : { 
-            success: true, 
-            operation_id: res.data?.operationId,
-            operation_name: res.data?.operationName,
-            message: res.data?.message,
-            provider: 'vertex-ai-express'
-          });
+        : {
+          success: true,
+          operation_id: res.data?.operationId,
+          operation_name: res.data?.operationName,
+          message: res.data?.message,
+          provider: 'vertex-ai-express'
+        });
 
     case 'vertex_check_video_status':
       console.log(`📽️ [${executiveName}] Checking video status: ${parsedArgs.operation_name}`);
@@ -2224,15 +2266,15 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
           action: 'check_video_status',
           operation_name: parsedArgs.operation_name
         }
-      }).then((res: any) => res.error 
+      }).then((res: any) => res.error
         ? { success: false, error: res.error.message }
-        : { 
-            success: true, 
-            done: res.data?.done,
-            video_url: res.data?.videoUrl,
-            error: res.data?.error,
-            provider: 'vertex-ai-express'
-          });
+        : {
+          success: true,
+          done: res.data?.done,
+          video_url: res.data?.videoUrl,
+          error: res.data?.error,
+          provider: 'vertex-ai-express'
+        });
 
     default:
       return null;

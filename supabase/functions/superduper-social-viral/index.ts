@@ -1,78 +1,31 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
+
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { startUsageTracking } from "../_shared/edgeFunctionUsageLogger.ts";
+import { SuperDuperAgent } from "../_shared/superduperAgent.ts";
+import { ELIZA_TOOLS } from "../_shared/elizaTools.ts";
 
-const FUNCTION_NAME = 'superduper-social-viral';
+const SYSTEM_PROMPT = `
+You are the Social Intelligence & Viral Content Engine (SuperDuper Agent).
+Your goal is to help the XMRT DAO go viral and manage its social presence.
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-eliza-key',
+Capabilities:
+- Find trending discussions about Monero/Crypto
+- Repurpose content for different platforms (Twitter, Reddit, TikTok)
+- Generate viral post hooks and scripts
+- Analyze engagement metrics
+
+You have access to tools to help you achieve these goals. 
+Always prioritize high-impact, engaging content that aligns with XMRT's mission of privacy and freedom.
+`;
+
+const AGENT_CONFIG = {
+  agent_name: 'superduper-social-viral',
+  display_name: 'Social Intelligence & Viral Engine',
+  system_prompt: SYSTEM_PROMPT,
+  tools: ELIZA_TOOLS // Give access to all shared tools, agent will select relevant ones
 };
 
-/**
- * SuperDuper Agent: Social Intelligence & Viral Content Engine
- * 
- * Combined capabilities from:
- * - Social Media Comment Finder, Content Repurposing Master, ViralPost.AI
- * - TrendVoice AI, StoryWeaver, Shotlist Magician, ClipSmith, Meme Master
- * 
- * Core Functions:
- * - findTrendingComments, repurposeContent, generateViralPost
- * - createVideoScript, generateMeme, analyzeEngagement
- */
+const agent = new SuperDuperAgent(AGENT_CONFIG);
 
 serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
-
-  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
-
-  try {
-    let body: any = {};
-    try {
-      body = await req.json();
-    } catch {
-      // Empty body for cron triggers
-    }
-
-    const { action, params } = body;
-
-    // Early return for cron triggers
-    if (!action) {
-      console.log('🚀 Social & Viral Agent: Cron health check - OK');
-      await usageTracker.success({ result_summary: 'cron_health_check' });
-      return new Response(
-        JSON.stringify({ 
-          success: true, 
-          cron: true,
-          agent: "Social Intelligence & Viral Content Engine",
-          status: "healthy",
-          message: "Ready for social/viral tasks",
-          timestamp: new Date().toISOString()
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`🚀 Social & Viral Agent: ${action}`);
-
-    const result = {
-      message: `Social Intelligence agent executing: ${action}`,
-      status: 'success',
-      data: params
-    };
-
-    await usageTracker.success({ result_summary: `${action}_completed` });
-    return new Response(
-      JSON.stringify({ success: true, result }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error: any) {
-    await usageTracker.failure(error.message, 500);
-    return new Response(
-      JSON.stringify({ success: false, error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  }
+  return await agent.handleRequest(req);
 });

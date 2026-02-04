@@ -18,6 +18,7 @@ export interface UnifiedAPIKeyInputProps {
   onSuccess?: () => void;
   showCancel?: boolean;
   onCancel?: () => void;
+  organizationId?: string;
 }
 
 export const UnifiedAPIKeyInput: React.FC<UnifiedAPIKeyInputProps> = ({
@@ -30,7 +31,8 @@ export const UnifiedAPIKeyInput: React.FC<UnifiedAPIKeyInputProps> = ({
   secretName,
   onSuccess,
   showCancel = false,
-  onCancel
+  onCancel,
+  organizationId
 }) => {
   const [apiKey, setApiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
@@ -64,7 +66,8 @@ export const UnifiedAPIKeyInput: React.FC<UnifiedAPIKeyInputProps> = ({
         body: {
           service: serviceName,
           secret_name: secretName || `${serviceName.toUpperCase()}_API_KEY`,
-          api_key: apiKey
+          api_key: apiKey,
+          organization_id: organizationId
         }
       });
 
@@ -76,7 +79,7 @@ export const UnifiedAPIKeyInput: React.FC<UnifiedAPIKeyInputProps> = ({
       });
 
       setApiKey('');
-      
+
       // Trigger health check
       setTimeout(async () => {
         await supabase.functions.invoke('api-key-health-monitor');
@@ -107,7 +110,7 @@ export const UnifiedAPIKeyInput: React.FC<UnifiedAPIKeyInputProps> = ({
           <CardDescription>{description}</CardDescription>
         )}
       </CardHeader>
-      
+
       <CardContent className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor={`${serviceName}-key`}>API Key</Label>

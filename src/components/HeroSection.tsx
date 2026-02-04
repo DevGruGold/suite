@@ -57,11 +57,11 @@ export const HeroSection = () => {
   // Auto-rotate banners
   useEffect(() => {
     if (isPaused) return;
-    
+
     const interval = setInterval(() => {
       setCurrentBanner(prev => (prev + 1) % marketingBanners.length);
     }, 5000);
-    
+
     return () => clearInterval(interval);
   }, [isPaused]);
 
@@ -69,8 +69,10 @@ export const HeroSection = () => {
   useEffect(() => {
     const fetchStats = async () => {
       // Fetch basic counts directly from database
-      const [executions, agents, tasks, latestHealth] = await Promise.all([
-        supabase.from('eliza_activity_log').select('*', { count: 'estimated', head: true }),
+      // Fetch basic counts directly from database
+      const [functionLogs, superduperLogs, agents, tasks, latestHealth] = await Promise.all([
+        supabase.from('function_usage_logs').select('*', { count: 'estimated', head: true }),
+        supabase.from('superduper_execution_log').select('*', { count: 'estimated', head: true }),
         supabase.from('agents').select('*', { count: 'exact', head: true }).in('status', ['IDLE', 'BUSY']),
         supabase.from('tasks').select('*', { count: 'exact', head: true }).in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED']),
         // Get cached health from latest system_health_check activity log entry
@@ -87,19 +89,19 @@ export const HeroSection = () => {
       let healthScore = 100;
       let healthStatus: 'healthy' | 'degraded' | 'critical' = 'healthy';
       let healthIssues: string[] = [];
-      
+
       if (latestHealth.data?.metadata) {
         const metadata = latestHealth.data.metadata as { health_score?: number; status?: string; issues_count?: number };
         healthScore = metadata.health_score ?? 100;
-        healthStatus = metadata.status === 'critical' ? 'critical' : 
-                       metadata.status === 'degraded' ? 'degraded' : 'healthy';
+        healthStatus = metadata.status === 'critical' ? 'critical' :
+          metadata.status === 'degraded' ? 'degraded' : 'healthy';
         if (metadata.issues_count && metadata.issues_count > 0) {
           healthIssues = [`${metadata.issues_count} issue(s) detected`];
         }
       }
 
       setStats({
-        totalExecutions: executions.count || 0,
+        totalExecutions: (functionLogs.count || 0) + (superduperLogs.count || 0),
         activeAgents: agents.count || 0,
         activeTasks: tasks.count || 0,
         healthScore,
@@ -115,17 +117,17 @@ export const HeroSection = () => {
       .channel('hero-stats')
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'eliza_activity_log' }, (payload) => {
         setStats(prev => ({ ...prev, totalExecutions: prev.totalExecutions + 1 }));
-        
+
         // Update health score if this is a health check
         if (payload.new.activity_type === 'system_health_check' && payload.new.metadata) {
           const metadata = payload.new.metadata as { health_score?: number; status?: string; issues_count?: number };
           setStats(prev => ({
             ...prev,
             healthScore: metadata.health_score ?? prev.healthScore,
-            healthStatus: metadata.status === 'critical' ? 'critical' : 
-                          metadata.status === 'degraded' ? 'degraded' : 'healthy',
-            healthIssues: metadata.issues_count && metadata.issues_count > 0 
-              ? [`${metadata.issues_count} issue(s) detected`] 
+            healthStatus: metadata.status === 'critical' ? 'critical' :
+              metadata.status === 'degraded' ? 'degraded' : 'healthy',
+            healthIssues: metadata.issues_count && metadata.issues_count > 0
+              ? [`${metadata.issues_count} issue(s) detected`]
               : []
           }));
         }
@@ -156,16 +158,16 @@ export const HeroSection = () => {
     <section className="relative w-full py-4 px-4 overflow-hidden">
       {/* Background gradient */}
       <div className={`absolute inset-0 bg-gradient-to-br ${banner.gradient} transition-all duration-1000`} />
-      
+
       <div className="relative max-w-6xl mx-auto space-y-4">
         {/* Compact Marketing Banner */}
-        <div 
+        <div
           className="relative flex items-center justify-center gap-4 py-2"
           onMouseEnter={() => setIsPaused(true)}
           onMouseLeave={() => setIsPaused(false)}
         >
           {/* Left arrow */}
-          <button 
+          <button
             onClick={() => setCurrentBanner(prev => (prev - 1 + marketingBanners.length) % marketingBanners.length)}
             className="p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors shrink-0"
             aria-label="Previous banner"
@@ -183,7 +185,7 @@ export const HeroSection = () => {
           </div>
 
           {/* Right arrow */}
-          <button 
+          <button
             onClick={() => setCurrentBanner(prev => (prev + 1) % marketingBanners.length)}
             className="p-1.5 rounded-full bg-background/50 hover:bg-background/80 transition-colors shrink-0"
             aria-label="Next banner"
@@ -197,11 +199,10 @@ export const HeroSection = () => {
               <button
                 key={i}
                 onClick={() => setCurrentBanner(i)}
-                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${
-                  i === currentBanner 
-                    ? 'bg-primary w-4' 
+                className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === currentBanner
+                    ? 'bg-primary w-4'
                     : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
-                }`}
+                  }`}
                 aria-label={`Go to banner ${i + 1}`}
               />
             ))}
@@ -210,24 +211,24 @@ export const HeroSection = () => {
 
         {/* Live Statistics Strip */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          <StatCard 
+          <StatCard
             icon={<Zap className="w-5 h-5 text-primary" />}
             label={t('hero.stats.executions')}
             value={stats.totalExecutions}
             suffix="+"
           />
-          <StatCard 
+          <StatCard
             icon={<Bot className="w-5 h-5 text-emerald-500" />}
             label={t('hero.stats.agents')}
             value={stats.activeAgents}
           />
-          <HealthStatCard 
+          <HealthStatCard
             healthScore={stats.healthScore}
             healthStatus={stats.healthStatus}
             healthIssues={stats.healthIssues}
             label={t('hero.stats.health')}
           />
-          <StatCard 
+          <StatCard
             icon={<Activity className="w-5 h-5 text-amber-500" />}
             label={t('hero.stats.tasks')}
             value={stats.activeTasks}
@@ -247,7 +248,7 @@ export const HeroSection = () => {
             </div>
             <AgentStatusGrid />
           </div>
-          <ActivityPulse 
+          <ActivityPulse
             healthScore={stats.healthScore}
             onTaskClick={(taskId) => {
               // Dispatch custom event to scroll to task in pipeline

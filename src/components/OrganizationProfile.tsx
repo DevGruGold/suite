@@ -6,11 +6,12 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { 
-  Building2, Globe, Mail, Phone, Github, Server, 
-  Plus, Trash2, Save, X, Briefcase, Link2
+import {
+  Building2, Globe, Mail, Phone, Github, Server,
+  Plus, Trash2, Save, X, Briefcase, Link2, Key
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
+import { OrganizationKeysDialog } from "./OrganizationKeysDialog";
 
 interface Organization {
   id: string;
@@ -21,6 +22,7 @@ interface Organization {
   github_repo: string | null;
   mcp_server_address: string | null;
   connections: any;
+  typefully_set?: string;
 }
 
 export const OrganizationProfile = () => {
@@ -29,6 +31,11 @@ export const OrganizationProfile = () => {
   const [loading, setLoading] = useState(true);
   const [isAdding, setIsAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+
+  // Keys Dialog State
+  const [keysDialogOpen, setKeysDialogOpen] = useState(false);
+  const [selectedOrgForKeys, setSelectedOrgForKeys] = useState<Organization | null>(null);
+
   const [formData, setFormData] = useState<Partial<Organization>>({
     name: '',
     website: '',
@@ -36,6 +43,7 @@ export const OrganizationProfile = () => {
     whatsapp_number: '',
     github_repo: '',
     mcp_server_address: '',
+    typefully_set: '',
     connections: {}
   });
 
@@ -85,7 +93,7 @@ export const OrganizationProfile = () => {
         if (error) throw error;
         toast.success('Organization added');
       }
-      
+
       setIsAdding(false);
       setEditingId(null);
       setFormData({
@@ -95,6 +103,7 @@ export const OrganizationProfile = () => {
         whatsapp_number: '',
         github_repo: '',
         mcp_server_address: '',
+        typefully_set: '',
         connections: {}
       });
       fetchOrganizations();
@@ -170,50 +179,58 @@ export const OrganizationProfile = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Organization Name *</Label>
-                <Input 
-                  value={formData.name} 
-                  onChange={e => setFormData({...formData, name: e.target.value})}
+                <Input
+                  value={formData.name}
+                  onChange={e => setFormData({ ...formData, name: e.target.value })}
                   placeholder="e.g. Acme Corp"
                 />
               </div>
               <div className="space-y-2">
                 <Label>Website</Label>
-                <Input 
-                  value={formData.website || ''} 
-                  onChange={e => setFormData({...formData, website: e.target.value})}
+                <Input
+                  value={formData.website || ''}
+                  onChange={e => setFormData({ ...formData, website: e.target.value })}
                   placeholder="https://..."
                 />
               </div>
               <div className="space-y-2">
                 <Label>Email</Label>
-                <Input 
-                  value={formData.email || ''} 
-                  onChange={e => setFormData({...formData, email: e.target.value})}
+                <Input
+                  value={formData.email || ''}
+                  onChange={e => setFormData({ ...formData, email: e.target.value })}
                   placeholder="contact@company.com"
                 />
               </div>
               <div className="space-y-2">
                 <Label>WhatsApp Number</Label>
-                <Input 
-                  value={formData.whatsapp_number || ''} 
-                  onChange={e => setFormData({...formData, whatsapp_number: e.target.value})}
+                <Input
+                  value={formData.whatsapp_number || ''}
+                  onChange={e => setFormData({ ...formData, whatsapp_number: e.target.value })}
                   placeholder="+1234567890"
                 />
               </div>
               <div className="space-y-2">
                 <Label>GitHub Repo</Label>
-                <Input 
-                  value={formData.github_repo || ''} 
-                  onChange={e => setFormData({...formData, github_repo: e.target.value})}
+                <Input
+                  value={formData.github_repo || ''}
+                  onChange={e => setFormData({ ...formData, github_repo: e.target.value })}
                   placeholder="owner/repo"
                 />
               </div>
               <div className="space-y-2">
                 <Label>MCP Server Address</Label>
-                <Input 
-                  value={formData.mcp_server_address || ''} 
-                  onChange={e => setFormData({...formData, mcp_server_address: e.target.value})}
+                <Input
+                  value={formData.mcp_server_address || ''}
+                  onChange={e => setFormData({ ...formData, mcp_server_address: e.target.value })}
                   placeholder="http://localhost:3000"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Typefully Set (Social Content)</Label>
+                <Input
+                  value={formData.typefully_set || ''}
+                  onChange={e => setFormData({ ...formData, typefully_set: e.target.value })}
+                  placeholder="e.g. My Tech Brand"
                 />
               </div>
             </div>
@@ -256,6 +273,9 @@ export const OrganizationProfile = () => {
                     <Link2 className="w-4 h-4 mr-2" /> Select
                   </Button>
                 )}
+                <Button variant="ghost" size="icon" onClick={() => { setSelectedOrgForKeys(org); setKeysDialogOpen(true); }}>
+                  <Key className="w-4 h-4" />
+                </Button>
                 <Button variant="ghost" size="icon" onClick={() => startEditing(org)}>
                   <Plus className="w-4 h-4" />
                 </Button>
@@ -267,6 +287,13 @@ export const OrganizationProfile = () => {
           ))}
         </div>
       </CardContent>
-    </Card>
+
+      <OrganizationKeysDialog
+        open={keysDialogOpen}
+        onOpenChange={setKeysDialogOpen}
+        organizationId={selectedOrgForKeys?.id || null}
+        organizationName={selectedOrgForKeys?.name || ''}
+      />
+    </Card >
   );
 };

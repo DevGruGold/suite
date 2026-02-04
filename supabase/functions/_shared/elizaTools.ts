@@ -12,272 +12,305 @@
 
 
 export const ELIZA_TOOLS = [
-    // ====================================================================
-    // 🚀 STAE - SUITE TASK AUTOMATION ENGINE TOOLS
-    // ====================================================================
-    {
-      type: 'function',
-      function: {
-        name: 'create_task_from_template',
-        description: '📋 STAE: Create a new task using a predefined template. Automatically fills in checklist, required skills, priority, and stage based on template category. Use this for consistent, standardized task creation.',
-        parameters: {
-          type: 'object',
-          properties: {
-            template_name: { 
-              type: 'string', 
-              description: 'Template name: code_review, bug_fix, feature_implementation, infrastructure_check, deployment_pipeline, research_analysis, proposal_evaluation, operations_task, system_health_investigation, mining_optimization, device_integration',
-              enum: ['code_review', 'bug_fix', 'feature_implementation', 'infrastructure_check', 'deployment_pipeline', 'research_analysis', 'proposal_evaluation', 'operations_task', 'system_health_investigation', 'mining_optimization', 'device_integration']
-            },
-            title: { type: 'string', description: 'Task title - will be substituted into template description' },
-            description: { type: 'string', description: 'Optional: Override template description with custom text' },
-            priority: { type: 'number', description: 'Optional: Override default priority (1-10, higher = more urgent)' },
-            auto_assign: { type: 'boolean', description: 'Optional: Automatically assign to best-matching agent (default: true)' }
+  // ====================================================================
+  // 🚀 STAE - SUITE TASK AUTOMATION ENGINE TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'create_task_from_template',
+      description: '📋 STAE: Create a new task using a predefined template. Automatically fills in checklist, required skills, priority, and stage based on template category. Use this for consistent, standardized task creation.',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: {
+            type: 'string',
+            description: 'Template name: code_review, bug_fix, feature_implementation, infrastructure_check, deployment_pipeline, research_analysis, proposal_evaluation, operations_task, system_health_investigation, mining_optimization, device_integration',
+            enum: ['code_review', 'bug_fix', 'feature_implementation', 'infrastructure_check', 'deployment_pipeline', 'research_analysis', 'proposal_evaluation', 'operations_task', 'system_health_investigation', 'mining_optimization', 'device_integration']
           },
-          required: ['template_name', 'title']
-        }
+          title: { type: 'string', description: 'Task title - will be substituted into template description' },
+          description: { type: 'string', description: 'Optional: Override template description with custom text' },
+          priority: { type: 'number', description: 'Optional: Override default priority (1-10, higher = more urgent)' },
+          auto_assign: { type: 'boolean', description: 'Optional: Automatically assign to best-matching agent (default: true)' }
+        },
+        required: ['template_name', 'title']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'smart_assign_task',
-        description: '🤖 STAE: Intelligently assign a task to the best-matching agent using weighted scoring: skills (40%), workload (30%), success rate (20%), activity (10%). Use this for optimal agent-task matching.',
-        parameters: {
-          type: 'object',
-          properties: {
-            task_id: { type: 'string', description: 'UUID of the task to assign' },
-            prefer_agent_id: { type: 'string', description: 'Optional: Prefer this agent if they meet minimum skill criteria' },
-            min_skill_match: { type: 'number', description: 'Optional: Minimum skill overlap required (0-1, default: 0.3 = 30%)' }
-          },
-          required: ['task_id']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'smart_assign_task',
+      description: '🤖 STAE: Intelligently assign a task to the best-matching agent using weighted scoring: skills (40%), workload (30%), success rate (20%), activity (10%). Use this for optimal agent-task matching.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'UUID of the task to assign' },
+          prefer_agent_id: { type: 'string', description: 'Optional: Prefer this agent if they meet minimum skill criteria' },
+          min_skill_match: { type: 'number', description: 'Optional: Minimum skill overlap required (0-1, default: 0.3 = 30%)' }
+        },
+        required: ['task_id']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_automation_metrics',
-        description: '📊 STAE: Get comprehensive automation coverage metrics including template usage rate, auto-assignment rate, knowledge extraction rate, agent utilization, and average completion time.',
-        parameters: {
-          type: 'object',
-          properties: {
-            time_window_hours: { type: 'number', description: 'Optional: Time window for metrics (default: 24 hours)' },
-            breakdown_by: { type: 'string', enum: ['category', 'agent', 'template'], description: 'Optional: Group metrics by category, agent, or template' }
-          },
-          required: []
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_automation_metrics',
+      description: '📊 STAE: Get comprehensive automation coverage metrics including template usage rate, auto-assignment rate, knowledge extraction rate, agent utilization, and average completion time.',
+      parameters: {
+        type: 'object',
+        properties: {
+          time_window_hours: { type: 'number', description: 'Optional: Time window for metrics (default: 24 hours)' },
+          breakdown_by: { type: 'string', enum: ['category', 'agent', 'template'], description: 'Optional: Group metrics by category, agent, or template' }
+        },
+        required: []
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'update_task_checklist',
-        description: '✅ STAE Phase 2: Update a task checklist item status. Mark items as completed or uncompleted to track progress.',
-        parameters: {
-          type: 'object',
-          properties: {
-            task_id: { type: 'string', description: 'UUID of the task' },
-            item_index: { type: 'number', description: 'Index of checklist item (0-based)' },
-            item_text: { type: 'string', description: 'Alternative: exact text of checklist item' },
-            completed: { type: 'boolean', description: 'Whether item is completed (true) or not (false)' }
-          },
-          required: ['task_id', 'completed']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'update_task_checklist',
+      description: '✅ STAE Phase 2: Update a task checklist item status. Mark items as completed or uncompleted to track progress.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'UUID of the task' },
+          item_index: { type: 'number', description: 'Index of checklist item (0-based)' },
+          item_text: { type: 'string', description: 'Alternative: exact text of checklist item' },
+          completed: { type: 'boolean', description: 'Whether item is completed (true) or not (false)' }
+        },
+        required: ['task_id', 'completed']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'resolve_blocked_task',
-        description: '🔓 STAE Phase 2: Attempt to auto-resolve a blocked task. Analyzes blocker reason and applies resolution rules for github, api, dependency issues.',
-        parameters: {
-          type: 'object',
-          properties: {
-            task_id: { type: 'string', description: 'UUID of the blocked task to resolve' }
-          },
-          required: ['task_id']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'resolve_blocked_task',
+      description: '🔓 STAE Phase 2: Attempt to auto-resolve a blocked task. Analyzes blocker reason and applies resolution rules for github, api, dependency issues.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'UUID of the blocked task to resolve' }
+        },
+        required: ['task_id']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_stae_recommendations',
-        description: '💡 STAE Phase 3: Get optimization recommendations for agents, templates, and workload. Identifies low performers, skill gaps, and imbalances.',
-        parameters: {
-          type: 'object',
-          properties: {},
-          required: []
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_stae_recommendations',
+      description: '💡 STAE Phase 3: Get optimization recommendations for agents, templates, and workload. Identifies low performers, skill gaps, and imbalances.',
+      parameters: {
+        type: 'object',
+        properties: {},
+        required: []
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'advance_task_stage',
-        description: '⏩ STAE Phase 2: Manually advance a task to the next pipeline stage (DISCUSS→PLAN→EXECUTE→VERIFY→INTEGRATE).',
-        parameters: {
-          type: 'object',
-          properties: {
-            task_id: { type: 'string', description: 'UUID of the task to advance' },
-            target_stage: { type: 'string', enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'], description: 'Optional: specific stage to advance to' }
-          },
-          required: ['task_id']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'advance_task_stage',
+      description: '⏩ STAE Phase 2: Manually advance a task to the next pipeline stage (DISCUSS→PLAN→EXECUTE→VERIFY→INTEGRATE).',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'UUID of the task to advance' },
+          target_stage: { type: 'string', enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'], description: 'Optional: specific stage to advance to' }
+        },
+        required: ['task_id']
       }
-    },
+    }
+  },
 
-    // ====================================================================
-    // 🎯 CONVERSATIONAL USER ACQUISITION TOOLS
-    // ====================================================================
-    {
-      type: 'function',
-      function: {
-        name: 'qualify_lead',
-        description: '🎯 Score a potential customer based on conversation signals (budget, urgency, company size, use case complexity). Returns lead score 0-100 and qualification level.',
-        parameters: {
-          type: 'object',
-          properties: {
-            session_key: { type: 'string', description: 'Current conversation session key' },
-            user_signals: {
-              type: 'object',
-              description: 'Signals detected from conversation',
-              properties: {
-                mentioned_budget: { type: 'boolean', description: 'User mentioned budget or willingness to pay' },
-                has_urgent_need: { type: 'boolean', description: 'User expressed urgency or time pressure' },
-                company_mentioned: { type: 'string', description: 'Company name if mentioned' },
-                use_case_complexity: { type: 'string', enum: ['simple', 'moderate', 'complex'], description: 'Complexity of their use case' }
-              }
+  {
+    type: 'function',
+    function: {
+      name: 'delegate_to_specialist',
+      description: '🤝 MANAGER-SPECIALIST PROTOCOL: Delegate a complex sub-task to a SuperDuper Specialist Agent. Use this when you (the Manager) need specific expertise (e.g., "social-viral" for tweets, "code-architect" for system design, "finance" for analysis).',
+      parameters: {
+        type: 'object',
+        properties: {
+          specialist_role: {
+            type: 'string',
+            enum: [
+              'social-viral',
+              'code-architect',
+              'business-growth',
+              'finance-investment',
+              'design-brand',
+              'content-media',
+              'communication-outreach',
+              'research-intelligence',
+              'integration',
+              'development-coach',
+              'domain-experts'
+            ],
+            description: 'The specific specialist role to handle this task.'
+          },
+          task_description: { type: 'string', description: 'Clear, concise instructions for the specialist.' },
+          context_data: { type: 'object', description: 'Any necessary JSON context (previous results, code snippets, user requirements) for the specialist to do their job.' }
+        },
+        required: ['specialist_role', 'task_description']
+      }
+    }
+  },
+
+  // ====================================================================
+  // 🎯 CONVERSATIONAL USER ACQUISITION TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'qualify_lead',
+      description: '🎯 Score a potential customer based on conversation signals (budget, urgency, company size, use case complexity). Returns lead score 0-100 and qualification level.',
+      parameters: {
+        type: 'object',
+        properties: {
+          session_key: { type: 'string', description: 'Current conversation session key' },
+          user_signals: {
+            type: 'object',
+            description: 'Signals detected from conversation',
+            properties: {
+              mentioned_budget: { type: 'boolean', description: 'User mentioned budget or willingness to pay' },
+              has_urgent_need: { type: 'boolean', description: 'User expressed urgency or time pressure' },
+              company_mentioned: { type: 'string', description: 'Company name if mentioned' },
+              use_case_complexity: { type: 'string', enum: ['simple', 'moderate', 'complex'], description: 'Complexity of their use case' }
             }
-          },
-          required: ['session_key']
-        }
+          }
+        },
+        required: ['session_key']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'identify_service_interest',
-        description: '🔍 Analyze user message to detect interest in specific monetized services. Returns service names with confidence scores.',
-        parameters: {
-          type: 'object',
-          properties: {
-            user_message: { type: 'string', description: 'Current user message to analyze' },
-            conversation_history: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } }, description: 'Optional: recent conversation messages for context' },
-            session_key: { type: 'string', description: 'Session key to track services interested in' }
-          },
-          required: ['user_message']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'identify_service_interest',
+      description: '🔍 Analyze user message to detect interest in specific monetized services. Returns service names with confidence scores.',
+      parameters: {
+        type: 'object',
+        properties: {
+          user_message: { type: 'string', description: 'Current user message to analyze' },
+          conversation_history: { type: 'array', items: { type: 'object', properties: { role: { type: 'string' }, content: { type: 'string' } } }, description: 'Optional: recent conversation messages for context' },
+          session_key: { type: 'string', description: 'Session key to track services interested in' }
+        },
+        required: ['user_message']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'suggest_tier_based_on_needs',
-        description: '💡 Recommend optimal pricing tier based on estimated usage and budget. Returns tier recommendation with reasoning.',
-        parameters: {
-          type: 'object',
-          properties: {
-            estimated_monthly_usage: { type: 'number', description: 'Estimated API calls per month' },
-            budget_range: { type: 'string', enum: ['budget-conscious', 'moderate', 'premium', 'enterprise'], description: 'User budget category' },
-            feature_requirements: { type: 'array', items: { type: 'string' }, description: 'Optional: specific features needed' }
-          },
-          required: ['estimated_monthly_usage', 'budget_range']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'suggest_tier_based_on_needs',
+      description: '💡 Recommend optimal pricing tier based on estimated usage and budget. Returns tier recommendation with reasoning.',
+      parameters: {
+        type: 'object',
+        properties: {
+          estimated_monthly_usage: { type: 'number', description: 'Estimated API calls per month' },
+          budget_range: { type: 'string', enum: ['budget-conscious', 'moderate', 'premium', 'enterprise'], description: 'User budget category' },
+          feature_requirements: { type: 'array', items: { type: 'string' }, description: 'Optional: specific features needed' }
+        },
+        required: ['estimated_monthly_usage', 'budget_range']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'create_user_profile_from_session',
-        description: '👤 Convert anonymous session to identified user profile. Collects email and links session to user_profiles table.',
-        parameters: {
-          type: 'object',
-          properties: {
-            session_key: { type: 'string', description: 'Current session key' },
-            email: { type: 'string', format: 'email', description: 'User email address' }
-          },
-          required: ['session_key', 'email']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_user_profile_from_session',
+      description: '👤 Convert anonymous session to identified user profile. Collects email and links session to user_profiles table.',
+      parameters: {
+        type: 'object',
+        properties: {
+          session_key: { type: 'string', description: 'Current session key' },
+          email: { type: 'string', format: 'email', description: 'User email address' }
+        },
+        required: ['session_key', 'email']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'generate_stripe_payment_link',
-        description: '💳 Generate Stripe checkout link for tier upgrade. Returns shareable payment URL with optional trial period.',
-        parameters: {
-          type: 'object',
-          properties: {
-            customer_email: { type: 'string', format: 'email', description: 'Customer email' },
-            tier: { type: 'string', enum: ['basic', 'pro', 'enterprise'], description: 'Tier to purchase' },
-            service_name: { type: 'string', description: 'Service being purchased' },
-            trial_days: { type: 'number', description: 'Optional: number of trial days (default 0)' },
-            session_key: { type: 'string', description: 'Session key for tracking conversion' },
-            api_key: { type: 'string', description: 'API key to upgrade after payment' }
-          },
-          required: ['customer_email', 'tier', 'service_name']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'generate_stripe_payment_link',
+      description: '💳 Generate Stripe checkout link for tier upgrade. Returns shareable payment URL with optional trial period.',
+      parameters: {
+        type: 'object',
+        properties: {
+          customer_email: { type: 'string', format: 'email', description: 'Customer email' },
+          tier: { type: 'string', enum: ['basic', 'pro', 'enterprise'], description: 'Tier to purchase' },
+          service_name: { type: 'string', description: 'Service being purchased' },
+          trial_days: { type: 'number', description: 'Optional: number of trial days (default 0)' },
+          session_key: { type: 'string', description: 'Session key for tracking conversion' },
+          api_key: { type: 'string', description: 'API key to upgrade after payment' }
+        },
+        required: ['customer_email', 'tier', 'service_name']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'check_onboarding_progress',
-        description: '📊 Track user activation milestones (API key received, first call, integration complete, value realized).',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to check progress for' }
-          },
-          required: ['api_key']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'check_onboarding_progress',
+      description: '📊 Track user activation milestones (API key received, first call, integration complete, value realized).',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to check progress for' }
+        },
+        required: ['api_key']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'send_usage_alert',
-        description: '⚠️ Notify user about quota usage (75% warning, exceeded, or upsell opportunity).',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to check usage for' },
-            alert_type: { type: 'string', enum: ['quota_warning', 'quota_exceeded', 'upsell'], description: 'Type of alert to send' }
-          },
-          required: ['api_key', 'alert_type']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'send_usage_alert',
+      description: '⚠️ Notify user about quota usage (75% warning, exceeded, or upsell opportunity).',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to check usage for' },
+          alert_type: { type: 'string', enum: ['quota_warning', 'quota_exceeded', 'upsell'], description: 'Type of alert to send' }
+        },
+        required: ['api_key', 'alert_type']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'link_api_key_to_conversation',
-        description: '🔗 Associate an API key with the current conversation session for attribution tracking.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to link' },
-            session_key: { type: 'string', description: 'Current session key' }
-          },
-          required: ['api_key', 'session_key']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'link_api_key_to_conversation',
+      description: '🔗 Associate an API key with the current conversation session for attribution tracking.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to link' },
+          session_key: { type: 'string', description: 'Current session key' }
+        },
+        required: ['api_key', 'session_key']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'apply_retention_discount',
-        description: '🎁 Offer discount to at-risk customer to prevent churn.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key for customer' },
-            discount_percent: { type: 'number', description: 'Discount percentage (e.g., 20 for 20% off)' },
-            duration_months: { type: 'number', description: 'How many months discount applies' }
-          },
-          required: ['api_key', 'discount_percent', 'duration_months']
-        }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'apply_retention_discount',
+      description: '🎁 Offer discount to at-risk customer to prevent churn.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key for customer' },
+          discount_percent: { type: 'number', description: 'Discount percentage (e.g., 20 for 20% off)' },
+          duration_months: { type: 'number', description: 'How many months discount applies' }
+        },
+        required: ['api_key', 'discount_percent', 'duration_months']
+      }
     }
   },
   {
@@ -337,444 +370,444 @@ export const ELIZA_TOOLS = [
     }
   },
 
-    // ====================================================================
-    // 💰 REVENUE GENERATION TOOLS
-    // ====================================================================
-    {
-      type: 'function',
-      function: {
-        name: 'generate_service_api_key',
-        description: '💰 Generate a new API key for a monetized service with tiered access control. Tiers: free (100/mo), basic ($10, 1K/mo), pro ($50, 10K/mo), enterprise ($500, unlimited).',
-        parameters: {
-          type: 'object',
-          properties: {
-            service_name: { type: 'string', description: 'Service to monetize (e.g., "uspto-patent-mcp", "lovable-chat", "python-executor")' },
-            tier: { type: 'string', enum: ['free', 'basic', 'pro', 'enterprise'], description: 'Access tier' },
-            owner_email: { type: 'string', format: 'email', description: 'Customer email address' },
-            owner_name: { type: 'string', description: 'Optional customer name' }
-          },
-          required: ['service_name', 'tier', 'owner_email']
+  // ====================================================================
+  // 💰 REVENUE GENERATION TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'generate_service_api_key',
+      description: '💰 Generate a new API key for a monetized service with tiered access control. Tiers: free (100/mo), basic ($10, 1K/mo), pro ($50, 10K/mo), enterprise ($500, unlimited).',
+      parameters: {
+        type: 'object',
+        properties: {
+          service_name: { type: 'string', description: 'Service to monetize (e.g., "uspto-patent-mcp", "lovable-chat", "python-executor")' },
+          tier: { type: 'string', enum: ['free', 'basic', 'pro', 'enterprise'], description: 'Access tier' },
+          owner_email: { type: 'string', format: 'email', description: 'Customer email address' },
+          owner_name: { type: 'string', description: 'Optional customer name' }
+        },
+        required: ['service_name', 'tier', 'owner_email']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'validate_service_api_key',
+      description: 'Check if an API key is valid, active, and has remaining quota. Returns tier, quota remaining, and validation status.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to validate' }
+        },
+        required: ['api_key']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'track_service_usage',
+      description: 'Log API usage and update quota for a customer. Automatically increments usage counter and logs metadata.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'Customer API key' },
+          service_name: { type: 'string', description: 'Service being used' },
+          endpoint: { type: 'string', description: 'API endpoint called' },
+          tokens_used: { type: 'number', description: 'Optional: number of tokens/credits consumed' },
+          response_time_ms: { type: 'number', description: 'Optional: response time in milliseconds' },
+          status_code: { type: 'number', description: 'Optional: HTTP status code' }
+        },
+        required: ['api_key', 'service_name', 'endpoint']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_service_usage_stats',
+      description: 'Get detailed usage statistics for a customer API key including quota remaining, recent usage, and tier info.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to check' }
+        },
+        required: ['api_key']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'upgrade_service_tier',
+      description: 'Upgrade a customer to a higher tier (free → basic → pro → enterprise). Automatically updates quota.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to upgrade' },
+          new_tier: { type: 'string', enum: ['basic', 'pro', 'enterprise'], description: 'New tier level' }
+        },
+        required: ['api_key', 'new_tier']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'suspend_service_api_key',
+      description: 'Suspend an API key for non-payment, abuse, or other reasons. Key becomes inactive immediately.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to suspend' },
+          reason: { type: 'string', description: 'Reason for suspension' }
+        },
+        required: ['api_key', 'reason']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'calculate_monthly_revenue',
+      description: 'Generate comprehensive revenue report including MRR, customer count, tier breakdown, top service, and usage stats.',
+      parameters: {
+        type: 'object',
+        properties: {
+          start_date: { type: 'string', format: 'date-time', description: 'Optional: start of reporting period' },
+          end_date: { type: 'string', format: 'date-time', description: 'Optional: end of reporting period' }
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'validate_service_api_key',
-        description: 'Check if an API key is valid, active, and has remaining quota. Returns tier, quota remaining, and validation status.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to validate' }
-          },
-          required: ['api_key']
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_service_invoice',
+      description: 'Generate a monthly invoice for a customer based on their tier and usage.',
+      parameters: {
+        type: 'object',
+        properties: {
+          api_key: { type: 'string', description: 'API key to invoice' }
+        },
+        required: ['api_key']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_top_service_customers',
+      description: 'Get list of highest-value customers sorted by tier and usage. Useful for identifying upsell opportunities.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Number of top customers to return (default 10)' }
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'track_service_usage',
-        description: 'Log API usage and update quota for a customer. Automatically increments usage counter and logs metadata.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'Customer API key' },
-            service_name: { type: 'string', description: 'Service being used' },
-            endpoint: { type: 'string', description: 'API endpoint called' },
-            tokens_used: { type: 'number', description: 'Optional: number of tokens/credits consumed' },
-            response_time_ms: { type: 'number', description: 'Optional: response time in milliseconds' },
-            status_code: { type: 'number', description: 'Optional: HTTP status code' }
+    }
+  },
+  // Workflow Template Manager Tools
+  {
+    type: 'function',
+    function: {
+      name: 'execute_workflow_template',
+      description: '🔄 Execute a pre-built workflow template by name with custom parameters. Categories: Revenue (acquire_new_customer, upsell_existing_customer, monthly_billing_cycle, churn_prevention), Marketing (content_campaign, influencer_outreach), Financial (treasury_health_check, execute_buyback), Technical Excellence (auto_fix_codebase, code_quality_audit, automated_testing_pipeline), Optimization (modify_edge_function, performance_optimization_cycle, database_optimization_workflow), Knowledge Management (documentation_generation_workflow, knowledge_graph_expansion), Community Growth (dao_governance_cycle, contributor_onboarding_workflow), Ecosystem Evolution (create_new_microservice, feature_development_pipeline), Meta (learn_from_failures, diagnose_workflow_failure).',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: {
+            type: 'string',
+            enum: [
+              // Revenue workflows
+              'acquire_new_customer',
+              'upsell_existing_customer',
+              'monthly_billing_cycle',
+              'churn_prevention',
+              // Marketing workflows
+              'content_campaign',
+              'influencer_outreach',
+              // Financial workflows
+              'treasury_health_check',
+              'execute_buyback',
+              // Technical excellence workflows
+              'auto_fix_codebase',
+              'code_quality_audit',
+              'automated_testing_pipeline',
+              // Optimization workflows
+              'modify_edge_function',
+              'performance_optimization_cycle',
+              'database_optimization_workflow',
+              // Knowledge management workflows
+              'documentation_generation_workflow',
+              'knowledge_graph_expansion',
+              // Community growth workflows
+              'dao_governance_cycle',
+              'contributor_onboarding_workflow',
+              // Ecosystem evolution workflows
+              'create_new_microservice',
+              'feature_development_pipeline',
+              // Meta workflows
+              'learn_from_failures',
+              'diagnose_workflow_failure',
+              // Legacy/governance workflows
+              'autonomous_governance_proposal_evaluation',
+              'proactive_system_anomaly_detection_and_resolution',
+              'community_engagement_sentiment_analysis_and_response',
+              'developer_onboarding_and_contribution_guidance',
+              'competitive_landscape_analysis_and_reporting',
+              'documentation_generation_and_maintenance',
+              'agent_performance_review_and_optimization'
+            ],
+            description: 'Name of the workflow template to execute'
           },
-          required: ['api_key', 'service_name', 'endpoint']
-        }
+          params: {
+            type: 'object',
+            description: 'Template-specific parameters (e.g., {"email":"customer@example.com","tier":"pro","service_name":"uspto-patent-mcp"})'
+          }
+        },
+        required: ['template_name']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_service_usage_stats',
-        description: 'Get detailed usage statistics for a customer API key including quota remaining, recent usage, and tier info.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to check' }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'diagnose_workflow_failure',
+      description: '🔍 Diagnose why a workflow is failing by analyzing execution history, error patterns, and edge function logs. Returns root cause analysis, affected functions, severity assessment, and actionable remediation recommendations.',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: {
+            type: 'string',
+            description: 'Name of the failing workflow template to diagnose (e.g., "acquire_new_customer")'
           },
-          required: ['api_key']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'upgrade_service_tier',
-        description: 'Upgrade a customer to a higher tier (free → basic → pro → enterprise). Automatically updates quota.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to upgrade' },
-            new_tier: { type: 'string', enum: ['basic', 'pro', 'enterprise'], description: 'New tier level' }
+          time_window_days: {
+            type: 'number',
+            description: 'Number of days of execution history to analyze. Default: 7',
+            default: 7
           },
-          required: ['api_key', 'new_tier']
-        }
+          include_logs: {
+            type: 'boolean',
+            description: 'Whether to fetch detailed edge function logs for affected functions. Default: true',
+            default: true
+          }
+        },
+        required: ['template_name']
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'suspend_service_api_key',
-        description: 'Suspend an API key for non-payment, abuse, or other reasons. Key becomes inactive immediately.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to suspend' },
-            reason: { type: 'string', description: 'Reason for suspension' }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_workflow_templates',
+      description: '📋 Get all available workflow templates with success rates, execution counts, and descriptions. Filter by category (revenue, marketing, financial, optimization).',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            enum: ['revenue', 'marketing', 'financial', 'optimization'],
+            description: 'Optional: filter templates by category'
           },
-          required: ['api_key', 'reason']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'calculate_monthly_revenue',
-        description: 'Generate comprehensive revenue report including MRR, customer count, tier breakdown, top service, and usage stats.',
-        parameters: {
-          type: 'object',
-          properties: {
-            start_date: { type: 'string', format: 'date-time', description: 'Optional: start of reporting period' },
-            end_date: { type: 'string', format: 'date-time', description: 'Optional: end of reporting period' }
+          active_only: {
+            type: 'boolean',
+            description: 'Only show active templates (default: true)'
           }
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'create_service_invoice',
-        description: 'Generate a monthly invoice for a customer based on their tier and usage.',
-        parameters: {
-          type: 'object',
-          properties: {
-            api_key: { type: 'string', description: 'API key to invoice' }
-          },
-          required: ['api_key']
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_workflow_template',
+      description: '🔍 Get detailed information about a specific workflow template including all steps and configuration.',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: { type: 'string', description: 'Name of the template to retrieve' }
+        },
+        required: ['template_name']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_workflow_analytics',
+      description: '📊 Get execution analytics for workflow templates including success rate, average duration, and recent execution history.',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: { type: 'string', description: 'Optional: specific template to analyze' },
+          limit: { type: 'number', description: 'Number of recent executions to include (default 10)' }
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_top_service_customers',
-        description: 'Get list of highest-value customers sorted by tier and usage. Useful for identifying upsell opportunities.',
-        parameters: {
-          type: 'object',
-          properties: {
-            limit: { type: 'number', description: 'Number of top customers to return (default 10)' }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'create_workflow_template',
+      description: '🆕 Create a new custom workflow template with defined steps and configuration.',
+      parameters: {
+        type: 'object',
+        properties: {
+          template_name: { type: 'string', description: 'Unique name for the template' },
+          category: {
+            type: 'string',
+            enum: ['revenue', 'marketing', 'financial', 'optimization'],
+            description: 'Template category'
+          },
+          description: { type: 'string', description: 'Description of what the workflow does' },
+          steps: {
+            type: 'array',
+            items: { type: 'object', properties: { type: { type: 'string' }, name: { type: 'string' }, config: { type: 'object' } } },
+            description: 'Array of workflow steps with type, name, and configuration'
+          },
+          tags: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Tags for searchability and organization'
+          }
+        },
+        required: ['template_name', 'category', 'description', 'steps']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_function_usage_analytics',
+      description: 'Query historical edge function usage patterns. See which functions you and other executives use most, success rates, common use cases, and execution patterns. Use this to learn from past behavior and make informed decisions about which functions to call.',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: { type: 'string', description: 'Optional: specific function to analyze' },
+          executive_name: { type: 'string', description: 'Optional: filter by CSO, CTO, CIO, or CAO' },
+          time_period_hours: { type: 'number', description: 'Look back period in hours (default 168 = 1 week)' },
+          min_usage_count: { type: 'number', description: 'Only show functions used at least N times' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'propose_new_edge_function',
+      description: 'Propose a new edge function to the Executive Council. IMPORTANT: Before proposing, use list_function_proposals to check if the function already exists. If a function is already approved, use invoke_edge_function to call it directly instead of re-proposing. Requires 3/4 executive votes for approval. Previously rejected functions can be re-proposed with improvements.',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: { type: 'string', description: 'Name for the new function (kebab-case)' },
+          description: { type: 'string', description: 'What this function does' },
+          category: { type: 'string', description: 'Category (ai, mining, github, code, analytics, etc.)' },
+          rationale: { type: 'string', description: 'Why we need this function' },
+          use_cases: { type: 'array', items: { type: 'string' }, description: 'Specific use cases' },
+          implementation_outline: { type: 'string', description: 'High-level implementation approach' }
+        },
+        required: ['function_name', 'description', 'category', 'rationale', 'use_cases']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'vote_on_function_proposal',
+      description: 'Cast your vote on a pending edge function proposal. Requires 3/4 executive approval for deployment. Your vote and reasoning become part of the permanent record.',
+      parameters: {
+        type: 'object',
+        properties: {
+          proposal_id: { type: 'string', description: 'UUID of the proposal' },
+          vote: { type: 'string', enum: ['approve', 'reject', 'abstain'], description: 'Your vote' },
+          reasoning: { type: 'string', description: 'Detailed reasoning for your vote' }
+        },
+        required: ['proposal_id', 'vote', 'reasoning']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_function_proposals',
+      description: 'List all edge function proposals (pending, voting, approved, deployed). See what new capabilities are being proposed and vote on them.',
+      parameters: {
+        type: 'object',
+        properties: {
+          status: { type: 'string', enum: ['pending', 'voting', 'approved', 'rejected', 'deployed'], description: 'Filter by status' }
+        }
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'invoke_edge_function',
+      description: '🌐 UNIVERSAL EDGE FUNCTION INVOKER - Call ANY of 125+ Supabase edge functions dynamically. This is your primary tool for accessing specialized capabilities. Categories: AI (10+), SuperDuper agents (12), code execution (6), GitHub (5+), task management (8), knowledge (7), monitoring (10+), mining (8), autonomous systems (12+), governance (7), ecosystem (8), posting daemons (7), database (3), analytics (3). Examples: superduper-code-architect for code review, python-executor for data analysis, ecosystem-monitor for health checks, autonomous-code-fixer for self-healing. Use list_available_functions first to discover what\'s available.',
+      parameters: {
+        type: 'object',
+        properties: {
+          function_name: {
+            type: 'string',
+            description: 'Name of the edge function to invoke (e.g., "python-executor", "github-integration", "system-diagnostics")'
+          },
+          payload: {
+            type: 'object',
+            description: 'JSON payload to send to the function. Structure depends on the target function.'
+          }
+        },
+        required: ['function_name', 'payload']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'list_available_functions',
+      description: '📋 LIST ALL 125+ EDGE FUNCTIONS - Returns complete registry of all available edge functions with descriptions, capabilities, categories, and examples. Categories include: ai (10+), superduper (12), code-execution (6), github (5+), task-management (8), knowledge (7), monitoring (10+), mining (8), autonomous (12+), governance (7), ecosystem (8), database (3), deployment (5). Use this FIRST when you need to discover available capabilities or find the right function for a task. Each function includes example use cases.',
+      parameters: {
+        type: 'object',
+        properties: {
+          category: {
+            type: 'string',
+            description: 'Optional: Filter by category (ai, superduper, code-execution, github, task-management, knowledge, monitoring, mining, autonomous, governance, ecosystem, database, deployment)'
           }
         }
       }
-    },
-    // Workflow Template Manager Tools
-    {
-      type: 'function',
-      function: {
-        name: 'execute_workflow_template',
-        description: '🔄 Execute a pre-built workflow template by name with custom parameters. Categories: Revenue (acquire_new_customer, upsell_existing_customer, monthly_billing_cycle, churn_prevention), Marketing (content_campaign, influencer_outreach), Financial (treasury_health_check, execute_buyback), Technical Excellence (auto_fix_codebase, code_quality_audit, automated_testing_pipeline), Optimization (modify_edge_function, performance_optimization_cycle, database_optimization_workflow), Knowledge Management (documentation_generation_workflow, knowledge_graph_expansion), Community Growth (dao_governance_cycle, contributor_onboarding_workflow), Ecosystem Evolution (create_new_microservice, feature_development_pipeline), Meta (learn_from_failures, diagnose_workflow_failure).',
-        parameters: {
-          type: 'object',
-          properties: {
-            template_name: { 
-              type: 'string', 
-              enum: [
-                // Revenue workflows
-                'acquire_new_customer', 
-                'upsell_existing_customer', 
-                'monthly_billing_cycle', 
-                'churn_prevention',
-                // Marketing workflows
-                'content_campaign', 
-                'influencer_outreach',
-                // Financial workflows
-                'treasury_health_check', 
-                'execute_buyback',
-                // Technical excellence workflows
-                'auto_fix_codebase',
-                'code_quality_audit',
-                'automated_testing_pipeline',
-                // Optimization workflows
-                'modify_edge_function',
-                'performance_optimization_cycle',
-                'database_optimization_workflow',
-                // Knowledge management workflows
-                'documentation_generation_workflow',
-                'knowledge_graph_expansion',
-                // Community growth workflows
-                'dao_governance_cycle',
-                'contributor_onboarding_workflow',
-                // Ecosystem evolution workflows
-                'create_new_microservice',
-                'feature_development_pipeline',
-                // Meta workflows
-                'learn_from_failures',
-                'diagnose_workflow_failure',
-                // Legacy/governance workflows
-                'autonomous_governance_proposal_evaluation',
-                'proactive_system_anomaly_detection_and_resolution',
-                'community_engagement_sentiment_analysis_and_response',
-                'developer_onboarding_and_contribution_guidance',
-                'competitive_landscape_analysis_and_reporting',
-                'documentation_generation_and_maintenance',
-                'agent_performance_review_and_optimization'
-              ],
-              description: 'Name of the workflow template to execute'
-            },
-            params: { 
-              type: 'object',
-              description: 'Template-specific parameters (e.g., {"email":"customer@example.com","tier":"pro","service_name":"uspto-patent-mcp"})'
-            }
-          },
-          required: ['template_name']
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_code_execution_lessons',
+      description: 'Retrieve lessons learned from recent code executions. Use this to learn what code patterns work vs fail, and improve your code generation. Returns: recent execution results, auto-fix patterns, success/failure analysis.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Number of recent executions to analyze (default 10)' },
+          include_failures_only: { type: 'boolean', description: 'Only include failed executions to learn from mistakes' }
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'diagnose_workflow_failure',
-        description: '🔍 Diagnose why a workflow is failing by analyzing execution history, error patterns, and edge function logs. Returns root cause analysis, affected functions, severity assessment, and actionable remediation recommendations.',
-        parameters: {
-          type: 'object',
-          properties: {
-            template_name: { 
-              type: 'string', 
-              description: 'Name of the failing workflow template to diagnose (e.g., "acquire_new_customer")'
-            },
-            time_window_days: {
-              type: 'number',
-              description: 'Number of days of execution history to analyze. Default: 7',
-              default: 7
-            },
-            include_logs: {
-              type: 'boolean',
-              description: 'Whether to fetch detailed edge function logs for affected functions. Default: true',
-              default: true
-            }
-          },
-          required: ['template_name']
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'get_my_feedback',
+      description: 'Retrieve feedback about YOUR recent tool calls, code executions, and learning points. Use this to learn from mistakes and improve future performance. Returns feedback entries with learning points, original context, and fix results. You can acknowledge feedback to mark it as reviewed.',
+      parameters: {
+        type: 'object',
+        properties: {
+          limit: { type: 'number', description: 'Number of feedback items to retrieve (default 10)' },
+          unacknowledged_only: { type: 'boolean', description: 'Only show unread feedback (default true)' },
+          acknowledge_ids: { type: 'array', items: { type: 'string' }, description: 'Array of feedback IDs to mark as acknowledged' }
         }
       }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'list_workflow_templates',
-        description: '📋 Get all available workflow templates with success rates, execution counts, and descriptions. Filter by category (revenue, marketing, financial, optimization).',
-        parameters: {
-          type: 'object',
-          properties: {
-            category: { 
-              type: 'string', 
-              enum: ['revenue', 'marketing', 'financial', 'optimization'],
-              description: 'Optional: filter templates by category'
-            },
-            active_only: {
-              type: 'boolean',
-              description: 'Only show active templates (default: true)'
-            }
-          }
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_workflow_template',
-        description: '🔍 Get detailed information about a specific workflow template including all steps and configuration.',
-        parameters: {
-          type: 'object',
-          properties: {
-            template_name: { type: 'string', description: 'Name of the template to retrieve' }
-          },
-          required: ['template_name']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_workflow_analytics',
-        description: '📊 Get execution analytics for workflow templates including success rate, average duration, and recent execution history.',
-        parameters: {
-          type: 'object',
-          properties: {
-            template_name: { type: 'string', description: 'Optional: specific template to analyze' },
-            limit: { type: 'number', description: 'Number of recent executions to include (default 10)' }
-          }
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'create_workflow_template',
-        description: '🆕 Create a new custom workflow template with defined steps and configuration.',
-        parameters: {
-          type: 'object',
-          properties: {
-            template_name: { type: 'string', description: 'Unique name for the template' },
-            category: { 
-              type: 'string', 
-              enum: ['revenue', 'marketing', 'financial', 'optimization'],
-              description: 'Template category'
-            },
-            description: { type: 'string', description: 'Description of what the workflow does' },
-            steps: { 
-              type: 'array',
-              items: { type: 'object', properties: { type: { type: 'string' }, name: { type: 'string' }, config: { type: 'object' } } },
-              description: 'Array of workflow steps with type, name, and configuration'
-            },
-            tags: {
-              type: 'array',
-              items: { type: 'string' },
-              description: 'Tags for searchability and organization'
-            }
-          },
-          required: ['template_name', 'category', 'description', 'steps']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_function_usage_analytics',
-        description: 'Query historical edge function usage patterns. See which functions you and other executives use most, success rates, common use cases, and execution patterns. Use this to learn from past behavior and make informed decisions about which functions to call.',
-        parameters: {
-          type: 'object',
-          properties: {
-            function_name: { type: 'string', description: 'Optional: specific function to analyze' },
-            executive_name: { type: 'string', description: 'Optional: filter by CSO, CTO, CIO, or CAO' },
-            time_period_hours: { type: 'number', description: 'Look back period in hours (default 168 = 1 week)' },
-            min_usage_count: { type: 'number', description: 'Only show functions used at least N times' }
-          }
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'propose_new_edge_function',
-        description: 'Propose a new edge function to the Executive Council. IMPORTANT: Before proposing, use list_function_proposals to check if the function already exists. If a function is already approved, use invoke_edge_function to call it directly instead of re-proposing. Requires 3/4 executive votes for approval. Previously rejected functions can be re-proposed with improvements.',
-        parameters: {
-          type: 'object',
-          properties: {
-            function_name: { type: 'string', description: 'Name for the new function (kebab-case)' },
-            description: { type: 'string', description: 'What this function does' },
-            category: { type: 'string', description: 'Category (ai, mining, github, code, analytics, etc.)' },
-            rationale: { type: 'string', description: 'Why we need this function' },
-            use_cases: { type: 'array', items: { type: 'string' }, description: 'Specific use cases' },
-            implementation_outline: { type: 'string', description: 'High-level implementation approach' }
-          },
-          required: ['function_name', 'description', 'category', 'rationale', 'use_cases']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'vote_on_function_proposal',
-        description: 'Cast your vote on a pending edge function proposal. Requires 3/4 executive approval for deployment. Your vote and reasoning become part of the permanent record.',
-        parameters: {
-          type: 'object',
-          properties: {
-            proposal_id: { type: 'string', description: 'UUID of the proposal' },
-            vote: { type: 'string', enum: ['approve', 'reject', 'abstain'], description: 'Your vote' },
-            reasoning: { type: 'string', description: 'Detailed reasoning for your vote' }
-          },
-          required: ['proposal_id', 'vote', 'reasoning']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'list_function_proposals',
-        description: 'List all edge function proposals (pending, voting, approved, deployed). See what new capabilities are being proposed and vote on them.',
-        parameters: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['pending', 'voting', 'approved', 'rejected', 'deployed'], description: 'Filter by status' }
-          }
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'invoke_edge_function',
-        description: '🌐 UNIVERSAL EDGE FUNCTION INVOKER - Call ANY of 125+ Supabase edge functions dynamically. This is your primary tool for accessing specialized capabilities. Categories: AI (10+), SuperDuper agents (12), code execution (6), GitHub (5+), task management (8), knowledge (7), monitoring (10+), mining (8), autonomous systems (12+), governance (7), ecosystem (8), posting daemons (7), database (3), analytics (3). Examples: superduper-code-architect for code review, python-executor for data analysis, ecosystem-monitor for health checks, autonomous-code-fixer for self-healing. Use list_available_functions first to discover what\'s available.',
-        parameters: {
-          type: 'object',
-          properties: {
-            function_name: { 
-              type: 'string', 
-              description: 'Name of the edge function to invoke (e.g., "python-executor", "github-integration", "system-diagnostics")' 
-            },
-            payload: { 
-              type: 'object', 
-              description: 'JSON payload to send to the function. Structure depends on the target function.' 
-            }
-          },
-          required: ['function_name', 'payload']
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'list_available_functions',
-        description: '📋 LIST ALL 125+ EDGE FUNCTIONS - Returns complete registry of all available edge functions with descriptions, capabilities, categories, and examples. Categories include: ai (10+), superduper (12), code-execution (6), github (5+), task-management (8), knowledge (7), monitoring (10+), mining (8), autonomous (12+), governance (7), ecosystem (8), database (3), deployment (5). Use this FIRST when you need to discover available capabilities or find the right function for a task. Each function includes example use cases.',
-        parameters: {
-          type: 'object',
-          properties: {
-            category: { 
-              type: 'string', 
-              description: 'Optional: Filter by category (ai, superduper, code-execution, github, task-management, knowledge, monitoring, mining, autonomous, governance, ecosystem, database, deployment)' 
-            }
-          }
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_code_execution_lessons',
-        description: 'Retrieve lessons learned from recent code executions. Use this to learn what code patterns work vs fail, and improve your code generation. Returns: recent execution results, auto-fix patterns, success/failure analysis.',
-        parameters: {
-          type: 'object',
-          properties: {
-            limit: { type: 'number', description: 'Number of recent executions to analyze (default 10)' },
-            include_failures_only: { type: 'boolean', description: 'Only include failed executions to learn from mistakes' }
-          }
-        }
-      }
-    },
-    {
-      type: 'function',
-      function: {
-        name: 'get_my_feedback',
-        description: 'Retrieve feedback about YOUR recent tool calls, code executions, and learning points. Use this to learn from mistakes and improve future performance. Returns feedback entries with learning points, original context, and fix results. You can acknowledge feedback to mark it as reviewed.',
-        parameters: {
-          type: 'object',
-          properties: {
-            limit: { type: 'number', description: 'Number of feedback items to retrieve (default 10)' },
-            unacknowledged_only: { type: 'boolean', description: 'Only show unread feedback (default true)' },
-            acknowledge_ids: { type: 'array', items: { type: 'string' }, description: 'Array of feedback IDs to mark as acknowledged' }
-          }
-        }
-      }
-    },
-{
+    }
+  },
+  {
     type: 'function',
     function: {
       name: 'execute_python',
@@ -815,10 +848,10 @@ export const ELIZA_TOOLS = [
         properties: {
           title: { type: 'string', description: 'Discussion title' },
           body: { type: 'string', description: 'Discussion content (supports Markdown)' },
-          categoryId: { 
-            type: 'string', 
-            description: 'Category ID (default: DIC_kwDOPHeChc4CkXxI for General)', 
-            default: 'DIC_kwDOPHeChc4CkXxI' 
+          categoryId: {
+            type: 'string',
+            description: 'Category ID (default: DIC_kwDOPHeChc4CkXxI for General)',
+            default: 'DIC_kwDOPHeChc4CkXxI'
           },
           executive: {
             type: 'string',
@@ -1344,15 +1377,15 @@ export const ELIZA_TOOLS = [
           title: { type: 'string', description: 'Task title' },
           description: { type: 'string', description: 'Task description' },
           repo: { type: 'string', description: 'Repository name. Default: XMRT-Ecosystem' },
-          category: { 
-            type: 'string', 
+          category: {
+            type: 'string',
             enum: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'],
-            description: 'Task category - MUST be one of: code, infra, research, governance, mining, device, ops, other' 
+            description: 'Task category - MUST be one of: code, infra, research, governance, mining, device, ops, other'
           },
-          stage: { 
-            type: 'string', 
+          stage: {
+            type: 'string',
             enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
-            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE. Default: PLAN' 
+            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE. Default: PLAN'
           },
           assignee_agent_id: { type: 'string', description: 'Agent ID from list_agents or spawn_agent result' },
           priority: { type: 'number', description: 'Priority 1-10, default 5' }
@@ -1370,15 +1403,15 @@ export const ELIZA_TOOLS = [
         type: 'object',
         properties: {
           task_id: { type: 'string', description: 'Task ID' },
-          status: { 
-            type: 'string', 
-            enum: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'], 
-            description: 'New status - MUST be one of: PENDING, CLAIMED, IN_PROGRESS, BLOCKED, DONE, CANCELLED, COMPLETED, FAILED' 
+          status: {
+            type: 'string',
+            enum: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'],
+            description: 'New status - MUST be one of: PENDING, CLAIMED, IN_PROGRESS, BLOCKED, DONE, CANCELLED, COMPLETED, FAILED'
           },
-          stage: { 
-            type: 'string', 
+          stage: {
+            type: 'string',
             enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
-            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE' 
+            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE'
           },
           blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' }
         },
@@ -1574,10 +1607,10 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          section: { 
-            type: 'string', 
+          section: {
+            type: 'string',
             enum: ['all', 'governance', 'knowledge', 'github', 'workflows', 'learning', 'python', 'ai_providers', 'xmrt_charger', 'acquisition'],
-            description: 'Optional: Focus on specific ecosystem section (default: all)' 
+            description: 'Optional: Focus on specific ecosystem section (default: all)'
           }
         }
       }
@@ -1606,14 +1639,14 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          include_repos: { 
-            type: 'array', 
-            items: { type: 'string' }, 
-            description: 'Optional: specific repos to check (e.g., ["XMRT-Ecosystem", "mobilemonero"])' 
+          include_repos: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: specific repos to check (e.g., ["XMRT-Ecosystem", "mobilemonero"])'
           },
-          detailed: { 
-            type: 'boolean', 
-            description: 'Include detailed metrics (default: true)' 
+          detailed: {
+            type: 'boolean',
+            description: 'Include detailed metrics (default: true)'
           }
         }
       }
@@ -1627,10 +1660,10 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          format: { 
-            type: 'string', 
-            enum: ['markdown', 'json'], 
-            description: 'Report format (default: markdown)' 
+          format: {
+            type: 'string',
+            enum: ['markdown', 'json'],
+            description: 'Report format (default: markdown)'
           }
         }
       }
@@ -1644,9 +1677,9 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          ideaId: { 
-            type: 'string', 
-            description: 'UUID of the community idea to evaluate' 
+          ideaId: {
+            type: 'string',
+            description: 'UUID of the community idea to evaluate'
           },
           action: {
             type: 'string',
@@ -1683,9 +1716,9 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          opportunityId: { 
-            type: 'string', 
-            description: 'UUID of the opportunity from opportunity_log to act upon' 
+          opportunityId: {
+            type: 'string',
+            description: 'UUID of the opportunity from opportunity_log to act upon'
           }
         },
         required: ['opportunityId']
@@ -2215,8 +2248,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Name of the knowledge entity' },
-          type: { 
-            type: 'string', 
+          type: {
+            type: 'string',
             description: 'Type of entity (e.g., concept, tool, skill, person, project, feature, fact)',
             enum: ['concept', 'tool', 'skill', 'person', 'project', 'feature', 'fact', 'general']
           },
@@ -2268,8 +2301,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         properties: {
           source_id: { type: 'string', description: 'UUID of the source entity' },
           target_id: { type: 'string', description: 'UUID of the target entity' },
-          relationship_type: { 
-            type: 'string', 
+          relationship_type: {
+            type: 'string',
             description: 'Type of relationship (e.g., related_to, part_of, depends_on, created_by, uses)'
           },
           strength: { type: 'number', description: 'Relationship strength 0-1 (default 0.5)' }
@@ -2392,15 +2425,15 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_jobs', 'get_job', 'create_job', 'update_job', 'close_job', 'sync_jobs'],
             description: 'Action to perform on jobs/leads'
           },
           job_id: { type: 'string', description: 'VSCO job ID (required for get/update/close)' },
           name: { type: 'string', description: 'Job/lead name (for create/update)' },
-          stage: { 
-            type: 'string', 
+          stage: {
+            type: 'string',
             enum: ['lead', 'booked', 'fulfillment', 'completed'],
             description: 'Job stage in pipeline'
           },
@@ -2423,8 +2456,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_contacts', 'get_contact', 'create_contact', 'update_contact', 'sync_contacts'],
             description: 'Action to perform on contacts'
           },
@@ -2449,8 +2482,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_events', 'get_event', 'create_event', 'update_event'],
             description: 'Action to perform on events'
           },
@@ -2478,8 +2511,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['get_analytics', 'get_revenue_report', 'sync_all', 'get_api_health', 'list_brands', 'list_webhooks'],
             description: 'Analytics action to perform'
           },
@@ -2500,8 +2533,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_products', 'get_product', 'create_product', 'delete_product'],
             description: 'Action to perform on products'
           },
@@ -2525,8 +2558,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['get_job_worksheet', 'create_job_from_worksheet'],
             description: 'Action to perform on worksheets'
           },
@@ -2551,8 +2584,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_notes', 'create_note', 'update_note', 'delete_note', 'list_files', 'list_galleries', 'create_gallery'],
             description: 'Action to perform on notes/files'
           },
@@ -2580,13 +2613,13 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_orders', 'get_order', 'create_order', 'update_order', 'delete_order',
-                   'list_payment_methods', 'get_payment_method',
-                   'list_profit_centers', 'create_profit_center', 'get_profit_center', 'update_profit_center', 'delete_profit_center',
-                   'list_tax_groups', 'create_tax_group',
-                   'list_tax_rates', 'create_tax_rate', 'delete_tax_rate'],
+              'list_payment_methods', 'get_payment_method',
+              'list_profit_centers', 'create_profit_center', 'get_profit_center', 'update_profit_center', 'delete_profit_center',
+              'list_tax_groups', 'create_tax_group',
+              'list_tax_rates', 'create_tax_rate', 'delete_tax_rate'],
             description: 'Financial action to perform'
           },
           job_id: { type: 'string', description: 'Job ID for order creation' },
@@ -2611,21 +2644,21 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['get_studio', 'update_studio',
-                   'list_brands', 'update_brand', 'delete_brand',
-                   'list_custom_fields', 'create_custom_field', 'update_custom_field', 'delete_custom_field',
-                   'list_discounts', 'create_discount', 'delete_discount',
-                   'list_discount_types', 'create_discount_type', 'delete_discount_type',
-                   'list_event_types', 'create_event_type', 'update_event_type', 'delete_event_type',
-                   'list_file_types',
-                   'list_job_closed_reasons', 'create_job_closed_reason',
-                   'list_job_roles', 'create_job_role',
-                   'list_job_types', 'create_job_type',
-                   'list_lead_sources', 'create_lead_source',
-                   'list_lead_statuses', 'create_lead_status',
-                   'list_product_types', 'create_product_type'],
+              'list_brands', 'update_brand', 'delete_brand',
+              'list_custom_fields', 'create_custom_field', 'update_custom_field', 'delete_custom_field',
+              'list_discounts', 'create_discount', 'delete_discount',
+              'list_discount_types', 'create_discount_type', 'delete_discount_type',
+              'list_event_types', 'create_event_type', 'update_event_type', 'delete_event_type',
+              'list_file_types',
+              'list_job_closed_reasons', 'create_job_closed_reason',
+              'list_job_roles', 'create_job_role',
+              'list_job_types', 'create_job_type',
+              'list_lead_sources', 'create_lead_source',
+              'list_lead_statuses', 'create_lead_status',
+              'list_product_types', 'create_product_type'],
             description: 'Settings action to perform'
           },
           brand_id: { type: 'string', description: 'Brand ID for update/delete' },
@@ -2652,8 +2685,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_users', 'get_user', 'create_user', 'update_user', 'delete_user', 'list_timezones'],
             description: 'User management action'
           },
@@ -2783,7 +2816,7 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       }
     }
   }
-,
+  ,
   // ==================== ECOSYSTEM COORDINATION TOOLS ====================
   {
     type: "function",
@@ -2876,9 +2909,9 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          hours_back: { 
-            type: 'number', 
-            description: 'How many hours of logs to sync (default: 1, max: 24)' 
+          hours_back: {
+            type: 'number',
+            description: 'How many hours of logs to sync (default: 1, max: 24)'
           }
         },
         required: []
@@ -2893,18 +2926,18 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          function_name: { 
-            type: 'string', 
-            description: 'Filter to specific function (optional - omit for all functions)' 
+          function_name: {
+            type: 'string',
+            description: 'Filter to specific function (optional - omit for all functions)'
           },
-          time_window_hours: { 
-            type: 'number', 
-            description: 'Time window for analysis in hours (default: 24)' 
+          time_window_hours: {
+            type: 'number',
+            description: 'Time window for analysis in hours (default: 24)'
           },
-          group_by: { 
-            type: 'string', 
+          group_by: {
+            type: 'string',
             enum: ['function', 'category', 'executive', 'hour'],
-            description: 'How to group the results (default: function)' 
+            description: 'How to group the results (default: function)'
           }
         },
         required: []
@@ -3064,13 +3097,13 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          function_name: { 
-            type: 'string', 
-            description: 'Function to introspect. Options: vsco-workspace, github-integration, agent-manager, workflow-template-manager. Leave empty to see all supported functions.' 
+          function_name: {
+            type: 'string',
+            description: 'Function to introspect. Options: vsco-workspace, github-integration, agent-manager, workflow-template-manager. Leave empty to see all supported functions.'
           },
-          category: { 
-            type: 'string', 
-            description: 'Optional: Filter by action category (e.g., "jobs", "contacts", "issues", "tasks")' 
+          category: {
+            type: 'string',
+            description: 'Optional: Filter by action category (e.g., "jobs", "contacts", "issues", "tasks")'
           }
         },
         required: []
@@ -3089,31 +3122,31 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['list_all', 'list_by_platform', 'get_job_status', 'get_next_runs', 'get_failing_jobs', 'get_execution_stats'],
             description: 'Registry action: list_all (all jobs), list_by_platform (filter by source), get_job_status (specific job), get_next_runs (upcoming executions), get_failing_jobs (problem jobs), get_execution_stats (aggregate stats)'
           },
-          platform: { 
-            type: 'string', 
+          platform: {
+            type: 'string',
             enum: ['supabase_native', 'pg_cron', 'github_actions', 'vercel_cron'],
-            description: 'Filter by execution platform (for list_by_platform, get_execution_stats)' 
+            description: 'Filter by execution platform (for list_by_platform, get_execution_stats)'
           },
-          function_name: { 
-            type: 'string', 
-            description: 'Filter by function name (for get_job_status)' 
+          function_name: {
+            type: 'string',
+            description: 'Filter by function name (for get_job_status)'
           },
-          job_name: { 
-            type: 'string', 
-            description: 'Specific job name to query (for get_job_status)' 
+          job_name: {
+            type: 'string',
+            description: 'Specific job name to query (for get_job_status)'
           },
-          include_inactive: { 
-            type: 'boolean', 
-            description: 'Include disabled/inactive jobs (default: false)' 
+          include_inactive: {
+            type: 'boolean',
+            description: 'Include disabled/inactive jobs (default: false)'
           },
-          time_window_hours: { 
-            type: 'number', 
-            description: 'Time window for stats/failures (default: 24 hours)' 
+          time_window_hours: {
+            type: 'number',
+            description: 'Time window for stats/failures (default: 24 hours)'
           }
         },
         required: ['action']
@@ -3133,10 +3166,10 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         type: 'object',
         properties: {
           prompt: { type: 'string', description: 'Text prompt for generation' },
-          model: { 
-            type: 'string', 
+          model: {
+            type: 'string',
             enum: ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.5-flash-lite'],
-            description: 'Vertex AI model to use (default: gemini-2.5-flash)' 
+            description: 'Vertex AI model to use (default: gemini-2.5-flash)'
           },
           temperature: { type: 'number', description: 'Creativity level 0-1 (default: 0.7)' },
           max_tokens: { type: 'number', description: 'Max output tokens (default: 4096)' },
@@ -3173,23 +3206,23 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          prompt: { 
-            type: 'string', 
-            description: 'Detailed description of the image to generate. Be specific about style, composition, colors, and subject matter.' 
+          prompt: {
+            type: 'string',
+            description: 'Detailed description of the image to generate. Be specific about style, composition, colors, and subject matter.'
           },
-          model: { 
-            type: 'string', 
+          model: {
+            type: 'string',
             enum: ['gemini-2.5-flash-preview-05-20'],
-            description: 'Image generation model (default: gemini-2.5-flash-preview-05-20)' 
+            description: 'Image generation model (default: gemini-2.5-flash-preview-05-20)'
           },
-          aspect_ratio: { 
-            type: 'string', 
+          aspect_ratio: {
+            type: 'string',
             enum: ['16:9', '1:1', '9:16', '4:3', '3:4'],
-            description: 'Image aspect ratio (default: 1:1)' 
+            description: 'Image aspect ratio (default: 1:1)'
           },
-          count: { 
-            type: 'number', 
-            description: 'Number of images to generate 1-4 (default: 1)' 
+          count: {
+            type: 'number',
+            description: 'Number of images to generate 1-4 (default: 1)'
           }
         },
         required: ['prompt']
@@ -3208,24 +3241,24 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          prompt: { 
-            type: 'string', 
-            description: 'Detailed description of the video to generate. Include motion, scene, style, and camera movement details.' 
+          prompt: {
+            type: 'string',
+            description: 'Detailed description of the video to generate. Include motion, scene, style, and camera movement details.'
           },
-          model: { 
-            type: 'string', 
+          model: {
+            type: 'string',
             enum: ['veo-2.0-generate-001', 'veo-3.1-fast-generate-001'],
-            description: 'Video generation model. veo-2.0-generate-001 (most capable), veo-3.1-fast-generate-001 (faster)' 
+            description: 'Video generation model. veo-2.0-generate-001 (most capable), veo-3.1-fast-generate-001 (faster)'
           },
-          aspect_ratio: { 
-            type: 'string', 
+          aspect_ratio: {
+            type: 'string',
             enum: ['16:9', '9:16'],
-            description: 'Video aspect ratio: 16:9 (landscape) or 9:16 (portrait/vertical)' 
+            description: 'Video aspect ratio: 16:9 (landscape) or 9:16 (portrait/vertical)'
           },
-          duration_seconds: { 
-            type: 'number', 
+          duration_seconds: {
+            type: 'number',
             enum: [4, 5, 6, 7, 8],
-            description: 'Video duration in seconds (4-8, default: 5)' 
+            description: 'Video duration in seconds (4-8, default: 5)'
           }
         },
         required: ['prompt']
@@ -3240,9 +3273,9 @@ Response includes ecosystem_summary with one-line stats for each component.`,
       parameters: {
         type: 'object',
         properties: {
-          operation_name: { 
-            type: 'string', 
-            description: 'Full operation name returned from vertex_generate_video (e.g., "projects/.../operations/...")' 
+          operation_name: {
+            type: 'string',
+            description: 'Full operation name returned from vertex_generate_video (e.g., "projects/.../operations/...")'
           }
         },
         required: ['operation_name']

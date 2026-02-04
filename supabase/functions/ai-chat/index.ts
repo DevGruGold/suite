@@ -2000,7 +2000,7 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${this.config.deepseek.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -2055,7 +2055,7 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${this.config.kimi.apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://xmrt.pro',
         'X-Title': 'XMRT Eliza'
@@ -3054,6 +3054,11 @@ interface CascadeResult {
 
 class EnhancedProviderCascade {
   private attempts: any[] = [];
+  private config: Record<string, AIProviderConfig>;
+
+  constructor(configOverride?: Record<string, AIProviderConfig>) {
+    this.config = configOverride || AI_PROVIDERS_CONFIG;
+  }
 
   async callWithCascade(
     messages: any[],
@@ -3064,7 +3069,7 @@ class EnhancedProviderCascade {
     this.attempts = [];
 
     if (preferredProvider && preferredProvider !== 'auto') {
-      const config = AI_PROVIDERS_CONFIG[preferredProvider];
+      const config = this.config[preferredProvider];
       if (config?.enabled) {
         const result = await this.callProvider(preferredProvider, messages, tools, images);
         this.attempts.push({ provider: preferredProvider, success: result.success });
@@ -3072,495 +3077,497 @@ class EnhancedProviderCascade {
       }
     }
 
-    const providers = Object.entries(AI_PROVIDERS_CONFIG)
-      .filter(([_, config]) => config.enabled && !config.fallbackOnly)
-      .sort((a, b) => a[1].priority - b[1].priority)
-      .map(([name]) => name);
+  }
 
-    for (const provider of providers) {
-      const result = await this.callProvider(provider, messages, tools, images);
-      this.attempts.push({ provider, success: result.success });
+  const providers = Object.entries(this.config)
+    .filter(([_, config]) => config.enabled && !config.fallbackOnly)
+    .sort((a, b) => a[1].priority - b[1].priority)
+    .map(([name]) => name);
 
-      if (result.success) {
-        return result;
-      }
+  for(const provider of providers) {
+    const result = await this.callProvider(provider, messages, tools, images);
+    this.attempts.push({ provider, success: result.success });
+
+    if (result.success) {
+      return result;
     }
+  }
 
     console.log('🔄 Trying fallback providers...');
 
-    const fallbackResults = await Promise.all([
-      callDeepSeekFallback(messages, tools),
-      callKimiFallback(messages, tools),
-      callGeminiFallback(messages, tools, images)
-    ]);
+  const fallbackResults = await Promise.all([
+    callDeepSeekFallback(messages, tools),
+    callKimiFallback(messages, tools),
+    callGeminiFallback(messages, tools, images)
+  ]);
 
-    for (const result of fallbackResults) {
-      if (result) {
-        return {
-          success: true,
-          content: result.content,
-          tool_calls: result.tool_calls,
-          provider: result.provider,
-          model: result.model
-        };
-      }
+  for(const result of fallbackResults) {
+    if (result) {
+      return {
+        success: true,
+        content: result.content,
+        tool_calls: result.tool_calls,
+        provider: result.provider,
+        model: result.model
+      };
     }
+  }
 
     return {
-      success: false,
-      provider: 'all',
-      error: `All providers failed after ${this.attempts.length} attempts`
-    };
+  success: false,
+  provider: 'all',
+  error: `All providers failed after ${this.attempts.length} attempts`
+};
   }
 
   private async callProvider(
-    provider: string,
-    messages: any[],
-    tools: any[],
-    images?: string[]
-  ): Promise<CascadeResult> {
-    const config = AI_PROVIDERS_CONFIG[provider];
-    if (!config || !config.enabled) {
-      return {
+  provider: string,
+  messages: any[],
+  tools: any[],
+  images ?: string[]
+): Promise < CascadeResult > {
+  const config = this.config[provider];
+  if(!config || !config.enabled) {
+  return {
+    success: false,
+    provider,
+    error: `Provider ${provider} not configured or disabled`
+  };
+}
+
+const startTime = Date.now();
+
+try {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+
+  let result: CascadeResult;
+
+  switch (provider) {
+    case 'openai':
+      result = await this.callOpenAI(messages, tools, controller);
+      break;
+    case 'gemini':
+      result = await this.callGemini(messages, tools, images, controller);
+      break;
+    case 'deepseek':
+      result = await this.callDeepSeek(messages, tools, controller);
+      break;
+    case 'anthropic':
+      result = await this.callAnthropic(messages, controller);
+      break;
+    case 'kimi':
+      result = await this.callKimi(messages, tools, controller);
+      break;
+    default:
+      result = {
         success: false,
         provider,
-        error: `Provider ${provider} not configured or disabled`
+        error: `Unknown provider: ${provider}`
       };
-    }
+  }
 
-    const startTime = Date.now();
+  clearTimeout(timeoutId);
 
+  if (result.success) {
+    result.latency = Date.now() - startTime;
+  }
+
+  return result;
+
+} catch (error: any) {
+  return {
+    success: false,
+    provider,
+    error: error instanceof Error ? error.message : `${provider} request failed`
+  };
+}
+  }
+
+  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise < CascadeResult > {
+  const forceTools = needsDataRetrieval(messages);
+
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${this.config.openai.apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'gpt-4o-mini',
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 4000,
+      ...(tools.length > 0 && {
+        tools: tools,
+        tool_choice: forceTools ? 'required' : 'auto'
+      })
+    }),
+    signal: controller.signal
+  });
+
+  if(!response.ok) {
+  const errorText = await response.text();
+  return {
+    success: false,
+    provider: 'openai',
+    error: `OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`
+  };
+}
+
+const data = await response.json();
+const message = data.choices?.[0]?.message;
+
+if (message.tool_calls?.length > 0) {
+  return {
+    success: true,
+    tool_calls: message.tool_calls,
+    provider: 'openai',
+    model: 'gpt-4o-mini'
+  };
+}
+
+return {
+  success: true,
+  content: message.content || '',
+  provider: 'openai',
+  model: 'gpt-4o-mini'
+};
+  }
+
+  private async callGemini(messages: any[], tools: any[], images ?: string[], controller: AbortController): Promise < CascadeResult > {
+  const geminiModels = [
+    'gemini-2.5-flash',
+    'gemini-2.5-flash-image',
+    'gemini-2.0-flash-exp',
+    'gemini-1.5-flash'
+  ];
+
+  for(const model of geminiModels) {
     try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
+      console.log(`🔄 Trying Gemini model: ${model}`);
 
-      let result: CascadeResult;
+      const geminiMessages = [];
 
-      switch (provider) {
-        case 'openai':
-          result = await this.callOpenAI(messages, tools, controller);
-          break;
-        case 'gemini':
-          result = await this.callGemini(messages, tools, images, controller);
-          break;
-        case 'deepseek':
-          result = await this.callDeepSeek(messages, tools, controller);
-          break;
-        case 'anthropic':
-          result = await this.callAnthropic(messages, controller);
-          break;
-        case 'kimi':
-          result = await this.callKimi(messages, tools, controller);
-          break;
-        default:
-          result = {
-            success: false,
-            provider,
-            error: `Unknown provider: ${provider}`
-          };
-      }
+      for (const msg of messages) {
+        if (msg.role === 'system') {
+          geminiMessages.push({
+            role: 'user',
+            parts: [{ text: msg.content }]
+          });
+          geminiMessages.push({
+            role: 'model',
+            parts: [{ text: 'Understood. I will follow these instructions.' }]
+          });
+        } else if (msg.role === 'user') {
+          const parts: any[] = [{ text: msg.content }];
 
-      clearTimeout(timeoutId);
-
-      if (result.success) {
-        result.latency = Date.now() - startTime;
-      }
-
-      return result;
-
-    } catch (error: any) {
-      return {
-        success: false,
-        provider,
-        error: error instanceof Error ? error.message : `${provider} request failed`
-      };
-    }
-  }
-
-  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
-    const forceTools = needsDataRetrieval(messages);
-
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENAI_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 4000,
-        ...(tools.length > 0 && {
-          tools: tools,
-          tool_choice: forceTools ? 'required' : 'auto'
-        })
-      }),
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        provider: 'openai',
-        error: `OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`
-      };
-    }
-
-    const data = await response.json();
-    const message = data.choices?.[0]?.message;
-
-    if (message.tool_calls?.length > 0) {
-      return {
-        success: true,
-        tool_calls: message.tool_calls,
-        provider: 'openai',
-        model: 'gpt-4o-mini'
-      };
-    }
-
-    return {
-      success: true,
-      content: message.content || '',
-      provider: 'openai',
-      model: 'gpt-4o-mini'
-    };
-  }
-
-  private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
-    const geminiModels = [
-      'gemini-2.5-flash',
-      'gemini-2.5-flash-image',
-      'gemini-2.0-flash-exp',
-      'gemini-1.5-flash'
-    ];
-
-    for (const model of geminiModels) {
-      try {
-        console.log(`🔄 Trying Gemini model: ${model}`);
-
-        const geminiMessages = [];
-
-        for (const msg of messages) {
-          if (msg.role === 'system') {
-            geminiMessages.push({
-              role: 'user',
-              parts: [{ text: msg.content }]
-            });
-            geminiMessages.push({
-              role: 'model',
-              parts: [{ text: 'Understood. I will follow these instructions.' }]
-            });
-          } else if (msg.role === 'user') {
-            const parts: any[] = [{ text: msg.content }];
-
-            if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
-              (model.includes('image') || model === 'gemini-1.5-flash')) {
-              for (const imageBase64 of images) {
-                const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
-                if (matches) {
-                  parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
-                }
+          if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
+            (model.includes('image') || model === 'gemini-1.5-flash')) {
+            for (const imageBase64 of images) {
+              const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
+              if (matches) {
+                parts.push({ inline_data: { mime_type: matches[1], data: matches[2] } });
               }
             }
+          }
 
-            geminiMessages.push({
-              role: 'user',
-              parts: parts
-            });
-          } else if (msg.role === 'assistant') {
-            if (msg.tool_calls) {
-              for (const toolCall of msg.tool_calls) {
-                geminiMessages.push({
-                  role: 'model',
-                  parts: [{
-                    functionCall: {
-                      name: toolCall.function.name,
-                      args: typeof toolCall.function.arguments === 'string'
-                        ? JSON.parse(toolCall.function.arguments)
-                        : toolCall.function.arguments
-                    }
-                  }]
-                });
-              }
-            } else if (msg.content) {
+          geminiMessages.push({
+            role: 'user',
+            parts: parts
+          });
+        } else if (msg.role === 'assistant') {
+          if (msg.tool_calls) {
+            for (const toolCall of msg.tool_calls) {
               geminiMessages.push({
                 role: 'model',
-                parts: [{ text: msg.content }]
+                parts: [{
+                  functionCall: {
+                    name: toolCall.function.name,
+                    args: typeof toolCall.function.arguments === 'string'
+                      ? JSON.parse(toolCall.function.arguments)
+                      : toolCall.function.arguments
+                  }
+                }]
               });
             }
-          } else if (msg.role === 'tool') {
+          } else if (msg.content) {
             geminiMessages.push({
-              role: 'user',
-              parts: [{
-                functionResponse: {
-                  name: 'tool_result',
-                  response: {
-                    content: msg.content
-                  }
-                }
-              }]
+              role: 'model',
+              parts: [{ text: msg.content }]
             });
           }
+        } else if (msg.role === 'tool') {
+          geminiMessages.push({
+            role: 'user',
+            parts: [{
+              functionResponse: {
+                name: 'tool_result',
+                response: {
+                  content: msg.content
+                }
+              }
+            }]
+          });
+        }
+      }
+
+      const geminiTools = tools.length > 0 ? {
+        functionDeclarations: convertToolsToGeminiFormat(tools)
+      } : undefined;
+
+      const requestBody: any = {
+        contents: geminiMessages,
+        generationConfig: {
+          temperature: 0.7,
+          maxOutputTokens: 4000
+        }
+      };
+
+      if (geminiTools) {
+        requestBody.tools = [geminiTools];
+      }
+
+      const response = await fetch(
+        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': this.config.gemini.apiKey
+          },
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        }
+      );
+
+      if (!response.ok) {
+        if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
+          console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
+          continue;
         }
 
-        const geminiTools = tools.length > 0 ? {
-          functionDeclarations: convertToolsToGeminiFormat(tools)
-        } : undefined;
-
-        const requestBody: any = {
-          contents: geminiMessages,
-          generationConfig: {
-            temperature: 0.7,
-            maxOutputTokens: 4000
-          }
-        };
-
-        if (geminiTools) {
-          requestBody.tools = [geminiTools];
-        }
-
-        const response = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': GEMINI_API_KEY
-            },
-            body: JSON.stringify(requestBody),
-            signal: controller.signal
-          }
-        );
-
-        if (!response.ok) {
-          if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
-            console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
-            continue;
-          }
-
-          const errorText = await response.text();
-          return {
-            success: false,
-            provider: 'gemini',
-            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
-          };
-        }
-
-        const data = await response.json();
-        const candidate = data.candidates?.[0];
-
-        if (!candidate || !candidate.content) {
-          if (model !== geminiModels[geminiModels.length - 1]) {
-            continue;
-          }
-          return {
-            success: false,
-            provider: 'gemini',
-            error: `No content in Gemini ${model} response`
-          };
-        }
-
-        const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
-        if (functionCallPart) {
-          const functionCall = functionCallPart.functionCall;
-
-          const toolCalls = [{
-            id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-            type: 'function',
-            function: {
-              name: functionCall.name,
-              arguments: JSON.stringify(functionCall.args)
-            }
-          }];
-
-          return {
-            success: true,
-            tool_calls: toolCalls,
-            provider: 'gemini',
-            model: model
-          };
-        }
-
-        const text = candidate.content.parts
-          ?.map((part: any) => part.text || '')
-          .join('') || '';
-
+        const errorText = await response.text();
         return {
-          success: true,
-          content: text,
+          success: false,
           provider: 'gemini',
-          model: model
+          error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
         };
+      }
 
-      } catch (error: any) {
+      const data = await response.json();
+      const candidate = data.candidates?.[0];
+
+      if (!candidate || !candidate.content) {
         if (model !== geminiModels[geminiModels.length - 1]) {
-          console.warn(`⚠️ Gemini ${model} failed, trying next:`, error.message);
           continue;
         }
         return {
           success: false,
           provider: 'gemini',
-          error: `Gemini request failed: ${error.message}`
+          error: `No content in Gemini ${model} response`
         };
       }
-    }
 
-    return {
-      success: false,
-      provider: 'gemini',
-      error: 'All Gemini models failed'
-    };
-  }
+      const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
+      if (functionCallPart) {
+        const functionCall = functionCallPart.functionCall;
 
-  private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
-    const forceTools = needsDataRetrieval(messages);
+        const toolCalls = [{
+          id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          type: 'function',
+          function: {
+            name: functionCall.name,
+            arguments: JSON.stringify(functionCall.args)
+          }
+        }];
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: messages,
-        temperature: 0.7,
-        max_tokens: 4000,
-        ...(tools.length > 0 && {
-          tools: tools,
-          tool_choice: forceTools ? 'required' : 'auto'
-        })
-      }),
-      signal: controller.signal
-    });
+        return {
+          success: true,
+          tool_calls: toolCalls,
+          provider: 'gemini',
+          model: model
+        };
+      }
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        provider: 'deepseek',
-        error: `DeepSeek API error: ${response.status} - ${errorText.substring(0, 200)}`
-      };
-    }
+      const text = candidate.content.parts
+        ?.map((part: any) => part.text || '')
+        .join('') || '';
 
-    const data = await response.json();
-    const message = data.choices?.[0]?.message;
-
-    if (message.tool_calls?.length > 0) {
       return {
         success: true,
-        tool_calls: message.tool_calls,
-        provider: 'deepseek',
-        model: 'deepseek-chat'
+        content: text,
+        provider: 'gemini',
+        model: model
       };
-    }
 
-    return {
-      success: true,
-      content: message.content || '',
-      provider: 'deepseek',
-      model: 'deepseek-chat'
-    };
-  }
-
-  private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
-    const forceTools = needsDataRetrieval(messages);
-
-    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-        'Content-Type': 'application/json',
-        'HTTP-Referer': 'https://xmrt.pro',
-        'X-Title': 'XMRT Eliza'
-      },
-      body: JSON.stringify({
-        model: 'moonshotai/kimi-k2',
-        messages: messages,
-        temperature: 0.9,
-        max_tokens: 4000,
-        ...(tools.length > 0 && {
-          tools: tools,
-          tool_choice: forceTools ? 'required' : 'auto'
-        })
-      }),
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
+    } catch (error: any) {
+      if (model !== geminiModels[geminiModels.length - 1]) {
+        console.warn(`⚠️ Gemini ${model} failed, trying next:`, error.message);
+        continue;
+      }
       return {
         success: false,
-        provider: 'kimi',
-        error: `Kimi API error: ${response.status} - ${errorText.substring(0, 200)}`
+        provider: 'gemini',
+        error: `Gemini request failed: ${error.message}`
       };
     }
-
-    const data = await response.json();
-    const message = data.choices?.[0]?.message;
-
-    if (message.tool_calls?.length > 0) {
-      return {
-        success: true,
-        tool_calls: message.tool_calls,
-        provider: 'kimi',
-        model: 'moonshotai/kimi-k2'
-      };
-    }
-
-    return {
-      success: true,
-      content: message.content || '',
-      provider: 'kimi',
-      model: 'moonshotai/kimi-k2'
-    };
   }
 
-  private async callAnthropic(messages: any[], controller: AbortController): Promise<CascadeResult> {
-    const lastMessage = messages[messages.length - 1];
-    const systemMessages = messages.filter(m => m.role === 'system');
-    const systemPrompt = systemMessages.map(m => m.content).join('\n');
-
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'x-api-key': ANTHROPIC_API_KEY,
-        'anthropic-version': '2023-06-01',
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        model: 'claude-3-5-haiku-20241022',
-        max_tokens: 4000,
-        temperature: 0.7,
-        system: systemPrompt,
-        messages: [{
-          role: 'user',
-          content: lastMessage.content
-        }]
-      }),
-      signal: controller.signal
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      return {
-        success: false,
-        provider: 'anthropic',
-        error: `Anthropic API error: ${response.status} - ${errorText.substring(0, 200)}`
-      };
-    }
-
-    const data = await response.json();
-    const text = data.content?.[0]?.text || '';
-
     return {
-      success: true,
-      content: text,
-      provider: 'anthropic',
-      model: 'claude-3-5-haiku-20241022'
-    };
+    success: false,
+    provider: 'gemini',
+    error: 'All Gemini models failed'
+  };
+}
+
+  private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise < CascadeResult > {
+  const forceTools = needsDataRetrieval(messages);
+
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 4000,
+      ...(tools.length > 0 && {
+        tools: tools,
+        tool_choice: forceTools ? 'required' : 'auto'
+      })
+    }),
+    signal: controller.signal
+  });
+
+  if(!response.ok) {
+  const errorText = await response.text();
+  return {
+    success: false,
+    provider: 'deepseek',
+    error: `DeepSeek API error: ${response.status} - ${errorText.substring(0, 200)}`
+  };
+}
+
+const data = await response.json();
+const message = data.choices?.[0]?.message;
+
+if (message.tool_calls?.length > 0) {
+  return {
+    success: true,
+    tool_calls: message.tool_calls,
+    provider: 'deepseek',
+    model: 'deepseek-chat'
+  };
+}
+
+return {
+  success: true,
+  content: message.content || '',
+  provider: 'deepseek',
+  model: 'deepseek-chat'
+};
+  }
+
+  private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise < CascadeResult > {
+  const forceTools = needsDataRetrieval(messages);
+
+  const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'Content-Type': 'application/json',
+      'HTTP-Referer': 'https://xmrt.pro',
+      'X-Title': 'XMRT Eliza'
+    },
+    body: JSON.stringify({
+      model: 'moonshotai/kimi-k2',
+      messages: messages,
+      temperature: 0.9,
+      max_tokens: 4000,
+      ...(tools.length > 0 && {
+        tools: tools,
+        tool_choice: forceTools ? 'required' : 'auto'
+      })
+    }),
+    signal: controller.signal
+  });
+
+  if(!response.ok) {
+  const errorText = await response.text();
+  return {
+    success: false,
+    provider: 'kimi',
+    error: `Kimi API error: ${response.status} - ${errorText.substring(0, 200)}`
+  };
+}
+
+const data = await response.json();
+const message = data.choices?.[0]?.message;
+
+if (message.tool_calls?.length > 0) {
+  return {
+    success: true,
+    tool_calls: message.tool_calls,
+    provider: 'kimi',
+    model: 'moonshotai/kimi-k2'
+  };
+}
+
+return {
+  success: true,
+  content: message.content || '',
+  provider: 'kimi',
+  model: 'moonshotai/kimi-k2'
+};
+  }
+
+  private async callAnthropic(messages: any[], controller: AbortController): Promise < CascadeResult > {
+  const lastMessage = messages[messages.length - 1];
+  const systemMessages = messages.filter(m => m.role === 'system');
+  const systemPrompt = systemMessages.map(m => m.content).join('\n');
+
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'x-api-key': this.config.anthropic.apiKey,
+      'anthropic-version': '2023-06-01',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      model: 'claude-3-5-haiku-20241022',
+      max_tokens: 4000,
+      temperature: 0.7,
+      system: systemPrompt,
+      messages: [{
+        role: 'user',
+        content: lastMessage.content
+      }]
+    }),
+    signal: controller.signal
+  });
+
+  if(!response.ok) {
+  const errorText = await response.text();
+  return {
+    success: false,
+    provider: 'anthropic',
+    error: `Anthropic API error: ${response.status} - ${errorText.substring(0, 200)}`
+  };
+}
+
+const data = await response.json();
+const text = data.content?.[0]?.text || '';
+
+return {
+  success: true,
+  content: text,
+  provider: 'anthropic',
+  model: 'claude-3-5-haiku-20241022'
+};
   }
 }
 
@@ -4314,6 +4321,141 @@ const ELIZA_TOOLS = [
   }
 ];
 
+// ========== TOOL MANAGER & TIERED ACCESS ==========
+class ToolManager {
+  static readonly FREE_TOOLS = [
+    'browse_web',
+    'assign_task',
+    'list_tasks',
+    'search_knowledge',
+    'recall_entity',
+    'store_knowledge',
+    'get_mining_stats',
+    'get_system_status',
+    'get_ecosystem_metrics'
+  ];
+
+  static readonly PRO_TOOLS = [
+    'createGitHubIssue',
+    'listGitHubIssues',
+    'createGitHubDiscussion',
+    'searchGitHubCode',
+    'createGitHubPullRequest',
+    'commentOnGitHubIssue',
+    'commentOnGitHubDiscussion',
+    'listGitHubPullRequests',
+    'google_gmail',
+    'invoke_edge_function',
+    'vertex_generate_image',
+    'vertex_generate_video',
+    'list_available_functions',
+    'get_edge_function_logs'
+  ];
+
+  static readonly BYOK_PROVIDERS = [
+    'github',
+    'vercel',
+    'google',
+    'openai',
+    'anthropic'
+  ];
+
+  /**
+   * Determine available tools based on user role
+   */
+  static getAvailableTools(role: string = 'user'): any[] {
+    const isSuperAdmin = role === 'superadmin' || role === 'admin';
+    const isModerator = role === 'moderator';
+
+    // Superadmins get everything
+    if (isSuperAdmin) {
+      return ELIZA_TOOLS;
+    }
+
+    // Moderators get Pro tools + Free tools
+    if (isModerator) {
+      const allowedNames = new Set([...this.FREE_TOOLS, ...this.PRO_TOOLS]);
+      return ELIZA_TOOLS.filter(t => allowedNames.has(t.function.name));
+    }
+
+    // Free users get basic tools
+    const allowedNames = new Set(this.FREE_TOOLS);
+    return ELIZA_TOOLS.filter(t => allowedNames.has(t.function.name));
+  }
+
+  /**
+   * Fetch user-specific API keys for BYOK, optionally scoped to an organization
+   */
+  static async getUserApiKeys(userId: string, organizationId?: string): Promise<Record<string, string>> {
+    if (!userId) return {};
+
+    try {
+      let query = supabase
+        .from('user_api_connections')
+        .select('provider, api_key')
+        .eq('user_id', userId);
+
+      if (organizationId) {
+        query = query.eq('organization_id', organizationId);
+      } else {
+        query = query.is('organization_id', null);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.warn(`⚠️ Failed to fetch user keys: ${error.message}`);
+        return {};
+      }
+
+      const keys: Record<string, string> = {};
+      data?.forEach((row: any) => {
+        if (this.BYOK_PROVIDERS.includes(row.provider)) {
+          // If using encrypted keys, decrypt here.
+          keys[row.provider] = row.api_key;
+        }
+      });
+      return keys;
+    } catch (e) {
+      console.error('Error in getUserApiKeys:', e);
+      return {};
+    }
+  }
+
+  /**
+   * Override system config with user keys
+   */
+  static applyUserKeys(config: any, userKeys: Record<string, string>) {
+    // OpenAI
+    if (userKeys['openai']) {
+      config.openai.apiKey = userKeys['openai'];
+      config.openai.enabled = true;
+      console.log('🔓 Using User OpenAI Key');
+    }
+    // Anthropic
+    if (userKeys['anthropic']) {
+      config.anthropic.apiKey = userKeys['anthropic'];
+      config.anthropic.enabled = true;
+      config.anthropic.usageType = 'byok';
+      console.log('🔓 Using User Anthropic Key');
+    }
+
+    // Google/Gemini
+    if (userKeys['google']) {
+      config.gemini.apiKey = userKeys['google'];
+      config.gemini.enabled = true;
+      console.log('🔓 Using User Google/Gemini Key');
+    }
+
+    // GitHub - Handled at tool execution level mostly, but good to have in config
+    if (userKeys['github']) {
+      config.github = { ...config.github, apiKey: userKeys['github'] };
+    }
+
+    return config;
+  }
+}
+
 // ========== MULTIPART PARSER ==========
 async function parseMultipartFormData(req: Request): Promise<any> {
   const contentType = req.headers.get('content-type') || '';
@@ -4404,6 +4546,107 @@ Deno.serve(async (req) => {
       const { count: agentCount } = await supabase
         .from(DATABASE_CONFIG.tables.agents)
         .select('*', { count: 'exact', head: true });
+
+      // ========== USER IDENTIFICATION & TIERED ACCESS ==========
+
+      // Get User ID from JWT (if authenticated)
+      const authHeader = req.headers.get('Authorization');
+      let userId = null;
+      let userRole = 'user'; // Default to free user
+      let userEmail = 'unknown';
+
+      if (authHeader) {
+        try {
+          const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+          if (user && !userError) {
+            userId = user.id;
+            userEmail = user.email || 'unknown';
+
+            // Fetch User Profile for Role and Selected Org
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('role, selected_organization_id')
+              .eq('id', userId)
+              .single();
+
+            if (profile) {
+              if (profile.role) userRole = profile.role;
+
+              // Handle Organization Context
+              if (profile.selected_organization_id) {
+                const { data: org } = await supabase
+                  .from('organizations')
+                  .select('*')
+                  .eq('id', profile.selected_organization_id)
+                  .single();
+
+                if (org) {
+                  console.log(`🏢 Organization Context: ${org.name} (${org.id})`);
+
+                  // Inject Organization GitHub Repo
+                  if (org.github_repo) {
+                    AI_PROVIDERS_CONFIG.github = { ...AI_PROVIDERS_CONFIG.github, defaultRepo: org.github_repo };
+                  }
+
+                  // We also capture org details to inject later into the request config
+                }
+              }
+            }
+
+            // Check hardcoded superadmins
+            if (userEmail === 'xmrtsolutions@gmail.com' || userEmail === 'xmrtnet@gmail.com') {
+              userRole = 'superadmin';
+            }
+          }
+        } catch (e) {
+          console.warn('⚠️ Auth check failed, proceeding as anonymous/free user');
+        }
+      }
+
+      console.log(`👤 User: ${userEmail} (${userId}) | Role: ${userRole}`);
+
+      // Filter Tools based on Role
+      const availableTools = ToolManager.getAvailableTools(userRole);
+      console.log(`🛠️ Available Tools for ${userRole}: ${availableTools.length}`);
+
+      // Fetch and Apply BYOK Keys (scoping to Org if selected)
+      const requestConfig = JSON.parse(JSON.stringify(AI_PROVIDERS_CONFIG)); // Deep copy
+
+      let selectedOrgId = null;
+      if (userId) {
+        const { data: p } = await supabase.from('profiles').select('selected_organization_id').eq('id', userId).single();
+        selectedOrgId = p?.selected_organization_id;
+      }
+
+      const userKeys = await ToolManager.getUserApiKeys(userId || '', selectedOrgId);
+
+      if (Object.keys(userKeys).length > 0) {
+        console.log(`🔑 Found user keys for: ${Object.keys(userKeys).join(', ')} (Org: ${selectedOrgId || 'Personal'})`);
+        ToolManager.applyUserKeys(requestConfig, userKeys);
+      }
+
+      // Inject extra Org context into requestConfig
+      if (selectedOrgId) {
+        const { data: org } = await supabase
+          .from('organizations')
+          .select('github_repo, email, typefully_set')
+          .eq('id', selectedOrgId)
+          .single();
+
+        if (org) {
+          if (org.github_repo) {
+            requestConfig.github = { ...requestConfig.github, defaultRepo: org.github_repo };
+            console.log(`📂 Using Org GitHub Repo: ${org.github_repo}`);
+          }
+          if (org.email) {
+            requestConfig.email = org.email;
+          }
+          if (org.typefully_set) {
+            requestConfig.typefully = { ...requestConfig.typefully, defaultSet: org.typefully_set };
+          }
+        }
+      }
+      // ========== END TIERED ACCESS LOGIC ==========
 
       const { count: summaryCount } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
@@ -4660,9 +4903,9 @@ Deno.serve(async (req) => {
       ...allMessages
     ];
 
-    const cascade = new EnhancedProviderCascade();
+    const cascade = new EnhancedProviderCascade(requestConfig);
 
-    const tools = use_tools ? ELIZA_TOOLS : [];
+    const tools = use_tools ? availableTools : [];
     let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, images);
 
     if (!cascadeResult.success) {
