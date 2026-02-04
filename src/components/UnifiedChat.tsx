@@ -117,7 +117,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [isConnected, setIsConnected] = useState(true); // Always connected for text/TTS mode
   const [realtimeConnected, setRealtimeConnected] = useState(false);
   const [hasUserEngaged, setHasUserEngaged] = useState(false); // Track if user has sent first message
-  
+
   // Office Clerk loading progress
   const [officeClerkProgress, setOfficeClerkProgress] = useState<{
     status: string;
@@ -163,7 +163,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [userContext, setUserContext] = useState<UserContext | null>(null);
   const [organizationContext, setOrganizationContext] = useState<any>(null);
   const [lastElizaMessage, setLastElizaMessage] = useState<string>("");
-  
+
   // Council mode state - initialize from prop
   const [councilMode, setCouncilMode] = useState<boolean>(defaultCouncilMode);
 
@@ -202,17 +202,17 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const type: AttachmentFile['type'] = file.type.startsWith('image/')
         ? 'image'
         : file.type.startsWith('audio/')
-        ? 'audio'
-        : file.type.startsWith('video/')
-        ? 'video'
-        : 'document';
+          ? 'audio'
+          : file.type.startsWith('video/')
+            ? 'video'
+            : 'document';
 
       const url = URL.createObjectURL(file);
       newAttachments.push({ type, url, name: file.name, file });
     }
 
     setAttachments(prev => [...prev, ...newAttachments].slice(0, MAX_FILES));
-    
+
     // Reset file input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
@@ -248,7 +248,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [videoReady, setVideoReady] = useState(false);
   const [latestVideoFrame, setLatestVideoFrame] = useState<string | null>(null);
   const continuousCaptureRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Pre-initialize video element when multimodal mode activates
   useEffect(() => {
     if (humeState?.mode === 'multimodal' && humeState?.videoStream && !videoRef.current) {
@@ -259,19 +259,19 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       video.playsInline = true;
       video.muted = true; // Required for autoplay
       videoRef.current = video;
-      
+
       video.onloadeddata = () => {
         console.log('🎬 Video data loaded, readyState:', video.readyState);
         setVideoReady(true);
       };
-      
+
       video.play().then(() => {
         console.log('🎬 Video pre-initialized and playing for multimodal mode');
       }).catch(err => {
         console.error('Video pre-initialization failed:', err);
       });
     }
-    
+
     // Cleanup when mode changes or stream ends
     if (humeState?.mode !== 'multimodal' || !humeState?.videoStream) {
       if (videoRef.current) {
@@ -286,10 +286,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   useEffect(() => {
     if (humeState?.mode === 'multimodal' && humeState?.videoStream && videoReady) {
       console.log('👁️ Starting continuous video capture (every 3s)');
-      
+
       const captureFrame = async () => {
         if (!videoRef.current || videoRef.current.readyState < 2) return;
-        
+
         try {
           const canvas = document.createElement('canvas');
           canvas.width = videoRef.current.videoWidth || 640;
@@ -305,11 +305,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           console.error('Continuous capture error:', err);
         }
       };
-      
+
       // Capture immediately, then every 3 seconds
       captureFrame();
       continuousCaptureRef.current = setInterval(captureFrame, 3000);
-      
+
       return () => {
         if (continuousCaptureRef.current) {
           clearInterval(continuousCaptureRef.current);
@@ -325,14 +325,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       setLatestVideoFrame(null);
     }
   }, [humeState?.mode, humeState?.videoStream, videoReady]);
-  
+
   const captureVideoFrame = useCallback(async (): Promise<string | null> => {
     // Use pre-captured frame if available (from continuous capture)
     if (latestVideoFrame) {
       console.log('📸 Using pre-captured continuous frame');
       return latestVideoFrame;
     }
-    
+
     console.log('📹 Video capture attempt:', {
       mode: humeState?.mode,
       hasVideoStream: !!humeState?.videoStream,
@@ -340,12 +340,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       videoReady,
       readyState: videoRef.current?.readyState
     });
-    
+
     if (!humeState?.videoStream) {
       console.log('⚠️ No video stream available');
       return null;
     }
-    
+
     try {
       // Create video element if needed and wait for it to be ready
       if (!videoRef.current) {
@@ -356,7 +356,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         video.playsInline = true;
         video.muted = true;
         videoRef.current = video;
-        
+
         // Wait for video to be ready with timeout
         await new Promise<void>((resolve, reject) => {
           const timeout = setTimeout(() => reject(new Error('Video load timeout')), 3000);
@@ -372,9 +372,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           video.play().catch(reject);
         });
       }
-      
+
       const video = videoRef.current;
-      
+
       // Ensure video is ready
       if (video.readyState < 2) {
         console.log('⏳ Video not ready yet, waiting...', video.readyState);
@@ -391,18 +391,18 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           setTimeout(resolve, 2000);
         });
       }
-      
+
       // Capture frame
       const canvas = document.createElement('canvas');
       canvas.width = video.videoWidth || 640;
       canvas.height = video.videoHeight || 480;
       const ctx = canvas.getContext('2d');
-      
+
       if (!ctx) {
         console.error('Failed to get canvas context');
         return null;
       }
-      
+
       ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
       const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
       console.log('📸 Successfully captured video frame:', canvas.width, 'x', canvas.height);
@@ -455,7 +455,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         }
       }
     };
-    
+
     initializeTTS();
   }, []);
 
@@ -483,7 +483,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           unifiedDataService.getUserContext(),
           externalMiningStats || unifiedDataService.getMiningStats()
         ]);
-        
+
         setUserContext(userCtx);
         if (!externalMiningStats) {
           setMiningStats(miningData);
@@ -492,15 +492,15 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         // Initialize conversation session (creates or resumes from conversation_sessions)
         try {
           await conversationPersistence.initializeSession();
-          
+
           // Load conversation context (summaries from conversation_summaries table)
           const context = await conversationPersistence.getConversationContext(0);
-          
+
           if (context.summaries.length > 0 || context.totalMessageCount > 0) {
             setConversationSummaries(context.summaries);
             setHasMoreMessages(context.totalMessageCount > 0);
             setTotalMessageCount(context.totalMessageCount);
-            
+
             console.log(`📚 Found ${context.summaries.length} summaries for ${context.totalMessageCount} total messages`);
           }
 
@@ -539,7 +539,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         console.error('Failed to initialize:', error);
       }
     };
-    
+
     initialize();
   }, []);
 
@@ -552,7 +552,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           .select('*')
           .eq('id', profile.selected_organization_id)
           .single();
-        
+
         if (!error && data) {
           setOrganizationContext(data);
           console.log('🏢 Organization context loaded:', data.name);
@@ -626,22 +626,22 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     const subscribeToOfficeClerk = async () => {
       try {
         const { MLCLLMService } = await import('@/services/mlcLLMService');
-        
+
         // Subscribe to progress updates
         const unsubscribe = MLCLLMService.subscribeToProgress((progress) => {
           setOfficeClerkProgress(progress);
-          
+
           // Also expose to window for error handler
           (window as any).__mlcProgress = progress;
         });
-        
+
         return unsubscribe;
       } catch (error) {
         console.log('Office Clerk not available:', error);
-        return () => {};
+        return () => { };
       }
     };
-    
+
     subscribeToOfficeClerk().then(unsub => {
       return () => unsub();
     });
@@ -657,24 +657,24 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const generateQuickGreeting = () => {
     // Show immediate greeting without waiting for AI
     const cachedSummary = quickGreetingService.getCachedConversationSummary();
-    
+
     const quickGreeting = quickGreetingService.generateQuickGreeting({
       isFounder: userContext?.isFounder,
       conversationSummary: cachedSummary?.summary || (conversationSummaries.length > 0 ? conversationSummaries[conversationSummaries.length - 1].summaryText : undefined),
       totalMessageCount: cachedSummary?.messageCount || totalMessageCount,
       miningStats
     });
-    
+
     const greeting: UnifiedMessage = {
       id: 'quick-greeting',
       content: quickGreeting,
       sender: 'assistant',
       timestamp: new Date()
     };
-    
+
     setMessages([greeting]);
     setLastElizaMessage(quickGreeting);
-    
+
     // Store greeting in persistent storage (non-blocking)
     conversationPersistence.storeMessage(quickGreeting, 'assistant', {
       type: 'quick-greeting',
@@ -689,10 +689,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const handleSynthesizeWorkflowResult = async (prompt: string, workflow: any) => {
     try {
       console.log('🔄 Synthesizing workflow result with Eliza...');
-      
+
       // Get full conversation context
       const fullContext = await conversationPersistence.getFullConversationContext();
-      
+
       const response = await UnifiedElizaService.generateResponse(prompt, {
         miningStats,
         userContext,
@@ -702,9 +702,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         conversationContext: fullContext,
         councilMode: false
       }, language);
-      
+
       const responseText = typeof response === 'string' ? response : response.deliberation.synthesis;
-      
+
       // Display Eliza's synthesized answer
       const elizaMessage: UnifiedMessage = {
         id: `workflow-result-${workflow.id}`,
@@ -712,14 +712,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         sender: 'assistant',
         timestamp: new Date()
       };
-      
+
       setMessages(prev => {
         if (prev.some(m => m.id === elizaMessage.id)) return prev;
         return [...prev, elizaMessage];
       });
-      
+
       console.log('✅ Workflow result synthesized and displayed');
-      
+
       // Store the synthesized result
       try {
         await conversationPersistence.storeMessage(responseText, 'assistant', {
@@ -749,14 +749,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
     try {
       await conversationPersistence.clearConversationHistory();
-      
+
       // Reset local state
       setMessages([]);
       setConversationSummaries([]);
       setHasMoreMessages(false);
       setTotalMessageCount(0);
       setLastElizaMessage('');
-      
+
       // Generate new greeting for fresh start
       if (userContext) {
         const greeting: UnifiedMessage = {
@@ -765,16 +765,16 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           sender: 'assistant',
           timestamp: new Date()
         };
-        
+
         setMessages([greeting]);
         setLastElizaMessage(greeting.content);
-        
+
         // Store new greeting
         await conversationPersistence.storeMessage(greeting.content, 'assistant', {
           type: 'fresh-start-greeting'
         });
       }
-      
+
       console.log('✅ Conversation cleared and reset');
     } catch (error) {
       console.error('Failed to clear conversation:', error);
@@ -792,7 +792,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // Load more messages for pagination
   const loadMoreMessages = async () => {
     if (loadingMoreMessages || !hasMoreMessages) return;
-    
+
     setLoadingMoreMessages(true);
     try {
       // Load recent messages from the database (this replaces the current empty state)
@@ -805,7 +805,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           timestamp: msg.timestamp instanceof Date ? msg.timestamp : new Date(msg.timestamp),
           ...msg.metadata
         }));
-        
+
         // Replace the greeting with actual conversation history
         setMessages(prev => {
           // Keep the greeting if it exists, then add the history
@@ -813,7 +813,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           return greeting ? [greeting, ...convertedMessages] : convertedMessages;
         });
       }
-      
+
       // After loading first batch, enable normal pagination
       setHasMoreMessages(recentMessages.length >= 20 && recentMessages.length < totalMessageCount);
     } catch (error) {
@@ -829,11 +829,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const response = await fetch(
         "https://www.supportxmr.com/api/miner/46UxNFuGM2E3UwmZWWJicaRPoRwqwW4byQkaTHkX8yPcVihp91qAVtSFipWUGJJUyTXgzSqxzDQtNLf2bsp2DX2qCCgC5mg/stats"
       );
-      
+
       if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-      
+
       const data = await response.json();
-      
+
       setMiningStats({
         hashRate: data.hash || 0,
         validShares: data.validShares || 0,
@@ -884,16 +884,16 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           await enhancedTTS.initialize();
           setAudioInitialized(true);
         }
-        
+
         setIsSpeaking(true);
-        
+
         // Use humanized TTS if enabled
         await humanizedTTS.speak({
           text: responseText,
           emotion: currentEmotion,
           language
         });
-        
+
         setCurrentTTSMethod(isHumanizedMode ? 'Hume AI EVI' : 'Browser Web Speech');
         console.log(`🎵 TTS Method: ${isHumanizedMode ? 'Humanized' : 'Browser'}`);
         setIsSpeaking(false);
@@ -907,7 +907,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // Handler to update emotional context from voice or video
   const handleEmotionUpdate = useCallback((emotions: { name: string; score: number }[], source: 'voice' | 'facial' = 'voice') => {
     const primaryEmotion = emotions[0];
-    
+
     setEmotionalContext(prev => ({
       currentEmotion: primaryEmotion?.name || prev?.currentEmotion || '',
       emotionConfidence: primaryEmotion?.score || prev?.emotionConfidence || 0,
@@ -915,13 +915,13 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       facialEmotions: source === 'facial' ? emotions : prev?.facialEmotions,
       lastUpdate: Date.now()
     }));
-    
+
     // Also update legacy state for backward compatibility
     if (primaryEmotion) {
       setCurrentEmotion(primaryEmotion.name);
       setEmotionConfidence(primaryEmotion.score);
     }
-    
+
     console.log(`🎭 ${source} emotions updated:`, emotions.slice(0, 3).map(e => e.name).join(', '));
   }, []);
 
@@ -996,7 +996,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     try {
       // Determine input mode - use 'vision' if we have live video frames
       const inputMode = imageBase64Array.length > 0 ? 'vision' : 'voice';
-      
+
       const response = await UnifiedElizaService.generateResponse(transcript, {
         miningStats,
         userContext,
@@ -1023,7 +1023,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
       setMessages(prev => [...prev, elizaMessage]);
       setLastElizaMessage(responseText);
-      
+
       // Store Eliza's response with enhanced data
       try {
         await conversationPersistence.storeMessage(responseText, 'assistant', {
@@ -1065,12 +1065,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             await enhancedTTS.initialize();
             setAudioInitialized(true);
           }
-          
+
           setIsSpeaking(true);
-          
+
           // Add small delay in voice mode to let speech recognition settle
           await new Promise(resolve => setTimeout(resolve, 500));
-          
+
           // Stop any previous speech before starting new one
           humanizedTTS.stop();
           await humanizedTTS.speak({ text: responseText, language });
@@ -1082,7 +1082,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           setIsSpeaking(false);
         }
       }
-      
+
     } catch (error) {
       console.error('Failed to process voice input:', error);
       const errorMessage: UnifiedMessage = {
@@ -1101,7 +1101,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const handleSendMessage = async (quickMessage?: string) => {
     const messageText = quickMessage || textInput.trim();
     if (!messageText || isProcessing) return;
-    
+
     // Mark that user has engaged with the chat
     if (!hasUserEngaged) {
       setHasUserEngaged(true);
@@ -1113,20 +1113,20 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       try {
         const apiKey = messageText;
         const result = await apiKeyManager.setUserApiKey(apiKey);
-        
+
         if (result.success) {
           // Clear the API key from input and reset services
           setTextInput('');
           UnifiedElizaService.resetOpenAIInstance();
           setNeedsAPIKey(false);
-          
+
           const successMessage: UnifiedMessage = {
             id: `api-success-${Date.now()}`,
             content: '🔑 Perfect! Your Gemini API key has been validated and saved securely. Full AI capabilities have been restored. What would you like to talk about?',
             sender: 'assistant',
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, successMessage]);
           setLastElizaMessage(successMessage.content);
         } else {
@@ -1136,7 +1136,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             sender: 'assistant',
             timestamp: new Date()
           };
-          
+
           setMessages(prev => [...prev, errorMessage]);
           setTextInput('');
         }
@@ -1148,7 +1148,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           sender: 'assistant',
           timestamp: new Date()
         };
-        
+
         setMessages(prev => [...prev, errorMessage]);
         setTextInput('');
       } finally {
@@ -1163,32 +1163,27 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       setIsSpeaking(false);
     }
 
-    // Convert image attachments to base64
-    const imageBase64Array: string[] = [];
-    console.log('📎 Current attachments:', attachments.length, attachments.map(a => ({ type: a.type, name: a.name })));
-    
-    const imageAttachments = attachments.filter(a => a.type === 'image');
-    console.log('🖼️ Image attachments to convert:', imageAttachments.length);
-    
-    for (const att of imageAttachments) {
-      try {
-        const base64 = await fileToBase64(att.file);
-        imageBase64Array.push(base64);
-        console.log(`✅ Converted image ${att.name} to base64 (${base64.substring(0, 50)}...)`);
-      } catch (err) {
-        console.error('Failed to convert image to base64:', err);
-      }
-    }
-    
-    console.log('📸 Total images converted:', imageBase64Array.length);
-    
+    // Collect all file attachments
+    const currentAttachments: File[] = attachments.map(a => a.file);
+    console.log('📎 Preparing attachments:', currentAttachments.length, currentAttachments.map(f => f.name));
+
     // ✅ Capture video frame in multimodal mode (if camera is active)
+    let hasLiveVideo = false;
     if (humeState?.mode === 'multimodal' && humeState?.videoStream) {
       console.log('📹 Attempting to capture video frame for multimodal message...');
       const videoFrame = await captureVideoFrame();
       if (videoFrame) {
-        imageBase64Array.push(videoFrame);
-        console.log('📹 Added live video frame to message for visual analysis');
+        try {
+          // Convert base64 to File object
+          const res = await fetch(videoFrame);
+          const blob = await res.blob();
+          const file = new File([blob], "camera_frame.jpg", { type: "image/jpeg" });
+          currentAttachments.push(file);
+          hasLiveVideo = true;
+          console.log('📹 Added live video frame to attachments');
+        } catch (err) {
+          console.error('Failed to convert video frame to file:', err);
+        }
       } else {
         console.warn('⚠️ Could not capture video frame - video may not be ready');
       }
@@ -1199,7 +1194,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       content: messageText,
       sender: 'user',
       timestamp: new Date(),
-      attachments: imageBase64Array.length > 0 ? { images: imageBase64Array } : undefined
+      // Display first image from attachments if any (for UI feedback)
+      // We can't easily preview non-images here without logic, but this is just for local display state
+      // We'll skip adding 'attachments' prop to local message for now as it expects base64 structure 
+      // or we update the type. For now, we trust the persistence layer will handle it.
     };
 
     setMessages(prev => [...prev, userMessage]);
@@ -1240,7 +1238,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     try {
       console.log('💬 Starting message processing:', messageText);
       console.log('🔧 Context:', { miningStats: !!miningStats, userContext: !!userContext });
-      
+
       // Check if user is teaching pronunciation
       const learnedSpeech = speechLearningService.parseInstruction(messageText);
       if (learnedSpeech) {
@@ -1254,35 +1252,36 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         setIsProcessing(false);
         return;
       }
-      
+
       console.log('💾 User message stored, generating response...');
-      
+
       // Get full conversation context for better AI understanding
       const fullContext = await conversationPersistence.getFullConversationContext();
-      
+
       // Process response using Gemini AI Gateway or Council
       const response = await UnifiedElizaService.generateResponse(messageText, {
         miningStats,
         userContext,
         organizationContext,
-        inputMode: imageBase64Array.length > 0 ? 'vision' : 'text',
+        inputMode: currentAttachments.some(f => f.type.startsWith('image') || f.type.startsWith('video')) ? 'vision' : 'text',
         shouldSpeak: false,
         enableBrowsing: true,
         conversationContext: fullContext,
         emotionalContext: emotionalContext || undefined, // Pass real-time emotional context
         councilMode,
-        images: imageBase64Array.length > 0 ? imageBase64Array : undefined,
+        attachments: currentAttachments, // ✅ Pass all file attachments (including converted camera frames)
+        isLiveCameraFeed: hasLiveVideo,
         targetExecutive: selectedExecutive // Route to specific executive if selected
       }, language);
-      
+
       // Handle council deliberation response
       if (typeof response !== 'string' && response.type === 'council_deliberation') {
         const deliberation = response.deliberation;
-        
+
         const elizaMessage: UnifiedMessage = {
           id: `eliza-${Date.now()}`,
-          content: typeof deliberation.synthesis === 'string' 
-            ? deliberation.synthesis 
+          content: typeof deliberation.synthesis === 'string'
+            ? deliberation.synthesis
             : String(deliberation.synthesis || 'No response'),
           sender: 'assistant',
           timestamp: new Date(),
@@ -1290,10 +1289,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           isCouncilDeliberation: true,
           councilDeliberation: deliberation
         };
-        
+
         setMessages(prev => [...prev, elizaMessage]);
         setLastElizaMessage(deliberation.synthesis);
-        
+
         // Store council response
         try {
           await conversationPersistence.storeMessage(deliberation.synthesis, 'assistant', {
@@ -1306,7 +1305,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         } catch (error) {
           console.log('Conversation persistence error:', error);
         }
-        
+
         // Speak council synthesis with TTS (even if partial responses) - auto-initialize if needed
         if (voiceEnabled) {
           // Ensure TTS is initialized
@@ -1318,12 +1317,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               console.error('Failed to initialize TTS for council speech:', error);
             }
           }
-          
+
           setIsSpeaking(true);
-          
+
           // Build spoken text based on what's available
           console.log('🎵 Speaking council deliberation with executive voices...');
-          
+
           // Use the new council deliberation method with per-executive voices
           humanizedTTS.speakCouncilDeliberation(
             deliberation.responses.map(r => ({
@@ -1343,11 +1342,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               setIsSpeaking(false);
             });
         }
-        
+
         setIsProcessing(false);
         return;
       }
-      
+
       // Handle standard string response
       const responseText = response as string;
       console.log('✅ Response generated, length:', responseText.length);
@@ -1374,7 +1373,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       }
 
       // If it's a workflow initiation, show a brief acknowledgment instead
-      const displayContent = isWorkflowInitiation 
+      const displayContent = isWorkflowInitiation
         ? '🔄 Processing your request in the background. I\'ll share the results shortly...'
         : cleanResponse;
 
@@ -1394,11 +1393,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const toolCalls = (window as any).__lastElizaToolCalls || [];
       const providerUsed = (window as any).__lastElizaProvider || '';
       const executiveTitle = (window as any).__lastElizaExecutiveTitle || '';
-      
+
       const elizaMessage: UnifiedMessage = {
         id: `eliza-${Date.now()}`,
-        content: typeof displayContent === 'string' 
-          ? displayContent 
+        content: typeof displayContent === 'string'
+          ? displayContent
           : String(displayContent || 'No response'),
         sender: 'assistant',
         timestamp: new Date(),
@@ -1412,7 +1411,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
       setMessages(prev => [...prev, elizaMessage]);
       setLastElizaMessage(displayContent);
-      
+
       // Store Eliza's response with full data integration
       try {
         await conversationPersistence.storeMessage(cleanResponse, 'assistant', {
@@ -1427,10 +1426,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         // Record successful text response pattern
         await learningPatternsService.recordPattern(
           'text_response_success',
-          { 
-            inputLength: userMessage.content.length, 
+          {
+            inputLength: userMessage.content.length,
             responseLength: cleanResponse.length,
-            method: 'OpenAI' 
+            method: 'OpenAI'
           },
           0.85
         );
@@ -1459,7 +1458,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               await enhancedTTS.initialize();
               setAudioInitialized(true);
             }
-            
+
             setIsSpeaking(true);
             // Stop any previous speech before starting new one
             humanizedTTS.stop();
@@ -1472,22 +1471,22 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             setIsSpeaking(false);
           }
         };
-        
+
         initAndSpeak();
       }
-      
+
     } catch (error) {
       console.error('❌ Chat error:', error);
-      
+
       // Import intelligent error handler
       const { IntelligentErrorHandler } = await import('@/services/intelligentErrorHandler');
-      
+
       // Get error message
       const errorMessage = error instanceof Error ? error.message : String(error);
-      
+
       // Check if this is already a formatted diagnostic message
       let errorContent: string;
-      
+
       if (errorMessage.startsWith('DIAGNOSTIC:')) {
         // This is already a formatted diagnostic message
         errorContent = errorMessage.replace('DIAGNOSTIC:', '').trim();
@@ -1497,10 +1496,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           userInput: messageText,
           attemptedExecutive: (window as any).__lastElizaExecutive
         });
-        
+
         errorContent = IntelligentErrorHandler.generateExplanation(diagnosis);
       }
-      
+
       const errorMessageObj: UnifiedMessage = {
         id: `error-${Date.now()}`,
         content: errorContent,
@@ -1508,7 +1507,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         timestamp: new Date()
       };
       setMessages(prev => [...prev, errorMessageObj]);
-      
+
       // Log to Eliza activity log for autonomous monitoring
       try {
         await supabase.from('eliza_activity_log').insert({
@@ -1547,7 +1546,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
       localStorage.setItem('audioEnabled', newState.toString());
-      
+
       // If disabling, stop any ongoing speech
       if (!newState) {
         enhancedTTS.stop();
@@ -1558,14 +1557,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
   const handleAPIKeyValidated = () => {
     console.log('✅ API key validated, resetting Gemini and hiding input');
-    
+
     // Reset Gemini instance to use new API key
     UnifiedElizaService.resetOpenAIInstance();
-    
+
     // Hide the API key input
     setShowAPIKeyInput(false);
     setNeedsAPIKey(false);
-    
+
     // Add a success message to chat
     const successMessage: UnifiedMessage = {
       id: `success-${Date.now()}`,
@@ -1573,18 +1572,18 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       sender: 'assistant',
       timestamp: new Date()
     };
-    
+
     setMessages(prev => [...prev, successMessage]);
   };
 
   return (
     <Card className={`bg-card border-border/60 flex flex-col h-[500px] sm:h-[600px] ${className}`}>
       {/* Voice Intelligence Toggle */}
-      <MakeMeHumanToggle 
+      <MakeMeHumanToggle
         onModeChange={(mode, enabled) => setIsHumanizedMode(enabled)}
         onStateChange={(state) => setHumeState(state)}
       />
-      
+
       {/* Clean Header */}
       <div className="px-4 py-3 border-b border-border/60">
         <div className="flex items-center justify-between gap-2 sm:gap-4">
@@ -1653,17 +1652,17 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                     {councilMode ? 'Multi-AI Mode Active' : 'Single Executive Mode'}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {councilMode 
+                    {councilMode
                       ? 'Get perspectives from all 4 AI executives (CTO, CSO, CIO, CAO) before a unified response.'
                       : 'Chat with Eliza directly. Toggle to consult all executives.'}
                   </p>
                 </TooltipContent>
               </Tooltip>
             </TooltipProvider>
-            
+
             {/* Governance Status Badge */}
             <GovernanceStatusBadge />
-            
+
             {/* Realtime Connection Indicator */}
             {realtimeConnected && (
               <Badge variant="outline" className="text-[10px] hidden sm:flex items-center gap-1 bg-suite-success/10 text-suite-success border-suite-success/30">
@@ -1671,12 +1670,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                 <span>Live</span>
               </Badge>
             )}
-            
+
             {/* GitHub Token Status Indicator */}
             <div className="hidden md:block">
               <GitHubTokenStatus onRequestPAT={() => setShowAPIKeyInput(true)} />
             </div>
-            
+
             {/* API Key Button */}
             <Button
               onClick={() => setShowAPIKeyInput(true)}
@@ -1687,7 +1686,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             >
               <Key className="h-4 w-4" />
             </Button>
-            
+
             {/* Clear Conversation Button */}
             {totalMessageCount > 0 && (
               <Button
@@ -1700,17 +1699,16 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                 <Trash2 className="h-4 w-4" />
               </Button>
             )}
-            
+
             {/* Voice Toggle */}
             <Button
               onClick={toggleVoiceSynthesis}
               variant="ghost"
               size="sm"
-              className={`h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 ${
-                voiceEnabled 
+              className={`h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 ${voiceEnabled
                   ? (isHumanizedMode ? 'text-purple-500' : 'text-primary')
                   : 'text-muted-foreground'
-              }`}
+                }`}
               title={`${voiceEnabled ? 'Disable' : 'Enable'} voice${isHumanizedMode ? ' (Humanized)' : ''}`}
             >
               {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
@@ -1733,10 +1731,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                   </div>
                   <span className="text-xs text-muted-foreground">{officeClerkProgress.progress}%</span>
                 </div>
-                
+
                 <div className="space-y-2">
                   <div className="h-2 bg-muted rounded-full overflow-hidden">
-                    <div 
+                    <div
                       className="h-full bg-primary transition-all duration-300 rounded-full"
                       style={{ width: `${officeClerkProgress.progress}%` }}
                     />
@@ -1772,7 +1770,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                 </Button>
               </div>
             )}
-            
+
             {/* Conversation Summary Context (only show if user hasn't loaded messages) */}
             {conversationSummaries.length > 0 && !messages.some(m => m.id !== 'greeting') && (
               <div className="bg-muted/30 border border-border/30 rounded-lg p-3 mb-2">
@@ -1782,7 +1780,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                 </div>
               </div>
             )}
-            
+
             {messages.map((message) => (
               <div
                 key={message.id}
@@ -1794,23 +1792,22 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                     <ExecutiveCouncilChat deliberation={message.councilDeliberation} />
                   </div>
                 )}
-                
+
                 {/* Show Reasoning Steps for assistant messages */}
                 {message.sender === 'assistant' && message.reasoning && message.reasoning.length > 0 && (
                   <div className="max-w-[85%]">
                     <ReasoningSteps steps={message.reasoning} />
                   </div>
                 )}
-                
+
                 {/* Standard message bubble (skip if council deliberation) */}
                 {!(message.isCouncilDeliberation) && (
                   <div className="max-w-[80%] sm:max-w-[75%]">
-                  <div
-                      className={`p-3 rounded-xl ${
-                        message.sender === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
-                    }`}
+                    <div
+                      className={`p-3 rounded-xl ${message.sender === 'user'
+                          ? 'bg-primary text-primary-foreground rounded-br-sm'
+                          : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
+                        }`}
                     >
                       {/* Show attached images */}
                       {message.attachments?.images && message.attachments.images.length > 0 && (
@@ -1825,7 +1822,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                           ))}
                         </div>
                       )}
-                      
+
                       {/* Show AI-generated images with lazy loading to prevent freeze */}
                       {message.generatedImages && message.generatedImages.length > 0 && (
                         <div className="space-y-2 mb-2">
@@ -1839,27 +1836,27 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                           ))}
                         </div>
                       )}
-                      
+
                       <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
-                    
-                    {/* Tool Call Indicators */}
-                    {message.tool_calls && message.tool_calls.length > 0 && (
-                      <div className="mt-2 space-y-1">
-                        {message.tool_calls.map((tool) => (
-                          <div key={tool.id} className="text-xs flex items-center gap-1.5 opacity-70">
-                            <span className="text-muted-foreground">🔧</span>
-                            <span className="font-medium">{tool.function_name}</span>
-                            {tool.status === 'success' && <span className="text-green-600">✓</span>}
-                            {tool.status === 'failed' && <span className="text-red-600">✗</span>}
-                            {tool.status === 'pending' && <span className="animate-pulse">⋯</span>}
-                            {tool.execution_time_ms && (
-                              <span className="text-muted-foreground">({tool.execution_time_ms}ms)</span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                    
+
+                      {/* Tool Call Indicators */}
+                      {message.tool_calls && message.tool_calls.length > 0 && (
+                        <div className="mt-2 space-y-1">
+                          {message.tool_calls.map((tool) => (
+                            <div key={tool.id} className="text-xs flex items-center gap-1.5 opacity-70">
+                              <span className="text-muted-foreground">🔧</span>
+                              <span className="font-medium">{tool.function_name}</span>
+                              {tool.status === 'success' && <span className="text-green-600">✓</span>}
+                              {tool.status === 'failed' && <span className="text-red-600">✗</span>}
+                              {tool.status === 'pending' && <span className="animate-pulse">⋯</span>}
+                              {tool.execution_time_ms && (
+                                <span className="text-muted-foreground">({tool.execution_time_ms}ms)</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
                       <div className="text-xs opacity-60 mt-2 flex items-center justify-between gap-2">
                         <span>{formatTime(message.timestamp)}</span>
                         {message.sender === 'assistant' && message.providerUsed && (
@@ -1895,7 +1892,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         {/* API Key Input Dialog - Show automatically when needed or manually requested */}
         {(showAPIKeyInput || needsAPIKey) && (
           <div className="absolute inset-0 bg-background/95 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-            <GitHubPATInput 
+            <GitHubPATInput
               onKeyValidated={() => {
                 setShowAPIKeyInput(false);
                 setNeedsAPIKey(false);
@@ -1914,7 +1911,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             onRemove={removeAttachment}
             onClear={clearAttachments}
           />
-          
+
           <div className="flex gap-3 items-center">
             {/* Hume Voice/Video Controls */}
             <HumeChatControls
@@ -1925,18 +1922,18 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               onVoiceInput={handleVoiceInput}
               onEmotionUpdate={handleEmotionUpdate}
             />
-            
+
             {/* Camera Active Indicator */}
             {humeState?.mode === 'multimodal' && humeState?.videoStream && (
-              <Badge 
-                variant="outline" 
+              <Badge
+                variant="outline"
                 className={`text-[10px] flex items-center gap-1 ${videoReady ? 'bg-suite-success/10 text-suite-success border-suite-success/30' : 'bg-suite-warning/10 text-suite-warning border-suite-warning/30 animate-pulse-subtle'}`}
               >
                 <span className={`w-1.5 h-1.5 rounded-full ${videoReady ? 'bg-suite-success animate-pulse-subtle' : 'bg-suite-warning'}`}></span>
                 {videoReady ? 'Camera active' : 'Initializing...'}
               </Badge>
             )}
-            
+
             {/* File Attachment Button */}
             <input
               type="file"
@@ -1956,7 +1953,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             >
               <Paperclip className="h-4 w-4" />
             </Button>
-            
+
             <Input
               value={textInput}
               onChange={(e) => {
@@ -1969,14 +1966,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               }}
               onKeyPress={handleKeyPress}
               placeholder={
-                needsAPIKey 
-                  ? "Configure API key to continue..." 
+                needsAPIKey
+                  ? "Configure API key to continue..."
                   : attachments.length > 0
                     ? `${attachments.length} file${attachments.length > 1 ? 's' : ''} attached`
                     : humeState.mode === 'voice' && humeState.isEnabled
                       ? "Speak or type..."
-                      : isSpeaking 
-                        ? "Type to interrupt..." 
+                      : isSpeaking
+                        ? "Type to interrupt..."
                         : "Ask anything..."
               }
               className="flex-1 rounded-lg border-border/60 bg-background min-h-[44px] text-sm px-4"
@@ -1991,7 +1988,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               <Send className="h-4 w-4" />
             </Button>
           </div>
-          
+
           {/* Quick Response Buttons */}
           <QuickResponseButtons
             onQuickResponse={(message) => handleSendMessage(message)}

@@ -19,6 +19,7 @@ export interface ElizaContext {
   };
   emotionalContext?: any;
   images?: any[];
+  attachments?: File[]; // NEW: Support for raw file attachments
   isLiveCameraFeed?: boolean;
   targetExecutive?: string;
   councilMode?: boolean;
@@ -35,14 +36,14 @@ export interface ElizaContext {
 }
 
 export class UnifiedElizaService {
-  
+
   /**
    * Get healthy executives by checking their status from the backend
    * Transitioned from SAFE MODE to Production Health Checks
    */
   private static async getHealthyExecutives(): Promise<string[]> {
     console.log('📡 Production Mode: Fetching healthy executives...');
-    
+
     try {
       // Fetch agent status from Supabase
       const { data: agents, error } = await supabase
@@ -77,55 +78,55 @@ export class UnifiedElizaService {
   // CRITICAL FIX: Extract content properly from backend response
   private static extractResponseContent(data: any): string | null {
     console.log('🔍 Extracting response content from:', typeof data);
-    
+
     if (!data) {
       console.warn('⚠️ No data received');
       return null;
     }
-    
+
     // If it's already a string, return it
     if (typeof data === 'string') {
       console.log('📝 Response is already a string');
       return data;
     }
-    
+
     // If it's an object, try different extraction paths
     if (typeof data === 'object') {
-      
+
       // Try choices[0].message.content (OpenAI/ChatGPT format)
       if (data.choices && Array.isArray(data.choices) && data.choices[0]?.message?.content) {
         console.log('✅ Extracted from choices[0].message.content');
         return data.choices[0].message.content;
       }
-      
+
       // Try direct content property
       if (data.content && typeof data.content === 'string') {
         console.log('✅ Extracted from data.content');
         return data.content;
       }
-      
+
       // Try message property
       if (data.message && typeof data.message === 'string') {
         console.log('✅ Extracted from data.message');
         return data.message;
       }
-      
+
       // Try response property
       if (data.response && typeof data.response === 'string') {
         console.log('✅ Extracted from data.response');
         return data.response;
       }
-      
+
       // Try text property
       if (data.text && typeof data.text === 'string') {
         console.log('✅ Extracted from data.text');
         return data.text;
       }
-      
+
       console.warn('⚠️ Could not find content in object:', Object.keys(data));
       return null;
     }
-    
+
     console.warn('⚠️ Unknown data type:', typeof data);
     return null;
   }
@@ -135,88 +136,112 @@ export class UnifiedElizaService {
    * Production routing with response extraction
    */
   private static async routeToExecutive(
-    userInput: string, 
-    context: ElizaContext, 
-    healthyExecutives: string[], 
+    userInput: string,
+    context: ElizaContext,
+    healthyExecutives: string[],
     language = 'en'
   ) {
     console.log('🎯 Production routing with response extraction');
     console.log('📝 Input preview:', (userInput || '').substring(0, 30) + '...');
-    
+
     // Ensure we have a valid array
-    const safeExecutives = Array.isArray(healthyExecutives) && healthyExecutives.length > 0 
-      ? healthyExecutives 
+    const safeExecutives = Array.isArray(healthyExecutives) && healthyExecutives.length > 0
+      ? healthyExecutives
       : ['ai-chat', 'deepseek-chat', 'gemini-chat'];
-    
+
     console.log('🔒 Safe executives:', safeExecutives.length, 'available');
-    
+
     // Try executives in priority order
     for (const executive of safeExecutives) {
       try {
         console.log(`📞 Calling ${executive}...`);
-        
-        // Simple payload construction
-        const payload = {
-          message: userInput || 'Hello',
-          messages: [{ 
-            role: 'user', 
-            content: userInput || 'Hello' 
-          }],
-          organizationContext: context.organizationContext,
-          timestamp: new Date().toISOString(),
-          // ✅ CRITICAL FIX: Include images if they exist in the context
-          images: context.images || undefined, // Pass the images array (Base64 strings)
-          isLiveCameraFeed: context.isLiveCameraFeed || undefined // Pass the live camera feed flag
-        };
-        
-        const { data, error } = await supabase.functions.invoke(executive, {
-          body: payload
-        });
-        
+
+        let data, error;
+
+        // Check if we need multipart/form-data (for file attachments)
+        if (context.attachments && context.attachments.length > 0) {
+          console.log(`📎 Uploading ${context.attachments.length} attachments via multipart/form-data...`);
+          const formData = new FormData();
+          formData.append('userQuery', userInput || 'Hello');
+
+          // Append all files
+          context.attachments.forEach(file => {
+            formData.append('file', file);
+          });
+
+          // Execute request with FormData
+          const response = await supabase.functions.invoke(executive, {
+            body: formData
+          });
+          data = response.data;
+          error = response.error;
+
+        } else {
+          // Standard JSON payload
+          const payload = {
+            message: userInput || 'Hello',
+            messages: [{
+              role: 'user',
+              content: userInput || 'Hello'
+            }],
+            organizationContext: context.organizationContext,
+            timestamp: new Date().toISOString(),
+            // ✅ CRITICAL FIX: Include images if they exist in the context
+            images: context.images || undefined, // Pass the images array (Base64 strings)
+            isLiveCameraFeed: context.isLiveCameraFeed || undefined // Pass the live camera feed flag
+          };
+
+          const response = await supabase.functions.invoke(executive, {
+            body: payload
+          });
+          data = response.data;
+          error = response.error;
+        }
+
         if (error) {
           console.error(`❌ ${executive} error:`, error);
           continue;
         }
-        
+
         // CRITICAL FIX: Extract content properly
         const content = this.extractResponseContent(data);
-        
+
         if (content && content.length > 0) {
           console.log(`✅ ${executive} SUCCESS! Extracted content:`, content.substring(0, 100) + '...');
-          
+
           // Return as STRING (what frontend expects)
           return content;
         }
-        
+
         console.log(`⚠️ ${executive} no valid content extracted`);
-        
+
       } catch (err: any) {
         console.error(`💥 ${executive} crashed:`, err?.message || 'Unknown error');
         continue;
       }
     }
-    
+
     // All executives failed - use FallbackAIService (Office Clerk)
     console.log('🚨 All executives failed, falling back to Office Clerk...');
     const fallbackResult = await FallbackAIService.generateResponse(userInput, context);
-        return fallbackResult.text;
+    return fallbackResult.text;
   }
 
   // MAIN METHOD: Returns STRING as expected by frontend
   public static async generateResponse(
-    userInput: string, 
-    context: ElizaContext = {}, 
+    userInput: string,
+    context: ElizaContext = {},
     language = 'en'
   ): Promise<string> {
     console.log('🚀 FIXED UnifiedElizaService.generateResponse()');
-    
+
     try {
       // Validate inputs safely
       const safeInput = (typeof userInput === 'string' && userInput.trim()) ? userInput.trim() : 'Hello';
       const safeContext = (context && typeof context === 'object') ? context : {};
-      
+
       console.log('📋 Safe input length:', safeInput.length);
-      
+
       // Executive council mode (if requested)
       if (safeContext.councilMode) {
         console.log('🏛️ Trying executive council...');
@@ -230,29 +255,29 @@ export class UnifiedElizaService {
           console.warn('🏛️ Council failed, continuing with regular mode:', councilError?.message);
         }
       }
-      
+
       // Get healthy executives (guaranteed array)
       const healthyExecutives = await this.getHealthyExecutives();
       console.log('💚 Got healthy executives:', healthyExecutives.length);
-      
+
       // Route to best executive and get STRING response
       const result = await this.routeToExecutive(safeInput, safeContext, healthyExecutives, language);
-      
+
       console.log('✨ Response generated successfully, type:', typeof result);
       return result; // Return string directly
-      
+
     } catch (error: any) {
       console.error('💥 Critical error in generateResponse:', error?.message || error);
-      
-throw error;
+
+      throw error;
     }
   }
-  
+
   // Compatibility methods - all return strings
   public static async processMessage(input: string, context?: any): Promise<string> {
     return this.generateResponse(input || 'Hello', context || {});
   }
-  
+
   public static async chat(message: string, options?: any): Promise<string> {
     return this.generateResponse(message || 'Hello', options || {});
   }

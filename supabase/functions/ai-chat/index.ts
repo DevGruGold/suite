@@ -57,7 +57,7 @@ const DATABASE_CONFIG = {
     // NEW: IP-based session tracking
     ip_conversation_sessions: 'ip_conversation_sessions'
   },
-  
+
   agentStatuses: ['IDLE', 'BUSY', 'ARCHIVED', 'ERROR', 'OFFLINE'] as const,
   taskStatuses: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'] as const,
   taskStages: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'] as const,
@@ -166,42 +166,42 @@ const AMBIGUOUS_RESPONSES = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alrigh
 class IPSessionManager {
   private static readonly SESSION_TTL_MS = 24 * 60 * 60 * 1000;
   private static readonly IP_CACHE = new Map<string, { sessionId: string; lastSeen: number }>();
-  
+
   static extractIP(req: Request): string {
     try {
       const cfConnectingIp = req.headers.get('cf-connecting-ip');
       const xRealIp = req.headers.get('x-real-ip');
       const xForwardedFor = req.headers.get('x-forwarded-for');
       const remoteAddr = req.headers.get('remote-addr');
-      
+
       if (cfConnectingIp) {
         return cfConnectingIp.split(',')[0].trim();
       }
-      
+
       if (xRealIp) {
         return xRealIp.split(',')[0].trim();
       }
-      
+
       if (xForwardedFor) {
         const ips = xForwardedFor.split(',');
         return ips[0].trim();
       }
-      
+
       if (remoteAddr) {
         return remoteAddr;
       }
-      
+
       const headersHash = Array.from(req.headers.entries())
         .map(([k, v]) => `${k}:${v}`)
         .join('|');
       return `ip_hash_${this.hashString(headersHash).substring(0, 16)}`;
-      
+
     } catch (error) {
       console.warn('Failed to extract IP:', error);
       return `unknown_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
   }
-  
+
   private static hashString(str: string): string {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -211,16 +211,16 @@ class IPSessionManager {
     }
     return Math.abs(hash).toString(36);
   }
-  
+
   static async getOrCreateSessionId(ipAddress: string, userId?: string): Promise<string> {
     this.cleanupCache();
-    
+
     const cached = this.IP_CACHE.get(ipAddress);
     if (cached && Date.now() - cached.lastSeen < this.SESSION_TTL_MS) {
       cached.lastSeen = Date.now();
       return cached.sessionId;
     }
-    
+
     try {
       const { data: existingSessions, error: findError } = await supabase
         .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
@@ -229,29 +229,29 @@ class IPSessionManager {
         .gte('last_active', new Date(Date.now() - this.SESSION_TTL_MS).toISOString())
         .order('last_active', { ascending: false })
         .limit(1);
-      
+
       if (!findError && existingSessions && existingSessions.length > 0) {
         const session = existingSessions[0];
-        
+
         await supabase
           .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
-          .update({ 
+          .update({
             last_active: new Date().toISOString(),
             user_id: userId || undefined
           })
           .eq('session_id', session.session_id);
-        
+
         this.IP_CACHE.set(ipAddress, {
           sessionId: session.session_id,
           lastSeen: Date.now()
         });
-        
+
         return session.session_id;
       }
-      
+
       const sessionId = generateSessionId();
       const now = new Date().toISOString();
-      
+
       const { error: insertError } = await supabase
         .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
         .insert({
@@ -266,7 +266,7 @@ class IPSessionManager {
             ttl_hours: 24
           }
         });
-      
+
       if (insertError) {
         console.warn('Failed to save IP session:', insertError);
         const fallbackSessionId = `ip_${this.hashString(ipAddress)}_${Date.now()}`;
@@ -276,14 +276,14 @@ class IPSessionManager {
         });
         return fallbackSessionId;
       }
-      
+
       this.IP_CACHE.set(ipAddress, {
         sessionId: sessionId,
         lastSeen: Date.now()
       });
-      
+
       return sessionId;
-      
+
     } catch (error) {
       console.warn('IP session management error:', error);
       const fallbackSessionId = `ip_${this.hashString(ipAddress)}_${Date.now()}`;
@@ -294,38 +294,38 @@ class IPSessionManager {
       return fallbackSessionId;
     }
   }
-  
+
   private static detectIPType(ipAddress: string): string {
     if (ipAddress.startsWith('ip_hash_')) return 'hashed';
     if (ipAddress.startsWith('unknown_')) return 'fallback';
-    
+
     const ipv4Regex = /^(\d{1,3}\.){3}\d{1,3}$/;
     if (ipv4Regex.test(ipAddress)) return 'ipv4';
-    
+
     const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$/;
     if (ipv6Regex.test(ipAddress)) return 'ipv6';
-    
+
     return 'unknown';
   }
-  
+
   private static cleanupCache(): void {
     const now = Date.now();
     const threshold = this.SESSION_TTL_MS;
-    
+
     for (const [ip, data] of this.IP_CACHE.entries()) {
       if (now - data.lastSeen > threshold) {
         this.IP_CACHE.delete(ip);
       }
     }
   }
-  
+
   static async getActiveSessionsCount(): Promise<number> {
     try {
       const { count, error } = await supabase
         .from(DATABASE_CONFIG.tables.ip_conversation_sessions)
         .select('*', { count: 'exact', head: true })
         .gte('last_active', new Date(Date.now() - this.SESSION_TTL_MS).toISOString());
-      
+
       return error ? 0 : (count || 0);
     } catch {
       return 0;
@@ -390,17 +390,17 @@ function summarizeArray(arr: any[], max = 8) {
 async function logFunctionUsage(entry: any) {
   try {
     await supabase.from(DATABASE_CONFIG.tables.function_usage_logs).insert(entry);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 async function logActivity(entry: any) {
   try {
     await supabase.from(DATABASE_CONFIG.tables.eliza_activity_log).insert(entry);
-  } catch (_) {}
+  } catch (_) { }
 }
 
 function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
     const r = Math.random() * 16 | 0;
     const v = c === 'x' ? r : (r & 0x3 | 0x8);
     return v.toString(16);
@@ -437,36 +437,36 @@ function truncateString(str: string, maxLength: number): string {
 function generateEnhancedManualSummary(messages: any[], toolResults: any[]): string {
   const userMessages = messages.filter(m => m.role === 'user');
   const assistantMessages = messages.filter(m => m.role === 'assistant');
-  
+
   if (userMessages.length === 0) {
     return "Conversation started";
   }
-  
+
   const recentMessages = messages.slice(-5);
   const topics = extractConversationTopics(recentMessages);
   const conversationFocus = analyzeConversationFocus(messages);
   const successfulTools = toolResults.filter(r => r.result?.success).length;
   const failedTools = toolResults.filter(r => !r.result?.success).length;
-  
+
   const mainQueries = userMessages.slice(-3).map(m => m.content).filter(c => c.length > 10);
   const primaryQuery = mainQueries[mainQueries.length - 1] || userMessages[userMessages.length - 1]?.content || '';
-  
+
   let summary = `Discussion about ${topics.join(', ') || 'various topics'}. `;
-  
+
   if (conversationFocus) {
     summary += `Primary focus: ${conversationFocus}. `;
   }
-  
+
   if (primaryQuery && primaryQuery.length > 0) {
-    const truncatedQuery = primaryQuery.length > 80 
-      ? primaryQuery.substring(0, 80) + '...' 
+    const truncatedQuery = primaryQuery.length > 80
+      ? primaryQuery.substring(0, 80) + '...'
       : primaryQuery;
     summary += `Recent query: "${truncatedQuery}". `;
   }
-  
+
   if (toolResults.length > 0) {
     summary += `Executed ${toolResults.length} tools (${successfulTools} successful, ${failedTools} failed). `;
-    
+
     const uniqueTools = [...new Set(toolResults.map(tr => tr.name))];
     if (uniqueTools.length > 0) {
       summary += `Tools used: ${uniqueTools.slice(0, 3).join(', ')}`;
@@ -474,7 +474,7 @@ function generateEnhancedManualSummary(messages: any[], toolResults: any[]): str
       summary += '.';
     }
   }
-  
+
   return summary;
 }
 
@@ -490,22 +490,22 @@ function extractConversationTopics(messages: any[]): string[] {
     'task': ['task', 'assign', 'agent', 'work', 'project'],
     'knowledge': ['search', 'recall', 'store', 'knowledge', 'information']
   };
-  
+
   const allText = messages.map(m => m.content || '').join(' ').toLowerCase();
   const foundTopics: string[] = [];
-  
+
   for (const [topic, keywords] of Object.entries(topicKeywords)) {
     if (keywords.some(keyword => allText.includes(keyword))) {
       foundTopics.push(topic);
     }
   }
-  
+
   return foundTopics.length > 0 ? foundTopics : ['general discussion'];
 }
 
 function analyzeConversationFocus(messages: any[]): string | null {
   const recentText = messages.slice(-5).map(m => m.content || '').join(' ').toLowerCase();
-  
+
   const focusPatterns = [
     { pattern: /(what|how|when|where|who|why) (is|are|does|do|can|will)/, label: 'information inquiry' },
     { pattern: /(show|get|find|list|check) (me|the|all)/, label: 'data retrieval' },
@@ -516,13 +516,13 @@ function analyzeConversationFocus(messages: any[]): string | null {
     { pattern: /(browse|open|view|visit|check) (http|https|www|\.com)/, label: 'web browsing' },
     { pattern: /(file|document|pdf|image|attachment)/, label: 'file analysis' }
   ];
-  
+
   for (const { pattern, label } of focusPatterns) {
     if (pattern.test(recentText)) {
       return label;
     }
   }
-  
+
   return null;
 }
 
@@ -536,7 +536,7 @@ async function triggerBackgroundSummarization(
 ): Promise<void> {
   try {
     console.log(`🚀 Triggering background AI summarization for session: ${sessionId}`);
-    
+
     // Prepare the payload for the summarize-conversation edge function
     const summarizationPayload = {
       session_id: sessionId,
@@ -547,7 +547,7 @@ async function triggerBackgroundSummarization(
       timestamp: new Date().toISOString(),
       trigger_source: 'ai-chat-async'
     };
-    
+
     // CRITICAL: DO NOT await this call - fire and forget
     // This is the key fix that prevents the 17.5-second delay
     fetch(`${SUPABASE_URL}/functions/v1/summarize-conversation`, {
@@ -567,7 +567,7 @@ async function triggerBackgroundSummarization(
     }).catch(error => {
       console.warn('⚠️ Failed to trigger background summarization:', error.message);
     });
-    
+
   } catch (error: any) {
     console.warn('⚠️ Error preparing background summarization:', error.message);
     // Don't throw - this is a background operation, shouldn't affect main flow
@@ -579,17 +579,17 @@ class EnhancedConversationPersistence {
   private sessionId: string;
   private ipAddress: string;
   private userId?: string;
-  
+
   constructor(sessionId: string, ipAddress: string, userId?: string) {
     this.sessionId = sessionId;
     this.ipAddress = ipAddress;
     this.userId = userId;
   }
-  
+
   async loadHistoricalSummaries(limit: number = MAX_SUMMARIZED_CONVERSATIONS): Promise<any[]> {
     try {
       console.log(`📚 Loading historical conversation summaries for session: ${this.sessionId} (IP: ${this.ipAddress})`);
-      
+
       if (this.userId) {
         const { data: userData, error: userError } = await supabase
           .from(DATABASE_CONFIG.tables.conversation_summaries)
@@ -597,46 +597,46 @@ class EnhancedConversationPersistence {
           .eq('user_id', this.userId)
           .order('created_at', { ascending: false })
           .limit(limit);
-        
+
         if (!userError && userData && userData.length > 0) {
           console.log(`📖 Loaded ${userData.length} historical summaries by user ID`);
           return userData;
         }
       }
-      
+
       const { data: ipData, error: ipError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
         .select('id, summary, key_topics, sentiment, created_at, metadata')
         .eq('ip_address', this.ipAddress)
         .order('created_at', { ascending: false })
         .limit(limit);
-      
+
       if (!ipError && ipData && ipData.length > 0) {
         console.log(`📖 Loaded ${ipData.length} historical summaries by IP address`);
         return ipData;
       }
-      
+
       const { data: sessionData, error: sessionError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
         .select('id, summary, key_topics, sentiment, created_at, metadata')
         .eq('session_id', this.sessionId)
         .order('created_at', { ascending: false })
         .limit(limit);
-      
+
       if (!sessionError && sessionData) {
         console.log(`📖 Loaded ${sessionData.length} historical summaries by session ID`);
         return sessionData;
       }
-      
+
       console.log('📭 No historical conversation summaries found');
       return [];
-      
+
     } catch (error: any) {
       console.warn('⚠️ Failed to load historical summaries:', error);
       return [];
     }
   }
-  
+
   async saveConversationSummary(
     messages: any[],
     toolResults: any[] = [],
@@ -647,7 +647,7 @@ class EnhancedConversationPersistence {
       const summary = generateEnhancedManualSummary(messages, toolResults);
       const keyTopics = this.extractKeyTopics(messages);
       const sentiment = this.analyzeSentiment(messages);
-      
+
       const summaryRecord: any = {
         session_id: this.sessionId,
         ip_address: this.ipAddress,
@@ -663,28 +663,28 @@ class EnhancedConversationPersistence {
         },
         created_at: new Date().toISOString()
       };
-      
+
       if (sentiment && sentiment !== 'unknown') {
         summaryRecord.sentiment = sentiment;
       }
-      
+
       if (this.userId) {
         summaryRecord.user_id = this.userId;
       }
-      
+
       const { data, error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
         .insert(summaryRecord)
         .select()
         .single();
-      
+
       if (error) {
         console.warn('⚠️ Failed to save conversation summary:', error.message);
         return null;
       }
-      
+
       console.log(`💾 Saved manual conversation summary with ID: ${data.id}`);
-      
+
       // TRIGGER BACKGROUND AI SUMMARIZATION ASYNCHRONOUSLY
       // This is the critical fix - don't await this, let it run in background
       triggerBackgroundSummarization(this.sessionId, this.ipAddress, messages, toolResults, this.userId)
@@ -694,15 +694,15 @@ class EnhancedConversationPersistence {
         .catch(err => {
           console.warn('⚠️ Background summarization trigger failed:', err.message);
         });
-      
+
       return data.id;
-      
+
     } catch (error: any) {
       console.warn('⚠️ Failed to save conversation summary:', error);
       return null;
     }
   }
-  
+
   private extractKeyTopics(messages: any[]): string[] {
     const topics = [
       'task', 'agent', 'github', 'deploy', 'bug', 'api', 'function', 'system', 'mining', 'web', 'url', 'browse',
@@ -713,36 +713,36 @@ class EnhancedConversationPersistence {
       'database', 'storage', 'memory', 'performance', 'optimization',
       'help', 'support', 'guide', 'tutorial', 'how-to'
     ];
-    
+
     const allText = messages.map(m => m.content).join(' ').toLowerCase();
     const foundTopics = topics.filter(topic => allText.includes(topic));
-    
+
     return [...new Set(foundTopics)];
   }
-  
+
   private analyzeSentiment(messages: any[]): string | null {
     const positiveWords = ['good', 'great', 'excellent', 'awesome', 'thanks', 'thank', 'helpful', 'perfect', 'love', 'amazing'];
     const negativeWords = ['bad', 'terrible', 'awful', 'wrong', 'error', 'failed', 'broken', 'problem', 'issue', 'disappointed'];
-    
+
     const allText = messages.map(m => m.content).join(' ').toLowerCase();
-    
+
     let positiveCount = 0;
     let negativeCount = 0;
-    
+
     positiveWords.forEach(word => {
       if (allText.includes(word)) positiveCount++;
     });
-    
+
     negativeWords.forEach(word => {
       if (allText.includes(word)) negativeCount++;
     });
-    
+
     if (positiveCount > 0 && positiveCount > negativeCount * 2) return 'positive';
     if (negativeCount > 0 && negativeCount > positiveCount * 2) return 'negative';
     if (positiveCount > 0 || negativeCount > 0) return 'neutral';
     return null;
   }
-  
+
   async saveConversationContext(
     currentQuestion: string,
     assistantResponse: string,
@@ -763,26 +763,26 @@ class EnhancedConversationPersistence {
           context_type: 'follow_up'
         }
       };
-      
+
       if (this.userId) {
         contextRecord.user_id = this.userId;
       }
-      
+
       const { error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_context)
         .insert(contextRecord);
-      
+
       if (error) {
         console.warn('⚠️ Failed to save conversation context:', error.message);
       } else {
         console.log('💾 Saved conversation context for follow-up understanding');
       }
-      
+
     } catch (error: any) {
       console.warn('⚠️ Failed to save conversation context:', error);
     }
   }
-  
+
   async loadRecentContext(limit: number = 5): Promise<any[]> {
     try {
       const { data, error } = await supabase
@@ -791,14 +791,14 @@ class EnhancedConversationPersistence {
         .eq('ip_address', this.ipAddress)
         .order('timestamp', { ascending: false })
         .limit(limit);
-      
+
       if (error) {
         console.warn('⚠️ Database error loading conversation context:', error.message);
         return [];
       }
-      
+
       return data || [];
-      
+
     } catch (error: any) {
       console.warn('⚠️ Failed to load conversation context:', error);
       return [];
@@ -812,7 +812,7 @@ class AttachmentAnalyzer {
     '.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.csv', '.html', '.htm',
     '.pdf', '.doc', '.docx', '.rtf',
     '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg',
-    '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.cs', 
+    '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.cs',
     '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
     '.sol', '.vy',
     '.sh', '.bash', '.zsh',
@@ -820,15 +820,15 @@ class AttachmentAnalyzer {
     '.csv', '.tsv', '.xls', '.xlsx',
     '.ini', '.conf', '.cfg', '.env'
   ];
-  
+
   static isSupportedFile(filename: string): boolean {
     const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
     return this.SUPPORTED_EXTENSIONS.includes(extension);
   }
-  
+
   static getFileType(filename: string): string {
     const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
-    
+
     if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(extension)) {
       return 'image';
     } else if (['.pdf', '.doc', '.docx', '.rtf'].includes(extension)) {
@@ -843,10 +843,10 @@ class AttachmentAnalyzer {
       return 'unknown';
     }
   }
-  
+
   static async analyzeTextContent(content: string, filename: string): Promise<any> {
     const fileType = this.getFileType(filename);
-    
+
     let analysis = {
       file_type: fileType,
       filename: filename,
@@ -857,24 +857,24 @@ class AttachmentAnalyzer {
       detected_language: 'unknown',
       key_findings: []
     };
-    
+
     if (fileType === 'code' || fileType === 'smart_contract') {
       analysis.has_code = true;
-      
+
       if (filename.endsWith('.sol')) {
         analysis.detected_language = 'solidity';
         analysis.key_findings.push('Smart contract file detected');
-        
+
         const contractMatch = content.match(/contract\s+(\w+)/);
         if (contractMatch) {
           analysis.key_findings.push(`Contract name: ${contractMatch[1]}`);
         }
-        
+
         const functionMatches = content.match(/function\s+(\w+)/g);
         if (functionMatches) {
           analysis.key_findings.push(`Found ${functionMatches.length} functions`);
         }
-        
+
       } else if (filename.endsWith('.js') || filename.endsWith('.jsx')) {
         analysis.detected_language = 'javascript';
       } else if (filename.endsWith('.ts') || filename.endsWith('.tsx')) {
@@ -890,33 +890,33 @@ class AttachmentAnalyzer {
       } else if (filename.endsWith('.rs')) {
         analysis.detected_language = 'rust';
       }
-      
+
       const importMatches = content.match(/(import|require|from|#include|using)\s+['"][^'"]+['"]/g);
       if (importMatches) {
         analysis.key_findings.push(`Found ${importMatches.length} imports/dependencies`);
       }
     }
-    
+
     if (fileType === 'document' || fileType === 'text') {
       const headingMatches = content.match(/^(#+|\w.+:\n)/gm);
       if (headingMatches) {
         analysis.key_findings.push(`Found ${headingMatches.length} headings/sections`);
       }
-      
+
       const urlMatches = content.match(/https?:\/\/[^\s]+/g);
       if (urlMatches) {
         analysis.key_findings.push(`Found ${urlMatches.length} URLs`);
       }
-      
+
       const emailMatches = content.match(/[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}/g);
       if (emailMatches) {
         analysis.key_findings.push(`Found ${emailMatches.length} email addresses`);
       }
     }
-    
+
     return analysis;
   }
-  
+
   static async saveAnalysisToDatabase(
     sessionId: string,
     ipAddress: string,
@@ -942,21 +942,21 @@ class AttachmentAnalyzer {
         },
         created_at: new Date().toISOString()
       };
-      
+
       if (analysis.detected_language && analysis.detected_language !== 'unknown') {
         analysisRecord.detected_language = analysis.detected_language;
       }
-      
+
       const { error } = await supabase
         .from(DATABASE_CONFIG.tables.attachment_analysis)
         .insert(analysisRecord);
-      
+
       if (error) {
         console.warn('⚠️ Failed to save attachment analysis:', error.message);
       } else {
         console.log(`💾 Saved attachment analysis for ${filename} with session ID: ${sessionId}`);
       }
-      
+
     } catch (error: any) {
       console.warn('⚠️ Failed to save attachment analysis:', error);
     }
@@ -985,7 +985,7 @@ async function getSystemStatus(): Promise<any> {
         body: { action: 'summary' }
       });
       if (!error && data) systemStatusData = data;
-    } catch (_) {}
+    } catch (_) { }
 
     return {
       success: true,
@@ -1023,12 +1023,12 @@ async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
 async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sessionId: string): Promise<any> {
   try {
     console.log(`📎 Analyzing ${attachments.length} attachment(s) for IP: ${ipAddress}, Session: ${sessionId}`);
-    
+
     const analyses = [];
-    
+
     for (const attachment of attachments) {
       const { filename, content, mime_type, size, url } = attachment;
-      
+
       if (!filename) {
         analyses.push({
           success: false,
@@ -1037,7 +1037,7 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
         });
         continue;
       }
-      
+
       if (!AttachmentAnalyzer.isSupportedFile(filename)) {
         analyses.push({
           success: false,
@@ -1047,9 +1047,9 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
         });
         continue;
       }
-      
+
       const fileType = AttachmentAnalyzer.getFileType(filename);
-      
+
       let analysis: any = {
         success: true,
         filename,
@@ -1058,11 +1058,11 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
         size: size || 'unknown',
         supported: true
       };
-      
+
       if (fileType === 'image') {
         analysis.analysis_type = 'image_vision';
         analysis.note = 'Image will be analyzed using vision capabilities';
-        
+
       } else if (['text', 'document', 'code', 'smart_contract'].includes(fileType)) {
         if (content) {
           const textAnalysis = await AttachmentAnalyzer.analyzeTextContent(content, filename);
@@ -1076,9 +1076,9 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
           analysis.error = 'No content provided for analysis';
         }
       }
-      
+
       analyses.push(analysis);
-      
+
       if (analysis.success) {
         await AttachmentAnalyzer.saveAnalysisToDatabase(
           sessionId,
@@ -1088,7 +1088,7 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
         );
       }
     }
-    
+
     return {
       success: true,
       total_attachments: attachments.length,
@@ -1097,7 +1097,7 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
       analyses: analyses,
       timestamp: new Date().toISOString()
     };
-    
+
   } catch (error: any) {
     return {
       success: false,
@@ -1121,34 +1121,34 @@ async function handleAmbiguousResponse(
   shouldExecuteTools: boolean;
 }> {
   const userMessageLower = userMessage.toLowerCase().trim();
-  
+
   const isAmbiguous = AMBIGUOUS_RESPONSES.includes(userMessageLower);
-  
+
   if (!isAmbiguous) {
     return { isAmbiguous: false, response: null, shouldExecuteTools: true };
   }
-  
+
   let recentQuestion = null;
   let recentAssistantMessage = null;
-  
+
   const recentMessages = conversationHistory.slice(-10).reverse();
-  
+
   for (const message of recentMessages) {
     if (message.role === 'assistant') {
       recentAssistantMessage = message.content || '';
-      
+
       const hasQuestion = recentAssistantMessage.includes('?');
-      const hasOptions = recentAssistantMessage.includes('option') || 
-                        recentAssistantMessage.includes('choice') || 
-                        recentAssistantMessage.includes('select');
-      
+      const hasOptions = recentAssistantMessage.includes('option') ||
+        recentAssistantMessage.includes('choice') ||
+        recentAssistantMessage.includes('select');
+
       if (hasQuestion || hasOptions) {
         recentQuestion = recentAssistantMessage;
         break;
       }
     }
   }
-  
+
   if (!recentQuestion) {
     const lastAssistant = recentMessages.find(m => m.role === 'assistant');
     if (lastAssistant) {
@@ -1157,12 +1157,12 @@ async function handleAmbiguousResponse(
       recentQuestion = 'the previous topic';
     }
   }
-  
+
   const questionSummary = recentQuestion.substring(0, 200);
-  
+
   let response = '';
   const isPositive = ['yes', 'yeah', 'yep', 'sure', 'ok', 'okay', 'alright', 'fine', 'go ahead', 'proceed'].includes(userMessageLower);
-  
+
   if (isPositive) {
     response = `Great! I understand your "yes" as agreement to:\n\n**${questionSummary}**\n\n`;
     response += `To proceed, I'll continue with that course of action. If you'd like me to do something specific, please provide more details.`;
@@ -1170,13 +1170,13 @@ async function handleAmbiguousResponse(
     response = `Understood. I interpret your "no" as disagreement with:\n\n**${questionSummary}**\n\n`;
     response += `Let me know what alternative you'd prefer, or provide more specific instructions.`;
   }
-  
+
   if (recentAssistantMessage) {
     await conversationManager.saveConversationContext(
       recentAssistantMessage,
       recentAssistantMessage,
       userMessage,
-      { 
+      {
         request_id: generateRequestId(),
         ambiguous_response: true,
         interpretation: isPositive ? 'agreement' : 'disagreement',
@@ -1184,7 +1184,7 @@ async function handleAmbiguousResponse(
       }
     );
   }
-  
+
   return {
     isAmbiguous: true,
     response: response,
@@ -1193,7 +1193,7 @@ async function handleAmbiguousResponse(
 }
 
 async function executeRealToolCall(
-  name: string, 
+  name: string,
   args: string,
   executiveName: string,
   sessionId: string,
@@ -1216,18 +1216,18 @@ async function executeRealToolCall(
       if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
         throw new Error('Missing or empty attachments array');
       }
-      
+
       result = await analyzeAttachmentTool(attachments, ipAddress, sessionId);
-      
+
     } else if (name === 'browse_web') {
       const url = parsedArgs.url;
       if (!url) throw new Error('Missing url');
-      
+
       let normalizedUrl = url;
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         normalizedUrl = `https://${url}`;
       }
-      
+
       result = await invokeEdgeFunction('playwright-browse', {
         url: normalizedUrl,
         action: parsedArgs.action || 'navigate',
@@ -1236,71 +1236,71 @@ async function executeRealToolCall(
         method: parsedArgs.method || 'GET',
         body: parsedArgs.body
       });
-      
+
     } else if (name === 'get_mining_stats') {
-      result = await invokeEdgeFunction('mining-proxy', { 
-        action: 'get_mining_stats' 
+      result = await invokeEdgeFunction('mining-proxy', {
+        action: 'get_mining_stats'
       });
-      
+
     } else if (name === 'get_ecosystem_metrics') {
-      result = await invokeEdgeFunction('ecosystem-monitor', { 
-        action: 'ecosystem_metrics' 
+      result = await invokeEdgeFunction('ecosystem-monitor', {
+        action: 'ecosystem_metrics'
       });
-      
+
     } else if (name === 'get_system_status') {
       result = await getSystemStatus();
-      
+
     } else if (name === 'vertex_generate_image') {
       const { prompt } = parsedArgs;
       if (!prompt) throw new Error('Missing prompt');
-      result = await invokeEdgeFunction('vertex-ai-chat', { 
-        action: 'generate_image', 
-        prompt 
+      result = await invokeEdgeFunction('vertex-ai-chat', {
+        action: 'generate_image',
+        prompt
       });
-      
+
     } else if (name === 'vertex_generate_video') {
       const { prompt, duration_seconds = 5 } = parsedArgs;
       if (!prompt) throw new Error('Missing prompt');
-      result = await invokeEdgeFunction('vertex-ai-chat', { 
-        action: 'generate_video', 
-        prompt, 
-        duration_seconds 
+      result = await invokeEdgeFunction('vertex-ai-chat', {
+        action: 'generate_video',
+        prompt,
+        duration_seconds
       });
-      
+
     } else if (name === 'vertex_check_video_status') {
       const { operation_name } = parsedArgs;
       if (!operation_name) throw new Error('Missing operation_name');
-      result = await invokeEdgeFunction('vertex-ai-chat', { 
-        action: 'check_video_status', 
-        operation_name 
+      result = await invokeEdgeFunction('vertex-ai-chat', {
+        action: 'check_video_status',
+        operation_name
       });
-      
+
     } else if (name === 'invoke_edge_function') {
       const { function_name, payload } = parsedArgs;
       if (!function_name) throw new Error('Missing function_name');
       result = await invokeEdgeFunction(function_name, payload ?? {});
-      
+
     } else if (name === 'search_edge_functions') {
       const { query, category, mode } = parsedArgs;
-      
+
       if (mode === 'full_registry') {
         const { data, error } = await supabase
           .from(DATABASE_CONFIG.tables.ai_tools)
           .select('name, description, category, is_active, parameters')
           .eq('is_active', true)
           .order('name');
-        
+
         if (error) throw error;
-        
+
         const grouped = (data || []).reduce((acc: any, tool) => {
           const cat = tool.category || 'uncategorized';
           if (!acc[cat]) acc[cat] = [];
           acc[cat].push(tool);
           return acc;
         }, {});
-        
-        result = { 
-          success: true, 
+
+        result = {
+          success: true,
           functions: data,
           grouped_by_category: grouped,
           total: data?.length || 0
@@ -1310,38 +1310,38 @@ async function executeRealToolCall(
           .from(DATABASE_CONFIG.tables.ai_tools)
           .select('name, description, category, is_active, parameters')
           .eq('is_active', true);
-        
+
         if (query) {
           dbQuery = dbQuery.or(`name.ilike.%${query}%,description.ilike.%${query}%`);
         }
-        
+
         if (category) {
           dbQuery = dbQuery.eq('category', category);
         }
-        
+
         const { data, error } = await dbQuery.order('name').limit(100);
         if (error) throw error;
         result = { success: true, functions: data, total: data?.length || 0 };
       }
-      
+
     } else if (name === 'list_available_functions') {
       // Simplified: Use search_edge_functions as the canonical source
       const { category } = parsedArgs;
-      
+
       let dbQuery = supabase
         .from(DATABASE_CONFIG.tables.ai_tools)
         .select('name, description, category, is_active, parameters')
         .eq('is_active', true)
         .order('name');
-      
+
       if (category) {
         dbQuery = dbQuery.eq('category', category);
       }
-      
+
       const { data, error } = await dbQuery;
       if (error) throw error;
       result = { success: true, functions: data, total: data?.length || 0 };
-      
+
     } else if (name === 'get_edge_function_logs') {
       const { function_name, limit = 50 } = parsedArgs;
       let query = supabase
@@ -1349,15 +1349,15 @@ async function executeRealToolCall(
         .select('function_name, level, event_type, event_message, timestamp, execution_time_ms, status_code, request_id')
         .order('timestamp', { ascending: false })
         .limit(Math.min(limit, 200));
-      
+
       if (function_name) {
         query = query.eq('function_name', function_name);
       }
-      
+
       const { data, error } = await query;
       if (error) throw error;
       result = { success: true, logs: data, total: data?.length || 0 };
-      
+
     } else if (name === 'list_agents') {
       const [agentsResult, superduperResult] = await Promise.all([
         supabase
@@ -1371,16 +1371,16 @@ async function executeRealToolCall(
           .order('created_at', { ascending: false })
           .limit(10)
       ]);
-      
+
       if (agentsResult.error) throw agentsResult.error;
-      
-      result = { 
-        success: true, 
+
+      result = {
+        success: true,
         agents: agentsResult.data || [],
         superduper_agents: superduperResult.data || [],
         total_agents: (agentsResult.data?.length || 0) + (superduperResult.data?.length || 0)
       };
-      
+
     } else if (name === 'assign_task') {
       const taskData = {
         title: parsedArgs.title,
@@ -1393,37 +1393,37 @@ async function executeRealToolCall(
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      
+
       const { data: task, error } = await supabase
         .from(DATABASE_CONFIG.tables.tasks)
         .insert(taskData)
         .select()
         .single();
-      
+
       if (error) throw error;
       result = { success: true, task: task };
-      
+
     } else if (name === 'list_tasks') {
       const { data: tasks, error } = await supabase
         .from(DATABASE_CONFIG.tables.tasks)
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
-      
+
       if (error) throw error;
       result = { success: true, tasks: tasks || [] };
-      
+
     } else if (name === 'search_knowledge') {
       const search_term = parsedArgs.search_term || parsedArgs.query;
       const limit = parsedArgs.limit || 10;
-      
+
       if (!search_term) {
         const { data: knowledge, error } = await supabase
           .from(DATABASE_CONFIG.tables.knowledge_entities)
           .select('*')
           .order('created_at', { ascending: false })
           .limit(limit);
-        
+
         if (error) throw error;
         result = { success: true, knowledge: knowledge || [] };
       } else {
@@ -1434,11 +1434,11 @@ async function executeRealToolCall(
           .or(`entity_name.ilike.%${search_term}%,description.ilike.%${search_term}%,content.ilike.%${search_term}%`)
           .order('created_at', { ascending: false })
           .limit(limit);
-        
+
         if (error) throw error;
         result = { success: true, knowledge: knowledge || [] };
       }
-      
+
     } else if (name === 'store_knowledge') {
       // FIXED: Changed 'name' to 'entity_name'
       const knowledgeData = {
@@ -1450,23 +1450,23 @@ async function executeRealToolCall(
         created_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
-      
+
       const { data: knowledge, error } = await supabase
         .from(DATABASE_CONFIG.tables.knowledge_entities)
         .insert(knowledgeData)
         .select()
         .single();
-      
+
       if (error) throw error;
       result = { success: true, knowledge: knowledge };
-      
+
     } else if (name === 'recall_entity') {
       const { name, entity_id } = parsedArgs;
-      
+
       let query = supabase
         .from(DATABASE_CONFIG.tables.knowledge_entities)
         .select('*');
-      
+
       if (entity_id) {
         query = query.eq('id', entity_id);
       } else if (name) {
@@ -1475,11 +1475,11 @@ async function executeRealToolCall(
       } else {
         throw new Error('Either name or entity_id is required');
       }
-      
+
       const { data: entity, error } = await query.single();
       if (error) throw error;
       result = { success: true, entity: entity };
-      
+
     } else if (name === 'createGitHubIssue') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'create_issue',
@@ -1489,7 +1489,7 @@ async function executeRealToolCall(
           labels: parsedArgs.labels || []
         }
       });
-      
+
     } else if (name === 'listGitHubIssues') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'list_issues',
@@ -1498,7 +1498,7 @@ async function executeRealToolCall(
           limit: parsedArgs.limit || 10
         }
       });
-      
+
     } else if (name === 'createGitHubDiscussion') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'create_discussion',
@@ -1508,7 +1508,7 @@ async function executeRealToolCall(
           category: parsedArgs.category || 'General'
         }
       });
-      
+
     } else if (name === 'searchGitHubCode') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'search_code',
@@ -1517,7 +1517,7 @@ async function executeRealToolCall(
           limit: parsedArgs.limit || 10
         }
       });
-      
+
     } else if (name === 'createGitHubPullRequest') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'create_pull_request',
@@ -1529,7 +1529,7 @@ async function executeRealToolCall(
           draft: parsedArgs.draft || false
         }
       });
-      
+
     } else if (name === 'commentOnGitHubIssue') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'comment_on_issue',
@@ -1538,7 +1538,7 @@ async function executeRealToolCall(
           body: parsedArgs.body
         }
       });
-      
+
     } else if (name === 'commentOnGitHubDiscussion') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'comment_on_discussion',
@@ -1547,7 +1547,7 @@ async function executeRealToolCall(
           body: parsedArgs.body
         }
       });
-      
+
     } else if (name === 'listGitHubPullRequests') {
       result = await invokeEdgeFunction('github-integration', {
         action: 'list_pull_requests',
@@ -1556,32 +1556,32 @@ async function executeRealToolCall(
           limit: parsedArgs.limit || 10
         }
       });
-      
+
     } else if (name === 'execute_workflow_template') {
       const { template_name, params } = parsedArgs;
-      
+
       const { data: template, error: templateError } = await supabase
         .from(DATABASE_CONFIG.tables.workflow_templates)
         .select('*')
         .eq('name', template_name)
         .single();
-      
+
       if (templateError) throw templateError;
-      
+
       result = await invokeEdgeFunction('workflow-template-manager', {
         action: 'execute_template',
         template_name,
         template_data: template,
         params: params || {}
       });
-      
+
     } else if (name === 'google_gmail') {
       result = await invokeEdgeFunction('google-gmail', parsedArgs);
-      
+
     } else {
       throw new Error(`Tool '${name}' is not a recognized or allowed tool. Please use one of the explicitly defined tools.`);
     }
-    
+
     success = true;
     return {
       ...result,
@@ -1589,11 +1589,11 @@ async function executeRealToolCall(
       tool_name: name,
       timestamp
     };
-    
+
   } catch (error: any) {
     error_message = error?.message || String(error);
-    return { 
-      success: false, 
+    return {
+      success: false,
       error: error_message,
       tool_name: name,
       timestamp,
@@ -1602,7 +1602,7 @@ async function executeRealToolCall(
   } finally {
     const duration = Math.round(performance.now() - startTime);
     const parsedToolArgs = parseToolArguments(args);
-    
+
     const logEntry = {
       function_name: name,
       executive_name: executiveName,
@@ -1615,17 +1615,17 @@ async function executeRealToolCall(
       ip_address: ipAddress,
       created_at: new Date().toISOString()
     };
-    
+
     logFunctionUsage(logEntry);
-    
+
     logActivity({
       activity_type: 'tool_execution',
       title: `🔧 ${executiveName} executed ${name}`,
       description: `${executiveName} executed tool: ${name}`,
       status: success ? 'completed' : 'error',
-      metadata: { 
-        name, 
-        args: parsedToolArgs, 
+      metadata: {
+        name,
+        args: parsedToolArgs,
         result: success ? 'ok' : error_message,
         duration_ms: duration,
         ip_address: ipAddress
@@ -1641,27 +1641,27 @@ function extractKeyInsights(content: string, domain: string): string {
   if (!content || content.length < 100) {
     return "The page appears to be accessible but contains minimal content.\n";
   }
-  
+
   const titleMatch = content.match(/<title[^>]*>([^<]+)<\/title>/i);
   const title = titleMatch ? titleMatch[1] : '';
-  
+
   const metaMatch = content.match(/<meta[^>]*name=["']description["'][^>]*content=["']([^"']+)["']/i);
   const description = metaMatch ? metaMatch[1] : '';
-  
+
   const isNewsSite = domain.includes('ycombinator') || domain.includes('news');
   const isSocialMedia = domain.includes('reddit') || domain.includes('twitter') || domain.includes('facebook');
   const isSearchEngine = domain.includes('google') || domain.includes('bing') || domain.includes('duckduckgo');
-  
+
   let insights = '';
-  
+
   if (title) {
     insights += `**Title**: ${title}\n`;
   }
-  
+
   if (description && description.length < 200) {
     insights += `**Description**: ${description}\n`;
   }
-  
+
   if (isNewsSite) {
     if (domain.includes('ycombinator')) {
       const hnMatches = content.match(/<a href="[^"]+" class="titlelink"[^>]*>([^<]+)<\/a>/g);
@@ -1670,7 +1670,7 @@ function extractKeyInsights(content: string, domain: string): string {
           const textMatch = h.match(/<a[^>]*>([^<]+)<\/a>/);
           return textMatch ? `  ${i + 1}. ${textMatch[1]}` : '';
         }).filter(Boolean);
-        
+
         if (headlines.length > 0) {
           insights += `**Top Headlines**:\n${headlines.join('\n')}\n`;
         }
@@ -1681,13 +1681,13 @@ function extractKeyInsights(content: string, domain: string): string {
   } else if (isSearchEngine) {
     insights += `**Note**: This is a search engine homepage. To search for specific content, I can help you formulate search queries.\n`;
   }
-  
+
   const hasForms = content.includes('<form') || content.includes('<input');
   const hasImages = content.match(/<img[^>]+>/g)?.length || 0;
   const hasLinks = content.match(/<a[^>]+href=["'][^"']+["'][^>]*>/g)?.length || 0;
-  
+
   insights += `**Page Elements**: ${hasForms ? 'Forms, ' : ''}${hasImages} images, ${hasLinks} links\n`;
-  
+
   return insights;
 }
 
@@ -1698,7 +1698,7 @@ function analyzeUserIntent(query: string, conversationContext: any[] = []): {
   topics: string[];
 } {
   const queryLower = query.toLowerCase();
-  
+
   const intents = {
     dataRetrieval: ['what', 'how', 'when', 'where', 'who', 'why', 'show', 'tell', 'get', 'find', 'list', 'check'],
     action: ['do', 'make', 'create', 'generate', 'build', 'execute', 'run', 'perform', 'start'],
@@ -1709,34 +1709,34 @@ function analyzeUserIntent(query: string, conversationContext: any[] = []): {
     help: ['help', 'assist', 'guide', 'how to', 'can you'],
     communication: ['email', 'send', 'mail', 'message', 'contact', 'reach out', 'notify']
   };
-  
+
   const detectedIntents = [];
   for (const [intent, keywords] of Object.entries(intents)) {
     if (keywords.some(keyword => queryLower.includes(keyword))) {
       detectedIntents.push(intent);
     }
   }
-  
+
   const commonTopics = [
     'task', 'agent', 'github', 'code', 'function', 'edge function', 'mining',
     'system', 'database', 'web', 'url', 'api', 'key', 'license', 'workflow',
     'vertex', 'image', 'video', 'billing', 'financial', 'vsco', 'lead',
     'email', 'gmail', 'contact', 'message', 'communication', 'send'
   ];
-  
+
   const foundTopics = commonTopics.filter(topic => queryLower.includes(topic));
-  
+
   const isFollowUp = conversationContext.length > 0 && (
     queryLower.includes('what about') ||
     queryLower.includes('how about') ||
     queryLower.includes('also') ||
     queryLower.includes('and') ||
     queryLower.includes('what else') ||
-    (queryLower.includes('?') && conversationContext.some(ctx => 
+    (queryLower.includes('?') && conversationContext.some(ctx =>
       ctx.role === 'assistant' && Date.now() - (ctx.timestamp || 0) < 300000
     ))
   );
-  
+
   return {
     primaryIntent: detectedIntents[0] || 'general',
     needsData: detectedIntents.some(intent => ['dataRetrieval', 'status', 'analysis'].includes(intent)),
@@ -1752,27 +1752,27 @@ function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]
   confidence: number;
 } {
   const userMessageLower = userMessage.toLowerCase().trim();
-  
+
   const isAmbiguous = AMBIGUOUS_RESPONSES.includes(userMessageLower);
-  
+
   if (!isAmbiguous) {
     return { isAmbiguous: false, likelyReferringTo: null, confidence: 0 };
   }
-  
+
   let likelyReferringTo = null;
   let confidence = 0.7;
-  
+
   const recentMessages = conversationHistory.slice(-10).reverse();
-  
+
   for (const message of recentMessages) {
     if (message.role === 'assistant') {
       const assistantMessage = message.content || '';
-      
+
       const hasQuestion = assistantMessage.includes('?');
-      const hasOptions = assistantMessage.includes('option') || 
-                         assistantMessage.includes('choice') || 
-                         assistantMessage.includes('select');
-      
+      const hasOptions = assistantMessage.includes('option') ||
+        assistantMessage.includes('choice') ||
+        assistantMessage.includes('select');
+
       if (hasQuestion || hasOptions) {
         likelyReferringTo = assistantMessage.substring(0, 200);
         confidence = hasQuestion && hasOptions ? 0.9 : 0.8;
@@ -1780,7 +1780,7 @@ function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]
       }
     }
   }
-  
+
   if (!likelyReferringTo) {
     const lastAssistant = recentMessages.find(m => m.role === 'assistant');
     if (lastAssistant) {
@@ -1788,7 +1788,7 @@ function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]
       confidence = 0.6;
     }
   }
-  
+
   return { isAmbiguous: true, likelyReferringTo, confidence };
 }
 
@@ -1796,16 +1796,16 @@ function detectAmbiguousResponse(userMessage: string, conversationHistory: any[]
 function parseDeepSeekToolCalls(content: string): Array<any> | null {
   const toolCallsMatch = content.match(/ 🫎(.*?)🫎/s);
   if (!toolCallsMatch) return null;
-  
+
   const toolCallsText = toolCallsMatch[1];
   const toolCallPattern = / 🔧(.*?)🔧(.*?)🔧/gs;
   const toolCalls: Array<any> = [];
-  
+
   let match;
   while ((match = toolCallPattern.exec(toolCallsText)) !== null) {
     const functionName = match[1].trim();
     let args = match[2].trim();
-    
+
     let parsedArgs = {};
     if (args && args !== '{}') {
       try {
@@ -1814,7 +1814,7 @@ function parseDeepSeekToolCalls(content: string): Array<any> | null {
         console.warn(`Failed to parse DeepSeek tool args for ${functionName}:`, args);
       }
     }
-    
+
     toolCalls.push({
       id: `deepseek_${Date.now()}_${Math.random().toString(36).substring(7)}`,
       type: 'function',
@@ -1824,19 +1824,19 @@ function parseDeepSeekToolCalls(content: string): Array<any> | null {
       }
     });
   }
-  
+
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
 function parseToolCodeBlocks(content: string): Array<any> | null {
   const toolCalls: Array<any> = [];
-  
+
   const toolCodeRegex = /```tool_code\s*\n?([\s\S]*?)```/g;
   let match;
-  
+
   while ((match = toolCodeRegex.exec(content)) !== null) {
     const code = match[1].trim();
-    
+
     const invokeMatch = code.match(/invoke_edge_function\s*\(\s*\{([\s\S]*?)\}\s*\)/);
     if (invokeMatch) {
       try {
@@ -1853,7 +1853,7 @@ function parseToolCodeBlocks(content: string): Array<any> | null {
       }
       continue;
     }
-    
+
     const directMatch = code.match(/(\w+)\s*\(\s*(\{[\s\S]*?\})?\s*\)/);
     if (directMatch) {
       const funcName = directMatch[1];
@@ -1871,7 +1871,7 @@ function parseToolCodeBlocks(content: string): Array<any> | null {
       }
     }
   }
-  
+
   return toolCalls.length > 0 ? toolCalls : null;
 }
 
@@ -1882,14 +1882,14 @@ function parseConversationalToolIntent(content: string): Array<any> | null {
     /let me (?:call|check|get|invoke)\s+[`"']?(\w+)[`"']?/gi,
     /I(?:'ll| will) (?:call|invoke|use)\s+[`"']?(\w+)[`"']?/gi
   ];
-  
+
   const knownTools = [
-    'get_mining_stats', 'get_system_status', 'get_ecosystem_metrics', 
-    'search_knowledge', 'recall_entity', 'invoke_edge_function', 
+    'get_mining_stats', 'get_system_status', 'get_ecosystem_metrics',
+    'search_knowledge', 'recall_entity', 'invoke_edge_function',
     'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks',
     'search_edge_functions', 'browse_web', 'analyze_attachment', 'google_gmail'
   ];
-  
+
   for (const pattern of patterns) {
     let match;
     while ((match = pattern.exec(content)) !== null) {
@@ -1908,7 +1908,7 @@ function parseConversationalToolIntent(content: string): Array<any> | null {
 
 function needsDataRetrieval(messages: any[]): boolean {
   const lastUser = messages.filter(m => m.role === 'user').pop()?.content?.toLowerCase() || '';
-  
+
   const dataKeywords = [
     'what is', 'what\'s', 'what are', 'who is', 'who are', 'where is', 'when is',
     'how is', 'how are', 'how much', 'how many', 'why is', 'why are',
@@ -1931,7 +1931,7 @@ function needsDataRetrieval(messages: any[]): boolean {
     'web', 'internet', 'page', 'site',
     'email', 'send', 'mail', 'contact', 'message'
   ];
-  
+
   const hasQuestionMark = lastUser.includes('?');
   const imperativePatterns = /^(show|tell|give|get|list|find|check|run|execute|analyze|fetch|retrieve|scan|diagnose|look|pull|view|open|browse|navigate|visit|go|send|email)/i;
   const startsWithImperative = imperativePatterns.test(lastUser.trim());
@@ -1939,7 +1939,7 @@ function needsDataRetrieval(messages: any[]): boolean {
   const hasUrl = urlPattern.test(lastUser);
   const emailPattern = /[\w._%+-]+@[\w.-]+\.[a-zA-Z]{2,}/gi;
   const hasEmail = emailPattern.test(lastUser);
-  
+
   return hasQuestionMark || startsWithImperative || hasUrl || hasEmail || dataKeywords.some(k => lastUser.includes(k));
 }
 
@@ -1953,7 +1953,7 @@ function convertToolsToGeminiFormat(tools: any[]): any[] {
 
 async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   if (!sessionKey) return [];
-  
+
   console.log('📚 Retrieving memory contexts server-side...');
   try {
     const { data: serverMemories, error } = await supabase
@@ -1963,9 +1963,9 @@ async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
       .order('importance_score', { ascending: false })
       .order('created_at', { ascending: false })
       .limit(30);
-    
+
     if (error) throw error;
-    
+
     if (serverMemories && serverMemories.length > 0) {
       console.log(`✅ Retrieved ${serverMemories.length} memory contexts`);
       return serverMemories.map(m => ({
@@ -1983,20 +1983,20 @@ async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
 async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
   const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
   if (!DEEPSEEK_API_KEY) return null;
-  
+
   console.log('🔄 Trying DeepSeek fallback...');
-  
-  const enhancedMessages = messages.map(m => 
+
+  const enhancedMessages = messages.map(m =>
     m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
   );
-  
+
   const forceTools = needsDataRetrieval(messages);
   console.log(`📊 DeepSeek - Data retrieval needed: ${forceTools}`);
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 30000);
-    
+
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -2013,9 +2013,9 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
       }),
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (response.ok) {
       const data = await response.json();
       console.log('✅ DeepSeek fallback successful');
@@ -2038,20 +2038,20 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
 async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
   const OPENROUTER_API_KEY = Deno.env.get('OPENROUTER_API_KEY');
   if (!OPENROUTER_API_KEY) return null;
-  
+
   console.log('🔄 Trying Kimi K2 fallback via OpenRouter...');
-  
-  const enhancedMessages = messages.map(m => 
+
+  const enhancedMessages = messages.map(m =>
     m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
   );
-  
+
   const forceTools = needsDataRetrieval(messages);
   console.log(`📊 Kimi K2 - Data retrieval needed: ${forceTools}`);
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 45000);
-    
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -2070,9 +2070,9 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
       }),
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (response.ok) {
       const data = await response.json();
       console.log('✅ Kimi K2 fallback successful');
@@ -2093,35 +2093,35 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
 }
 
 async function callGeminiFallback(
-  messages: any[], 
+  messages: any[],
   tools?: any[],
   images?: string[]
 ): Promise<any> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
   if (!GEMINI_API_KEY) return null;
-  
+
   console.log('🔄 Trying Gemini fallback with better models (2.5-flash)...');
-  
+
   const geminiModels = [
     'gemini-2.5-flash',
     'gemini-2.5-flash-image',
     'gemini-2.0-flash-exp',
     'gemini-1.5-flash'
   ];
-  
+
   for (const model of geminiModels) {
     try {
       console.log(`🔄 Trying Gemini model: ${model}`);
-      
+
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 30000);
-      
+
       const systemPrompt = messages.find(m => m.role === 'system')?.content || '';
       const lastUserMessage = messages.filter(m => m.role === 'user').pop();
       const userText = lastUserMessage?.content || 'Help me';
-      
+
       const parts: any[] = [{ text: `${TOOL_CALLING_MANDATE}\n${systemPrompt}\n\nUser: ${userText}` }];
-      
+
       if (images && images.length > 0 && (model.includes('image') || model === 'gemini-1.5-flash')) {
         for (const imageBase64 of images) {
           const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
@@ -2130,16 +2130,16 @@ async function callGeminiFallback(
           }
         }
       }
-      
+
       const geminiTools = tools && tools.length > 0 ? [{
         functionDeclarations: convertToolsToGeminiFormat(tools)
       }] : undefined;
-      
+
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          headers: { 
+          headers: {
             'Content-Type': 'application/json',
             'x-goog-api-key': GEMINI_API_KEY
           },
@@ -2151,20 +2151,20 @@ async function callGeminiFallback(
           signal: controller.signal
         }
       );
-      
+
       clearTimeout(timeoutId);
-      
+
       if (response.ok) {
         const data = await response.json();
         const candidate = data.candidates?.[0];
-        
+
         if (!candidate || !candidate.content) {
           if (model !== geminiModels[geminiModels.length - 1]) {
             continue;
           }
           return null;
         }
-        
+
         const functionCalls = candidate.content.parts?.filter((p: any) => p.functionCall);
         if (functionCalls && functionCalls.length > 0) {
           console.log(`✅ Gemini ${model} returned ${functionCalls.length} native function calls`);
@@ -2182,11 +2182,11 @@ async function callGeminiFallback(
             model: model
           };
         }
-        
+
         const text = candidate.content.parts
           ?.map((part: any) => part.text || '')
           .join('') || '';
-        
+
         if (text) {
           console.log(`✅ Gemini ${model} fallback successful`);
           return { content: text, tool_calls: [], provider: 'gemini', model: model };
@@ -2208,7 +2208,7 @@ async function callGeminiFallback(
       }
     }
   }
-  
+
   return null;
 }
 
@@ -2220,7 +2220,7 @@ async function synthesizeToolResults(
   conversationContext: any[] = []
 ): Promise<string> {
   console.log('🧠 Synthesizing tool results with intelligent analysis...');
-  
+
   const webResults = toolResults.filter(r => r.tool === 'browse_web');
   const functionResults = toolResults.filter(r => r.tool === 'search_edge_functions' || r.tool === 'list_available_functions');
   const systemResults = toolResults.filter(r => ['get_system_status', 'get_mining_stats', 'get_ecosystem_metrics'].includes(r.tool));
@@ -2228,11 +2228,11 @@ async function synthesizeToolResults(
   const emailResults = toolResults.filter(r => r.tool === 'google_gmail');
   const githubResults = toolResults.filter(r => r.tool.includes('GitHub'));
   const otherResults = toolResults.filter(r => !['browse_web', 'search_edge_functions', 'list_available_functions', 'get_system_status', 'get_mining_stats', 'get_ecosystem_metrics', 'analyze_attachment', 'google_gmail'].includes(r.tool) && !r.tool.includes('GitHub'));
-  
+
   const intent = analyzeUserIntent(userQuery, conversationContext);
-  
+
   let response = '';
-  
+
   if (conversationContext.length === 0) {
     response += `👋 **${executiveName} here!** I've gathered the information you requested.\n\n`;
   } else if (intent.isFollowUp) {
@@ -2240,16 +2240,16 @@ async function synthesizeToolResults(
   } else {
     response += `🔍 **Here's what I found** based on your request:\n\n`;
   }
-  
+
   if (githubResults.length > 0) {
     response += `### 🐙 **GitHub Operations**\n`;
-    
+
     githubResults.forEach((result, index) => {
       const { success, error, ...data } = result.result;
-      
+
       if (success) {
         response += `\n✅ **${result.tool.replace('GitHub', ' GitHub ')} successful!**\n`;
-        
+
         if (result.tool === 'createGitHubIssue' || result.tool === 'createGitHubDiscussion') {
           if (data.issue_number || data.discussion_number) {
             const number = data.issue_number || data.discussion_number;
@@ -2308,28 +2308,28 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (emailResults.length > 0) {
     response += `### 📧 **Email Communication**\n`;
-    
+
     emailResults.forEach((result, index) => {
       const { success, error, action, to, subject, message } = result.result;
-      
+
       if (success) {
         response += `\n✅ **Email ${action} successful!**\n`;
-        
+
         if (to) {
           response += `   • **To**: ${to}\n`;
         }
-        
+
         if (subject) {
           response += `   • **Subject**: ${subject}\n`;
         }
-        
+
         if (message) {
           response += `   • **Message**: ${message.substring(0, 150)}${message.length > 150 ? '...' : ''}\n`;
         }
-        
+
         if (action === 'send_email') {
           response += `   • **Status**: Sent successfully\n`;
           response += `   • **Confirmation**: Email has been delivered to the recipient\n`;
@@ -2345,41 +2345,41 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (attachmentResults.length > 0) {
     response += `### 📎 **Attachment Analysis**\n`;
-    
+
     attachmentResults.forEach((result, index) => {
       const { success, total_attachments, analyzed, failed, analyses } = result.result;
-      
+
       if (success) {
         response += `\n✅ **Analyzed ${total_attachments} attachment(s)** (${analyzed} successful, ${failed} failed)\n`;
-        
+
         analyses.forEach((analysis: any, idx: number) => {
           if (analysis.success) {
             response += `\n**${idx + 1}. ${analysis.filename}** (${analysis.file_type})\n`;
-            
+
             if (analysis.detected_language && analysis.detected_language !== 'unknown') {
               response += `   • **Language**: ${analysis.detected_language}\n`;
             }
-            
+
             if (analysis.estimated_lines) {
               response += `   • **Lines**: ~${analysis.estimated_lines}\n`;
             }
-            
+
             if (analysis.estimated_words) {
               response += `   • **Words**: ~${analysis.estimated_words}\n`;
             }
-            
+
             if (analysis.key_findings && analysis.key_findings.length > 0) {
               response += `   • **Key Findings**:\n`;
               analysis.key_findings.forEach((finding: string, i: number) => {
                 response += `     - ${finding}\n`;
               });
             }
-            
+
             if (analysis.content_preview && analysis.content_preview.length > 0) {
-              const preview = analysis.content_preview.length > 200 ? 
+              const preview = analysis.content_preview.length > 200 ?
                 analysis.content_preview.substring(0, 200) + '...' : analysis.content_preview;
               response += `   • **Preview**: "${preview}"\n`;
             }
@@ -2394,10 +2394,10 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (webResults.length > 0) {
     response += `### 🌐 **Web Analysis**\n`;
-    
+
     webResults.forEach((result, index) => {
       const { url, status, content, metadata, error, title, summary } = result.result;
       let domain = 'unknown';
@@ -2406,27 +2406,27 @@ async function synthesizeToolResults(
       } catch (e) {
         domain = url || 'unknown';
       }
-      
+
       response += `\n**${index + 1}. ${domain}** `;
-      
+
       if (status === 200 || result.result.success) {
         response += `✅ *Accessible* (${metadata?.loadTime ? `loaded in ${metadata.loadTime}ms` : 'loaded successfully'})\n`;
-        
+
         if (title) {
           response += `**Title**: ${title}\n`;
         }
-        
+
         if (summary) {
           response += `**Summary**: ${summary}\n`;
         }
-        
+
         if (content) {
           const insights = extractKeyInsights(content, domain);
           if (insights) {
             response += insights;
           }
         }
-        
+
         if (domain.includes('ycombinator.com')) {
           response += `   💡 *Hacker News Insight*: The site shows technology trends and startup discussions. Good for staying updated on tech news.\n`;
         } else if (domain.includes('reddit.com')) {
@@ -2434,7 +2434,7 @@ async function synthesizeToolResults(
         } else if (domain.includes('google.com')) {
           response += `   🔍 *Search Engine*: Ready for queries. I can help you search for specific information if needed.\n`;
         }
-        
+
         if (result.result.links && result.result.links.length > 0) {
           response += `   **Extracted Links (${Math.min(result.result.links.length, 12)}):**\n`;
           result.result.links.slice(0, 5).forEach((link: string, i: number) => {
@@ -2456,19 +2456,19 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (functionResults.length > 0) {
     response += `### 🔧 **Edge Functions**\n`;
-    
+
     functionResults.forEach((result, index) => {
       const { functions = [], success, error, grouped_by_category, total } = result.result;
       const funcs = functions || [];
-      
+
       if (success && funcs && funcs.length > 0) {
         if (grouped_by_category) {
           const totalFunctions = total || funcs.length;
           response += `\nFound **${totalFunctions}** available edge functions:\n`;
-          
+
           Object.entries(grouped_by_category).forEach(([category, funcsInCategory]: [string, any]) => {
             response += `\n**${category.toUpperCase()}** (${funcsInCategory.length}):\n`;
             funcsInCategory.slice(0, 3).forEach((f: any) => {
@@ -2487,10 +2487,10 @@ async function synthesizeToolResults(
             acc[category].push(func);
             return acc;
           }, {});
-          
+
           const totalFunctions = funcs.length;
           response += `\nFound **${totalFunctions}** available edge functions:\n`;
-          
+
           Object.entries(byCategory).forEach(([category, funcsInCategory]: [string, any]) => {
             response += `\n**${category.toUpperCase()}** (${funcsInCategory.length}):\n`;
             funcsInCategory.slice(0, 3).forEach((f: any) => {
@@ -2503,17 +2503,17 @@ async function synthesizeToolResults(
             }
           });
         }
-        
-        const billingFunctions = funcs.filter((f: any) => 
-          f.name.includes('billing') || f.name.includes('financial') || 
+
+        const billingFunctions = funcs.filter((f: any) =>
+          f.name.includes('billing') || f.name.includes('financial') ||
           f.description?.toLowerCase().includes('billing') ||
           f.description?.toLowerCase().includes('financial')
         );
-        
+
         if (billingFunctions.length > 0) {
           response += `\n   💰 *Billing Functions*: Found ${billingFunctions.length} billing/financial-related functions including "${billingFunctions[0]?.name}".\n`;
         }
-        
+
         response += `\n   🛠️ *Usage*: You can invoke any of these with the \`invoke_edge_function\` tool.\n`;
       } else if (!success) {
         response += `\n❌ *Search failed*: ${error || 'Unknown error'}\n`;
@@ -2524,13 +2524,13 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (systemResults.length > 0) {
     response += `### 📊 **System Status**\n`;
-    
+
     systemResults.forEach(result => {
       const { success, ...data } = result.result;
-      
+
       if (success) {
         Object.entries(data).forEach(([key, value]) => {
           if (key !== 'success' && key !== 'timestamp' && key !== 'last_updated' && value !== undefined) {
@@ -2552,19 +2552,19 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (otherResults.length > 0) {
     response += `### ⚙️ **Other Actions**\n`;
-    
+
     otherResults.forEach(result => {
       const { success, error, ...data } = result.result;
-      
+
       if (success) {
         const keys = Object.keys(data).filter(k => !['success', 'error', 'timestamp', 'execution_time_ms', 'tool_name'].includes(k));
         if (keys.length > 0) {
           const mainKey = keys[0];
           const mainValue = data[mainKey];
-          
+
           if (Array.isArray(mainValue)) {
             response += `   • ${result.tool}: Processed ${mainValue.length} items\n`;
           } else if (typeof mainValue === 'string' && mainValue.length < 100) {
@@ -2583,11 +2583,11 @@ async function synthesizeToolResults(
     });
     response += '\n';
   }
-  
+
   if (toolResults.length > 0) {
     const successful = toolResults.filter(r => r.result.success).length;
     const failed = toolResults.filter(r => !r.result.success).length;
-    
+
     if (successful === toolResults.length) {
       response += `🎯 **All operations completed successfully!**\n`;
     } else if (successful > 0 && failed > 0) {
@@ -2595,38 +2595,38 @@ async function synthesizeToolResults(
     } else {
       response += `❌ **All operations failed.** You might want to try alternative approaches.\n`;
     }
-    
+
     if (intent.topics.length > 0) {
       response += `\n**Related to**: ${intent.topics.join(', ')}\n`;
     }
-    
+
     if (intent.primaryIntent === 'communication' || userQuery.toLowerCase().includes('email')) {
       response += `\n📧 *Email follow-up*: I can send more emails or check email status. Just let me know!\n`;
     }
-    
+
     if (userQuery.toLowerCase().includes('github')) {
       response += `\n🐙 *GitHub follow-up*: I can help with more GitHub operations like creating issues, discussions, pull requests, or searching code.\n`;
     }
-    
+
     if (userQuery.toLowerCase().includes('function') || userQuery.toLowerCase().includes('capability')) {
       response += `\n💡 *Need more capabilities?* I can help you create new edge functions or modify existing ones.\n`;
     }
-    
+
     if (userQuery.toLowerCase().includes('web') || userQuery.toLowerCase().includes('browse') || userQuery.toLowerCase().includes('http')) {
       response += `\n🌐 *Want to browse more?* Just provide another URL and I'll fetch it for you.\n`;
     }
-    
+
     if (userQuery.toLowerCase().includes('status') || userQuery.toLowerCase().includes('health')) {
       response += `\n📈 *Need deeper analysis?* I can run more detailed diagnostics on specific system components.\n`;
     }
-    
+
     if (userQuery.toLowerCase().includes('attach') || userQuery.toLowerCase().includes('file') || userQuery.toLowerCase().includes('document')) {
       response += `\n📎 *Need to analyze more files?* I can analyze text files, code, documents, and images. Just upload them!\n`;
     }
   } else {
     response += `🤔 **No tool results to analyze.** Try asking me to perform specific actions.\n`;
   }
-  
+
   return response;
 }
 
@@ -2637,14 +2637,14 @@ class EnhancedConversationManager {
   private toolResultsMemory: any[] = [];
   private conversationPersistence: EnhancedConversationPersistence;
   private userId?: string;
-  
+
   constructor(sessionId: string, ipAddress: string, userId?: string) {
     this.sessionId = sessionId;
     this.ipAddress = ipAddress;
     this.userId = userId;
     this.conversationPersistence = new EnhancedConversationPersistence(sessionId, ipAddress, userId);
   }
-  
+
   async loadConversationHistory(): Promise<{
     messages: any[];
     toolResults: any[];
@@ -2653,29 +2653,29 @@ class EnhancedConversationManager {
   }> {
     try {
       console.log(`📚 Loading conversation history for session: ${this.sessionId} (IP: ${this.ipAddress})`);
-      
+
       const { data: ipData, error: ipError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .select('messages, summary, tool_results, metadata')
         .eq('ip_address', this.ipAddress)
         .order('updated_at', { ascending: false })
         .limit(1);
-      
+
       let messages = [];
       let toolResults = [];
       let conversationSummary = 'New session';
-      
+
       if (!ipError && ipData && ipData.length > 0) {
         const record = ipData[0];
         messages = record.messages || [];
         toolResults = record.tool_results || [];
         this.toolResultsMemory = toolResults;
         conversationSummary = record.summary || 'Existing conversation from IP';
-        
+
         console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from IP-based history`);
-        
+
         await this.updateSessionIdInMemory(record);
-        
+
       } else {
         const { data: sessionData, error: sessionError } = await supabase
           .from(DATABASE_CONFIG.tables.conversation_memory)
@@ -2683,57 +2683,57 @@ class EnhancedConversationManager {
           .eq('session_id', this.sessionId)
           .order('updated_at', { ascending: false })
           .limit(1);
-        
+
         if (!sessionError && sessionData && sessionData.length > 0) {
           const record = sessionData[0];
           messages = record.messages || [];
           toolResults = record.tool_results || [];
           this.toolResultsMemory = toolResults;
           conversationSummary = record.summary || 'Existing conversation';
-          
+
           console.log(`📖 Loaded ${messages.length} messages and ${toolResults.length} tool results from session history`);
         } else {
           console.log('📭 No existing conversation found for session or IP');
         }
       }
-      
+
       const historicalSummaries = await this.conversationPersistence.loadHistoricalSummaries();
-      
+
       return {
         messages: messages.slice(-CONVERSATION_HISTORY_LIMIT),
         toolResults: toolResults.slice(-MAX_TOOL_RESULTS_MEMORY),
         conversationSummary: conversationSummary,
         historicalSummaries: historicalSummaries
       };
-      
+
     } catch (error: any) {
       console.warn('⚠️ Failed to load conversation history:', error);
-      return { 
-        messages: [], 
-        toolResults: [], 
+      return {
+        messages: [],
+        toolResults: [],
         conversationSummary: 'Error loading history',
         historicalSummaries: []
       };
     }
   }
-  
+
   private async updateSessionIdInMemory(record: any): Promise<void> {
     try {
       await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
-        .update({ 
+        .update({
           session_id: this.sessionId,
           updated_at: new Date().toISOString()
         })
         .eq('ip_address', this.ipAddress)
         .eq('updated_at', record.updated_at);
-      
+
       console.log(`🔄 Updated session ID for IP ${this.ipAddress} to ${this.sessionId}`);
     } catch (error) {
       console.warn('⚠️ Failed to update session ID in memory:', error);
     }
   }
-  
+
   async saveConversation(
     messages: any[],
     toolResults: any[] = [],
@@ -2742,10 +2742,10 @@ class EnhancedConversationManager {
     try {
       const allToolResults = [...this.toolResultsMemory, ...toolResults].slice(-MAX_TOOL_RESULTS_MEMORY);
       this.toolResultsMemory = allToolResults;
-      
+
       // USE IMMEDIATE MANUAL SUMMARY INSTEAD OF AI SUMMARY
       const summary = generateEnhancedManualSummary(messages, allToolResults);
-      
+
       const conversationRecord: any = {
         session_id: this.sessionId,
         ip_address: this.ipAddress,
@@ -2763,18 +2763,18 @@ class EnhancedConversationManager {
         },
         updated_at: new Date().toISOString()
       };
-      
+
       if (this.userId) {
         conversationRecord.user_id = this.userId;
       }
-      
+
       const { error } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .upsert(conversationRecord, {
           onConflict: 'ip_address',
           ignoreDuplicates: false
         });
-      
+
       if (error) {
         console.warn('⚠️ Failed to save conversation:', error.message);
         const { error: sessionError } = await supabase
@@ -2782,7 +2782,7 @@ class EnhancedConversationManager {
           .upsert(conversationRecord, {
             onConflict: 'session_id'
           });
-        
+
         if (sessionError) {
           console.warn('⚠️ Failed to save conversation with session fallback:', sessionError.message);
         } else {
@@ -2791,20 +2791,20 @@ class EnhancedConversationManager {
       } else {
         console.log(`💾 Saved conversation (IP-based): ${messages.length} messages, ${allToolResults.length} tool results`);
       }
-      
+
       // CRITICAL FIX: Save summary immediately with manual method, trigger AI summarization in background
       await this.conversationPersistence.saveConversationSummary(messages, allToolResults, metadata);
-      
+
       await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .delete()
         .lt('updated_at', new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString());
-        
+
     } catch (error: any) {
       console.warn('⚠️ Failed to save conversation:', error);
     }
   }
-  
+
   async saveConversationContext(
     currentQuestion: string,
     assistantResponse: string,
@@ -2818,46 +2818,46 @@ class EnhancedConversationManager {
       metadata
     );
   }
-  
+
   async loadRecentContext(limit: number = 5): Promise<any[]> {
     return await this.conversationPersistence.loadRecentContext(limit);
   }
-  
+
   private async generateConversationSummary(messages: any[], toolResults: any[]): Promise<string> {
     // CRITICAL FIX: Always use manual summary, NEVER call AI summary synchronously
     return generateEnhancedManualSummary(messages, toolResults);
   }
-  
+
   getToolResults(): any[] {
     return this.toolResultsMemory;
   }
-  
+
   addToolResults(newResults: any[]): void {
     this.toolResultsMemory = [...this.toolResultsMemory, ...newResults].slice(-MAX_TOOL_RESULTS_MEMORY);
     console.log(`🧠 Added ${newResults.length} tool results to memory, total: ${this.toolResultsMemory.length}`);
   }
-  
+
   async generateMemoryContext(): Promise<string> {
     const toolResults = this.toolResultsMemory;
-    
+
     if (toolResults.length === 0) {
       return "## 🧠 CONVERSATION MEMORY\nNo previous tool calls in this conversation.\n\n**IP Address**: " + this.ipAddress + "\n**Session Persistence**: Active (24-hour TTL)";
     }
-    
+
     let context = "## 🧠 CONVERSATION MEMORY - TOOL CALL HISTORY\n\n";
     context += `**IP Address**: ${this.ipAddress}\n`;
     context += `**Session Persistence**: Active (24-hour TTL)\n\n`;
-    
+
     const recentTools = toolResults.slice(-10).reverse();
-    
+
     context += `### RECENT TOOL EXECUTIONS (${recentTools.length} total)\n\n`;
-    
+
     recentTools.forEach((tool, index) => {
       const status = tool.result?.success ? '✅ SUCCEEDED' : '❌ FAILED';
       const timeAgo = this.formatTimeAgo(tool.timestamp || Date.now());
-      
+
       context += `**${index + 1}. ${tool.name}** - ${status} (${timeAgo})\n`;
-      
+
       if (tool.result) {
         if (tool.result.success) {
           if (tool.name === 'browse_web' && tool.result.url) {
@@ -2866,7 +2866,7 @@ class EnhancedConversationManager {
               context += `   Load time: ${tool.result.metadata.loadTime}ms, Content type: ${tool.result.metadata.contentType}\n`;
             }
             if (tool.result.content) {
-              const preview = tool.result.content.length > 100 ? 
+              const preview = tool.result.content.length > 100 ?
                 tool.result.content.substring(0, 100) + '...' : tool.result.content;
               context += `   Content preview: "${preview}"\n`;
             }
@@ -2917,29 +2917,29 @@ class EnhancedConversationManager {
       }
       context += '\n';
     });
-    
+
     const successful = toolResults.filter(r => r.result?.success).length;
     const failed = toolResults.filter(r => !r.result?.success).length;
-    
+
     context += `### TOOL STATISTICS\n`;
     context += `• Total executions: ${toolResults.length}\n`;
     context += `• Successful: ${successful}\n`;
     context += `• Failed: ${failed}\n`;
     context += `• Success rate: ${toolResults.length > 0 ? Math.round((successful / toolResults.length) * 100) : 0}%\n\n`;
-    
+
     context += `**IMPORTANT**: You MUST reference these previous tool calls when users ask about them. `;
     context += `For example, if a user asks "what did you get from search_edge_functions?", `;
     context += `you should reference the exact results shown above.\n`;
     context += `**CRITICAL FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., check recent context to understand what they're responding to.\n`;
     context += `**IP-BASED MEMORY**: This conversation persists across sessions for 24 hours based on IP address.\n`;
-    
+
     return context;
   }
-  
+
   private formatTimeAgo(timestamp: number): string {
     const now = Date.now();
     const diff = now - timestamp;
-    
+
     if (diff < 60000) return 'just now';
     if (diff < 3600000) return `${Math.floor(diff / 60000)} minutes ago`;
     if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours ago`;
@@ -2963,23 +2963,23 @@ async function executeToolsWithIteration(
   let totalToolsExecuted = 0;
   let iteration = 0;
   let conversationMessages = [...aiMessages];
-  
+
   while (iteration < maxIterations) {
     let toolCalls = response.tool_calls || [];
-    
+
     if ((!toolCalls || toolCalls.length === 0) && response.content) {
-      const textToolCalls = parseToolCodeBlocks(response.content) || 
-                           parseDeepSeekToolCalls(response.content) ||
-                           parseConversationalToolIntent(response.content);
+      const textToolCalls = parseToolCodeBlocks(response.content) ||
+        parseDeepSeekToolCalls(response.content) ||
+        parseConversationalToolIntent(response.content);
       if (textToolCalls && textToolCalls.length > 0) {
         toolCalls = textToolCalls;
       }
     }
-    
+
     if (!toolCalls || toolCalls.length === 0) break;
-    
+
     console.log(`🔧 [${executiveName}] Iteration ${iteration + 1}: Executing ${toolCalls.length} tool(s)`);
-    
+
     const toolResults = [];
     for (const toolCall of toolCalls) {
       const result = await executeRealToolCall(
@@ -2998,13 +2998,13 @@ async function executeToolsWithIteration(
       });
       totalToolsExecuted++;
     }
-    
+
     const memoryFormatted = toolResults.map(tr => {
       let parsed;
-      try { 
-        parsed = JSON.parse(tr.content); 
-      } catch { 
-        parsed = { success: false, error: 'invalid JSON from tool' }; 
+      try {
+        parsed = JSON.parse(tr.content);
+      } catch {
+        parsed = { success: false, error: 'invalid JSON from tool' };
       }
       return {
         name: tr.name,
@@ -3013,31 +3013,31 @@ async function executeToolsWithIteration(
         toolCallId: tr.tool_call_id
       };
     });
-    
+
     if (memoryManager) {
       memoryManager.addToolResults(memoryFormatted);
     }
-    
+
     conversationMessages.push({
       role: 'assistant',
       content: response.content || '',
       tool_calls: toolCalls
     });
     conversationMessages.push(...toolResults);
-    
+
     const newResponse = await callAIFunction(conversationMessages, tools);
     if (!newResponse) break;
-    
+
     response = newResponse;
     iteration++;
   }
-  
+
   let finalContent = response?.content || '';
-  
+
   if (finalContent.includes('```tool_code')) {
     finalContent = finalContent.replace(/```tool_code[\s\S]*?```/g, '').trim();
   }
-  
+
   return { content: finalContent, toolsExecuted: totalToolsExecuted };
 }
 
@@ -3054,7 +3054,7 @@ interface CascadeResult {
 
 class EnhancedProviderCascade {
   private attempts: any[] = [];
-  
+
   async callWithCascade(
     messages: any[],
     tools: any[] = [],
@@ -3062,7 +3062,7 @@ class EnhancedProviderCascade {
     images?: string[]
   ): Promise<CascadeResult> {
     this.attempts = [];
-    
+
     if (preferredProvider && preferredProvider !== 'auto') {
       const config = AI_PROVIDERS_CONFIG[preferredProvider];
       if (config?.enabled) {
@@ -3071,29 +3071,29 @@ class EnhancedProviderCascade {
         return result;
       }
     }
-    
+
     const providers = Object.entries(AI_PROVIDERS_CONFIG)
       .filter(([_, config]) => config.enabled && !config.fallbackOnly)
       .sort((a, b) => a[1].priority - b[1].priority)
       .map(([name]) => name);
-    
+
     for (const provider of providers) {
       const result = await this.callProvider(provider, messages, tools, images);
       this.attempts.push({ provider, success: result.success });
-      
+
       if (result.success) {
         return result;
       }
     }
-    
+
     console.log('🔄 Trying fallback providers...');
-    
+
     const fallbackResults = await Promise.all([
       callDeepSeekFallback(messages, tools),
       callKimiFallback(messages, tools),
       callGeminiFallback(messages, tools, images)
     ]);
-    
+
     for (const result of fallbackResults) {
       if (result) {
         return {
@@ -3105,14 +3105,14 @@ class EnhancedProviderCascade {
         };
       }
     }
-    
+
     return {
       success: false,
       provider: 'all',
       error: `All providers failed after ${this.attempts.length} attempts`
     };
   }
-  
+
   private async callProvider(
     provider: string,
     messages: any[],
@@ -3127,15 +3127,15 @@ class EnhancedProviderCascade {
         error: `Provider ${provider} not configured or disabled`
       };
     }
-    
+
     const startTime = Date.now();
-    
+
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), config.timeoutMs);
-      
+
       let result: CascadeResult;
-      
+
       switch (provider) {
         case 'openai':
           result = await this.callOpenAI(messages, tools, controller);
@@ -3159,15 +3159,15 @@ class EnhancedProviderCascade {
             error: `Unknown provider: ${provider}`
           };
       }
-      
+
       clearTimeout(timeoutId);
-      
+
       if (result.success) {
         result.latency = Date.now() - startTime;
       }
-      
+
       return result;
-      
+
     } catch (error: any) {
       return {
         success: false,
@@ -3176,10 +3176,10 @@ class EnhancedProviderCascade {
       };
     }
   }
-  
+
   private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
     const forceTools = needsDataRetrieval(messages);
-    
+
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -3191,14 +3191,14 @@ class EnhancedProviderCascade {
         messages: messages,
         temperature: 0.7,
         max_tokens: 4000,
-        ...(tools.length > 0 && { 
-          tools: tools, 
-          tool_choice: forceTools ? 'required' : 'auto' 
+        ...(tools.length > 0 && {
+          tools: tools,
+          tool_choice: forceTools ? 'required' : 'auto'
         })
       }),
       signal: controller.signal
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       return {
@@ -3207,10 +3207,10 @@ class EnhancedProviderCascade {
         error: `OpenAI API error: ${response.status} - ${errorText.substring(0, 200)}`
       };
     }
-    
+
     const data = await response.json();
     const message = data.choices?.[0]?.message;
-    
+
     if (message.tool_calls?.length > 0) {
       return {
         success: true,
@@ -3219,7 +3219,7 @@ class EnhancedProviderCascade {
         model: 'gpt-4o-mini'
       };
     }
-    
+
     return {
       success: true,
       content: message.content || '',
@@ -3227,7 +3227,7 @@ class EnhancedProviderCascade {
       model: 'gpt-4o-mini'
     };
   }
-  
+
   private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
     const geminiModels = [
       'gemini-2.5-flash',
@@ -3235,13 +3235,13 @@ class EnhancedProviderCascade {
       'gemini-2.0-flash-exp',
       'gemini-1.5-flash'
     ];
-    
+
     for (const model of geminiModels) {
       try {
         console.log(`🔄 Trying Gemini model: ${model}`);
-        
+
         const geminiMessages = [];
-        
+
         for (const msg of messages) {
           if (msg.role === 'system') {
             geminiMessages.push({
@@ -3254,9 +3254,9 @@ class EnhancedProviderCascade {
             });
           } else if (msg.role === 'user') {
             const parts: any[] = [{ text: msg.content }];
-            
-            if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 && 
-                (model.includes('image') || model === 'gemini-1.5-flash')) {
+
+            if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
+              (model.includes('image') || model === 'gemini-1.5-flash')) {
               for (const imageBase64 of images) {
                 const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
                 if (matches) {
@@ -3264,7 +3264,7 @@ class EnhancedProviderCascade {
                 }
               }
             }
-            
+
             geminiMessages.push({
               role: 'user',
               parts: parts
@@ -3277,8 +3277,8 @@ class EnhancedProviderCascade {
                   parts: [{
                     functionCall: {
                       name: toolCall.function.name,
-                      args: typeof toolCall.function.arguments === 'string' 
-                        ? JSON.parse(toolCall.function.arguments) 
+                      args: typeof toolCall.function.arguments === 'string'
+                        ? JSON.parse(toolCall.function.arguments)
                         : toolCall.function.arguments
                     }
                   }]
@@ -3304,11 +3304,11 @@ class EnhancedProviderCascade {
             });
           }
         }
-        
+
         const geminiTools = tools.length > 0 ? {
           functionDeclarations: convertToolsToGeminiFormat(tools)
         } : undefined;
-        
+
         const requestBody: any = {
           contents: geminiMessages,
           generationConfig: {
@@ -3316,16 +3316,16 @@ class EnhancedProviderCascade {
             maxOutputTokens: 4000
           }
         };
-        
+
         if (geminiTools) {
           requestBody.tools = [geminiTools];
         }
-        
+
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
           {
             method: 'POST',
-            headers: { 
+            headers: {
               'Content-Type': 'application/json',
               'x-goog-api-key': GEMINI_API_KEY
             },
@@ -3333,13 +3333,13 @@ class EnhancedProviderCascade {
             signal: controller.signal
           }
         );
-        
+
         if (!response.ok) {
           if (response.status === 429 && model !== geminiModels[geminiModels.length - 1]) {
             console.log(`⚠️ Quota exceeded for ${model}, trying next model...`);
             continue;
           }
-          
+
           const errorText = await response.text();
           return {
             success: false,
@@ -3347,10 +3347,10 @@ class EnhancedProviderCascade {
             error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
           };
         }
-        
+
         const data = await response.json();
         const candidate = data.candidates?.[0];
-        
+
         if (!candidate || !candidate.content) {
           if (model !== geminiModels[geminiModels.length - 1]) {
             continue;
@@ -3361,11 +3361,11 @@ class EnhancedProviderCascade {
             error: `No content in Gemini ${model} response`
           };
         }
-        
+
         const functionCallPart = candidate.content.parts?.find((part: any) => part.functionCall);
         if (functionCallPart) {
           const functionCall = functionCallPart.functionCall;
-          
+
           const toolCalls = [{
             id: `call_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type: 'function',
@@ -3374,7 +3374,7 @@ class EnhancedProviderCascade {
               arguments: JSON.stringify(functionCall.args)
             }
           }];
-          
+
           return {
             success: true,
             tool_calls: toolCalls,
@@ -3382,18 +3382,18 @@ class EnhancedProviderCascade {
             model: model
           };
         }
-        
+
         const text = candidate.content.parts
           ?.map((part: any) => part.text || '')
           .join('') || '';
-        
+
         return {
           success: true,
           content: text,
           provider: 'gemini',
           model: model
         };
-        
+
       } catch (error: any) {
         if (model !== geminiModels[geminiModels.length - 1]) {
           console.warn(`⚠️ Gemini ${model} failed, trying next:`, error.message);
@@ -3406,17 +3406,17 @@ class EnhancedProviderCascade {
         };
       }
     }
-    
+
     return {
       success: false,
       provider: 'gemini',
       error: 'All Gemini models failed'
     };
   }
-  
+
   private async callDeepSeek(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
     const forceTools = needsDataRetrieval(messages);
-    
+
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -3428,14 +3428,14 @@ class EnhancedProviderCascade {
         messages: messages,
         temperature: 0.7,
         max_tokens: 4000,
-        ...(tools.length > 0 && { 
-          tools: tools, 
-          tool_choice: forceTools ? 'required' : 'auto' 
+        ...(tools.length > 0 && {
+          tools: tools,
+          tool_choice: forceTools ? 'required' : 'auto'
         })
       }),
       signal: controller.signal
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       return {
@@ -3444,10 +3444,10 @@ class EnhancedProviderCascade {
         error: `DeepSeek API error: ${response.status} - ${errorText.substring(0, 200)}`
       };
     }
-    
+
     const data = await response.json();
     const message = data.choices?.[0]?.message;
-    
+
     if (message.tool_calls?.length > 0) {
       return {
         success: true,
@@ -3456,7 +3456,7 @@ class EnhancedProviderCascade {
         model: 'deepseek-chat'
       };
     }
-  
+
     return {
       success: true,
       content: message.content || '',
@@ -3464,10 +3464,10 @@ class EnhancedProviderCascade {
       model: 'deepseek-chat'
     };
   }
-  
+
   private async callKimi(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
     const forceTools = needsDataRetrieval(messages);
-    
+
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
@@ -3481,14 +3481,14 @@ class EnhancedProviderCascade {
         messages: messages,
         temperature: 0.9,
         max_tokens: 4000,
-        ...(tools.length > 0 && { 
-          tools: tools, 
-          tool_choice: forceTools ? 'required' : 'auto' 
+        ...(tools.length > 0 && {
+          tools: tools,
+          tool_choice: forceTools ? 'required' : 'auto'
         })
       }),
       signal: controller.signal
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       return {
@@ -3497,10 +3497,10 @@ class EnhancedProviderCascade {
         error: `Kimi API error: ${response.status} - ${errorText.substring(0, 200)}`
       };
     }
-    
+
     const data = await response.json();
     const message = data.choices?.[0]?.message;
-    
+
     if (message.tool_calls?.length > 0) {
       return {
         success: true,
@@ -3509,7 +3509,7 @@ class EnhancedProviderCascade {
         model: 'moonshotai/kimi-k2'
       };
     }
-    
+
     return {
       success: true,
       content: message.content || '',
@@ -3517,12 +3517,12 @@ class EnhancedProviderCascade {
       model: 'moonshotai/kimi-k2'
     };
   }
-  
+
   private async callAnthropic(messages: any[], controller: AbortController): Promise<CascadeResult> {
     const lastMessage = messages[messages.length - 1];
     const systemMessages = messages.filter(m => m.role === 'system');
     const systemPrompt = systemMessages.map(m => m.content).join('\n');
-    
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -3542,7 +3542,7 @@ class EnhancedProviderCascade {
       }),
       signal: controller.signal
     });
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       return {
@@ -3551,10 +3551,10 @@ class EnhancedProviderCascade {
         error: `Anthropic API error: ${response.status} - ${errorText.substring(0, 200)}`
       };
     }
-    
+
     const data = await response.json();
     const text = data.content?.[0]?.text || '';
-    
+
     return {
       success: true,
       content: text,
@@ -3570,15 +3570,15 @@ async function handleToolChain(
   executiveName: string,
   sessionId: string,
   ipAddress: string
-): Promise<{ 
-  results: any[]; 
+): Promise<{
+  results: any[];
   allSuccessful: boolean;
   executionTime: number;
 }> {
   const startTime = Date.now();
   const results = [];
   let allSuccessful = true;
-  
+
   for (const toolCall of toolCalls) {
     const timestamp = Date.now();
     const result = await executeRealToolCall(
@@ -3589,23 +3589,23 @@ async function handleToolChain(
       ipAddress,
       timestamp
     );
-    
+
     const memoryResult = {
       name: toolCall.function?.name || toolCall.name,
       result: result,
       timestamp: timestamp,
       toolCallId: toolCall.id
     };
-    
+
     results.push(memoryResult);
-    
+
     if (!result.success) {
       allSuccessful = false;
     }
   }
-  
-  return { 
-    results, 
+
+  return {
+    results,
     allSuccessful,
     executionTime: Date.now() - startTime
   };
@@ -3620,41 +3620,41 @@ function generateSystemPrompt(
   ipAddress: string = 'unknown'
 ): string {
   let historicalContext = '';
-  
+
   if (historicalSummaries.length > 0) {
     historicalContext += "## 📜 HISTORICAL CONVERSATION SUMMARIES (2000+ Conversations)\n\n";
-    
+
     const recentSummaries = historicalSummaries.slice(0, 5);
-    
+
     recentSummaries.forEach((summary, index) => {
       historicalContext += `**${index + 1}. ${summary.metadata?.conversation_date ? new Date(summary.metadata.conversation_date).toLocaleDateString() : 'Previous'}**\n`;
       historicalContext += `Summary: ${summary.summary}\n`;
-      
+
       if (summary.key_topics && summary.key_topics.length > 0) {
         historicalContext += `Topics: ${summary.key_topics.join(', ')}\n`;
       }
-      
+
       if (summary.metadata?.tool_call_count) {
         historicalContext += `Tools used: ${summary.metadata.tool_call_count}\n`;
       }
-      
+
       historicalContext += '\n';
     });
-    
+
     historicalContext += `*Based on ${historicalSummaries.length} previous conversation summaries*\n\n`;
   }
-  
+
   let followUpContext = '';
   if (recentContext.length > 0) {
     followUpContext += "## 🔄 RECENT CONVERSATION CONTEXT\n\n";
-    
+
     recentContext.forEach((ctx, index) => {
       followUpContext += `**Context ${index + 1}:**\n`;
       followUpContext += `**Assistant asked:** "${ctx.current_question?.substring(0, 100)}${ctx.current_question?.length > 100 ? '...' : ''}"\n`;
       followUpContext += `**Assistant said:** "${ctx.assistant_response?.substring(0, 100)}${ctx.assistant_response?.length > 100 ? '...' : ''}"\n`;
       followUpContext += `**User responded:** "${ctx.user_response}"\n\n`;
     });
-    
+
     followUpContext += "**CRITICAL FOR AMBIGUOUS RESPONSES**: When user gives ambiguous responses like 'yes', 'no', 'okay', etc., you MUST:\n";
     followUpContext += "1. Check the recent context above to understand what they're responding to\n";
     followUpContext += "2. Explicitly state what you understand them to be agreeing/disagreeing with\n";
@@ -3794,14 +3794,14 @@ Remember: You are an intelligent analyst and proactive assistant. Your value is 
 async function emergencyStaticFallback(
   query: string,
   executiveName: string
-): Promise<{ 
-  content: string; 
+): Promise<{
+  content: string;
   hasToolCalls: boolean;
 }> {
   console.warn(`⚠️ [${executiveName}] Using emergency static fallback`);
-  
+
   let content = `I'm ${executiveName}, your ${EXECUTIVE_ROLE}. `;
-  
+
   if (query.toLowerCase().includes('hello') || query.toLowerCase().includes('hi')) {
     content += "I'm here to help you manage tasks, agents, browse the web, analyze attachments, and manage the XMRT ecosystem. How can I assist you today?";
   } else if (query.toLowerCase().includes('status') || query.toLowerCase().includes('system')) {
@@ -3819,7 +3819,7 @@ async function emergencyStaticFallback(
   } else {
     content += "I'm currently experiencing technical difficulties with my AI providers. Please try again in a moment.";
   }
-  
+
   return {
     content,
     hasToolCalls: false
@@ -3836,31 +3836,31 @@ const ELIZA_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['send_email', 'create_draft', 'list_emails', 'get_email'],
             description: 'Action type: send_email to send immediately, create_draft to create draft for review',
             default: 'send_email'
           },
-          to: { 
-            type: 'string', 
+          to: {
+            type: 'string',
             description: 'Recipient email address (required for send_email and create_draft)',
             pattern: '^[\\w._%+-]+@[\\w.-]+\\.[a-zA-Z]{2,}$'
           },
-          subject: { 
-            type: 'string', 
+          subject: {
+            type: 'string',
             description: 'Email subject line (required for send_email and create_draft)'
           },
-          body: { 
-            type: 'string', 
+          body: {
+            type: 'string',
             description: 'Email body content (required for send_email and create_draft)'
           },
-          cc: { 
-            type: 'string', 
+          cc: {
+            type: 'string',
             description: 'CC recipient email address'
           },
-          bcc: { 
-            type: 'string', 
+          bcc: {
+            type: 'string',
             description: 'BCC recipient email address'
           }
         },
@@ -3922,36 +3922,36 @@ const ELIZA_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          url: { 
-            type: 'string', 
+          url: {
+            type: 'string',
             description: 'Full URL to browse (must include https:// or http:// prefix)',
             pattern: '^https?://.+'
           },
-          action: { 
-            type: 'string', 
+          action: {
+            type: 'string',
             enum: ['navigate', 'extract', 'json'],
             description: 'Action type: navigate for HTML, extract for structured data, json for JSON endpoints',
             default: 'navigate'
           },
-          timeout: { 
-            type: 'number', 
+          timeout: {
+            type: 'number',
             description: 'Timeout in milliseconds (default: 30000)',
             default: 30000,
             minimum: 1000,
             maximum: 120000
           },
-          headers: { 
-            type: 'object', 
+          headers: {
+            type: 'object',
             description: 'Custom HTTP headers to send with the request'
           },
-          method: { 
-            type: 'string', 
+          method: {
+            type: 'string',
             enum: ['GET', 'POST'],
             description: 'HTTP method to use',
             default: 'GET'
           },
-          body: { 
-            type: 'string', 
+          body: {
+            type: 'string',
             description: 'Request body for POST requests'
           }
         },
@@ -4055,8 +4055,8 @@ const ELIZA_TOOLS = [
         properties: {
           title: { type: 'string', description: 'Task title' },
           description: { type: 'string', description: 'Task description' },
-          category: { 
-            type: 'string', 
+          category: {
+            type: 'string',
             enum: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other']
           },
           assignee_agent_id: { type: 'string', description: 'Agent ID to assign to' },
@@ -4114,8 +4114,8 @@ const ELIZA_TOOLS = [
         type: 'object',
         properties: {
           name: { type: 'string', description: 'Name of the knowledge entity' },
-          type: { 
-            type: 'string', 
+          type: {
+            type: 'string',
             enum: ['concept', 'tool', 'skill', 'person', 'project', 'fact', 'general']
           },
           description: { type: 'string', description: 'Detailed description' }
@@ -4298,8 +4298,8 @@ const ELIZA_TOOLS = [
       parameters: {
         type: 'object',
         properties: {
-          template_name: { 
-            type: 'string', 
+          template_name: {
+            type: 'string',
             enum: [
               'acquire_new_customer', 'upsell_existing_customer', 'churn_prevention',
               'code_quality_audit', 'auto_fix_codebase',
@@ -4314,40 +4314,90 @@ const ELIZA_TOOLS = [
   }
 ];
 
+// ========== MULTIPART PARSER ==========
+async function parseMultipartFormData(req: Request): Promise<any> {
+  const contentType = req.headers.get('content-type') || '';
+  if (!contentType.includes('multipart/form-data')) {
+    return null;
+  }
+
+  try {
+    const formData = await req.formData();
+    const body: any = {};
+    const attachments: any[] = [];
+
+    for (const [key, value] of formData.entries()) {
+      if (value instanceof File) {
+        console.log(`📎 Processing file upload: ${value.name} (${value.type})`);
+        const buffer = await value.arrayBuffer();
+
+        // Use Uint8Array to handle binary data correctly for btoa
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const len = bytes.byteLength;
+        for (let i = 0; i < len; i++) {
+          binary += String.fromCharCode(bytes[i]);
+        }
+        const base64 = btoa(binary);
+
+        attachments.push({
+          filename: value.name,
+          content: base64, // Base64 encoded content
+          mime_type: value.type,
+          size: value.size
+        });
+      } else {
+        // Text fields
+        body[key] = value;
+      }
+    }
+
+    // Add attachments to body
+    if (attachments.length > 0) {
+      body.attachments = attachments;
+    }
+
+    return body;
+  } catch (e) {
+    console.error('Error parsing multipart form data:', e);
+    throw new Error('Failed to parse multipart form data');
+  }
+}
+
 // ========== MAIN SERVE FUNCTION WITH IP-BASED PERSISTENCE ==========
 Deno.serve(async (req) => {
   const startTime = Date.now();
   const requestId = generateRequestId();
-  
+
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => {
     timeoutController.abort();
   }, REQUEST_TIMEOUT_MS);
-  
+
   try {
     if (req.method === 'OPTIONS') {
       clearTimeout(timeoutId);
       return new Response(null, { headers: corsHeaders });
     }
-    
+
     if (req.method === 'GET') {
       clearTimeout(timeoutId);
-      
+
       const { count: toolCount } = await supabase
         .from(DATABASE_CONFIG.tables.ai_tools)
         .select('*', { count: 'exact', head: true })
         .eq('is_active', true);
-      
+
       const { count: agentCount } = await supabase
         .from(DATABASE_CONFIG.tables.agents)
         .select('*', { count: 'exact', head: true });
-      
+
       const { count: summaryCount } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
         .select('*', { count: 'exact', head: true });
-      
+
       const activeSessions = await IPSessionManager.getActiveSessionsCount();
-      
+
       return new Response(
         JSON.stringify({
           status: 'operational',
@@ -4356,13 +4406,13 @@ Deno.serve(async (req) => {
           version: '5.0.0',
           timestamp: new Date().toISOString(),
           features: [
-            'production-ready', 
-            'real-database-wiring', 
-            'ip-based-persistence', 
-            'multi-provider', 
-            'tool-chaining', 
-            'edge-function-discovery', 
-            'web-browsing', 
+            'production-ready',
+            'real-database-wiring',
+            'ip-based-persistence',
+            'multi-provider',
+            'tool-chaining',
+            'edge-function-discovery',
+            'web-browsing',
             'intelligent-analysis',
             'enhanced-conversation-persistence',
             'attachment-analysis',
@@ -4414,36 +4464,41 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     if (req.method !== 'POST') {
       clearTimeout(timeoutId);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Method not allowed',
-          request_id: requestId 
+          request_id: requestId
         }),
         { status: 405, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     let body;
     try {
-      body = await req.json();
+      const contentType = req.headers.get('content-type') || '';
+      if (contentType.includes('multipart/form-data')) {
+        body = await parseMultipartFormData(req);
+      } else {
+        body = await req.json();
+      }
     } catch (parseError: any) {
       clearTimeout(timeoutId);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Invalid JSON payload',
           details: parseError.message,
-          request_id: requestId 
+          request_id: requestId
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
-    const { 
-      messages = [], 
-      userQuery, 
+
+    const {
+      messages = [],
+      userQuery,
       session_id: providedSessionId,
       provider = 'auto',
       executive_name = EXECUTIVE_NAME,
@@ -4455,35 +4510,35 @@ Deno.serve(async (req) => {
       attachments = [],
       user_id
     } = body;
-    
+
     if (!userQuery && (!messages || messages.length === 0)) {
       clearTimeout(timeoutId);
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           error: 'Missing required field: userQuery or messages',
-          request_id: requestId 
+          request_id: requestId
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     const query = userQuery || messages[messages.length - 1]?.content || '';
-    
+
     const ipAddress = IPSessionManager.extractIP(req);
     console.log(`🌐 IP Address detected: ${ipAddress}`);
-    
+
     const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
-    
+
     const conversationManager = new EnhancedConversationManager(sessionId, ipAddress, user_id);
-    
-    const { 
-      messages: savedMessages, 
+
+    const {
+      messages: savedMessages,
       toolResults: previousToolResults,
       historicalSummaries,
-      conversationSummary 
+      conversationSummary
     } = await conversationManager.loadConversationHistory();
-    
+
     const { isAmbiguous: isAmbiguousResponse, response: ambiguousResponse, shouldExecuteTools } = await handleAmbiguousResponse(
       query,
       [...savedMessages, ...messages],
@@ -4492,12 +4547,12 @@ Deno.serve(async (req) => {
       ipAddress,
       conversationManager
     );
-    
+
     if (isAmbiguousResponse && ambiguousResponse) {
       console.log(`🤔 Handling ambiguous response: "${query}"`);
-      
+
       clearTimeout(timeoutId);
-      
+
       await conversationManager.saveConversation(
         [...savedMessages, ...messages, { role: 'assistant', content: ambiguousResponse }],
         previousToolResults,
@@ -4513,7 +4568,7 @@ Deno.serve(async (req) => {
           ip_address: ipAddress
         }
       );
-      
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -4540,12 +4595,12 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     let recentContext = [];
     if (shouldExecuteTools) {
       recentContext = await conversationManager.loadRecentContext();
     }
-    
+
     const memoryContexts = await retrieveMemoryContexts(sessionId);
     let memoryContext = '';
     if (memoryContexts.length > 0) {
@@ -4555,52 +4610,52 @@ Deno.serve(async (req) => {
         memoryContext += `${ctx.content}\n\n`;
       });
     }
-    
+
     const toolMemoryContext = await conversationManager.generateMemoryContext();
     memoryContext += toolMemoryContext;
-    
+
     const systemPrompt = generateSystemPrompt(
-      executive_name, 
-      memoryContext, 
+      executive_name,
+      memoryContext,
       historicalSummaries,
       recentContext,
       ipAddress
     );
-    
+
     const allMessages = [
       ...savedMessages,
       ...messages
     ].slice(-CONVERSATION_HISTORY_LIMIT);
-    
+
     if (attachments && attachments.length > 0) {
       console.log(`📎 Found ${attachments.length} attachment(s) in request`);
-      
+
       const lastMessageIndex = allMessages.length - 1;
       if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
         allMessages[lastMessageIndex].attachments = attachments;
       }
     }
-    
+
     const messagesArray = [
       { role: 'system', content: systemPrompt },
       ...allMessages
     ];
-    
+
     const cascade = new EnhancedProviderCascade();
-    
+
     const tools = use_tools ? ELIZA_TOOLS : [];
     let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, images);
-    
+
     if (!cascadeResult.success) {
       console.error(`❌ [${executive_name}] AI Cascade failed for request ${requestId}:`, cascadeResult.error);
-      
+
       const emergencyResult = await emergencyStaticFallback(
         query,
         executive_name
       );
-      
+
       clearTimeout(timeoutId);
-      
+
       await conversationManager.saveConversation(
         [...messagesArray, { role: 'assistant', content: emergencyResult.content }],
         [],
@@ -4614,7 +4669,7 @@ Deno.serve(async (req) => {
           ip_address: ipAddress
         }
       );
-      
+
       return new Response(
         JSON.stringify({
           success: true,
@@ -4637,13 +4692,13 @@ Deno.serve(async (req) => {
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-    
+
     const callAIFunction = async (messages: any[], tools: any[]) => {
       const cascade = new EnhancedProviderCascade();
       const result = await cascade.callWithCascade(messages, tools, cascadeResult.provider, images);
       return result;
     };
-    
+
     const { content: finalContent, toolsExecuted } = await executeToolsWithIteration(
       cascadeResult,
       messagesArray,
@@ -4655,7 +4710,7 @@ Deno.serve(async (req) => {
       MAX_TOOL_ITERATIONS,
       conversationManager
     );
-    
+
     let responseContent = finalContent;
     if (toolsExecuted > 0 && !responseContent) {
       const toolResults = conversationManager.getToolResults();
@@ -4663,7 +4718,7 @@ Deno.serve(async (req) => {
         tool: r.name,
         result: r.result
       }));
-      
+
       const synthesized = await synthesizeToolResults(recentResults, query, executive_name, allMessages);
       if (synthesized) {
         responseContent = synthesized;
@@ -4677,16 +4732,16 @@ Deno.serve(async (req) => {
         });
       }
     }
-    
+
     if (save_memory) {
       const toolResults = conversationManager.getToolResults();
       const newResults = toolResults.slice(previousToolResults.length);
-      
+
       console.log(
         `🧪 Pre-save: detected ${toolResults.length} total tool results in memory, ` +
         `${newResults.length} new since load, executed ${toolsExecuted} tools this request`
       );
-      
+
       await conversationManager.saveConversation(
         [...messagesArray, { role: 'assistant', content: responseContent || '' }],
         newResults,
@@ -4709,12 +4764,12 @@ Deno.serve(async (req) => {
         }
       );
     }
-    
+
     const executionTime = Date.now() - startTime;
     console.log(`✅ [${executive_name}] Request ${requestId} completed in ${executionTime}ms, executed ${toolsExecuted} tools (IP: ${ipAddress})`);
-    
+
     clearTimeout(timeoutId);
-    
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -4751,12 +4806,12 @@ Deno.serve(async (req) => {
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-    
+
   } catch (error: any) {
     clearTimeout(timeoutId);
-    
+
     console.error(`💥 Critical error for request ${requestId}:`, error);
-    
+
     if (error.name === 'AbortError') {
       return new Response(
         JSON.stringify({
@@ -4768,13 +4823,13 @@ Deno.serve(async (req) => {
           timestamp: new Date().toISOString(),
           executionTimeMs: Date.now() - startTime
         }),
-        { 
+        {
           status: 504,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
-    
+
     return new Response(
       JSON.stringify({
         success: false,
@@ -4785,9 +4840,9 @@ Deno.serve(async (req) => {
         timestamp: new Date().toISOString(),
         executionTimeMs: Date.now() - startTime
       }),
-      { 
+      {
         status: 500,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
   }
