@@ -4348,7 +4348,16 @@ async function parseMultipartFormData(req: Request): Promise<any> {
         });
       } else {
         // Text fields
-        body[key] = value;
+        let parsedValue = value;
+        // Attempt to parse JSON strings for complex fields
+        if (typeof value === 'string' && (key === 'messages' || key === 'organizationContext' || key === 'images')) {
+          try {
+            parsedValue = JSON.parse(value);
+          } catch (e) {
+            // keep as string
+          }
+        }
+        body[key] = parsedValue;
       }
     }
 
@@ -4368,6 +4377,10 @@ async function parseMultipartFormData(req: Request): Promise<any> {
 Deno.serve(async (req) => {
   const startTime = Date.now();
   const requestId = generateRequestId();
+
+  // DEBUG LOGGING
+  const contentType = req.headers.get('content-type') || 'unknown';
+  console.log(`📥 Request ${requestId} received. Method: ${req.method}, Content-Type: ${contentType}`);
 
   const timeoutController = new AbortController();
   const timeoutId = setTimeout(() => {
@@ -4479,17 +4492,23 @@ Deno.serve(async (req) => {
     let body;
     try {
       const contentType = req.headers.get('content-type') || '';
+      console.log(`📥 [${requestId}] Parsing body with Content-Type: ${contentType}`);
+
       if (contentType.includes('multipart/form-data')) {
         body = await parseMultipartFormData(req);
+        if (!body) throw new Error('Multipart parsing returned null');
+        console.log(`✅ [${requestId}] Parsed multipart body. Keys: ${Object.keys(body).join(', ')}`);
       } else {
         body = await req.json();
+        console.log(`✅ [${requestId}] Parsed JSON body.`);
       }
     } catch (parseError: any) {
       clearTimeout(timeoutId);
+      console.error(`❌ [${requestId}] Body parsing failed:`, parseError);
       return new Response(
         JSON.stringify({
-          error: 'Invalid JSON payload',
-          details: parseError.message,
+          error: 'Invalid payload',
+          details: `Content-Type: ${req.headers.get('content-type')}, Error: ${parseError.message}`,
           request_id: requestId
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

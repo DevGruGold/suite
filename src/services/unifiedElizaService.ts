@@ -164,6 +164,22 @@ export class UnifiedElizaService {
           const formData = new FormData();
           formData.append('userQuery', userInput || 'Hello');
 
+          // Append Metadata and Context as JSON strings
+          formData.append('messages', JSON.stringify([{
+            role: 'user',
+            content: userInput || 'Hello'
+          }]));
+
+          if (context.organizationContext) {
+            formData.append('organizationContext', JSON.stringify(context.organizationContext));
+          }
+
+          formData.append('timestamp', new Date().toISOString());
+
+          if (context.isLiveCameraFeed) {
+            formData.append('isLiveCameraFeed', 'true');
+          }
+
           // Append all files
           context.attachments.forEach(file => {
             formData.append('file', file);
