@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { callAIWithFallback } from '../_shared/unifiedAIFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,7 +15,7 @@ const executivePerspectives = {
     prompt: 'Analyze this proposal from a strategic perspective. Consider: Does it align with XMRT DAO goals? Will it benefit the community? Is it strategically valuable long-term?'
   },
   CTO: {
-    title: 'Chief Technology Officer', 
+    title: 'Chief Technology Officer',
     focus: 'Technical feasibility, code quality, security, scalability',
     prompt: 'Analyze this proposal from a technical perspective. Consider: Is it technically feasible? Are there security concerns? Will it scale well? Does it follow best practices?'
   },
@@ -82,7 +83,7 @@ serve(async (req) => {
     // Update proposal to show voting has been initiated
     await supabase
       .from('edge_function_proposals')
-      .update({ 
+      .update({
         updated_at: new Date().toISOString(),
       })
       .eq('id', proposal_id);
@@ -105,9 +106,9 @@ serve(async (req) => {
     for (const exec of executives) {
       try {
         console.log(`📊 Requesting vote from ${exec}...`);
-        
+
         const perspective = executivePerspectives[exec as keyof typeof executivePerspectives];
-        
+
         // Build analysis prompt with STRICT JSON-only requirement
         const analysisPrompt = `🚨 RESPOND WITH JSON ONLY - NO OTHER TEXT 🚨
 
@@ -139,30 +140,54 @@ OR:
 ✅ ONLY output the raw JSON object`;
 
         // Call lovable-chat to get executive's analysis using correct message format
-        const { data: aiResponse, error: aiError } = await supabase.functions.invoke('lovable-chat', {
-          body: {
-            messages: [
-              { role: 'user', content: analysisPrompt }
-            ],
+        // Call unified AI fallback to get executive's analysis
+        // This fails over to Gemini/Vertex/others if primary provider is out of tokens
+        console.log(`🧠 Calling AI for ${exec} (Fallback Enabled)...`);
+
+        let aiResult;
+        try {
+          // Determine preferred provider based on executive persona
+          // CSO/COO -> Gemini (Strategy/Ops)
+          // CTO -> DeepSeek (Tech/Code)
+          // CIO -> Vertex AI (Innovation/Vision)
+          // CAO -> Lovable/Claude (Analytics/Data)
+          const providerMap: Record<string, 'gemini' | 'deepseek' | 'vertexai' | 'lovable' | 'kimi'> = {
+            'CSO': 'gemini',
+            'CTO': 'deepseek',
+            'CIO': 'vertexai',
+            'CAO': 'lovable',
+            'COO': 'gemini'
+          };
+
+          const preferredProvider = providerMap[exec] || 'gemini';
+
+          aiResult = await callAIWithFallback([
+            { role: 'user', content: analysisPrompt }
+          ], {
+            preferProvider: preferredProvider,
             userContext: {
               executiveRole: exec,
               mode: 'governance_analysis',
               governanceTask: 'proposal_analysis',
               proposalId: proposal_id
-            }
-          }
-        });
+            },
+            executiveName: perspective.title, // Pass full title for specialized system prompt
+            temperature: 0.4, // Lower temperature for more consistent JSON
+            maxTokens: 1000
+          });
 
-        if (aiError) {
-          // Extract detailed error from response if available
-          const errorDetail = aiResponse?.error || aiError.message;
-          console.error(`❌ ${exec} analysis failed:`, errorDetail);
-          errors.push({ executive: exec, error: errorDetail });
+        } catch (err) {
+          console.error(`❌ All AI providers failed for ${exec}:`, err);
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          errors.push({ executive: exec, error: errorMessage });
           continue;
         }
 
+        // Standardize response format
+        const responseText = typeof aiResult === 'string' ? aiResult : (aiResult.content || aiResult.message?.content || '');
+
         // Validate response exists
-        if (!aiResponse?.response && !aiResponse?.message) {
+        if (!responseText) {
           console.error(`❌ ${exec} returned empty response`);
           errors.push({ executive: exec, error: 'Empty response from AI' });
           continue;
@@ -174,12 +199,11 @@ OR:
         let reasoning = `${exec} could not complete analysis - defaulting to reject for accountability.`;
 
         try {
-          const responseText = aiResponse?.response || aiResponse?.message || '';
           console.log(`📝 ${exec} raw response (first 500 chars): ${responseText.slice(0, 500)}`);
-          
+
           // Try multiple JSON extraction strategies
           let parsed = null;
-          
+
           // Strategy 1: Look for JSON object anywhere in response
           const jsonMatch = responseText.match(/\{\s*"vote"\s*:\s*"[^"]+"\s*,\s*"reasoning"\s*:\s*"[^"]*"\s*\}/);
           if (jsonMatch) {
@@ -189,7 +213,7 @@ OR:
               console.log(`⚠️ JSON match found but parse failed: ${jsonMatch[0].slice(0, 100)}`);
             }
           }
-          
+
           // Strategy 2: Try to find JSON with more flexible regex (handles escaped quotes)
           if (!parsed) {
             const flexMatch = responseText.match(/\{[\s\S]*?"vote"[\s\S]*?"reasoning"[\s\S]*?\}/);
@@ -203,7 +227,7 @@ OR:
               }
             }
           }
-          
+
           // Strategy 3: Extract vote and reasoning separately using regex
           if (!parsed) {
             const voteMatch = responseText.match(/"vote"\s*:\s*"(approve|reject|abstain)"/i);
@@ -215,22 +239,22 @@ OR:
               };
             }
           }
-          
+
           if (parsed && parsed.vote) {
             const parsedVote = parsed.vote?.toLowerCase() || '';
             reasoning = parsed.reasoning || reasoning;
-            
+
             // Only accept abstain if it has valid justification
             if (parsedVote === 'abstain') {
               const validAbstentionReasons = [
                 'conflict of interest',
-                'insufficient information', 
+                'insufficient information',
                 'outside expertise',
                 'outside my expertise',
                 'outside my area',
                 'cannot objectively evaluate'
               ];
-              const hasValidReason = validAbstentionReasons.some(reason => 
+              const hasValidReason = validAbstentionReasons.some(reason =>
                 reasoning.toLowerCase().includes(reason)
               );
               if (hasValidReason) {
@@ -252,17 +276,17 @@ OR:
           } else {
             // Fallback: look for vote keywords in text with context
             const lowerResponse = responseText.toLowerCase();
-            
+
             // Look for explicit vote statements
-            if (lowerResponse.includes('i vote to approve') || 
-                lowerResponse.includes('my vote is approve') ||
-                lowerResponse.includes('vote: approve') ||
-                lowerResponse.includes('"approve"')) {
+            if (lowerResponse.includes('i vote to approve') ||
+              lowerResponse.includes('my vote is approve') ||
+              lowerResponse.includes('vote: approve') ||
+              lowerResponse.includes('"approve"')) {
               vote = 'approve';
-            } else if (lowerResponse.includes('i vote to reject') || 
-                       lowerResponse.includes('my vote is reject') ||
-                       lowerResponse.includes('vote: reject') ||
-                       lowerResponse.includes('"reject"')) {
+            } else if (lowerResponse.includes('i vote to reject') ||
+              lowerResponse.includes('my vote is reject') ||
+              lowerResponse.includes('vote: reject') ||
+              lowerResponse.includes('"reject"')) {
               vote = 'reject';
             } else if (lowerResponse.includes('approve') && !lowerResponse.includes('reject')) {
               vote = 'approve';
@@ -274,7 +298,7 @@ OR:
           }
         } catch (parseError) {
           console.error(`⚠️ Failed to parse ${exec} response:`, parseError);
-          reasoning = `${exec} analysis failed - defaulting to reject. Original: ${aiResponse?.response?.slice(0, 200) || 'No response'}`;
+          reasoning = `${exec} analysis failed - defaulting to reject. Original: ${responseText.slice(0, 200) || 'No response'}`;
           vote = 'reject';
         }
 
@@ -331,8 +355,8 @@ OR:
         type: 'deliberation_complete',
         title: `Executive Deliberation Complete: ${proposal.function_name}`,
         description: `${voteResults.length} executives voted. Status: ${finalStatus}`,
-        data: { 
-          proposal_id, 
+        data: {
+          proposal_id,
           votes: voteResults.map(v => ({ exec: v.executive, vote: v.vote })),
           final_status: finalStatus
         }
