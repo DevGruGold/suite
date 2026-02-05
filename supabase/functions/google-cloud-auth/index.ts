@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { SignJWT, importPKCS8 } from 'https://deno.land/x/jose@v4.15.5/index.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -105,6 +106,65 @@ async function getAccessToken(): Promise<string | null> {
   return tokens.access_token;
 }
 
+// Service Account Token Implementation
+async function getServiceAccountToken(scopes: string[] = SCOPES.split(' ')): Promise<string | null> {
+  try {
+    const serviceAccountJson = Deno.env.get('GOOGLE_SERVICE_ACCOUNT');
+    if (!serviceAccountJson) {
+      console.log('GOOGLE_SERVICE_ACCOUNT not configured');
+      return null;
+    }
+
+    const serviceAccount = JSON.parse(serviceAccountJson);
+    const privateKey = serviceAccount.private_key;
+    const clientEmail = serviceAccount.client_email;
+    const project_id = serviceAccount.project_id; // useful to log checking
+
+    if (!privateKey || !clientEmail) {
+      console.error('Invalid GOOGLE_SERVICE_ACCOUNT JSON: missing private_key or client_email');
+      return null;
+    }
+
+    // Create JWT
+    const algorithm = 'RS256';
+    const pkcs8 = await importPKCS8(privateKey, algorithm);
+
+    const jwt = await new SignJWT({
+      scope: scopes.join(' ')
+    })
+      .setProtectedHeader({ alg: algorithm })
+      .setIssuer(clientEmail)
+      .setSubject(clientEmail)
+      .setAudience(GOOGLE_TOKEN_URL)
+      .setIssuedAt()
+      .setExpirationTime('1h')
+      .sign(pkcs8);
+
+    // Exchange JWT for Access Token
+    const response = await fetch(GOOGLE_TOKEN_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwt
+      })
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('Service Account token exchange failed:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    return data.access_token;
+
+  } catch (error) {
+    console.error('Error getting Service Account token:', error);
+    return null;
+  }
+}
+
 // ============= GMAIL ACTIONS =============
 async function sendEmail(accessToken: string, to: string, subject: string, body: string, isHtml = false) {
   const message = [
@@ -202,7 +262,7 @@ async function listDriveFiles(accessToken: string, query = '', maxResults = 20, 
     pageSize: String(maxResults),
     fields: 'files(id,name,mimeType,createdTime,modifiedTime,size,webViewLink)'
   });
-  
+
   let q = query;
   if (folderId) {
     q = q ? `${q} and '${folderId}' in parents` : `'${folderId}' in parents`;
@@ -364,10 +424,10 @@ async function listCalendarEvents(accessToken: string, calendarId = 'primary', t
     singleEvents: 'true',
     orderBy: 'startTime'
   });
-  
+
   if (timeMin) params.set('timeMin', timeMin);
   else params.set('timeMin', new Date().toISOString());
-  
+
   if (timeMax) params.set('timeMax', timeMax);
 
   const response = await fetch(`${CALENDAR_API_URL}/calendars/${encodeURIComponent(calendarId)}/events?${params}`, {
@@ -391,7 +451,7 @@ async function createCalendarEvent(
     start: { dateTime: startTime },
     end: { dateTime: endTime }
   };
-  
+
   if (description) event.description = description;
   if (attendees?.length) {
     event.attendees = attendees.map(email => ({ email }));
@@ -457,7 +517,7 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    
+
     // Parse request body for POST requests first to check for action
     let body: any = {};
     if (req.method === 'POST') {
@@ -467,7 +527,7 @@ serve(async (req) => {
         body = {};
       }
     }
-    
+
     // Auto-detect callback mode when 'code' parameter is present (from Google's redirect)
     // This allows us to use a redirect URI without query parameters
     const hasAuthCode = url.searchParams.get('code');
@@ -491,7 +551,7 @@ serve(async (req) => {
 
         // Force HTTPS for redirect URI - NO query params (auto-detect callback via 'code' param)
         const redirectUri = `https://${url.host}/functions/v1/google-cloud-auth`;
-        
+
         const authUrl = new URL(GOOGLE_AUTH_URL);
         authUrl.searchParams.set('client_id', clientId);
         authUrl.searchParams.set('redirect_uri', redirectUri);
@@ -558,11 +618,11 @@ serve(async (req) => {
           try {
             const supabaseUrl = Deno.env.get('SUPABASE_URL');
             const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-            
+
             if (supabaseUrl && supabaseKey) {
               const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
               const supabase = createClient(supabaseUrl, supabaseKey);
-              
+
               // Get user info to store email
               const userInfoResponse = await fetch('https://www.googleapis.com/oauth2/v2/userinfo', {
                 headers: { Authorization: `Bearer ${tokens.access_token}` }
@@ -595,7 +655,7 @@ serve(async (req) => {
                     granted_scopes: tokens.scope
                   }
                 });
-              
+
               console.log('✅ OAuth connection saved to database from google-cloud-auth');
             }
           } catch (dbErr) {
@@ -615,26 +675,54 @@ serve(async (req) => {
       }
 
       case 'get_access_token': {
-        if (!refreshToken) {
-          return new Response(JSON.stringify({
-            success: false,
-            error: 'GOOGLE_REFRESH_TOKEN not configured. Run authorization flow first.',
-            needs_authorization: true
-          }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        const authType = body.auth_type || 'user_fallback'; // 'user', 'service_account', 'user_fallback' (default)
+
+        let accessToken: string | null = null;
+        let usedMethod = 'none';
+
+        // 1. Service Account
+        if (authType === 'service_account' || authType === 'user_fallback') {
+          // If specifically requested, or if fallback mode, try SA first
+          // (Usually SA is preferred for backend ops if available)
+          if (Deno.env.get('GOOGLE_SERVICE_ACCOUNT')) {
+            accessToken = await getServiceAccountToken();
+            if (accessToken) usedMethod = 'service_account';
+          } else if (authType === 'service_account') {
+            // Explicitly requested but missing
+            return new Response(JSON.stringify({
+              success: false,
+              error: 'GOOGLE_SERVICE_ACCOUNT not configured'
+            }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
         }
 
-        const accessToken = await getAccessToken();
+        // 2. User OAuth (Refresh Token) 
+        if (!accessToken && (authType === 'user' || authType === 'user_fallback')) {
+          // Fallback to existing user flow
+          if (refreshToken) {
+            accessToken = await getAccessToken();
+            if (accessToken) usedMethod = 'user_refresh_token';
+          } else if (authType === 'user') {
+            return new Response(JSON.stringify({
+              success: false,
+              error: 'GOOGLE_REFRESH_TOKEN not configured. Run authorization flow first.',
+              needs_authorization: true
+            }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+          }
+        }
+
         if (!accessToken) {
           return new Response(JSON.stringify({
             success: false,
-            error: 'Failed to refresh access token',
+            error: 'Failed to retrieve access token (no valid credentials found)',
             needs_reauthorization: true
           }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         return new Response(JSON.stringify({
           success: true,
-          access_token: accessToken
+          access_token: accessToken,
+          method: usedMethod
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
@@ -666,11 +754,12 @@ serve(async (req) => {
           configured: {
             client_id: !!clientId,
             client_secret: !!clientSecret,
-            refresh_token: hasRefreshToken
+            refresh_token: hasRefreshToken,
+            service_account: !!Deno.env.get('GOOGLE_SERVICE_ACCOUNT')
           },
-          ready: !!(clientId && clientSecret && hasRefreshToken),
+          ready: !!(clientId && clientSecret && hasRefreshToken) || !!Deno.env.get('GOOGLE_SERVICE_ACCOUNT'),
           available_services: ['gmail', 'drive', 'sheets', 'calendar', 'gemini'],
-          message: !hasRefreshToken 
+          message: !hasRefreshToken
             ? 'GOOGLE_REFRESH_TOKEN not set. Run authorization flow to obtain it.'
             : 'Google Cloud OAuth fully configured with Gmail, Drive, Sheets, Calendar access'
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -680,65 +769,65 @@ serve(async (req) => {
       case 'send_email': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const { to, subject, body: emailBody, is_html } = body;
         if (!to || !subject || !emailBody) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing to, subject, or body' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing to, subject, or body' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await sendEmail(accessToken, to, subject, emailBody, is_html);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'list_emails': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await listEmails(accessToken, body.query || '', body.max_results || 20);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'get_email': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.message_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing message_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing message_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await getEmail(accessToken, body.message_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'create_draft': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const { to, subject, body: draftBody } = body;
         if (!to || !subject || !draftBody) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing to, subject, or body' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing to, subject, or body' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await createDraft(accessToken, to, subject, draftBody);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
@@ -746,97 +835,97 @@ serve(async (req) => {
       case 'list_files': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await listDriveFiles(accessToken, body.query, body.max_results, body.folder_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'upload_file': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.file_name || !body.content) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing file_name or content' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing file_name or content' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await uploadDriveFile(accessToken, body.file_name, body.content, body.mime_type, body.folder_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'get_file': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.file_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing file_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing file_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await getDriveFile(accessToken, body.file_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'download_file': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.file_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing file_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing file_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const content = await downloadDriveFile(accessToken, body.file_id);
-        return new Response(JSON.stringify({ success: true, content }), 
+        return new Response(JSON.stringify({ success: true, content }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'create_folder': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.folder_name) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing folder_name' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing folder_name' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await createDriveFolder(accessToken, body.folder_name, body.parent_folder_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'share_file': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.file_id || !body.email) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing file_id or email' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing file_id or email' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await shareDriveFile(accessToken, body.file_id, body.email, body.role);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
@@ -844,85 +933,85 @@ serve(async (req) => {
       case 'create_spreadsheet': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.title) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing title' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing title' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await createSpreadsheet(accessToken, body.title, body.sheet_name);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'read_sheet': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.spreadsheet_id || !body.range) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id or range' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id or range' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await readSheet(accessToken, body.spreadsheet_id, body.range);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'write_sheet': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.spreadsheet_id || !body.range || !body.values) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id, range, or values' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id, range, or values' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await writeSheet(accessToken, body.spreadsheet_id, body.range, body.values);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'append_sheet': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.spreadsheet_id || !body.range || !body.values) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id, range, or values' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id, range, or values' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await appendSheet(accessToken, body.spreadsheet_id, body.range, body.values);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'get_spreadsheet_info': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.spreadsheet_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing spreadsheet_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await getSpreadsheetInfo(accessToken, body.spreadsheet_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
@@ -930,7 +1019,7 @@ serve(async (req) => {
       case 'list_events': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
@@ -941,19 +1030,19 @@ serve(async (req) => {
           body.time_max,
           body.max_results
         );
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'create_event': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.title || !body.start_time || !body.end_time) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing title, start_time, or end_time' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing title, start_time, or end_time' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
@@ -966,19 +1055,19 @@ serve(async (req) => {
           body.attendees,
           body.calendar_id
         );
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'update_event': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.event_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
@@ -993,41 +1082,41 @@ serve(async (req) => {
           },
           body.calendar_id
         );
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'delete_event': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.event_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await deleteCalendarEvent(accessToken, body.event_id, body.calendar_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
       case 'get_event': {
         const accessToken = await getAccessToken();
         if (!accessToken) {
-          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
             { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         if (!body.event_id) {
-          return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }), 
+          return new Response(JSON.stringify({ success: false, error: 'Missing event_id' }),
             { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
         }
 
         const result = await getCalendarEvent(accessToken, body.event_id, body.calendar_id);
-        return new Response(JSON.stringify({ success: true, result }), 
+        return new Response(JSON.stringify({ success: true, result }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 

@@ -37,7 +37,7 @@ const VISION_ENDPOINT = `https://vision.googleapis.com/v1/images:annotate`;
  */
 async function getAccessToken(): Promise<string> {
   const { data, error } = await supabase.functions.invoke('google-cloud-auth', {
-    body: { action: 'get_access_token' }
+    body: { action: 'get_access_token', auth_type: 'service_account' }
   });
 
   if (error || !data?.access_token) {
@@ -95,7 +95,7 @@ async function generateImage(
   }
 
   const result = await response.json();
-  
+
   // Extract generated images from response
   const predictions = result.predictions || [];
   const images = predictions.map((pred: any) => ({
@@ -202,7 +202,7 @@ async function analyzeAttachment(
     }
 
     const analysis = await analyzeImageWithVision(accessToken, imageContent);
-    
+
     return {
       success: true,
       filename: attachment.filename,
@@ -244,7 +244,7 @@ async function saveGeneratedImage(
         metadata: metadata,
         created_at: new Date().toISOString()
       });
-    
+
     console.log('💾 Saved generated image to database');
   } catch (error) {
     console.warn('⚠️ Failed to save generated image:', error);
@@ -262,7 +262,7 @@ serve(async (req) => {
 
   try {
     const url = new URL(req.url);
-    
+
     // GET request - return function status
     if (req.method === 'GET') {
       return new Response(JSON.stringify({
@@ -299,7 +299,7 @@ serve(async (req) => {
       switch (action) {
         case 'generate_image': {
           const { prompt, options = {} } = body;
-          
+
           if (!prompt) {
             return new Response(JSON.stringify({
               success: false,
@@ -311,7 +311,7 @@ serve(async (req) => {
           }
 
           const result = await generateImage(accessToken, prompt, options);
-          
+
           // Save first generated image to database
           if (result.images && result.images.length > 0) {
             await saveGeneratedImage(
@@ -332,7 +332,7 @@ serve(async (req) => {
 
         case 'analyze_image': {
           const { image, features } = body;
-          
+
           if (!image) {
             return new Response(JSON.stringify({
               success: false,
@@ -358,7 +358,7 @@ serve(async (req) => {
 
         case 'analyze_attachment': {
           const { attachment } = body;
-          
+
           if (!attachment || !attachment.filename) {
             return new Response(JSON.stringify({
               success: false,

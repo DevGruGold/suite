@@ -53,7 +53,7 @@ const GoogleCloudAPI = {
       async listFiles() {
         return [
           { id: "file001", name: "Strategy_Doc.pdf", mimeType: "application/pd" },
-          " + str( id: "file002", name: "Budget_Sheet.xlsx", mimeType: "application/vnd.ms-excel" ) + "
+          { id: "file002", name: "Budget_Sheet.xlsx", mimeType: "application/vnd.ms-excel" }
         ];
       },
       async uploadFile(name, content, type) {
@@ -94,7 +94,7 @@ const VertexAI = {
     if (!EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
       throw new Error("Video generation not available for this executive");
     }
-    
+
     return {
       success: true,
       videoId: `video_${Date.now()}`,
@@ -125,7 +125,7 @@ const TenorGIF = {
     if (!EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
       throw new Error("GIF generation not available for this executive");
     }
-    
+
     return {
       success: true,
       query: query,
@@ -191,11 +191,12 @@ INTERACTION STYLE:
 // Enhanced invoke function with real Google Cloud OAuth integration
 async function invokeExecutiveFunction(toolCall, attempt = 1) {
   console.log(`[${EXECUTIVE_CONFIG.name}] Executive function invocation - Attempt ${attempt}`);
-  
+
   try {
     // Get real OAuth token from google-cloud-auth
+    // Prefer Service Account for backend AI operations to avoid permission issues
     const { data: authData, error: authError } = await supabase.functions.invoke('google-cloud-auth', {
-      body: { action: 'get_access_token' }
+      body: { action: 'get_access_token', auth_type: 'service_account' }
     });
 
     if (authError || !authData?.access_token) {
@@ -210,7 +211,7 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       // Use Vertex AI API directly with the OAuth token
       const messages = toolCall.parameters?.messages || [];
       const systemPrompt = getExecutiveSystemPrompt();
-      
+
       const vertexResponse = await fetch(
         `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${EXECUTIVE_CONFIG.primaryModel}:streamGenerateContent`,
         {
@@ -240,7 +241,7 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 
       const result = await vertexResponse.json();
       // Handle streaming or non-streaming response format
-      const content = Array.isArray(result) 
+      const content = Array.isArray(result)
         ? result.map(r => r.candidates?.[0]?.content?.parts?.[0]?.text || '').join('')
         : result.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
 
@@ -255,7 +256,7 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
     } else if (requestType === 'google_cloud') {
       // Delegate to google-cloud-auth for specific operations
       const { data: opData, error: opError } = await supabase.functions.invoke('google-cloud-auth', {
-        body: { 
+        body: {
           action: toolCall.parameters.operation,
           service: toolCall.parameters.service,
           ...toolCall.parameters
@@ -268,7 +269,7 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 
     // Fallback for other types
     return { success: false, error: `Unsupported request type: ${requestType}` };
-    
+
   } catch (error) {
     if (attempt < 3) {
       const delay = 1000 * attempt;
@@ -283,12 +284,12 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 async function handleExecutiveRequest(request) {
   const startTime = Date.now();
   const requestId = `exec_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   try {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 200, headers: executiveCorsHeaders });
     }
-    
+
     if (request.method === "GET") {
       const status = {
         executive: EXECUTIVE_CONFIG.personality,
@@ -301,15 +302,15 @@ async function handleExecutiveRequest(request) {
         status: "operational",
         timestamp: new Date().toISOString()
       };
-      
+
       return new Response(JSON.stringify(status), {
         headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
       });
     }
-    
+
     if (request.method === "POST") {
       const body = await request.json();
-      
+
       let toolCall = {
         type: "chat",
         parameters: {
@@ -317,7 +318,7 @@ async function handleExecutiveRequest(request) {
           options: body.options || {}
         }
       };
-      
+
       // Check for specialized operations
       if (body.googleCloudOperation) {
         toolCall.type = "google_cloud";
@@ -329,13 +330,13 @@ async function handleExecutiveRequest(request) {
         toolCall.type = "gif_search";
         toolCall.parameters = { query: body.query };
       }
-      
+
       const result = await invokeExecutiveFunction(toolCall);
-      
+
       if (!result.success) {
         throw new Error(result.error || "Executive function failed");
       }
-      
+
       const response = {
         success: true,
         data: result.result,
@@ -350,21 +351,21 @@ async function handleExecutiveRequest(request) {
           timestamp: new Date().toISOString()
         }
       };
-      
+
       return new Response(JSON.stringify(response), {
         headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
       });
     }
-    
+
     throw new Error(`Method ${request.method} not supported`);
-    
+
   } catch (error) {
     const errorResponse = {
       success: false,
       error: { message: error.message, executive: EXECUTIVE_CONFIG.personality },
       metadata: { executionTime: Date.now() - startTime, requestId }
     };
-    
+
     return new Response(JSON.stringify(errorResponse), {
       status: 500,
       headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
