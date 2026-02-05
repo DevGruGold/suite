@@ -63,6 +63,14 @@ const DATABASE_CONFIG = {
   taskStatuses: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'] as const,
   taskStages: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'] as const,
   taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const
+  taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const
+};
+
+// ========== AGENT DELEGATION MAP ==========
+// Maps Named Agents (frontend personas) to SuperDuper Specialist Edge Functions
+const DELEGATION_MAP: Record<string, string> = {
+  'Echo': 'superduper-social-viral'
+  // Add other mappings here: 'Name': 'edge-function-name'
 };
 
 // ========== UPDATED AI PROVIDER CONFIGURATION ==========
@@ -4805,6 +4813,62 @@ Deno.serve(async (req) => {
 
     const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
+
+    // ========== AGENT DELEGATION ROUTING ==========
+    // Intercept requests for specific Named Agents and route to Specialists
+    if (DELEGATION_MAP[executive_name]) {
+      const targetFunction = DELEGATION_MAP[executive_name];
+      console.log(`🔀 Delegating request for agent '${executive_name}' to Specialist '${targetFunction}'`);
+
+      try {
+        const delegationPayload = {
+          action: query,
+          params: {
+            original_agent: executive_name,
+            source: 'ai-chat-delegation',
+            request_id: requestId,
+            session_id: sessionId
+          },
+          context: {
+            messages: messages,
+            user_id: user_id, // Vital for inbox notifications
+            task_id: body.task_id || body.taskId || null, // Vital for task board updates
+            session_id: sessionId
+          }
+        };
+
+        // Call the specialist function directly
+        const delegationResult = await invokeEdgeFunction(targetFunction, delegationPayload);
+
+        // Transform SuperDuper response { success: true, data: { result: "...", tool_executions: N } }
+        // to ai-chat format { success: true, content: "...", ... }
+        const content = delegationResult.data?.result || "Task executed successfully (no text output).";
+        const toolCalls = delegationResult.data?.tool_executions || 0;
+
+        console.log(`✅ Delegation to ${targetFunction} succeeded. Tool calls: ${toolCalls}`);
+
+        clearTimeout(timeoutId);
+
+        return new Response(JSON.stringify({
+          success: true,
+          content: content,
+          executive: executive_name,
+          provider: 'delegated_specialist',
+          model: targetFunction,
+          hasToolCalls: toolCalls > 0,
+          toolCallsExecuted: toolCalls,
+          executionTimeMs: Date.now() - startTime,
+          session_id: sessionId,
+          ip_address: ipAddress,
+          request_id: requestId,
+          note: `Delegated to ${targetFunction}`
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+
+      } catch (delegationError: any) {
+        console.warn(`⚠️ Delegation to ${targetFunction} failed: ${delegationError.message}. Falling back to standard chat.`);
+        // Start standard conversation manager if fallback occurs
+      }
+    }
 
     const conversationManager = new EnhancedConversationManager(sessionId, ipAddress, user_id);
 
