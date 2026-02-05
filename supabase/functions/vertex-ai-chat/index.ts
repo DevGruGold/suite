@@ -14,8 +14,8 @@ const EXECUTIVE_CONFIG = {
   personality: "ML Operations Specialist",
   aiService: "vertex",
   primaryModel: "gemini-1.5-pro",
-  specializations: ["ml_ops", "ai_training", "model_deployment"],
-  googleCloudServices: ["vertex_ai", "ml_engine", "automl", "gmail"],
+  specializations: ["ml_ops", "ai_training", "model_deployment", "image_generation", "video_creation"],
+  googleCloudServices: ["vertex_ai", "ml_engine", "automl", "gmail", "drive"],
   version: "5.0.0"
 };
 
@@ -106,6 +106,78 @@ const VertexAI = {
     };
   },
 
+  async generateImage(prompt, model = "imagen-3.0-generate-002", aspectRatio = "1:1") {
+    const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
+    const location = 'us-central1';
+
+    console.log(`🎨 [Eliza] Calling Imagen API: ${model}`);
+
+    // Create Service Role client to bypass RLS/Auth checks for internal function calls
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    // Get Access Token using Service Role client
+    const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+      body: { action: 'get_access_token', auth_type: 'service_account' }
+    });
+
+    if (authError || !authData?.access_token) {
+      console.error('❌ [Eliza] Auth Error:', authError);
+      throw new Error(`Auth failed: ${authError?.message || 'No token'}`);
+    }
+
+    const accessToken = authData.access_token;
+    console.log('🔑 [Eliza] Successfully obtained access token');
+
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+
+    const requestBody = {
+      instances: [{ prompt: prompt }],
+      parameters: {
+        sampleCount: 1,
+        aspectRatio: aspectRatio
+      }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json; charset=utf-8'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`❌ [Eliza] Imagen API Error (${response.status}): ${errorText}`);
+      throw new Error(`Imagen API call failed: ${errorText}`);
+    }
+
+    const data = await response.json();
+
+    // Extract base64 image from prediction response
+    const predictions = data.predictions || [];
+    if (predictions.length === 0) {
+      throw new Error('No image generated');
+    }
+
+    // Imagen 3 response structure
+    const base64Image = predictions[0].bytesBase64Encoded;
+    const mimeType = predictions[0].mimeType || 'image/png';
+
+    return {
+      success: true,
+      format: "base64",
+      mimeType: mimeType,
+      data: base64Image,
+      model: model,
+      prompt: prompt
+    };
+  },
+
   async analyzeVideo(videoUrl) {
     return {
       success: true,
@@ -170,6 +242,11 @@ CAPABILITIES:
 - Video Analysis: Extract objects, text, sentiment from video content`;
   }
 
+  if (EXECUTIVE_CONFIG.specializations.includes("image_generation")) {
+    prompt += `
+- Vertex AI Image Generation: Create images using Imagen 3 models`;
+  }
+
   if (EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
     prompt += `
 - GIF Communication: Search and create GIFs for visual responses
@@ -194,8 +271,18 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 
   try {
     // Get real OAuth token from google-cloud-auth
-    // Prefer Service Account for backend AI operations to avoid permission issues
-    const { data: authData, error: authError } = await supabase.functions.invoke('google-cloud-auth', {
+    // Get Google Cloud Access Token (Service Account)
+    // Get Google Cloud Access Token (Service Account)
+    console.log('🔑 Requesting Service Account token from google-cloud-auth...');
+
+    // Create Service Role client to bypass RLS/Auth checks for internal function calls
+    // This fixes the 401 error when calling google-cloud-auth
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
       body: { action: 'get_access_token', auth_type: 'service_account' }
     });
 
@@ -265,6 +352,12 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 
       if (opError) throw opError;
       return { success: true, result: opData };
+    } else if (requestType === 'video_generation') {
+      const result = await VertexAI.generateVideo(toolCall.parameters.prompt, toolCall.parameters.model);
+      return { success: true, result };
+    } else if (requestType === 'image_generation') {
+      const result = await VertexAI.generateImage(toolCall.parameters.prompt, toolCall.parameters.model, toolCall.parameters.aspectRatio);
+      return { success: true, result };
     }
 
     // Fallback for other types
@@ -311,7 +404,7 @@ async function handleExecutiveRequest(request) {
     if (request.method === "POST") {
       const body = await request.json();
 
-      let toolCall = {
+      let toolCall: any = {
         type: "chat",
         parameters: {
           messages: body.messages || [],
@@ -326,6 +419,9 @@ async function handleExecutiveRequest(request) {
       } else if (body.videoGeneration && EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
         toolCall.type = "video_generation";
         toolCall.parameters = { prompt: body.prompt, model: body.model || "veo2" };
+      } else if (body.imageGeneration && EXECUTIVE_CONFIG.specializations.includes("image_generation")) {
+        toolCall.type = "image_generation";
+        toolCall.parameters = { prompt: body.prompt, model: body.model || "imagen-3.0-generate-002", aspectRatio: body.aspectRatio || "1:1" };
       } else if (body.gifSearch && EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
         toolCall.type = "gif_search";
         toolCall.parameters = { query: body.query };

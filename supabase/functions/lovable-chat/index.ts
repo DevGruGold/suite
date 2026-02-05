@@ -1,25 +1,12 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { callLovableAIGateway } from '../_shared/unifiedAIFallback.ts';
-import { generateExecutiveSystemPrompt } from '../_shared/elizaSystemPrompt.ts';
-import { buildContextualPrompt } from '../_shared/contextBuilder.ts';
+import { callAIWithFallback, UnifiedAIOptions } from '../_shared/unifiedAIFallback.ts'; // USE ROBUST FALLBACK
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { executeToolCall } from '../_shared/toolExecutor.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import {
-  TOOL_CALLING_MANDATE,
-  parseDeepSeekToolCalls,
-  parseToolCodeBlocks,
-  parseConversationalToolIntent,
-  needsDataRetrieval,
-  retrieveMemoryContexts,
-  callDeepSeekFallback,
-  callKimiFallback,
-  callGeminiFallback,
-  synthesizeToolResults
-} from '../_shared/executiveHelpers.ts';
-import { processFallbackWithToolExecution, emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
+import { synthesizeToolResults } from '../_shared/executiveHelpers.ts';
+import { emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
 import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const logger = EdgeFunctionLogger('lovable-executive');
@@ -39,17 +26,17 @@ serve(async (req) => {
   }
 
   // Start usage tracking at function entry
-  const usageTracker = startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
+  startUsageTracking(FUNCTION_NAME, EXECUTIVE_NAME);
 
   try {
-    const { 
-      messages, 
-      conversationHistory = [], 
-      userContext = { ip: 'unknown', isFounder: false }, 
-      miningStats = null, 
+    const {
+      messages,
+      conversationHistory = [],
+      userContext = { ip: 'unknown', isFounder: false },
+      miningStats = null,
       systemVersion = null,
       councilMode = false,
-      images = []
+      images = [] // Support vision
     } = await req.json();
 
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
@@ -58,184 +45,112 @@ serve(async (req) => {
 
     console.log(`🧠 ${EXECUTIVE_NAME} Executive Processing: ${messages.length} messages, Council: ${councilMode}`);
 
-    // ========== PHASE: MEMORY RETRIEVAL ==========
-    const enrichedConversationHistory = conversationHistory;
-    
-    if (needsDataRetrieval(messages)) {
-      console.log('🔍 Retrieving memory contexts for enhanced response generation');
-      const memoryContexts = await retrieveMemoryContexts(supabase, messages, userContext);
-      
-      if (memoryContexts && memoryContexts.length > 0) {
-        console.log(`📚 Injected ${memoryContexts.length} memory contexts`);
-        
-        const memoryContext = memoryContexts.map(ctx => 
-          `Memory Context: ${ctx.type} - ${ctx.content.substring(0, 200)}...`
-        ).join('\n');
-        
-        const executivePrompt = generateExecutiveSystemPrompt('LOVABLE');
-        const enhancedPrompt = `${executivePrompt}\n\n=== RELEVANT MEMORY CONTEXTS ===\n${memoryContext}\n\nUse these contexts to provide informed, detailed responses based on our previous interactions and established knowledge base.`;
-        
-        enrichedConversationHistory.unshift({
-          role: 'system',
-          content: enhancedPrompt
-        });
-      }
-    }
-
-    // ========== PHASE: VISION ROUTING ==========
-    if (images && images.length > 0) {
-      console.log(`🖼️ Images detected (${images.length}) - routing to Gemini Vision`);
-      
-      const executivePrompt = generateExecutiveSystemPrompt('LOVABLE');
-      const contextualPrompt = await buildContextualPrompt(executivePrompt, {
-        conversationHistory: enrichedConversationHistory,
-        userContext,
-        miningStats,
-        systemVersion
-      });
-      
-      const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
-      const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS, images);
-      
-      if (geminiResult) {
-        // Execute any tool calls from Gemini
-        if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
-          console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini Vision`);
-          const toolResults = [];
-          for (const toolCall of geminiResult.tool_calls) {
-            const result = await executeToolCall(supabase, toolCall, 'LOVABLE', SUPABASE_URL, SERVICE_ROLE_KEY);
-            toolResults.push({ tool: toolCall.function.name, result });
-          }
-          
-          const userQuery = messages[messages.length - 1]?.content || '';
-          const synthesized = await synthesizeToolResults(toolResults, userQuery, 'Lovable Development Executive');
-          
-          return new Response(
-            JSON.stringify({
-              success: true,
-              response: synthesized || geminiResult.content,
-              hasToolCalls: true,
-              toolCallsExecuted: geminiResult.tool_calls.length,
-              executive: 'lovable-chat',
-              executiveTitle: 'Lovable Development Executive [Vision]',
-              provider: 'gemini',
-              model: 'gemini-1.5-flash',
-              vision_analysis: true
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
-        
-        return new Response(
-          JSON.stringify({
-            success: true,
-            response: geminiResult.content,
-            executive: 'lovable-chat',
-            executiveTitle: 'Lovable Development Executive [Vision]',
-            provider: 'gemini',
-            model: 'gemini-1.5-flash',
-            vision_analysis: true
-          }),
-          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // ========== PHASE: AI PROCESSING WITH FALLBACKS ==========
-    // Generate executive system prompt
-    const executivePrompt = generateExecutiveSystemPrompt('LOVABLE');
-    const contextualPrompt = await buildContextualPrompt(executivePrompt, {
-      conversationHistory: enrichedConversationHistory,
+    // Prepare Unified AI Options
+    const options: UnifiedAIOptions = {
+      preferProvider: 'gemini', // Priority 1: Gemini 2.5 Flash (Fastest/Smartest)
       userContext,
       miningStats,
-      systemVersion
-    });
+      executiveName: 'Lovable Development Executive', // Specialized identity
+      useFullElizaContext: true, // Inject full Eliza intelligence
+      maxTokens: 4000,
+      temperature: 0.7,
+      tools: ELIZA_TOOLS // Enable full toolset
+    };
 
+    // Handle Council Mode specifically
     if (councilMode) {
-      contextualPrompt += '\n\n=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide strategic, analytical input from the Lovable Development perspective. Focus on rapid prototyping, user experience, and development velocity.';
+      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide strategic, analytical input from the Lovable Development perspective. Focus on rapid prototyping, user experience, and development velocity.";
     }
 
-    const aiMessages = [{ role: 'system', content: contextualPrompt }, ...messages];
+    // Call Unified AI Fallback (Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi)
+    try {
+      console.log('🚀 Calling Unified AI Fallback System...');
+      const result = await callAIWithFallback(messages, options);
 
-    console.log('🚀 Trying AI providers in sequence...');
+      // Handle response
+      let responseContent = '';
+      let toolCalls = [];
+      let provider = 'unknown';
 
-    // Try Gemini first (most reliable for development tasks)
-    const geminiResult = await callGeminiFallback(aiMessages, ELIZA_TOOLS);
-    if (geminiResult) {
-      // Execute any tool calls from Gemini
-      if (geminiResult.tool_calls && geminiResult.tool_calls.length > 0) {
-        console.log(`🔧 Executing ${geminiResult.tool_calls.length} tool(s) from Gemini`);
+      if (typeof result === 'string') {
+        responseContent = result;
+      } else {
+        responseContent = result.content || '';
+        toolCalls = result.tool_calls || [];
+        provider = result.provider || 'unknown';
+      }
+
+      // Execute Tool Calls if any
+      if (toolCalls.length > 0) {
+        console.log(`🔧 Executing ${toolCalls.length} tool(s) via ${provider}`);
         const toolResults = [];
-        for (const toolCall of geminiResult.tool_calls) {
+
+        for (const toolCall of toolCalls) {
           const result = await executeToolCall(supabase, toolCall, 'LOVABLE', SUPABASE_URL, SERVICE_ROLE_KEY);
           toolResults.push({ tool: toolCall.function.name, result });
         }
-        
+
+        // Synthesize results
         const userQuery = messages[messages.length - 1]?.content || '';
         const synthesized = await synthesizeToolResults(toolResults, userQuery, 'Lovable Development Executive');
-        
+
         return new Response(
           JSON.stringify({
             success: true,
-            response: synthesized || geminiResult.content,
+            response: synthesized || responseContent,
             hasToolCalls: true,
-            toolCallsExecuted: geminiResult.tool_calls.length,
+            toolCallsExecuted: toolCalls.length,
             executive: 'lovable-chat',
             executiveTitle: 'Lovable Development Executive',
-            provider: 'gemini',
-            model: 'gemini-1.5-flash'
+            provider: provider,
+            model: 'unified-fallback-cascade' // Generic
           }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
-      
+
+      // No tools, just return response
       return new Response(
         JSON.stringify({
           success: true,
-          response: geminiResult.content,
+          response: responseContent,
           executive: 'lovable-chat',
           executiveTitle: 'Lovable Development Executive',
-          provider: 'gemini',
-          model: 'gemini-1.5-flash'
+          provider: provider,
+          model: 'unified-fallback-cascade'
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+
+    } catch (aiError) {
+      console.warn('⚠️ Unified AI Fallback failed, trying emergency static fallback:', aiError);
+
+      // Use existing static fallback as last resort (Office Clerk style)
+      // But only if ALL 5 AI providers failed
+      const fallbackResult = await emergencyStaticFallback(
+        messages[messages.length - 1]?.content || '',
+        supabase,
+        'LOVABLE',
+        SUPABASE_URL,
+        SERVICE_ROLE_KEY
+      );
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          response: fallbackResult.content,
+          executive: 'lovable-chat',
+          executiveTitle: 'Lovable Development Executive',
+          provider: 'emergency-static',
+          model: 'static-fallback'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-
-    // Try DeepSeek fallback
-    console.log('🔄 Trying DeepSeek fallback...');
-    const deepseekResult = await callDeepSeekFallback(aiMessages, ELIZA_TOOLS);
-    if (deepseekResult) {
-      return new Response(
-        JSON.stringify({
-          success: true,
-          response: deepseekResult.content,
-          executive: 'lovable-chat',
-          executiveTitle: 'Lovable Development Executive',
-          provider: 'deepseek-fallback',
-          model: 'deepseek-chat'
-        }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Emergency static fallback
-    console.log('⚠️ All AI providers failed, using emergency static fallback');
-    return new Response(
-      JSON.stringify({
-        success: true,
-        response: emergencyStaticFallback('LOVABLE', messages[messages.length - 1]?.content || ''),
-        executive: 'lovable-chat',
-        executiveTitle: 'Lovable Development Executive',
-        provider: 'emergency-static'
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
 
   } catch (error) {
     console.error('Function error:', error);
-    
-    // Final emergency fallback
+
     return new Response(
       JSON.stringify({
         success: false,
@@ -243,9 +158,9 @@ serve(async (req) => {
         executive: 'lovable-chat',
         executiveTitle: 'Lovable Development Executive',
         provider: 'error-fallback',
-        message: emergencyStaticFallback('LOVABLE', 'system error')
+        message: 'System error occurred.'
       }),
-      { 
+      {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }

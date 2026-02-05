@@ -1,89 +1,112 @@
-// Using Deno.serve instead of importing
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAIWithFallback, UnifiedAIOptions } from '../_shared/unifiedAIFallback.ts';
+import { EdgeFunctionLogger } from "../_shared/logging.ts";
 
-// EMERGENCY MINIMAL vercel-ai-chat - STOP THE BLEEDING
+const logger = EdgeFunctionLogger('vercel-executive');
+const FUNCTION_NAME = 'vercel-ai-chat';
+const EXECUTIVE_NAME = 'CSO';
+
 const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type"
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-async function handleRequest(request: Request): Promise<Response> {
-  console.log(`[vercel-ai-chat] Request: ${request.method}`);
-  
+serve(async (req) => {
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { headers: corsHeaders });
+  }
+
   try {
-    // Handle OPTIONS
-    if (request.method === "OPTIONS") {
-      return new Response(null, { status: 200, headers: corsHeaders });
+    const { message, messages, conversationHistory, userContext, councilMode } = await req.json();
+    const userMessage = message || messages?.[messages.length - 1]?.content || '';
+
+    // Construct messages array if only single message provided
+    const chatMessages = messages || [
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log(`🎯 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
+
+    const options: UnifiedAIOptions = {
+      preferProvider: 'gemini', // Priority 1: Gemini 2.5 (Strategy/Vision)
+      userContext,
+      executiveName: 'Chief Strategy Officer (CSO)',
+      useFullElizaContext: true,
+      maxTokens: 4000,
+      temperature: 0.7,
+      // Fallback chain: Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi
+    };
+
+    // Handle Council Mode specifically
+    if (councilMode) {
+      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation as the Chief Strategy Officer (CSO). Provide high-level strategic direction, identify long-term goals, and align technical/operational decisions with the overall mission.";
+    } else {
+      options.systemPrompt = "You are the Chief Strategy Officer (CSO), a strategic visionary. You help finding the best tools, defining the roadmap, and ensuring all initiatives align with the core mission. Be concise, decisive, and forward-looking.";
     }
-    
-    // Handle GET - return status
-    if (request.method === "GET") {
-      const status = {
-        function: "vercel-ai-chat",
-        status: "operational",
-        version: "emergency-fix",
-        timestamp: new Date().toISOString()
-      };
-      
-      return new Response(JSON.stringify(status), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-    
-    // Handle POST - minimal chat response
-    if (request.method === "POST") {
-      const body = await request.json();
-      console.log(`[vercel-ai-chat] Processing chat request`);
-      
-      const response = {
-        success: true,
-        data: {
+
+    // Call Unified AI Fallback
+    try {
+      const result = await callAIWithFallback(chatMessages, options);
+
+      let content = '';
+      let provider = 'unknown';
+
+      if (typeof result === 'string') {
+        content = result;
+      } else {
+        content = result.content || '';
+        provider = result.provider || 'unknown';
+      }
+
+      return new Response(
+        JSON.stringify({
+          content: content, // Compatibility for ExecutiveCouncilService
           choices: [{
             message: {
-              role: "assistant",
-              content: `Hello! I'm vercel-ai-chat and I'm now working correctly. The 500 errors have been resolved. How can I help you today?`
+              content: content,
+              role: 'assistant'
             }
           }],
-          usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
-          model: "vercel-ai-chat",
-          provider: "vercel-ai-chat"
-        },
-        metadata: {
-          function: "vercel-ai-chat",
-          status: "emergency-fixed",
+          success: true,
+          executive: 'vercel-ai-chat',
+          provider: provider,
+          model: 'unified-fallback-cascade',
           timestamp: new Date().toISOString()
-        }
-      };
-      
-      return new Response(JSON.stringify(response), {
-        status: 200,
-        headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-    
-    return new Response("Method not allowed", { 
-      status: 405, 
-      headers: corsHeaders 
-    });
-    
-  } catch (error) {
-    console.error(`[vercel-ai-chat] Error:`, error);
-    
-    const errorResponse = {
-      success: false,
-      error: {
-        message: error.message || "Internal error",
-        function: "vercel-ai-chat",
-        timestamp: new Date().toISOString()
-      }
-    };
-    
-    return new Response(JSON.stringify(errorResponse), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
-}
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
 
-Deno.serve(handleRequest);
+    } catch (aiError) {
+      console.error('Unified AI Fallback failed for CSO:', aiError);
+
+      // Final fallback if everything fails
+      return new Response(
+        JSON.stringify({
+          content: `I'm unable to provide strategic direction at this moment due to system capacity. Please verify system status or try again shortly.`,
+          choices: [{
+            message: {
+              content: `I'm unable to provide strategic direction at this moment due to system capacity. Please verify system status or try again shortly.`,
+              role: 'assistant'
+            }
+          }],
+          success: false,
+          executive: 'vercel-ai-chat',
+          provider: 'system-error',
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+  } catch (error) {
+    console.error('Function error:', error);
+    return new Response(
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
+  }
+});

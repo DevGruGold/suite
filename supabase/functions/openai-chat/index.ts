@@ -1,177 +1,112 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAIWithFallback, UnifiedAIOptions } from '../_shared/unifiedAIFallback.ts';
+import { EdgeFunctionLogger } from "../_shared/logging.ts";
+
+const logger = EdgeFunctionLogger('openai-executive');
+const FUNCTION_NAME = 'openai-chat';
+const EXECUTIVE_NAME = 'OPENAI';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message, messages } = await req.json()
-    const userMessage = message || messages?.[messages.length - 1]?.content || 'Hello'
-    
-    console.log('🤖 OpenAI-chat processing:', userMessage)
-    
-    // Get OpenAI API key from Supabase secrets
-    const openaiApiKey = Deno.env.get('OPENAI_API_KEY')
-    if (!openaiApiKey) {
-      throw new Error('OpenAI API key not found in Supabase secrets')
+    const { message, messages, conversationHistory, userContext, councilMode } = await req.json();
+    const userMessage = message || messages?.[messages.length - 1]?.content || '';
+
+    // Construct messages array if only single message provided
+    const chatMessages = messages || [
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log(`🤖 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
+
+    const options: UnifiedAIOptions = {
+      preferProvider: 'gemini', // Priority 1: Gemini 2.5 (Innovation/Reasoning) - Replaces OpenAI for reliability
+      userContext,
+      executiveName: 'OpenAI Innovation Director',
+      useFullElizaContext: true,
+      maxTokens: 4000,
+      temperature: 0.7,
+      // Fallback chain: Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi
+    };
+
+    // Handle Council Mode specifically
+    if (councilMode) {
+      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide innovative, creative, and forward-thinking input from the Innovation Director perspective. Focus on new opportunities, creative solutions, and out-of-the-box thinking.";
+    } else {
+      options.systemPrompt = "You are OpenAI Executive, an Innovation Director. You help with innovation strategy, product development, and creative ideation. Be helpful, innovative, and professional.";
     }
-    
-    console.log('✅ OpenAI API key found')
-    
-    // Try GPT-4, fallback to GPT-3.5 if quota exceeded
-    let model = 'gpt-4'
-    let provider = 'OpenAI GPT-4'
-    
+
+    // Call Unified AI Fallback
     try {
-      // First try GPT-4
-      const openaiResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${openaiApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: model,
-          messages: [
-            {
-              role: 'system',
-              content: 'You are OpenAI Executive, an Innovation Director powered by OpenAI GPT. You help with innovation strategy, product development, and creative ideation. Be helpful, innovative, and professional.'
-            },
-            {
-              role: 'user',
-              content: userMessage
-            }
-          ],
-          max_tokens: 1500,
-          temperature: 0.7
-        })
-      })
-      
-      if (openaiResponse.status === 429) {
-        // Quota exceeded, try GPT-3.5 turbo
-        console.log('🔄 GPT-4 quota exceeded, trying GPT-3.5...')
-        model = 'gpt-3.5-turbo'
-        provider = 'OpenAI GPT-3.5 Turbo'
-        
-        const fallbackResponse = await fetch('https://api.openai.com/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${openaiApiKey}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: model,
-            messages: [
-              {
-                role: 'system',
-                content: 'You are OpenAI Executive, an Innovation Director powered by OpenAI. You help with innovation strategy, product development, and creative ideation. Be helpful, innovative, and professional.'
-              },
-              {
-                role: 'user',
-                content: userMessage
-              }
-            ],
-            max_tokens: 1500,
-            temperature: 0.7
-          })
-        })
-        
-        if (fallbackResponse.ok) {
-          const fallbackData = await fallbackResponse.json()
-          const aiResponse = fallbackData.choices?.[0]?.message?.content
-          
-          if (aiResponse) {
-            console.log('✅ GPT-3.5 response received:', aiResponse.substring(0, 100) + '...')
-            
-            return new Response(
-              JSON.stringify({
-                choices: [{
-                  message: {
-                    content: aiResponse,
-                    role: 'assistant'
-                  }
-                }],
-                success: true,
-                executive: 'openai-chat',
-                provider: provider,
-                timestamp: new Date().toISOString()
-              }),
-              { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            )
-          }
-        }
-      } else if (openaiResponse.ok) {
-        const openaiData = await openaiResponse.json()
-        const aiResponse = openaiData.choices?.[0]?.message?.content
-        
-        if (aiResponse) {
-          console.log('✅ GPT-4 response received:', aiResponse.substring(0, 100) + '...')
-          
-          return new Response(
-            JSON.stringify({
-              choices: [{
-                message: {
-                  content: aiResponse,
-                  role: 'assistant'
-                }
-              }],
-              success: true,
-              executive: 'openai-chat',
-              provider: provider,
-              timestamp: new Date().toISOString()
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
+      const result = await callAIWithFallback(chatMessages, options);
+
+      let content = '';
+      let provider = 'unknown';
+
+      if (typeof result === 'string') {
+        content = result;
+      } else {
+        content = result.content || '';
+        provider = result.provider || 'unknown';
       }
-      
-      // If we get here, both API calls failed
-      throw new Error('OpenAI API calls failed')
-      
-    } catch (apiError) {
-      console.error('OpenAI API error:', apiError.message)
-      
-      // Return helpful fallback response
+
       return new Response(
         JSON.stringify({
+          content: content, // Compatibility for ExecutiveCouncilService
           choices: [{
             message: {
-              content: `Hello! I'm OpenAI Executive, your Innovation Director. I'm currently experiencing API connectivity issues, but I'm here to help with innovation strategy, product development, and creative ideation. Your message: "${userMessage}". Could you please try again, or let me know how I can assist you with innovation and strategy?`,
+              content: content,
               role: 'assistant'
             }
           }],
           success: true,
           executive: 'openai-chat',
-          provider: 'OpenAI Executive (Fallback)',
+          provider: provider,
+          model: 'unified-fallback-cascade',
           timestamp: new Date().toISOString()
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      );
+
+    } catch (aiError) {
+      console.error('Unified AI Fallback failed for OpenAI executive:', aiError);
+
+      // Final fallback if everything fails
+      return new Response(
+        JSON.stringify({
+          content: `I'm unable to provide innovation insights at this moment due to system capacity. Please verify system status or try again shortly.`,
+          choices: [{
+            message: {
+              content: `I'm unable to provide innovation insights at this moment due to system capacity. Please verify system status or try again shortly.`,
+              role: 'assistant'
+            }
+          }],
+          success: false,
+          executive: 'openai-chat',
+          provider: 'system-error',
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
+
   } catch (error) {
-    console.error('💥 OpenAI-chat error:', error.message)
-    
+    console.error('Function error:', error);
     return new Response(
-      JSON.stringify({
-        choices: [{
-          message: {
-            content: `Hello! I'm OpenAI Executive, your Innovation Director. I encountered a technical issue: ${error.message}. I'm still ready to help with innovation strategy, product development, and creative ideation. Please try rephrasing your request.`,
-            role: 'assistant'
-          }
-        }],
-        success: true,
-        executive: 'openai-chat',
-        provider: 'OpenAI Executive (Error Handler)',
-        timestamp: new Date().toISOString()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
-})
+});

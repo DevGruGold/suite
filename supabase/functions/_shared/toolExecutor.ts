@@ -1527,7 +1527,13 @@ export async function executeToolCall(
       case 'create_task_from_template':
         console.log(`📋 [${executiveName}] STAE: Create Task from Template`);
         const createTemplateResult = await supabase.functions.invoke('suite-task-automation-engine', {
-          body: { action: 'create_from_template', data: parsedArgs }
+          body: {
+            action: 'create_from_template',
+            data: {
+              ...parsedArgs,
+              created_by_user_id: session_credentials?.user_id
+            }
+          }
         });
         result = createTemplateResult.error
           ? { success: false, error: createTemplateResult.error.message }

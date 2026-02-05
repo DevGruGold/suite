@@ -141,6 +141,18 @@ export class SuperDuperAgent {
                 tool_usage: (finalResponse as any).tool_executions > 0 ? aiMessage.tool_calls : null
             });
 
+            // Notify user via Inbox if user_id is present
+            const userId = context?.user_id;
+            if (userId) {
+                await this.supabase.from('inbox_messages').insert({
+                    user_id: userId,
+                    task_id: taskId,
+                    title: `Task Completed: ${actionName}`,
+                    content: `Your task assigned to ${this.config.display_name} has been completed.\n\nResult Summary: ${(finalResponse as any).result?.substring(0, 100)}...`,
+                    is_read: false
+                });
+            }
+
             return new Response(JSON.stringify({
                 success: true,
                 data: finalResponse

@@ -73,23 +73,26 @@ export const OrganizationProfile = () => {
 
   const handleSave = async () => {
     if (!user) return;
-    if (!formData.name) {
-      toast.error('Organization name is required');
-      return;
-    }
+
+    // Validation removed for "no required fields"
+    // Use default name if empty to satisfy DB NOT NULL constraint and improve UX
+    const submissionData = {
+      ...formData,
+      name: formData.name?.trim() || 'Unnamed Organization'
+    };
 
     try {
       if (editingId) {
         const { error } = await supabase
           .from('organizations')
-          .update(formData)
+          .update(submissionData)
           .eq('id', editingId);
         if (error) throw error;
         toast.success('Organization updated');
       } else {
         const { error } = await supabase
           .from('organizations')
-          .insert([{ ...formData, owner_id: user.id }]);
+          .insert([{ ...submissionData, owner_id: user.id }]);
         if (error) throw error;
         toast.success('Organization added');
       }
@@ -178,11 +181,11 @@ export const OrganizationProfile = () => {
           <div className="space-y-4 p-4 border rounded-lg bg-muted/30">
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Organization Name *</Label>
+                <Label>Organization Name</Label>
                 <Input
-                  value={formData.name}
+                  value={formData.name || ''}
                   onChange={e => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="e.g. Acme Corp"
+                  placeholder="e.g. Acme Corp (Optional)"
                 />
               </div>
               <div className="space-y-2">
@@ -254,7 +257,7 @@ export const OrganizationProfile = () => {
               <div className="space-y-2">
                 <div className="flex items-center gap-2">
                   <Building2 className="w-5 h-5 text-primary" />
-                  <h3 className="font-bold text-lg">{org.name}</h3>
+                  <h3 className="font-bold text-lg">{org.name || 'Unnamed Organization'}</h3>
                   {profile?.selected_organization_id === org.id && (
                     <span className="text-xs bg-primary text-primary-foreground px-2 py-0.5 rounded-full">Active Context</span>
                   )}

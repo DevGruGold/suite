@@ -1,114 +1,112 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAIWithFallback, UnifiedAIOptions } from '../_shared/unifiedAIFallback.ts';
+import { EdgeFunctionLogger } from "../_shared/logging.ts";
+
+const logger = EdgeFunctionLogger('gemini-executive');
+const FUNCTION_NAME = 'gemini-chat';
+const EXECUTIVE_NAME = 'GEMINI';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message, messages } = await req.json()
-    const userMessage = message || messages?.[messages.length - 1]?.content || 'Hello'
-    
-    console.log('💎 Gemini-chat processing:', userMessage)
-    
-    // Get Gemini API key from Supabase secrets
-    const geminiApiKey = Deno.env.get('GEMINI_API_KEY') || Deno.env.get('GOOGLE_AI_API_KEY')
-    if (!geminiApiKey) {
-      throw new Error('Gemini API key not found in Supabase secrets')
-    }
-    
-    console.log('✅ Gemini API key found')
-    
-    // Call Gemini API with CORRECT model name
-    const geminiResponse = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key=${geminiApiKey}`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        contents: [{
-          parts: [{
-            text: `You are Gemini Assistant, a Strategic Advisor powered by Google Gemini. You excel at strategic planning, market analysis, and creative problem solving. Be strategic, insightful, and comprehensive.
+    const { message, messages, conversationHistory, userContext, councilMode } = await req.json();
+    const userMessage = message || messages?.[messages.length - 1]?.content || '';
 
-User message: ${userMessage}`
-          }]
-        }],
-        generationConfig: {
-          maxOutputTokens: 1500,
-          temperature: 0.7
-        }
-      })
-    })
-    
-    if (!geminiResponse.ok) {
-      const errorText = await geminiResponse.text()
-      console.error('Gemini API error:', geminiResponse.status, errorText)
-      
-      // Return helpful fallback response instead of crashing
+    // Construct messages array if only single message provided
+    const chatMessages = messages || [
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log(`💎 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
+
+    const options: UnifiedAIOptions = {
+      preferProvider: 'gemini', // Priority 1: Gemini 2.5 Pro (Strategic)
+      userContext,
+      executiveName: 'Gemini Strategic Advisor',
+      useFullElizaContext: true,
+      maxTokens: 4000,
+      temperature: 0.7,
+      // Fallback chain: Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi
+    };
+
+    // Handle Council Mode specifically
+    if (councilMode) {
+      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide strategic, forward-looking, and comprehensive input from the Gemini Strategy perspective. Focus on market analysis, long-term vision, and holistic solutions.";
+    } else {
+      options.systemPrompt = "You are Gemini Assistant, a Strategic Advisor powered by Google Gemini. You excel at strategic planning, market analysis, and creative problem solving. Be strategic, insightful, and comprehensive.";
+    }
+
+    // Call Unified AI Fallback
+    try {
+      const result = await callAIWithFallback(chatMessages, options);
+
+      let content = '';
+      let provider = 'unknown';
+
+      if (typeof result === 'string') {
+        content = result;
+      } else {
+        content = result.content || '';
+        provider = result.provider || 'unknown';
+      }
+
       return new Response(
         JSON.stringify({
+          content: content, // Compatibility for ExecutiveCouncilService
           choices: [{
             message: {
-              content: `Hello! I'm Gemini Assistant, your Strategic Advisor. I'm currently experiencing API connectivity issues (${geminiResponse.status}). However, I'm here to help with strategic planning, market analysis, and creative problem solving. Could you please try your request again, or let me know how I can assist you with strategic insights?`,
+              content: content,
               role: 'assistant'
             }
           }],
           success: true,
           executive: 'gemini-chat',
-          provider: 'Gemini Pro (API issue)',
+          provider: provider,
+          model: 'unified-fallback-cascade',
           timestamp: new Date().toISOString()
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
+      );
+
+    } catch (aiError) {
+      console.error('Unified AI Fallback failed for Gemini:', aiError);
+
+      // Final fallback if everything fails
+      return new Response(
+        JSON.stringify({
+          content: `I'm unable to provide strategic insights at this moment due to system capacity. Please verify system status or try again shortly.`,
+          choices: [{
+            message: {
+              content: `I'm unable to provide strategic insights at this moment due to system capacity. Please verify system status or try again shortly.`,
+              role: 'assistant'
+            }
+          }],
+          success: false,
+          executive: 'gemini-chat',
+          provider: 'system-error',
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
-    const geminiData = await geminiResponse.json()
-    const aiResponse = geminiData.candidates?.[0]?.content?.parts?.[0]?.text
-    
-    if (!aiResponse) {
-      throw new Error('No response from Gemini API')
-    }
-    
-    console.log('✅ Gemini response received:', aiResponse.substring(0, 100) + '...')
-    
-    return new Response(
-      JSON.stringify({
-        choices: [{
-          message: {
-            content: aiResponse,
-            role: 'assistant'
-          }
-        }],
-        success: true,
-        executive: 'gemini-chat',
-        provider: 'Google Gemini Pro',
-        timestamp: new Date().toISOString()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-    
+
   } catch (error) {
-    console.error('💥 Gemini-chat error:', error.message)
-    
+    console.error('Function error:', error);
     return new Response(
-      JSON.stringify({
-        choices: [{
-          message: {
-            content: `Hello! I'm Gemini Assistant, your Strategic Advisor powered by Google Gemini. I encountered a technical issue: ${error.message}. I'm still here to help with strategic planning, market analysis, and creative problem solving. Please try rephrasing your request or let me know how I can assist you strategically.`,
-            role: 'assistant'
-          }
-        }],
-        success: true, // Keep success true to avoid frontend errors
-        executive: 'gemini-chat',
-        provider: 'Gemini Pro (Fallback)',
-        timestamp: new Date().toISOString()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
-})
+});

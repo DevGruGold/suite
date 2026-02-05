@@ -140,7 +140,10 @@ async function getServiceAccountToken(scopes: string[] = SCOPES.split(' ')): Pro
       .setExpirationTime('1h')
       .sign(pkcs8);
 
+    console.log(`🔐 [ServiceAccount] Signing JWT for email: ${clientEmail}, Project ID: ${project_id}`);
+
     // Exchange JWT for Access Token
+    console.log('[ServiceAccount] Exchanging JWT for Access Token at ' + GOOGLE_TOKEN_URL);
     const response = await fetch(GOOGLE_TOKEN_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
@@ -152,9 +155,12 @@ async function getServiceAccountToken(scopes: string[] = SCOPES.split(' ')): Pro
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('Service Account token exchange failed:', errorText);
+      console.error(`❌ [ServiceAccount] Token exchange failed! Status: ${response.status} ${response.statusText}`);
+      console.error(`❌ [ServiceAccount] Error details: ${errorText}`);
       return null;
     }
+
+    console.log(`✅ [ServiceAccount] Token exchange successful! Status: ${response.status}`);
 
     const data = await response.json();
     return data.access_token;
@@ -676,6 +682,7 @@ serve(async (req) => {
 
       case 'get_access_token': {
         const authType = body.auth_type || 'user_fallback'; // 'user', 'service_account', 'user_fallback' (default)
+        console.log(`🔑 [get_access_token] Requested auth_type: '${authType}'`);
 
         let accessToken: string | null = null;
         let usedMethod = 'none';

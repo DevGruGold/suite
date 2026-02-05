@@ -1,154 +1,113 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import "https://deno.land/x/xhr@0.1.0/mod.ts";
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { callAIWithFallback, UnifiedAIOptions } from '../_shared/unifiedAIFallback.ts';
+import { EdgeFunctionLogger } from "../_shared/logging.ts";
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+const logger = EdgeFunctionLogger('deepseek-executive');
+const FUNCTION_NAME = 'deepseek-chat';
+const EXECUTIVE_NAME = 'DEEPSEEK';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+};
 
-Deno.serve(async (req) => {
+serve(async (req) => {
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { message, messages } = await req.json()
-    const userMessage = message || messages?.[messages.length - 1]?.content || 'Hello'
-    
-    console.log('🧠 DeepSeek-chat processing:', userMessage)
-    
-    // Get DeepSeek API key from Supabase secrets
-    const deepseekApiKey = Deno.env.get('DEEPSEEK_API_KEY')
-    if (!deepseekApiKey) {
-      // Return helpful response instead of crashing
+    const { message, messages, conversationHistory, userContext, councilMode } = await req.json();
+    const userMessage = message || messages?.[messages.length - 1]?.content || '';
+
+    // Construct messages array if only single message provided
+    const chatMessages = messages || [
+      { role: 'user', content: userMessage }
+    ];
+
+    console.log(`🧠 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
+
+    const options: UnifiedAIOptions = {
+      preferProvider: 'deepseek', // Priority 1: DeepSeek (Tech Specialist)
+      userContext,
+      executiveName: 'DeepSeek Tech Executive',
+      useFullElizaContext: true,
+      maxTokens: 4000,
+      temperature: 0.7,
+      // Fallback chain: DeepSeek -> Gemini -> Vertex -> Lovable -> Kimi
+    };
+
+    // Handle Council Mode specifically
+    if (councilMode) {
+      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide technical, architectural, and security input from the DeepSeek CTO perspective. Focus on code quality, scalability, and implementation details.";
+    } else {
+      options.systemPrompt = "You are DeepSeek Executive, a TechLead CTO powered by DeepSeek AI. You excel at technical architecture, code review, optimization, and AI/ML implementation. Be technical, precise, and helpful.";
+    }
+
+    // Call Unified AI Fallback
+    try {
+      const result = await callAIWithFallback(chatMessages, options);
+
+      let content = '';
+      let provider = 'unknown';
+
+      if (typeof result === 'string') {
+        content = result;
+      } else {
+        content = result.content || '';
+        provider = result.provider || 'unknown';
+      }
+
       return new Response(
         JSON.stringify({
+          content: content, // Compatibility for ExecutiveCouncilService
           choices: [{
             message: {
-              content: `Hello! I'm DeepSeek Executive, your TechLead CTO. I'm currently experiencing API configuration issues. However, I'm here to help with technical architecture, code review, optimization, and AI/ML implementation. Your message: "${userMessage}". How can I assist you with technical solutions?`,
+              content: content,
               role: 'assistant'
             }
           }],
           success: true,
           executive: 'deepseek-chat',
-          provider: 'DeepSeek Executive (Config Issue)',
+          provider: provider,
+          model: 'unified-fallback-cascade',
           timestamp: new Date().toISOString()
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
-    
-    console.log('✅ DeepSeek API key found')
-    
-    // Call DeepSeek API with error handling
-    try {
-      const deepseekResponse = await fetch('https://api.deepseek.com/v1/chat/completions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${deepseekApiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: 'You are DeepSeek Executive, a TechLead CTO powered by DeepSeek AI. You excel at technical architecture, code review, optimization, and AI/ML implementation. Be technical, precise, and helpful.'
-            },
-            {
-              role: 'user',
-              content: userMessage
+      );
+
+    } catch (aiError) {
+      console.error('Unified AI Fallback failed for DeepSeek:', aiError);
+
+      // Final fallback if everything fails
+      return new Response(
+        JSON.stringify({
+          content: `I'm encountering critical system issues and cannot generate a technical response at this moment. Please check system status or try again later.`,
+          choices: [{
+            message: {
+              content: `I'm encountering critical system issues and cannot generate a technical response at this moment. Please check system status or try again later.`,
+              role: 'assistant'
             }
-          ],
-          max_tokens: 1500,
-          temperature: 0.7
-        })
-      })
-      
-      if (deepseekResponse.ok) {
-        const deepseekData = await deepseekResponse.json()
-        const aiResponse = deepseekData.choices?.[0]?.message?.content
-        
-        if (aiResponse) {
-          console.log('✅ DeepSeek response received:', aiResponse.substring(0, 100) + '...')
-          
-          return new Response(
-            JSON.stringify({
-              choices: [{
-                message: {
-                  content: aiResponse,
-                  role: 'assistant'
-                }
-              }],
-              success: true,
-              executive: 'deepseek-chat',
-              provider: 'DeepSeek AI',
-              timestamp: new Date().toISOString()
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-      } else {
-        const errorText = await deepseekResponse.text()
-        console.error('DeepSeek API error:', deepseekResponse.status, errorText)
-        
-        // Handle specific errors gracefully
-        if (deepseekResponse.status === 402) {
-          return new Response(
-            JSON.stringify({
-              choices: [{
-                message: {
-                  content: `Hello! I'm DeepSeek Executive, your TechLead CTO. I'm currently experiencing account balance issues with my API service. However, I'm still here to help with technical architecture, code reviews, and AI/ML implementation. Your message: "${userMessage}". How can I assist you with technical solutions while we resolve this?`,
-                  role: 'assistant'
-                }
-              }],
-              success: true,
-              executive: 'deepseek-chat',
-              provider: 'DeepSeek Executive (Balance Issue)',
-              timestamp: new Date().toISOString()
-            }),
-            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          )
-        }
-      }
-      
-    } catch (apiError) {
-      console.error('DeepSeek API error:', apiError.message)
+          }],
+          success: false,
+          executive: 'deepseek-chat',
+          provider: 'system-error',
+          timestamp: new Date().toISOString()
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
-    
-    // Fallback response
-    return new Response(
-      JSON.stringify({
-        choices: [{
-          message: {
-            content: `Hello! I'm DeepSeek Executive, your TechLead CTO powered by DeepSeek AI. I'm currently experiencing some API connectivity issues, but I'm here to help with technical architecture, code review, optimization, and AI/ML implementation. Your message: "${userMessage}". What technical challenge can I help you solve?`,
-            role: 'assistant'
-          }
-        }],
-        success: true,
-        executive: 'deepseek-chat',
-        provider: 'DeepSeek Executive (Fallback)',
-        timestamp: new Date().toISOString()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
-    
+
   } catch (error) {
-    console.error('💥 DeepSeek-chat error:', error.message)
-    
+    console.error('Function error:', error);
     return new Response(
-      JSON.stringify({
-        choices: [{
-          message: {
-            content: `Hello! I'm DeepSeek Executive, your TechLead CTO. I encountered a technical issue: ${error.message}. I'm still ready to help with technical architecture, code reviews, and AI/ML implementation. Please try rephrasing your request.`,
-            role: 'assistant'
-          }
-        }],
-        success: true,
-        executive: 'deepseek-chat',
-        provider: 'DeepSeek Executive (Error Handler)',
-        timestamp: new Date().toISOString()
-      }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    )
+      JSON.stringify({ error: error.message }),
+      {
+        status: 500,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+      }
+    );
   }
-})
+});
