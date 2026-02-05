@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
-import { useIsMobile } '@/hooks/useIsMobile';
+import { useIsMobile } from '@/hooks/useIsMobile';
 import {
   MessageSquare,
   FileText,
@@ -140,12 +140,12 @@ function AgentCard({ agent, taskCount, assignedTasks, onAgentClick, onTaskDropTo
       onDragOver={handleDragOver}
       onDrop={(e) => onTaskDropToAgent(e, agent.id)}
       className={`p-2.5 rounded-lg border transition-all cursor-pointer ${isDragOverAgent
-          ? 'border-primary bg-primary/20 ring-2 ring-primary/50 scale-105'
-          : hasUrgent
-            ? 'border-amber-500/50 bg-amber-500/10'
-            : isActive
-              ? 'border-green-500/50 bg-green-500/10'
-              : 'border-blue-500/30 bg-blue-500/5'
+        ? 'border-primary bg-primary/20 ring-2 ring-primary/50 scale-105'
+        : hasUrgent
+          ? 'border-amber-500/50 bg-amber-500/10'
+          : isActive
+            ? 'border-green-500/50 bg-green-500/10'
+            : 'border-blue-500/30 bg-blue-500/5'
         } ${hasDraggedTask ? 'hover:border-primary hover:bg-primary/10' : 'hover:scale-[1.02]'}`}
     >
       <div className="flex items-center gap-2">
@@ -318,8 +318,8 @@ function StageColumn({
     <div className="flex items-stretch gap-2">
       <div
         className={`flex flex-col min-w-[180px] max-w-[200px] rounded-lg transition-all duration-200 ${isDragOver
-            ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5'
-            : ''
+          ? 'ring-2 ring-primary ring-offset-2 ring-offset-background bg-primary/5'
+          : ''
           } ${isUpdating ? 'opacity-50 pointer-events-none' : ''}`}
         onDragOver={(e) => onDragOver(e, stage.key)}
         onDragLeave={onDragLeave}
@@ -338,8 +338,8 @@ function StageColumn({
         {/* Direction indicator */}
         {showDirection && (
           <div className={`flex items-center justify-center gap-1.5 py-2 mb-2 rounded-md text-[10px] font-medium ${isMovingForward
-              ? 'bg-green-500/20 text-green-400 border border-green-500/30'
-              : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
+            ? 'bg-green-500/20 text-green-400 border border-green-500/30'
+            : 'bg-amber-500/20 text-amber-400 border border-amber-500/30'
             }`}>
             {isMovingForward ? (
               <>
