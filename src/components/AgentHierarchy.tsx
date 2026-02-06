@@ -80,21 +80,21 @@ export const AgentHierarchy = () => {
     const GROUPS = {
         EXECUTIVE: {
             title: "Executive Council",
-            match: (a: Agent) => ['chief', 'head of', 'director', 'vp'].some(r => a.role.toLowerCase().includes(r)),
+            match: (a: Agent) => ['chief', 'head of', 'director', 'vp'].some(r => (a.role || '').toLowerCase().includes(r)),
             color: "border-purple-500/50 bg-purple-500/10",
             text: "text-purple-400",
             icon: Shield
         },
         STRATEGIC: {
             title: "Strategic Departments",
-            match: (a: Agent) => a.role.toLowerCase().includes('manager') || a.role.toLowerCase().includes('lead'),
+            match: (a: Agent) => (a.role || '').toLowerCase().includes('manager') || (a.role || '').toLowerCase().includes('lead'),
             color: "border-blue-500/50 bg-blue-500/10",
             text: "text-blue-400",
             icon: Briefcase
         },
         OPERATIONS: {
             title: "Operations & Specialists",
-            match: (a: Agent) => !['chief', 'head of', 'director', 'vp', 'manager', 'lead'].some(r => a.role.toLowerCase().includes(r)),
+            match: (a: Agent) => !['chief', 'head of', 'director', 'vp', 'manager', 'lead'].some(r => (a.role || '').toLowerCase().includes(r)),
             color: "border-emerald-500/50 bg-emerald-500/10",
             text: "text-emerald-400",
             icon: Cpu
