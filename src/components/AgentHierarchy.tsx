@@ -99,7 +99,6 @@ export const AgentHierarchy = () => {
     const operations = agents.filter(a => !GROUPS.EXECUTIVE.match(a) && !GROUPS.STRATEGIC.match(a));
 
     return (
-    return (
         <div className="w-full h-full flex flex-col border rounded-xl bg-card border-border overflow-hidden relative shadow-sm">
             {/* Header */}
             <div className="px-3 py-2 border-b border-border flex items-center justify-between bg-muted/20 shrink-0 z-10">
