@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { AnimatedCounter } from './AnimatedCounter';
 import { ActivityPulse } from './ActivityPulse';
-import { AgentStatusGrid } from './AgentStatusGrid';
+import { AgentHierarchy } from '@/components/AgentHierarchy';
 import { supabase } from '@/integrations/supabase/client';
 import { Zap, Bot, Activity, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -200,8 +200,8 @@ export const HeroSection = () => {
                 key={i}
                 onClick={() => setCurrentBanner(i)}
                 className={`w-1.5 h-1.5 rounded-full transition-all duration-300 ${i === currentBanner
-                    ? 'bg-primary w-4'
-                    : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
+                  ? 'bg-primary w-4'
+                  : 'bg-muted-foreground/30 hover:bg-muted-foreground/50'
                   }`}
                 aria-label={`Go to banner ${i + 1}`}
               />
@@ -246,7 +246,11 @@ export const HeroSection = () => {
               <h3 className="text-sm font-semibold text-foreground">{t('hero.activity.title')}</h3>
               <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">{t('hero.activity.realtime')}</span>
             </div>
-            <AgentStatusGrid />
+            {/* Dashboard Visualizers */}
+            <div className="space-y-6">
+              <AgentHierarchy />
+              <SystemStatusMonitor />
+            </div>
           </div>
           <ActivityPulse
             healthScore={stats.healthScore}

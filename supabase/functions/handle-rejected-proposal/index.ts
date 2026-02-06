@@ -87,8 +87,8 @@ Generate improvement suggestions that address the concerns raised. Format as a J
 ["suggestion 1", "suggestion 2", ...]
 `;
 
-      // Use correct message format for lovable-chat
-      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('lovable-chat', {
+      // Use correct message format for gemini-chat
+      const { data: aiResponse, error: aiError } = await supabase.functions.invoke('gemini-chat', {
         body: {
           messages: [
             { role: 'user', content: analysisPrompt }
@@ -155,7 +155,7 @@ Generate improvement suggestions that address the concerns raised. Format as a J
 
     const { error: updateError } = await supabase
       .from('edge_function_proposals')
-      .update({ 
+      .update({
         status: 'rejected_with_feedback',
         updated_at: new Date().toISOString(),
         implementation_code: JSON.stringify(finalAnalysis)

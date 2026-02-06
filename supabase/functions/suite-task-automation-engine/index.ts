@@ -43,6 +43,7 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
+  const usageTracker = (action: string) => console.log(`🚀 [STAE] Action: ${action}`);
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -54,660 +55,132 @@ serve(async (req) => {
     const body = await req.json();
     const { action, data = {} } = body;
 
-    console.log(`🚀 [STAE] Action: ${action}`, data);
+    usageTracker(action);
 
-    let result: any;
+    // --- REUSABLE CORE LOGIC ---
 
-    switch (action) {
-      // ====================================================================
-      // CREATE TASK FROM TEMPLATE
-      // ====================================================================
-      case 'create_from_template': {
-        const { template_name, title, description, priority, repo, auto_assign = true } = data;
-
-        if (!template_name || !title) {
-          throw new Error('template_name and title are required');
-        }
-
-        // Fetch template
-        const { data: template, error: templateError } = await supabase
-          .from('task_templates')
-          .select('*')
-          .eq('template_name', template_name)
-          .eq('is_active', true)
-          .single();
-
-        if (templateError || !template) {
-          throw new Error(`Template '${template_name}' not found or inactive`);
-        }
-
-        // Generate task description from template
-        const taskDescription = description || template.description_template.replace('{{title}}', title);
-
-        // Generate unique task ID
-        const taskId = `task-${crypto.randomUUID()}`;
-
-        // Create task
-        const { data: task, error: taskError } = await supabase
+    const executeSmartAssign = async (targetTaskId?: string, preferAgentId?: string, minSkillMatch = 0.3) => {
+      if (targetTaskId) {
+        // Single task assignment
+        const { data: task } = await supabase.from('tasks').select('id, metadata, title').eq('id', targetTaskId).single();
+        if (!task) throw new Error(`Task ${targetTaskId} not found`);
+        const skills = task.metadata?.required_skills || [];
+        const assignResult = await smartAssignTask(supabase, targetTaskId, skills, preferAgentId, minSkillMatch);
+        return { success: true, task_id: targetTaskId, task_title: task.title, ...assignResult };
+      } else {
+        // Batch assignment (default behavior for cron)
+        const { data: pendingTasks } = await supabase
           .from('tasks')
-          .insert({
-            id: taskId,
-            title,
-            description: taskDescription,
-            repo: repo || 'xmrt-ecosystem',
-            category: template.category,
-            stage: template.default_stage,
-            priority: priority ?? template.default_priority,
-            status: 'PENDING',
-            metadata: {
-              created_from_template: template_name,
-              template_id: template.id,
-              required_skills: template.required_skills,
-              checklist: template.checklist,
-              auto_advance_threshold_hours: template.auto_advance_threshold_hours,
-              estimated_duration_hours: template.estimated_duration_hours
-            },
-            auto_advance_threshold_hours: template.auto_advance_threshold_hours
-          })
-          .select()
-          .single();
+          .select('id, metadata')
+          .is('assignee_agent_id', null)
+          .eq('status', 'PENDING')
+          .limit(10);
 
-        if (taskError) throw taskError;
-
-        // Update template usage count
-        await supabase
-          .from('task_templates')
-          .update({ times_used: template.times_used + 1 })
-          .eq('id', template.id);
-
-        // Log activity
-        await supabase.from('eliza_activity_log').insert({
-          activity_type: 'stae_task_created',
-          title: `📋 STAE: Task Created from Template`,
-          description: `Created task "${title}" using template "${template_name}"`,
-          status: 'completed',
-          task_id: task.id,
-          metadata: { template_name, category: template.category, auto_assign }
-        });
-
-        // Auto-assign if requested
-        let assignmentResult = null;
-        if (auto_assign) {
-          const assignResponse = await smartAssignTask(supabase, task.id, template.required_skills);
-          assignmentResult = assignResponse;
-        }
-
-        result = {
-          success: true,
-          task,
-          template_used: template_name,
-          auto_assigned: auto_assign,
-          assignment: assignmentResult
-        };
-        break;
-      }
-
-      // ====================================================================
-      // SMART ASSIGN TASK (Skill-based matching)
-      // ====================================================================
-      case 'smart_assign': {
-        const { task_id, prefer_agent_id, min_skill_match = 0.3, auto_batch = false } = data;
-
-        if (auto_batch) {
-          // Batch assign all pending unassigned tasks
-          const { data: pendingTasks } = await supabase
-            .from('tasks')
-            .select('id, metadata')
-            .is('assignee_agent_id', null)
-            .eq('status', 'PENDING')
-            .limit(10);
-
-          const assignments = [];
-          for (const task of pendingTasks || []) {
-            const skills = task.metadata?.required_skills || [];
-            const assignResult = await smartAssignTask(supabase, task.id, skills, prefer_agent_id, min_skill_match);
-            assignments.push({ task_id: task.id, ...assignResult });
-          }
-
-          result = {
-            success: true,
-            batch_mode: true,
-            tasks_processed: assignments.length,
-            assignments
-          };
-        } else {
-          if (!task_id) throw new Error('task_id is required');
-
-          // Get task to find required skills
-          const { data: task } = await supabase
-            .from('tasks')
-            .select('id, metadata, title')
-            .eq('id', task_id)
-            .single();
-
-          if (!task) throw new Error(`Task ${task_id} not found`);
-
+        const assignments = [];
+        for (const task of pendingTasks || []) {
           const skills = task.metadata?.required_skills || [];
-          const assignResult = await smartAssignTask(supabase, task_id, skills, prefer_agent_id, min_skill_match);
-
-          result = {
-            success: true,
-            task_id,
-            task_title: task.title,
-            ...assignResult
-          };
+          const assignResult = await smartAssignTask(supabase, task.id, skills, preferAgentId, minSkillMatch);
+          assignments.push({ task_id: task.id, ...assignResult });
         }
-        break;
+        return { success: true, batch_mode: true, tasks_processed: assignments.length, assignments };
       }
-
-      // ====================================================================
-      // AUTO CREATE AND ASSIGN (Full automation)
-      // ====================================================================
-      case 'auto_create_and_assign': {
-        const { template_name, title, description, priority } = data;
-
-        // First create from template with auto_assign
-        const createResult = await supabase.functions.invoke('suite-task-automation-engine', {
-          body: { action: 'create_from_template', data: { template_name, title, description, priority, auto_assign: true } }
-        });
-
-        result = createResult.data;
-        break;
-      }
-
-      // ====================================================================
-      // VERIFY TASK COMPLETION (Quality checks)
-      // ====================================================================
-      case 'verify_completion': {
-        const { task_id } = data;
-
-        if (!task_id) throw new Error('task_id is required');
-
-        const { data: task } = await supabase
-          .from('tasks')
-          .select('*')
-          .eq('id', task_id)
-          .single();
-
-        if (!task) throw new Error(`Task ${task_id} not found`);
-
-        // Quality verification checks
-        const checks = {
-          has_deliverables: !!task.metadata?.deliverables || !!task.result,
-          checklist_completed: await checkChecklistCompletion(task),
-          no_blocking_issues: task.status !== 'BLOCKED',
-          has_resolution: !!task.resolution || task.status === 'COMPLETED',
-          stage_is_final: task.stage === 'INTEGRATE' || task.stage === 'VERIFY'
-        };
-
-        const passedChecks = Object.values(checks).filter(Boolean).length;
-        const totalChecks = Object.keys(checks).length;
-        const qualityScore = Math.round((passedChecks / totalChecks) * 100);
-
-        // Determine if task passes quality gate
-        const passesQualityGate = qualityScore >= 60;
-
-        // Log verification
-        await supabase.from('eliza_activity_log').insert({
-          activity_type: 'stae_quality_verification',
-          title: `🔍 STAE: Quality Verification`,
-          description: `Task "${task.title}" scored ${qualityScore}% - ${passesQualityGate ? 'PASSED' : 'NEEDS REVIEW'}`,
-          status: passesQualityGate ? 'completed' : 'pending',
-          task_id,
-          metadata: { checks, qualityScore, passesQualityGate }
-        });
-
-        result = {
-          success: true,
-          task_id,
-          quality_score: qualityScore,
-          passes_quality_gate: passesQualityGate,
-          checks,
-          recommendation: passesQualityGate
-            ? 'Task meets quality standards - ready for completion'
-            : 'Task needs review - some quality checks failed'
-        };
-        break;
-      }
-
-      // ====================================================================
-      // EXTRACT KNOWLEDGE FROM COMPLETED TASKS
-      // ====================================================================
-      case 'extract_knowledge': {
-        const { task_id, completed_since_hours = 24 } = data;
-
-        let tasksToProcess = [];
-
-        if (task_id) {
-          // Extract from specific task
-          const { data: task } = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('id', task_id)
-            .single();
-          if (task) tasksToProcess = [task];
-        } else {
-          // Extract from recently completed tasks
-          const cutoff = new Date(Date.now() - completed_since_hours * 60 * 60 * 1000).toISOString();
-          const { data: tasks } = await supabase
-            .from('tasks')
-            .select('*')
-            .eq('status', 'COMPLETED')
-            .gte('updated_at', cutoff)
-            .is('metadata->knowledge_extracted', null);
-          tasksToProcess = tasks || [];
-        }
-
-        const extractedKnowledge = [];
-
-        for (const task of tasksToProcess) {
-          // Extract learnings
-          const learnings = {
-            task_id: task.id,
-            title: task.title,
-            category: task.category,
-            resolution: task.resolution || task.result,
-            duration_hours: task.metadata?.actual_duration_hours,
-            template_used: task.metadata?.created_from_template,
-            skills_used: task.metadata?.required_skills || [],
-            blockers_encountered: task.blocked_reason ? [task.blocked_reason] : [],
-            stage_progression: task.stage,
-            success: task.status === 'COMPLETED'
-          };
-
-          // Store in learning_patterns
-          await supabase.from('learning_patterns').insert({
-            learning_type: 'task_completion',
-            context: JSON.stringify({
-              task_category: task.category,
-              template: task.metadata?.created_from_template,
-              skills: task.metadata?.required_skills
-            }),
-            pattern_data: learnings,
-            confidence: task.status === 'COMPLETED' ? 0.9 : 0.5,
-            application_count: 1,
-            last_applied: new Date().toISOString()
-          });
-
-          // Mark task as knowledge-extracted
-          await supabase
-            .from('tasks')
-            .update({ metadata: { ...task.metadata, knowledge_extracted: true, extracted_at: new Date().toISOString() } })
-            .eq('id', task.id);
-
-          extractedKnowledge.push(learnings);
-        }
-
-        // Log activity
-        if (extractedKnowledge.length > 0) {
-          await supabase.from('eliza_activity_log').insert({
-            activity_type: 'stae_knowledge_extraction',
-            title: `📚 STAE: Knowledge Extraction`,
-            description: `Extracted knowledge from ${extractedKnowledge.length} completed task(s)`,
-            status: 'completed',
-            metadata: { tasks_processed: extractedKnowledge.length }
-          });
-        }
-
-        result = {
-          success: true,
-          tasks_processed: extractedKnowledge.length,
-          knowledge_entries: extractedKnowledge
-        };
-        break;
-      }
-
-      // ====================================================================
-      // GET AUTOMATION METRICS
-      // ====================================================================
-      case 'get_metrics': {
-        const { time_window_hours = 24, breakdown_by, store_metrics = false } = data;
-        const cutoff = new Date(Date.now() - time_window_hours * 60 * 60 * 1000).toISOString();
-
-        // Get all tasks in time window
-        const { data: allTasks, count: totalTasks } = await supabase
-          .from('tasks')
-          .select('*', { count: 'exact' })
-          .gte('created_at', cutoff);
-
-        // Tasks created from templates
-        const templateTasks = allTasks?.filter(t => t.metadata?.created_from_template) || [];
-        const automationCoverage = totalTasks ? Math.round((templateTasks.length / totalTasks) * 100) : 0;
-
-        // Tasks with auto-assignment
-        const autoAssignedTasks = allTasks?.filter(t => t.metadata?.auto_assigned) || [];
-        const autoAssignmentRate = totalTasks ? Math.round((autoAssignedTasks.length / totalTasks) * 100) : 0;
-
-        // Completed tasks with knowledge extraction
-        const completedTasks = allTasks?.filter(t => t.status === 'COMPLETED') || [];
-        const knowledgeExtracted = completedTasks.filter(t => t.metadata?.knowledge_extracted) || [];
-        const knowledgeExtractionRate = completedTasks.length
-          ? Math.round((knowledgeExtracted.length / completedTasks.length) * 100)
-          : 0;
-
-        // Agent utilization
-        const { data: agents } = await supabase
-          .from('agents')
-          .select('id, name, status, current_workload, max_concurrent_tasks')
-          .neq('status', 'ARCHIVED');
-
-        const activeAgents = agents?.filter(a => a.status !== 'OFFLINE') || [];
-        const totalCapacity = activeAgents.reduce((sum, a) => sum + (a.max_concurrent_tasks || 5), 0);
-        const currentWorkload = activeAgents.reduce((sum, a) => sum + (a.current_workload || 0), 0);
-        const agentUtilization = totalCapacity ? Math.round((currentWorkload / totalCapacity) * 100) : 0;
-
-        // Template usage breakdown
-        const { data: templates } = await supabase
-          .from('task_templates')
-          .select('template_name, times_used, success_rate')
-          .order('times_used', { ascending: false });
-
-        // Average task completion time
-        const completionTimes = completedTasks
-          .filter(t => t.created_at && t.updated_at)
-          .map(t => (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60));
-        const avgCompletionTime = completionTimes.length
-          ? Math.round(completionTimes.reduce((a, b) => a + b, 0) / completionTimes.length * 10) / 10
-          : 0;
-
-        const metrics = {
-          time_window_hours,
-          automation_coverage: `${automationCoverage}%`,
-          auto_assignment_rate: `${autoAssignmentRate}%`,
-          knowledge_extraction_rate: `${knowledgeExtractionRate}%`,
-          agent_utilization: `${agentUtilization}%`,
-          avg_completion_time_hours: avgCompletionTime,
-          total_tasks: totalTasks || 0,
-          template_tasks: templateTasks.length,
-          completed_tasks: completedTasks.length,
-          active_agents: activeAgents.length,
-          template_usage: templates?.slice(0, 5) || []
-        };
-
-        // Store metrics if requested (for historical tracking)
-        if (store_metrics) {
-          await supabase.from('autonomy_metrics').insert({
-            metric_name: 'stae_automation_metrics',
-            metric_value: metrics,
-            measured_at: new Date().toISOString()
-          });
-        }
-
-        result = {
-          success: true,
-          metrics,
-          generated_at: new Date().toISOString()
-        };
-        break;
-      }
-
-      // ====================================================================
-      // LIST TEMPLATES
-      // ====================================================================
-      case 'list_templates': {
-        const { category, include_inactive = false } = data;
-
-        let query = supabase
-          .from('task_templates')
-          .select('*')
-          .order('times_used', { ascending: false });
-
-        if (!include_inactive) {
-          query = query.eq('is_active', true);
-        }
-        if (category) {
-          query = query.eq('category', category);
-        }
-
-        const { data: templates, error } = await query;
-
-        if (error) throw error;
-
-        result = {
-          success: true,
-          templates,
-          count: templates?.length || 0
-        };
-        break;
-      }
-
-      // ====================================================================
-      // UPDATE TEMPLATE SUCCESS RATE
-      // ====================================================================
-      case 'update_template_stats': {
-        const { template_name, task_success } = data;
-
-        const { data: template } = await supabase
-          .from('task_templates')
-          .select('*')
-          .eq('template_name', template_name)
-          .single();
-
-        if (template) {
-          const currentRate = template.success_rate || 0;
-          const currentCount = template.times_used || 0;
-          const newRate = ((currentRate * (currentCount - 1)) + (task_success ? 100 : 0)) / currentCount;
-
-          await supabase
-            .from('task_templates')
-            .update({ success_rate: Math.round(newRate * 10) / 10 })
-            .eq('template_name', template_name);
-        }
-
-        result = { success: true, template_name, updated: !!template };
-        break;
-      }
-
-      // ====================================================================
-      // PHASE 2: CHECKLIST-BASED STAGE ADVANCEMENT
-      // ====================================================================
-      case 'checklist_based_advance': {
-        const { task_id } = data;
-
-        // Get tasks eligible for advancement
-        let tasksToCheck = [];
-        if (task_id) {
-          const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-          if (task) tasksToCheck = [task];
-        } else {
-          const { data: tasks } = await supabase
-            .from('tasks')
-            .select('*')
-            .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
-            .neq('stage', 'INTEGRATE');
-          tasksToCheck = tasks || [];
-        }
-
-        const advancedTasks = [];
-        const STAGE_ORDER = ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'];
-        const STAGE_THRESHOLDS = {
-          'DISCUSS': { minChecklist: 0.5, minHours: 2 },
-          'PLAN': { minChecklist: 0.8, minHours: 4 },
-          'EXECUTE': { minChecklist: 1.0, minHours: 8 },
-          'VERIFY': { minChecklist: 0.8, minHours: 2 }
-        };
-
-        for (const task of tasksToCheck) {
-          const checklist = task.metadata?.checklist || [];
-          const completedItems = task.completed_checklist_items || [];
-          const checklistProgress = checklist.length > 0 ? completedItems.length / checklist.length : 1;
-
-          const stageStarted = task.stage_started_at || task.created_at;
-          const hoursInStage = (Date.now() - new Date(stageStarted).getTime()) / (1000 * 60 * 60);
-
-          const currentStageIdx = STAGE_ORDER.indexOf(task.stage);
-          const threshold = STAGE_THRESHOLDS[task.stage];
-
-          if (threshold && currentStageIdx < STAGE_ORDER.length - 1) {
-            // REQUIRE documented progress: at least one checklist item OR explicit progress
-            const hasDocumentedProgress = completedItems.length > 0 || (task.progress_percentage > 0);
-
-            // Only advance if: (checklist progress met AND has any progress) OR (time elapsed AND has any progress)
-            const meetsChecklistThreshold = checklistProgress >= threshold.minChecklist;
-            const meetsTimeThreshold = hoursInStage >= threshold.minHours;
-            const shouldAdvance = hasDocumentedProgress && (meetsChecklistThreshold || meetsTimeThreshold);
-
-            if (shouldAdvance) {
-              const nextStage = STAGE_ORDER[currentStageIdx + 1];
-              await supabase.from('tasks').update({
-                stage: nextStage,
-                stage_started_at: new Date().toISOString()
-              }).eq('id', task.id);
-
-              await supabase.from('eliza_activity_log').insert({
-                activity_type: 'stae_stage_advance',
-                title: `⏩ STAE: Stage Advanced`,
-                description: `Task "${task.title}" advanced from ${task.stage} to ${nextStage} (checklist: ${Math.round(checklistProgress * 100)}%)`,
-                status: 'completed',
-                task_id: task.id,
-                metadata: { from_stage: task.stage, to_stage: nextStage, checklist_progress: checklistProgress }
-              });
-
-              advancedTasks.push({ task_id: task.id, title: task.title, from: task.stage, to: nextStage });
-            }
-          }
-        }
-
-        result = { success: true, tasks_checked: tasksToCheck.length, tasks_advanced: advancedTasks.length, advanced: advancedTasks };
-        break;
-      }
-
-      // ====================================================================
-      // PHASE 2: AUTO-RESOLVE BLOCKERS
-      // ====================================================================
-      case 'auto_resolve_blockers': {
-        const { task_id } = data;
-
-        let blockedTasks = [];
-        if (task_id) {
-          const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).eq('status', 'BLOCKED').single();
-          if (task) blockedTasks = [task];
-        } else {
-          const { data: tasks } = await supabase.from('tasks').select('*').eq('status', 'BLOCKED').limit(20);
-          blockedTasks = tasks || [];
-        }
-
-        const RESOLUTION_RULES: Record<string, { autoResolve: boolean; action: string; message: string }> = {
-          'github': { autoResolve: true, action: 'verify_github_access', message: 'GitHub access verified' },
-          'dependency': { autoResolve: false, action: 'install_dependency', message: 'Dependency needs manual installation' },
-          'permission': { autoResolve: false, action: 'escalate_to_admin', message: 'Permission issue escalated' },
-          'api': { autoResolve: true, action: 'retry_api_call', message: 'API connection retried' },
-          'waiting': { autoResolve: false, action: 'check_dependency_status', message: 'Waiting for dependent task' },
-          'approval': { autoResolve: false, action: 'check_governance_status', message: 'Awaiting council approval' }
-        };
-
-        const resolutions = [];
-        for (const task of blockedTasks) {
-          const reason = (task.blocked_reason || '').toLowerCase();
-          let matchedRule = null;
-
-          for (const [key, rule] of Object.entries(RESOLUTION_RULES)) {
-            if (reason.includes(key)) matchedRule = rule;
-          }
-
-          if (matchedRule && matchedRule.autoResolve) {
-            await supabase.from('tasks').update({
-              status: 'PENDING',
-              blocked_reason: null,
-              updated_at: new Date().toISOString()
-            }).eq('id', task.id);
-
-            resolutions.push({
-              task_id: task.id,
-              action: matchedRule.action,
-              status: 'RESOLVED',
-              message: matchedRule.message
-            });
-          } else {
-            resolutions.push({
-              task_id: task.id,
-              action: matchedRule?.action || 'manual_intervention',
-              status: 'BLOCKED',
-              message: matchedRule?.message || 'No auto-resolution rule found'
-            });
-          }
-        }
-
-        result = { success: true, resolutions };
-        break;
-      }
-
-      // ====================================================================
-      // PHASE 3: VERIFICATION AUDIT (ELIZA'S MEMORY)
-      // ====================================================================
-      case 'verify_task_execution': {
-        const { task_id_range_start = 1, task_id_range_end = 99 } = data;
-
-        // Fetch tasks in the range that are supposedly done or in progress
+    };
+
+    const executeChecklistAdvance = async (targetTaskId?: string) => {
+      let tasksToCheck = [];
+      if (targetTaskId) {
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', targetTaskId).single();
+        if (task) tasksToCheck = [task];
+      } else {
         const { data: tasks } = await supabase
           .from('tasks')
-          .select('id, title, status, stage, assigned_agent_id')
-          .gte('id', task_id_range_start)
-          .lte('id', task_id_range_end)
-          .in('status', ['COMPLETED', 'IN_PROGRESS']);
+          .select('*')
+          .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS'])
+          .neq('stage', 'INTEGRATE');
+        tasksToCheck = tasks || [];
+      }
 
-        const auditResults = [];
+      const advancedTasks = [];
+      const STAGE_ORDER = ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'];
+      const STAGE_THRESHOLDS: Record<string, { minChecklist: number; minHours: number }> = {
+        'DISCUSS': { minChecklist: 0.5, minHours: 2 },
+        'PLAN': { minChecklist: 0.8, minHours: 4 },
+        'EXECUTE': { minChecklist: 1.0, minHours: 8 },
+        'VERIFY': { minChecklist: 0.8, minHours: 2 }
+      };
 
-        if (tasks && tasks.length > 0) {
-          for (const task of tasks) {
-            // Check for execution logs
-            const { data: logs } = await supabase
-              .from('superduper_execution_log')
-              .select('id, status, created_at')
-              .eq('task_id', task.id)
-              .eq('status', 'success')
-              .limit(1);
+      for (const task of tasksToCheck) {
+        const checklist = task.metadata?.checklist || [];
+        const completedItems = task.completed_checklist_items || [];
+        const checklistProgress = checklist.length > 0 ? completedItems.length / checklist.length : 1;
+        const stageStarted = task.stage_started_at || task.created_at;
+        const hoursInStage = (Date.now() - new Date(stageStarted).getTime()) / (1000 * 60 * 60);
+        const currentStageIdx = STAGE_ORDER.indexOf(task.stage);
+        const threshold = STAGE_THRESHOLDS[task.stage];
 
-            const hasLogs = logs && logs.length > 0;
+        if (threshold && currentStageIdx < STAGE_ORDER.length - 1) {
+          // REQUIRE documented progress: at least one checklist item OR explicit progress
+          const hasDocumentedProgress = completedItems.length > 0 || (task.progress_percentage > 0);
 
-            if (!hasLogs) {
-              // FLAG FOR REVIEW - DO NOT AUTO-RERUN (Destructive Safety)
-              auditResults.push({
-                task_id: task.id,
-                title: task.title,
-                status: 'MISSING_PROOF',
-                action: 'Flagged for human review'
-              });
+          const meetsChecklistThreshold = checklistProgress >= threshold.minChecklist;
+          const meetsTimeThreshold = hoursInStage >= threshold.minHours;
+          const shouldAdvance = hasDocumentedProgress && (meetsChecklistThreshold || meetsTimeThreshold);
 
-              // Log to Eliza's activity stream
-              await supabase.from('eliza_activity_log').insert({
-                activity_type: 'stae_audit_failure',
-                title: `⚠️ Audit: No Proof for Task #${task.id}`,
-                description: `Task "${task.title}" has no SuperDuper execution logs. Flagged for review.`,
-                status: 'action_required',
-                task_id: task.id,
-                metadata: { agent: task.assigned_agent_id }
-              });
+          if (shouldAdvance) {
+            const nextStage = STAGE_ORDER[currentStageIdx + 1];
+            await supabase.from('tasks').update({
+              stage: nextStage,
+              stage_started_at: new Date().toISOString()
+            }).eq('id', task.id);
 
-            } else {
-              auditResults.push({ task_id: task.id, status: 'VERIFIED' });
-            }
+            await supabase.from('eliza_activity_log').insert({
+              activity_type: 'stae_stage_advance',
+              title: `⏩ STAE: Stage Advanced`,
+              description: `Task "${task.title}" advanced from ${task.stage} to ${nextStage} (checklist: ${Math.round(checklistProgress * 100)}%)`,
+              status: 'completed',
+              task_id: task.id,
+              metadata: { from_stage: task.stage, to_stage: nextStage, checklist_progress: checklistProgress }
+            });
+
+            advancedTasks.push({ task_id: task.id, title: task.title, from: task.stage, to: nextStage });
           }
         }
-
-        result = {
-          success: true,
-          audit_summary: {
-            total_checked: tasks?.length || 0,
-            verified: auditResults.filter(r => r.status === 'VERIFIED').length,
-            flagged: auditResults.filter(r => r.status === 'MISSING_PROOF').length,
-            details: auditResults
-          }
-        };
-        break;
       }
+
+      return { success: true, tasks_checked: tasksToCheck.length, tasks_advanced: advancedTasks.length, advanced: advancedTasks };
+    };
+
+    const executeAutoResolveBlockers = async (targetTaskId?: string) => {
+      let blockedTasks = [];
+      if (targetTaskId) {
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', targetTaskId).eq('status', 'BLOCKED').single();
+        if (task) blockedTasks = [task];
+      } else {
+        const { data: tasks } = await supabase.from('tasks').select('*').eq('status', 'BLOCKED').limit(20);
+        blockedTasks = tasks || [];
+      }
+
+      const RESOLUTION_RULES: Record<string, { autoResolve: boolean; action: string; message: string; type: string }> = {
+        'github': { autoResolve: true, action: 'verify_github_access', message: 'GitHub access verified', type: 'github' },
+        'dependency': { autoResolve: false, action: 'install_dependency', message: 'Dependency needs manual installation', type: 'dependency' },
+        'permission': { autoResolve: false, action: 'escalate_to_admin', message: 'Permission issue escalated', type: 'permission' },
+        'api': { autoResolve: true, action: 'retry_api_call', message: 'API connection retried', type: 'api' },
+        'waiting': { autoResolve: false, action: 'check_dependency_status', message: 'Waiting for dependent task', type: 'waiting' },
+        'approval': { autoResolve: false, action: 'check_governance_status', message: 'Awaiting council approval', type: 'approval' }
+      };
+
+      const resolutions = [];
+      for (const task of blockedTasks) {
         const reason = (task.blocked_reason || '').toLowerCase();
         let matchedRule = null;
-
         for (const [key, rule] of Object.entries(RESOLUTION_RULES)) {
           if (reason.includes(key)) {
-            matchedRule = { type: key, ...rule };
+            matchedRule = rule;
             break;
           }
         }
 
         if (matchedRule?.autoResolve) {
-          // Auto-resolve the blocker
           await supabase.from('tasks').update({
             status: 'IN_PROGRESS',
             blocked_reason: null,
@@ -734,408 +207,336 @@ serve(async (req) => {
           resolutions.push({ task_id: task.id, resolved: true, action: matchedRule.action });
         } else if (matchedRule) {
           resolutions.push({ task_id: task.id, resolved: false, suggestion: matchedRule.message, action: matchedRule.action });
+        } else {
+          resolutions.push({ task_id: task.id, resolved: false, suggestion: 'No resolution found', action: 'manual' });
         }
-    }
+      }
+      return { success: true, blocked_tasks_checked: blockedTasks.length, resolutions };
+    };
 
-    result = { success: true, blocked_tasks_checked: blockedTasks.length, resolutions };
-    break;
-  }
+    let result: any;
 
-      // ====================================================================
-      // PHASE 2: UPDATE CHECKLIST ITEM
-      // ====================================================================
+    switch (action) {
+      case 'run_all': {
+        console.log('🔄 Executing consolidated run_all cycle...');
+        const assignResult = await executeSmartAssign(undefined, undefined, 0.3);
+        const advanceResult = await executeChecklistAdvance();
+        const resolveResult = await executeAutoResolveBlockers();
+
+        result = {
+          success: true,
+          action: 'run_all',
+          smart_assign: assignResult,
+          checklist_advance: advanceResult,
+          resolve_blockers: resolveResult
+        };
+        break;
+      }
+
+      case 'create_from_template': {
+        const { template_name, title, description, priority, repo, auto_assign = true } = data;
+        if (!template_name || !title) throw new Error('template_name and title are required');
+        const { data: template, error: templateError } = await supabase.from('task_templates').select('*').eq('template_name', template_name).eq('is_active', true).single();
+        if (templateError || !template) throw new Error(`Template '${template_name}' not found or inactive`);
+        const taskDescription = description || template.description_template.replace('{{title}}', title);
+        const taskId = `task-${crypto.randomUUID()}`;
+        const { data: task, error: taskError } = await supabase.from('tasks').insert({
+          id: taskId, title, description: taskDescription, repo: repo || 'xmrt-ecosystem', category: template.category, stage: template.default_stage, priority: priority ?? template.default_priority, status: 'PENDING',
+          metadata: { created_from_template: template_name, template_id: template.id, required_skills: template.required_skills, checklist: template.checklist, auto_advance_threshold_hours: template.auto_advance_threshold_hours, estimated_duration_hours: template.estimated_duration_hours },
+          auto_advance_threshold_hours: template.auto_advance_threshold_hours
+        }).select().single();
+        if (taskError) throw taskError;
+        await supabase.from('task_templates').update({ times_used: template.times_used + 1 }).eq('id', template.id);
+        await supabase.from('eliza_activity_log').insert({ activity_type: 'stae_task_created', title: `📋 STAE: Task Created from Template`, description: `Created task "${title}" using template "${template_name}"`, status: 'completed', task_id: task.id, metadata: { template_name, category: template.category, auto_assign } });
+        let assignmentResult = null;
+        if (auto_assign) {
+          assignmentResult = await executeSmartAssign(task.id, undefined, 0.3);
+        }
+        result = { success: true, task, template_used: template_name, auto_assigned: auto_assign, assignment: assignmentResult };
+        break;
+      }
+
+      case 'smart_assign': {
+        const { task_id, prefer_agent_id, min_skill_match, auto_batch } = data;
+        if (auto_batch) {
+          result = await executeSmartAssign(undefined, prefer_agent_id, min_skill_match);
+        } else {
+          result = await executeSmartAssign(task_id, prefer_agent_id, min_skill_match);
+        }
+        break;
+      }
+
+      case 'auto_create_and_assign': {
+        const { template_name, title, description, priority } = data;
+        const createResult = await supabase.functions.invoke('suite-task-automation-engine', {
+          body: { action: 'create_from_template', data: { template_name, title, description, priority, auto_assign: true } }
+        });
+        result = createResult.data;
+        break;
+      }
+
+      case 'verify_completion': {
+        const { task_id } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        const checks = {
+          has_deliverables: !!task.metadata?.deliverables || !!task.result,
+          checklist_completed: await checkChecklistCompletion(task),
+          no_blocking_issues: task.status !== 'BLOCKED',
+          has_resolution: !!task.resolution || task.status === 'COMPLETED',
+          stage_is_final: task.stage === 'INTEGRATE' || task.stage === 'VERIFY'
+        };
+        const passedChecks = Object.values(checks).filter(Boolean).length;
+        const totalChecks = Object.keys(checks).length;
+        const qualityScore = Math.round((passedChecks / totalChecks) * 100);
+        const passesQualityGate = qualityScore >= 60;
+        await supabase.from('eliza_activity_log').insert({ activity_type: 'stae_quality_verification', title: `🔍 STAE: Quality Verification`, description: `Task "${task.title}" scored ${qualityScore}% - ${passesQualityGate ? 'PASSED' : 'NEEDS REVIEW'}`, status: passesQualityGate ? 'completed' : 'pending', task_id, metadata: { checks, qualityScore, passesQualityGate } });
+        result = { success: true, task_id, quality_score: qualityScore, passes_quality_gate: passesQualityGate, checks, recommendation: passesQualityGate ? 'Task meets quality standards - ready for completion' : 'Task needs review - some quality checks failed' };
+        break;
+      }
+
+      case 'extract_knowledge': {
+        const { task_id, completed_since_hours = 24 } = data;
+        let tasksToProcess = [];
+        if (task_id) {
+          const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+          if (task) tasksToProcess = [task];
+        } else {
+          const cutoff = new Date(Date.now() - completed_since_hours * 60 * 60 * 1000).toISOString();
+          const { data: tasks } = await supabase.from('tasks').select('*').eq('status', 'COMPLETED').gte('updated_at', cutoff).is('metadata->knowledge_extracted', null);
+          tasksToProcess = tasks || [];
+        }
+        const extractedKnowledge = [];
+        for (const task of tasksToProcess) {
+          const learnings = { task_id: task.id, title: task.title, category: task.category, resolution: task.resolution || task.result, duration_hours: task.metadata?.actual_duration_hours, template_used: task.metadata?.created_from_template, skills_used: task.metadata?.required_skills || [], blockers_encountered: task.blocked_reason ? [task.blocked_reason] : [], stage_progression: task.stage, success: task.status === 'COMPLETED' };
+          await supabase.from('learning_patterns').insert({ learning_type: 'task_completion', context: JSON.stringify({ task_category: task.category, template: task.metadata?.created_from_template, skills: task.metadata?.required_skills }), pattern_data: learnings, confidence: task.status === 'COMPLETED' ? 0.9 : 0.5, application_count: 1, last_applied: new Date().toISOString() });
+          await supabase.from('tasks').update({ metadata: { ...task.metadata, knowledge_extracted: true, extracted_at: new Date().toISOString() } }).eq('id', task.id);
+          extractedKnowledge.push(learnings);
+        }
+        if (extractedKnowledge.length > 0) {
+          await supabase.from('eliza_activity_log').insert({ activity_type: 'stae_knowledge_extraction', title: `📚 STAE: Knowledge Extraction`, description: `Extracted knowledge from ${extractedKnowledge.length} completed task(s)`, status: 'completed', metadata: { tasks_processed: extractedKnowledge.length } });
+        }
+        result = { success: true, tasks_processed: extractedKnowledge.length, knowledge_entries: extractedKnowledge };
+        break;
+      }
+
+      case 'get_metrics': {
+        const { time_window_hours = 24, store_metrics = false } = data;
+        const cutoff = new Date(Date.now() - time_window_hours * 60 * 60 * 1000).toISOString();
+        const { data: allTasks, count: totalTasks } = await supabase.from('tasks').select('*', { count: 'exact' }).gte('created_at', cutoff);
+        const templateTasks = allTasks?.filter(t => t.metadata?.created_from_template) || [];
+        const automationCoverage = totalTasks ? Math.round((templateTasks.length / totalTasks) * 100) : 0;
+        const autoAssignedTasks = allTasks?.filter(t => t.metadata?.auto_assigned) || [];
+        const autoAssignmentRate = totalTasks ? Math.round((autoAssignedTasks.length / totalTasks) * 100) : 0;
+        const completedTasks = allTasks?.filter(t => t.status === 'COMPLETED') || [];
+        const knowledgeExtracted = completedTasks.filter(t => t.metadata?.knowledge_extracted) || [];
+        const knowledgeExtractionRate = completedTasks.length ? Math.round((knowledgeExtracted.length / completedTasks.length) * 100) : 0;
+        const { data: agents } = await supabase.from('agents').select('id, name, status, current_workload, max_concurrent_tasks').neq('status', 'ARCHIVED');
+        const activeAgents = agents?.filter(a => a.status !== 'OFFLINE') || [];
+        const totalCapacity = activeAgents.reduce((sum, a) => sum + (a.max_concurrent_tasks || 5), 0);
+        const currentWorkload = activeAgents.reduce((sum, a) => sum + (a.current_workload || 0), 0);
+        const agentUtilization = totalCapacity ? Math.round((currentWorkload / totalCapacity) * 100) : 0;
+        const { data: templates } = await supabase.from('task_templates').select('template_name, times_used, success_rate').order('times_used', { ascending: false });
+        const completionTimes = completedTasks.filter(t => t.created_at && t.updated_at).map(t => (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60));
+        const avgCompletionTime = completionTimes.length ? Math.round(completionTimes.reduce((a, b) => a + b, 0) / completionTimes.length * 10) / 10 : 0;
+        const metrics = { time_window_hours, automation_coverage: `${automationCoverage}%`, auto_assignment_rate: `${autoAssignmentRate}%`, knowledge_extraction_rate: `${knowledgeExtractionRate}%`, agent_utilization: `${agentUtilization}%`, avg_completion_time_hours: avgCompletionTime, total_tasks: totalTasks || 0, template_tasks: templateTasks.length, completed_tasks: completedTasks.length, active_agents: activeAgents.length, template_usage: templates?.slice(0, 5) || [] };
+        if (store_metrics) await supabase.from('autonomy_metrics').insert({ metric_name: 'stae_automation_metrics', metric_value: metrics, measured_at: new Date().toISOString() });
+        result = { success: true, metrics, generated_at: new Date().toISOString() };
+        break;
+      }
+
+      case 'list_templates': {
+        const { category, include_inactive = false } = data;
+        let query = supabase.from('task_templates').select('*').order('times_used', { ascending: false });
+        if (!include_inactive) query = query.eq('is_active', true);
+        if (category) query = query.eq('category', category);
+        const { data: templates, error } = await query;
+        if (error) throw error;
+        result = { success: true, templates, count: templates?.length || 0 };
+        break;
+      }
+
+      case 'update_template_stats': {
+        const { template_name, task_success } = data;
+        const { data: template } = await supabase.from('task_templates').select('*').eq('template_name', template_name).single();
+        if (template) {
+          const currentRate = template.success_rate || 0;
+          const currentCount = template.times_used || 0;
+          const newRate = ((currentRate * (currentCount - 1)) + (task_success ? 100 : 0)) / currentCount;
+          await supabase.from('task_templates').update({ success_rate: Math.round(newRate * 10) / 10 }).eq('template_name', template_name);
+        }
+        result = { success: true, template_name, updated: !!template };
+        break;
+      }
+
+      case 'checklist_based_advance':
+        result = await executeChecklistAdvance(data.task_id);
+        break;
+
+      case 'auto_resolve_blockers':
+        result = await executeAutoResolveBlockers(data.task_id);
+        break;
+
+      case 'verify_task_execution': {
+        const { task_id_range_start = 1, task_id_range_end = 99 } = data;
+        const { data: tasks } = await supabase.from('tasks').select('id, title, status, stage, assigned_agent_id').gte('id', task_id_range_start).lte('id', task_id_range_end).in('status', ['COMPLETED', 'IN_PROGRESS']);
+        const auditResults = [];
+        if (tasks && tasks.length > 0) {
+          for (const task of tasks) {
+            const { data: logs } = await supabase.from('superduper_execution_log').select('id, status, created_at').eq('task_id', task.id).eq('status', 'success').limit(1);
+            const hasLogs = logs && logs.length > 0;
+            if (!hasLogs) {
+              auditResults.push({ task_id: task.id, title: task.title, status: 'MISSING_PROOF', action: 'Flagged for human review' });
+              await supabase.from('eliza_activity_log').insert({ activity_type: 'stae_audit_failure', title: `⚠️ Audit: No Proof for Task #${task.id}`, description: `Task "${task.title}" has no SuperDuper execution logs. Flagged for review.`, status: 'action_required', task_id: task.id, metadata: { agent: task.assigned_agent_id } });
+            } else {
+              auditResults.push({ task_id: task.id, status: 'VERIFIED' });
+            }
+          }
+        }
+        result = { success: true, audit_summary: { total_checked: tasks?.length || 0, verified: auditResults.filter(r => r.status === 'VERIFIED').length, flagged: auditResults.filter(r => r.status === 'MISSING_PROOF').length, details: auditResults } };
+        break;
+      }
+
       case 'update_checklist_item': {
-    const { task_id, item_index, item_text, completed } = data;
+        const { task_id, item_index, item_text, completed } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        const completedItems = [...(task.completed_checklist_items || [])];
+        const checklist = task.metadata?.checklist || [];
+        const itemToMark = item_index !== undefined ? checklist[item_index] : item_text;
+        if (completed && !completedItems.includes(itemToMark)) { completedItems.push(itemToMark); } else if (!completed) { const idx = completedItems.indexOf(itemToMark); if (idx > -1) completedItems.splice(idx, 1); }
+        await supabase.from('tasks').update({ completed_checklist_items: completedItems }).eq('id', task_id);
+        const progress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 100;
+        result = { success: true, task_id, checklist_progress: `${progress}%`, completed_items: completedItems.length, total_items: checklist.length };
+        break;
+      }
 
-    if (!task_id) throw new Error('task_id is required');
-
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-    if (!task) throw new Error(`Task ${task_id} not found`);
-
-    const completedItems = [...(task.completed_checklist_items || [])];
-    const checklist = task.metadata?.checklist || [];
-
-    // Find item by index or text
-    const itemToMark = item_index !== undefined ? checklist[item_index] : item_text;
-
-    if (completed && !completedItems.includes(itemToMark)) {
-      completedItems.push(itemToMark);
-    } else if (!completed) {
-      const idx = completedItems.indexOf(itemToMark);
-      if (idx > -1) completedItems.splice(idx, 1);
-    }
-
-    await supabase.from('tasks').update({ completed_checklist_items: completedItems }).eq('id', task_id);
-
-    const progress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 100;
-
-    result = { success: true, task_id, checklist_progress: `${progress}%`, completed_items: completedItems.length, total_items: checklist.length };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 2: GET CHECKLIST PROGRESS
-      // ====================================================================
       case 'get_checklist_progress': {
-    const { task_id } = data;
+        const { task_id } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        const checklist = task.metadata?.checklist || [];
+        const completedItems = task.completed_checklist_items || [];
+        const progress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 100;
+        result = { success: true, task_id, progress_percent: progress, completed_items: completedItems, pending_items: checklist.filter((item: string) => !completedItems.includes(item)), total_items: checklist.length };
+        break;
+      }
 
-    if (!task_id) throw new Error('task_id is required');
-
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-    if (!task) throw new Error(`Task ${task_id} not found`);
-
-    const checklist = task.metadata?.checklist || [];
-    const completedItems = task.completed_checklist_items || [];
-    const progress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 100;
-
-    result = {
-      success: true,
-      task_id,
-      progress_percent: progress,
-      completed_items: completedItems,
-      pending_items: checklist.filter((item: string) => !completedItems.includes(item)),
-      total_items: checklist.length
-    };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 2: DOCUMENT AGENT PROGRESS
-      // ====================================================================
       case 'document_agent_progress': {
-    const { task_id, agent_id, work_summary, items_completed = [], progress_note } = data;
-
-    if (!task_id) throw new Error('task_id is required');
-
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-    if (!task) throw new Error(`Task ${task_id} not found`);
-
-    const existingCompleted = task.completed_checklist_items || [];
-    const checklist = task.metadata?.checklist || [];
-
-    // Add newly completed items
-    const newlyCompleted = (items_completed || []).filter((item: string) => !existingCompleted.includes(item));
-    const updatedCompleted = [...existingCompleted, ...newlyCompleted];
-
-    // Calculate progress percentage
-    const progressPercent = checklist.length > 0
-      ? Math.round((updatedCompleted.length / checklist.length) * 100)
-      : Math.min(100, (task.progress_percentage || 0) + 10);
-
-    // Build agent notes history
-    const existingNotes = task.metadata?.agent_notes || [];
-    const newNote = {
-      timestamp: new Date().toISOString(),
-      agent_id: agent_id || task.assignee_agent_id,
-      summary: work_summary || progress_note || `Completed: ${newlyCompleted.join(', ')}`,
-      items_completed: newlyCompleted
-    };
-
-    // Update task with progress
-    await supabase.from('tasks').update({
-      completed_checklist_items: updatedCompleted,
-      progress_percentage: progressPercent,
-      metadata: {
-        ...task.metadata,
-        agent_notes: [...existingNotes, newNote],
-        last_progress_update: new Date().toISOString()
+        const { task_id, agent_id, work_summary, items_completed = [], progress_note } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        const existingCompleted = task.completed_checklist_items || [];
+        const checklist = task.metadata?.checklist || [];
+        const newlyCompleted = (items_completed || []).filter((item: string) => !existingCompleted.includes(item));
+        const updatedCompleted = [...existingCompleted, ...newlyCompleted];
+        const progressPercent = checklist.length > 0 ? Math.round((updatedCompleted.length / checklist.length) * 100) : Math.min(100, (task.progress_percentage || 0) + 10);
+        const existingNotes = task.metadata?.agent_notes || [];
+        const newNote = { timestamp: new Date().toISOString(), agent_id: agent_id || task.assignee_agent_id, summary: work_summary || progress_note || `Completed: ${newlyCompleted.join(', ')}`, items_completed: newlyCompleted };
+        await supabase.from('tasks').update({ completed_checklist_items: updatedCompleted, progress_percentage: progressPercent, metadata: { ...task.metadata, agent_notes: [...existingNotes, newNote], last_progress_update: new Date().toISOString() } }).eq('id', task_id);
+        await supabase.from('eliza_activity_log').insert({ activity_type: 'agent_progress_documented', title: `📝 Agent Progress: ${task.title}`, description: work_summary || `Completed ${newlyCompleted.length} items (${progressPercent}% total)`, status: 'completed', task_id: task_id, agent_id: agent_id || task.assignee_agent_id, metadata: { items_completed: newlyCompleted, progress_percent: progressPercent, note: progress_note } });
+        result = { success: true, task_id, progress_percent: progressPercent, items_newly_completed: newlyCompleted, total_completed: updatedCompleted.length, total_items: checklist.length, note_recorded: !!work_summary || !!progress_note };
+        break;
       }
-    }).eq('id', task_id);
 
-    // Log activity
-    await supabase.from('eliza_activity_log').insert({
-      activity_type: 'agent_progress_documented',
-      title: `📝 Agent Progress: ${task.title}`,
-      description: work_summary || `Completed ${newlyCompleted.length} items (${progressPercent}% total)`,
-      status: 'completed',
-      task_id: task_id,
-      agent_id: agent_id || task.assignee_agent_id,
-      metadata: {
-        items_completed: newlyCompleted,
-        progress_percent: progressPercent,
-        note: progress_note
-      }
-    });
-
-    result = {
-      success: true,
-      task_id,
-      progress_percent: progressPercent,
-      items_newly_completed: newlyCompleted,
-      total_completed: updatedCompleted.length,
-      total_items: checklist.length,
-      note_recorded: !!work_summary || !!progress_note
-    };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 2: ESCALATE STALLED TASK
-      // ====================================================================
       case 'escalate_stalled_task': {
-    const { task_id, reason } = data;
+        const { task_id, reason } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        await supabase.from('tasks').update({ priority: Math.min((task.priority || 5) + 2, 10), metadata: { ...task.metadata, escalated: true, escalation_reason: reason, escalated_at: new Date().toISOString() } }).eq('id', task_id);
+        await supabase.from('eliza_activity_log').insert({ activity_type: 'stae_task_escalated', title: `🚨 STAE: Task Escalated to Council`, description: `Task "${task.title}" requires council attention: ${reason || 'Stalled progress'}`, status: 'pending', task_id: task_id, metadata: { original_priority: task.priority, new_priority: Math.min((task.priority || 5) + 2, 10) } });
+        result = { success: true, task_id, escalated: true, new_priority: Math.min((task.priority || 5) + 2, 10) };
+        break;
+      }
 
-    if (!task_id) throw new Error('task_id is required');
-
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-    if (!task) throw new Error(`Task ${task_id} not found`);
-
-    // Create escalation
-    await supabase.from('tasks').update({
-      priority: Math.min((task.priority || 5) + 2, 10),
-      metadata: { ...task.metadata, escalated: true, escalation_reason: reason, escalated_at: new Date().toISOString() }
-    }).eq('id', task_id);
-
-    // Notify council
-    await supabase.from('eliza_activity_log').insert({
-      activity_type: 'stae_task_escalated',
-      title: `🚨 STAE: Task Escalated to Council`,
-      description: `Task "${task.title}" requires council attention: ${reason || 'Stalled progress'}`,
-      status: 'pending',
-      task_id: task_id,
-      metadata: { original_priority: task.priority, new_priority: Math.min((task.priority || 5) + 2, 10) }
-    });
-
-    result = { success: true, task_id, escalated: true, new_priority: Math.min((task.priority || 5) + 2, 10) };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 3: UPDATE TEMPLATE PERFORMANCE
-      // ====================================================================
       case 'update_template_performance': {
-    const { time_window_hours = 168 } = data; // Default 1 week
-    const cutoff = new Date(Date.now() - time_window_hours * 60 * 60 * 1000).toISOString();
+        const { time_window_hours = 168 } = data;
+        const cutoff = new Date(Date.now() - time_window_hours * 60 * 60 * 1000).toISOString();
+        const { data: templates } = await supabase.from('task_templates').select('*');
+        const updates = [];
+        for (const template of templates || []) {
+          const { data: tasks } = await supabase.from('tasks').select('*').eq('metadata->>created_from_template', template.template_name).gte('created_at', cutoff);
+          if (!tasks || tasks.length === 0) continue;
+          const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
+          const successRate = Math.round((completedTasks.length / tasks.length) * 100);
+          const durations = completedTasks.filter(t => t.created_at && t.updated_at).map(t => (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60));
+          const avgDuration = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
+          await supabase.from('task_templates').update({ success_rate: successRate, estimated_duration_hours: avgDuration ? Math.round(avgDuration * 10) / 10 : template.estimated_duration_hours }).eq('id', template.id);
+          updates.push({ template: template.template_name, tasks_analyzed: tasks.length, success_rate: successRate, avg_duration: avgDuration });
+        }
+        result = { success: true, templates_updated: updates.length, updates };
+        break;
+      }
 
-    // Get all templates
-    const { data: templates } = await supabase.from('task_templates').select('*');
-
-    const updates = [];
-    for (const template of templates || []) {
-      // Get tasks created from this template
-      const { data: tasks } = await supabase
-        .from('tasks')
-        .select('*')
-        .eq('metadata->>created_from_template', template.template_name)
-        .gte('created_at', cutoff);
-
-      if (!tasks || tasks.length === 0) continue;
-
-      const completedTasks = tasks.filter(t => t.status === 'COMPLETED');
-      const successRate = Math.round((completedTasks.length / tasks.length) * 100);
-
-      // Calculate average duration
-      const durations = completedTasks
-        .filter(t => t.created_at && t.updated_at)
-        .map(t => (new Date(t.updated_at).getTime() - new Date(t.created_at).getTime()) / (1000 * 60 * 60));
-      const avgDuration = durations.length > 0 ? durations.reduce((a, b) => a + b, 0) / durations.length : null;
-
-      await supabase.from('task_templates').update({
-        success_rate: successRate,
-        estimated_duration_hours: avgDuration ? Math.round(avgDuration * 10) / 10 : template.estimated_duration_hours
-      }).eq('id', template.id);
-
-      updates.push({ template: template.template_name, tasks_analyzed: tasks.length, success_rate: successRate, avg_duration: avgDuration });
-    }
-
-    result = { success: true, templates_updated: updates.length, updates };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 3: GET OPTIMIZATION RECOMMENDATIONS
-      // ====================================================================
       case 'get_optimization_recommendations': {
-    const recommendations = [];
-
-    // Check for agents with low success rates
-    const { data: agents } = await supabase.from('agents').select('*').neq('status', 'ARCHIVED');
-    for (const agent of agents || []) {
-      const { count: completed } = await supabase
-        .from('tasks').select('*', { count: 'exact', head: true })
-        .eq('assignee_agent_id', agent.id).eq('status', 'COMPLETED');
-      const { count: failed } = await supabase
-        .from('tasks').select('*', { count: 'exact', head: true })
-        .eq('assignee_agent_id', agent.id).eq('status', 'FAILED');
-
-      const total = (completed || 0) + (failed || 0);
-      if (total >= 5 && (completed || 0) / total < 0.7) {
-        recommendations.push({
-          type: 'agent_performance',
-          severity: 'medium',
-          agent: agent.name,
-          message: `Agent ${agent.name} has low success rate (${Math.round(((completed || 0) / total) * 100)}%). Consider retraining or reassigning tasks.`
-        });
+        const recommendations = [];
+        const { data: agents } = await supabase.from('agents').select('*').neq('status', 'ARCHIVED');
+        for (const agent of agents || []) {
+          const { count: completed } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assignee_agent_id', agent.id).eq('status', 'COMPLETED');
+          const { count: failed } = await supabase.from('tasks').select('*', { count: 'exact', head: true }).eq('assignee_agent_id', agent.id).eq('status', 'FAILED');
+          const total = (completed || 0) + (failed || 0);
+          if (total >= 5 && (completed || 0) / total < 0.7) { recommendations.push({ type: 'agent_performance', severity: 'medium', agent: agent.name, message: `Agent ${agent.name} has low success rate (${Math.round(((completed || 0) / total) * 100)}%). Consider retraining or reassigning tasks.` }); }
+        }
+        const { data: templates } = await supabase.from('task_templates').select('*').gt('times_used', 5);
+        for (const template of templates || []) { if ((template.success_rate || 0) < 60) { recommendations.push({ type: 'template_optimization', severity: 'low', template: template.template_name, message: `Template "${template.template_name}" has ${template.success_rate}% success rate. Consider updating checklist or requirements.` }); } }
+        const { data: pendingTasks } = await supabase.from('tasks').select('*').is('assignee_agent_id', null).eq('status', 'PENDING').limit(10);
+        for (const task of pendingTasks || []) { const requiredSkills = task.metadata?.required_skills || []; if (requiredSkills.length > 0) { recommendations.push({ type: 'skill_gap', severity: 'high', task: task.title, message: `Unassigned task needs skills: ${requiredSkills.join(', ')}. Consider spawning specialized agent.` }); } }
+        const busyAgents = (agents || []).filter(a => (a.current_workload || 0) >= (a.max_concurrent_tasks || 5) * 0.8);
+        const idleAgents = (agents || []).filter(a => a.status === 'IDLE' && (a.current_workload || 0) === 0);
+        if (busyAgents.length > 2 && idleAgents.length > 0) { recommendations.push({ type: 'workload_imbalance', severity: 'medium', message: `${busyAgents.length} agents overloaded while ${idleAgents.length} are idle. Run smart_assign to rebalance.` }); }
+        result = { success: true, recommendations, generated_at: new Date().toISOString() };
+        break;
       }
-    }
 
-    // Check for templates with low success rates
-    const { data: templates } = await supabase.from('task_templates').select('*').gt('times_used', 5);
-    for (const template of templates || []) {
-      if ((template.success_rate || 0) < 60) {
-        recommendations.push({
-          type: 'template_optimization',
-          severity: 'low',
-          template: template.template_name,
-          message: `Template "${template.template_name}" has ${template.success_rate}% success rate. Consider updating checklist or requirements.`
-        });
-      }
-    }
-
-    // Check for skill gaps
-    const { data: pendingTasks } = await supabase.from('tasks').select('*').is('assignee_agent_id', null).eq('status', 'PENDING').limit(10);
-    for (const task of pendingTasks || []) {
-      const requiredSkills = task.metadata?.required_skills || [];
-      if (requiredSkills.length > 0) {
-        recommendations.push({
-          type: 'skill_gap',
-          severity: 'high',
-          task: task.title,
-          message: `Unassigned task needs skills: ${requiredSkills.join(', ')}. Consider spawning specialized agent.`
-        });
-      }
-    }
-
-    // Check workload balance
-    const busyAgents = (agents || []).filter(a => (a.current_workload || 0) >= (a.max_concurrent_tasks || 5) * 0.8);
-    const idleAgents = (agents || []).filter(a => a.status === 'IDLE' && (a.current_workload || 0) === 0);
-    if (busyAgents.length > 2 && idleAgents.length > 0) {
-      recommendations.push({
-        type: 'workload_imbalance',
-        severity: 'medium',
-        message: `${busyAgents.length} agents overloaded while ${idleAgents.length} are idle. Run smart_assign to rebalance.`
-      });
-    }
-
-    result = { success: true, recommendations, generated_at: new Date().toISOString() };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 3: CREATE KNOWLEDGE RELATIONSHIPS
-      // ====================================================================
       case 'create_knowledge_relationships': {
-    const { task_id, entity_type = 'task_pattern' } = data;
-
-    if (!task_id) throw new Error('task_id is required');
-
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-    if (!task) throw new Error(`Task ${task_id} not found`);
-
-    const relationships = [];
-
-    // Create entity for task pattern
-    const { data: entity } = await supabase.from('knowledge_entities').insert({
-      entity_type,
-      entity_name: `Pattern: ${task.category}/${task.metadata?.created_from_template || 'manual'}`,
-      confidence: task.status === 'COMPLETED' ? 0.9 : 0.5,
-      metadata: {
-        task_id: task.id,
-        category: task.category,
-        template: task.metadata?.created_from_template,
-        skills_used: task.metadata?.required_skills,
-        duration_hours: task.updated_at && task.created_at
-          ? (new Date(task.updated_at).getTime() - new Date(task.created_at).getTime()) / (1000 * 60 * 60)
-          : null,
-        success: task.status === 'COMPLETED'
-      }
-    }).select().single();
-
-    if (entity) {
-      relationships.push({ entity_id: entity.id, type: 'task_pattern' });
-
-      // Link to agent if assigned
-      if (task.assignee_agent_id) {
-        await supabase.from('entity_relationships').insert({
-          source_entity_id: entity.id,
-          target_entity_type: 'agent',
-          target_entity_name: task.assignee_agent_id,
-          relationship_type: 'completed_by',
-          strength: task.status === 'COMPLETED' ? 0.9 : 0.3
-        });
-        relationships.push({ type: 'agent_link', agent_id: task.assignee_agent_id });
+        const { task_id, entity_type = 'task_pattern' } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        const relationships = [];
+        const { data: entity } = await supabase.from('knowledge_entities').insert({ entity_type, entity_name: `Pattern: ${task.category}/${task.metadata?.created_from_template || 'manual'}`, confidence: task.status === 'COMPLETED' ? 0.9 : 0.5, metadata: { task_id: task.id, category: task.category, template: task.metadata?.created_from_template, skills_used: task.metadata?.required_skills, duration_hours: task.updated_at && task.created_at ? (new Date(task.updated_at).getTime() - new Date(task.created_at).getTime()) / (1000 * 60 * 60) : null, success: task.status === 'COMPLETED' } }).select().single();
+        if (entity) {
+          relationships.push({ entity_id: entity.id, type: 'task_pattern' });
+          if (task.assignee_agent_id) { await supabase.from('entity_relationships').insert({ source_entity_id: entity.id, target_entity_type: 'agent', target_entity_name: task.assignee_agent_id, relationship_type: 'completed_by', strength: task.status === 'COMPLETED' ? 0.9 : 0.3 }); relationships.push({ type: 'agent_link', agent_id: task.assignee_agent_id }); }
+          for (const skill of task.metadata?.required_skills || []) { await supabase.from('entity_relationships').insert({ source_entity_id: entity.id, target_entity_type: 'skill', target_entity_name: skill, relationship_type: 'requires_skill', strength: 0.8 }); relationships.push({ type: 'skill_link', skill }); }
+        }
+        result = { success: true, task_id, entity_created: !!entity, relationships };
+        break;
       }
 
-      // Link to skills
-      for (const skill of task.metadata?.required_skills || []) {
-        await supabase.from('entity_relationships').insert({
-          source_entity_id: entity.id,
-          target_entity_type: 'skill',
-          target_entity_name: skill,
-          relationship_type: 'requires_skill',
-          strength: 0.8
-        });
-        relationships.push({ type: 'skill_link', skill });
-      }
-    }
-
-    result = { success: true, task_id, entity_created: !!entity, relationships };
-    break;
-  }
-
-      // ====================================================================
-      // PHASE 2: ADVANCE TASK STAGE (Manual)
-      // ====================================================================
       case 'advance_task_stage': {
-    const { task_id, target_stage } = data;
-
-    if (!task_id) throw new Error('task_id is required');
-
-    const STAGE_ORDER = ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'];
-    const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
-    if (!task) throw new Error(`Task ${task_id} not found`);
-
-    const currentIdx = STAGE_ORDER.indexOf(task.stage);
-    let nextStage = target_stage;
-
-    if (!nextStage) {
-      if (currentIdx < STAGE_ORDER.length - 1) {
-        nextStage = STAGE_ORDER[currentIdx + 1];
-      } else {
-        throw new Error('Task is already at final stage');
+        const { task_id, target_stage } = data;
+        if (!task_id) throw new Error('task_id is required');
+        const STAGE_ORDER = ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'];
+        const { data: task } = await supabase.from('tasks').select('*').eq('id', task_id).single();
+        if (!task) throw new Error(`Task ${task_id} not found`);
+        const currentIdx = STAGE_ORDER.indexOf(task.stage);
+        let nextStage = target_stage;
+        if (!nextStage) { if (currentIdx < STAGE_ORDER.length - 1) { nextStage = STAGE_ORDER[currentIdx + 1]; } else { throw new Error('Task is already at final stage'); } }
+        if (!STAGE_ORDER.includes(nextStage)) { throw new Error(`Invalid stage: ${nextStage}. Valid: ${STAGE_ORDER.join(', ')}`); }
+        await supabase.from('tasks').update({ stage: nextStage, stage_started_at: new Date().toISOString() }).eq('id', task_id);
+        await supabase.from('eliza_activity_log').insert({ activity_type: 'stae_manual_advance', title: `⏩ STAE: Manual Stage Advance`, description: `Task "${task.title}" manually advanced from ${task.stage} to ${nextStage}`, status: 'completed', task_id });
+        result = { success: true, task_id, previous_stage: task.stage, new_stage: nextStage };
+        break;
       }
-    }
-
-    if (!STAGE_ORDER.includes(nextStage)) {
-      throw new Error(`Invalid stage: ${nextStage}. Valid: ${STAGE_ORDER.join(', ')}`);
-    }
-
-    await supabase.from('tasks').update({
-      stage: nextStage,
-      stage_started_at: new Date().toISOString()
-    }).eq('id', task_id);
-
-    await supabase.from('eliza_activity_log').insert({
-      activity_type: 'stae_manual_advance',
-      title: `⏩ STAE: Manual Stage Advance`,
-      description: `Task "${task.title}" manually advanced from ${task.stage} to ${nextStage}`,
-      status: 'completed',
-      task_id
-    });
-
-    result = { success: true, task_id, previous_stage: task.stage, new_stage: nextStage };
-    break;
-  }
 
       default:
-  throw new Error(`Unknown action: ${action}. Available: create_from_template, smart_assign, verify_completion, extract_knowledge, get_metrics, list_templates, checklist_based_advance, auto_resolve_blockers, update_checklist_item, get_checklist_progress, escalate_stalled_task, update_template_performance, get_optimization_recommendations, create_knowledge_relationships, advance_task_stage`);
-}
+        throw new Error(`Unknown action: ${action}. Available: run_all, create_from_template, smart_assign, verify_completion, extract_knowledge, get_metrics, list_templates, checklist_based_advance, auto_resolve_blockers, update_checklist_item, get_checklist_progress, escalate_stalled_task, update_template_performance, get_optimization_recommendations, create_knowledge_relationships, advance_task_stage`);
+    }
 
     const executionTime = Date.now() - startTime;
-console.log(`✅ [STAE] Action ${action} completed in ${executionTime}ms`);
-
-return new Response(
-  JSON.stringify({ ...result, execution_time_ms: executionTime }),
-  { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-);
+    console.log(`✅ [STAE] Action ${action} completed in ${executionTime}ms`);
+    return new Response(JSON.stringify({ ...result, execution_time_ms: executionTime }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
-  console.error('❌ [STAE] Error:', error);
-  return new Response(
-    JSON.stringify({ success: false, error: error.message }),
-    { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-  );
-}
+    console.error('❌ [STAE] Error:', error);
+    return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+  }
 });
 
 // ====================================================================

@@ -27,7 +27,7 @@ serve(async (req) => {
 
   const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, { method: req.method });
   const startTime = Date.now();
-  
+
   try {
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
@@ -37,7 +37,9 @@ serve(async (req) => {
 
     const { action = 'auto_advance', task_id, force = false } = await req.json().catch(() => ({}));
 
-    if (action === 'update_progress') {
+    // --- REUSABLE LOGIC FUNCTIONS ---
+
+    const executeUpdateProgress = async () => {
       // Update progress percentage for all active tasks
       // PRIORITY: Checklist-based progress > Time-based progress
       const { data: tasks, error: fetchError } = await supabase
@@ -56,7 +58,7 @@ serve(async (req) => {
         const checklist = task.metadata?.checklist || [];
         const completedItems = task.completed_checklist_items || [];
         const currentProgress = task.progress_percentage || 0;
-        
+
         let newProgress: number;
         let progressSource: string;
 
@@ -82,7 +84,7 @@ serve(async (req) => {
         if (finalProgress !== currentProgress) {
           await supabase
             .from('tasks')
-            .update({ 
+            .update({
               progress_percentage: finalProgress,
               metadata: {
                 ...task.metadata,
@@ -95,21 +97,16 @@ serve(async (req) => {
         updated++;
       }
 
-      return new Response(
-        JSON.stringify({ 
-          ok: true, 
-          action: 'update_progress', 
-          updated,
-          progress_breakdown: {
-            checklist_based: checklistBased,
-            time_based: timeBased
-          }
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+      return {
+        updated,
+        progress_breakdown: {
+          checklist_based: checklistBased,
+          time_based: timeBased
+        }
+      };
+    };
 
-    if (action === 'auto_advance') {
+    const executeAutoAdvance = async () => {
       // Find tasks ready to auto-advance
       const { data: tasks, error: fetchError } = await supabase
         .from('tasks')
@@ -122,10 +119,11 @@ serve(async (req) => {
 
       const advanced: Array<{ id: string; from: string; to: string }> = [];
       const notAdvanced: Array<{ id: string; reason: string }> = [];
+      let notified = 0;
 
       for (const task of tasks || []) {
         const currentStageIdx = STAGE_ORDER.indexOf(task.stage);
-        
+
         // At INTEGRATE with 100% = COMPLETED
         if (currentStageIdx >= STAGE_ORDER.length - 1) {
           // Mark as COMPLETED instead of just skipping
@@ -147,7 +145,7 @@ serve(async (req) => {
           if (task.assignee_agent_id) {
             await supabase
               .from('agents')
-              .update({ 
+              .update({
                 current_workload: Math.max(0, (task.current_workload || 1) - 1)
               })
               .eq('id', task.assignee_agent_id);
@@ -249,19 +247,18 @@ serve(async (req) => {
         .gte('progress_percentage', 75)
         .lt('progress_percentage', 100);
 
-      let notified = 0;
       for (const task of urgentTasks || []) {
         // Only notify once per threshold crossing
         const lastNotified = task.last_agent_notified_at ? new Date(task.last_agent_notified_at) : null;
         const hoursSinceNotified = lastNotified ? (Date.now() - lastNotified.getTime()) / 3600000 : Infinity;
-        
+
         // Notify at most once per hour
         if (hoursSinceNotified < 1) continue;
-        
+
         if (task.assignee_agent_id) {
           const urgencyLevel = task.progress_percentage >= 90 ? 'warning' : 'info';
           const urgencyText = task.progress_percentage >= 90 ? 'URGENT' : 'Attention';
-          
+
           await supabase.from('agent_activities').insert({
             agent_id: task.assignee_agent_id,
             activity: `${urgencyText}: Task "${task.title}" at ${task.progress_percentage}% of auto-advance threshold in ${task.stage}`,
@@ -272,18 +269,55 @@ serve(async (req) => {
             .from('tasks')
             .update({ last_agent_notified_at: new Date().toISOString() })
             .eq('id', task.id);
-          
+
           notified++;
         }
       }
 
+      return {
+        advanced,
+        notAdvanced,
+        agentsNotified: notified,
+      };
+    };
+
+    // --- ACTION HANDLING ---
+
+    if (action === 'run_all') {
+      const progressResult = await executeUpdateProgress();
+      const advanceResult = await executeAutoAdvance();
+
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          action: 'run_all',
+          update_summary: progressResult,
+          advance_summary: advanceResult,
+          executionTime: Date.now() - startTime
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === 'update_progress') {
+      const result = await executeUpdateProgress();
+      return new Response(
+        JSON.stringify({
+          ok: true,
+          action: 'update_progress',
+          ...result
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    if (action === 'auto_advance') {
+      const result = await executeAutoAdvance();
       return new Response(
         JSON.stringify({
           ok: true,
           action: 'auto_advance',
-          advanced,
-          notAdvanced,
-          agentsNotified: notified,
+          ...result,
           executionTime: Date.now() - startTime
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -350,7 +384,7 @@ serve(async (req) => {
 
     await usageTracker.failure('Unknown action', 400);
     return new Response(
-      JSON.stringify({ ok: false, error: 'Unknown action', validActions: ['auto_advance', 'update_progress', 'advance_single'] }),
+      JSON.stringify({ ok: false, error: 'Unknown action', validActions: ['run_all', 'auto_advance', 'update_progress', 'advance_single'] }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 

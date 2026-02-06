@@ -155,7 +155,7 @@ OR:
             'CSO': 'gemini',
             'CTO': 'deepseek',
             'CIO': 'vertexai',
-            'CAO': 'lovable',
+            'CAO': 'gemini',
             'COO': 'gemini'
           };
 

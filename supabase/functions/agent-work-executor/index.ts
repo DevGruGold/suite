@@ -45,14 +45,27 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  const tracker = startUsageTrackingWithRequest('agent-work-executor', 'COO', req);
-  
+  // Fix: Correct argument order is (functionName, req, body, executiveName)
+  // We pass empty body {} initially to avoid crash, as body is parsed later
+  const tracker = startUsageTrackingWithRequest('agent-work-executor', req, {}, 'COO');
+
   try {
     const body = await req.json().catch(() => ({}));
     const { action = 'execute_pending_work', task_id, agent_id, max_tasks = 5 } = body;
-    
-    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
-    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+
+    if (!supabaseUrl || !supabaseKey) {
+      console.error("❌ CRITICAL ERROR: Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.");
+      console.error("   Please run: supabase secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...");
+      tracker.failure("Missing Supabase Credentials");
+      return new Response(
+        JSON.stringify({ error: "Configuration Error: Missing Supabase Credentials" }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     const supabase = createClient(supabaseUrl, supabaseKey, {
       auth: { autoRefreshToken: false, persistSession: false }
     });
@@ -70,15 +83,15 @@ serve(async (req) => {
           .lt('progress_percentage', 100)
           .order('priority', { ascending: false })
           .limit(max_tasks);
-        
+
         if (task_id) {
           query = query.eq('id', task_id);
         }
-        
+
         const { data: tasks, error: tasksError } = await query;
-        
+
         if (tasksError) throw tasksError;
-        
+
         if (!tasks || tasks.length === 0) {
           tracker.success();
           return new Response(
@@ -88,20 +101,20 @@ serve(async (req) => {
         }
 
         console.log(`⚙️ Found ${tasks.length} tasks needing work`);
-        
+
         const results = [];
-        
+
         for (const task of tasks) {
           const result = await processTaskWork(supabase, task);
           results.push(result);
         }
-        
+
         tracker.success();
         return new Response(
-          JSON.stringify({ 
-            success: true, 
+          JSON.stringify({
+            success: true,
             tasksProcessed: results.length,
-            results 
+            results
           }),
           { headers: { ...corsHeaders, "Content-Type": "application/json" } }
         );
@@ -114,17 +127,17 @@ serve(async (req) => {
             { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
           );
         }
-        
+
         const { data: task, error: taskError } = await supabase
           .from('tasks')
           .select('*')
           .eq('id', task_id)
           .single();
-        
+
         if (taskError || !task) {
           throw new Error(`Task not found: ${task_id}`);
         }
-        
+
         const result = await processTaskWork(supabase, task);
         tracker.success();
         return new Response(
@@ -143,9 +156,9 @@ serve(async (req) => {
           .lt('progress_percentage', 100)
           .order('priority', { ascending: false })
           .limit(20);
-        
+
         if (error) throw error;
-        
+
         const pending = (tasks || []).map((t: any) => ({
           id: t.id,
           title: t.title,
@@ -156,7 +169,7 @@ serve(async (req) => {
           checklist: t.metadata?.checklist || [],
           completed: t.metadata?.completed_checklist_items || []
         }));
-        
+
         tracker.success();
         return new Response(
           JSON.stringify({ success: true, pending_tasks: pending }),
@@ -184,10 +197,10 @@ serve(async (req) => {
 async function processTaskWork(supabase: any, task: Task): Promise<any> {
   const checklist = task.metadata?.checklist || [];
   const completed = task.completed_checklist_items || [];
-  
+
   console.log(`⚙️ Processing task ${task.id}: ${task.title}`);
   console.log(`   Checklist: ${checklist.length} items, ${completed.length} completed`);
-  
+
   // If no checklist, we can't do documented work
   if (checklist.length === 0) {
     console.log(`   ⚠️ Task has no checklist - cannot document work`);
@@ -197,10 +210,10 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
       reason: 'no_checklist'
     };
   }
-  
+
   // Find next uncompleted checklist item
   const pendingItems = checklist.filter((item: string) => !(completed || []).includes(item));
-  
+
   if (pendingItems.length === 0) {
     console.log(`   ✅ All checklist items completed`);
     return {
@@ -209,18 +222,18 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
       reason: 'all_items_done'
     };
   }
-  
+
   const nextItem = pendingItems[0];
   console.log(`   🎯 Next item: "${nextItem}"`);
-  
+
   // Determine which tool/function to use based on item content
   const workResult = await executeChecklistItem(supabase, task, nextItem);
-  
+
   if (workResult.success) {
     // Mark the checklist item as completed
     const newCompleted = [...completed, nextItem];
     const newProgress = Math.round((newCompleted.length / checklist.length) * 100);
-    
+
     await supabase
       .from('tasks')
       .update({
@@ -234,7 +247,7 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
         }
       })
       .eq('id', task.id);
-    
+
     // Log to activity
     await supabase.from('eliza_activity_log').insert({
       activity_type: 'agent_work',
@@ -247,9 +260,9 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
         work_result: workResult.summary
       }
     });
-    
+
     console.log(`   ✅ Item completed, progress now ${newProgress}%`);
-    
+
     return {
       task_id: task.id,
       status: 'work_done',
@@ -270,7 +283,7 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
 
 async function executeChecklistItem(supabase: any, task: Task, item: string): Promise<{ success: boolean; summary?: string; error?: string }> {
   const itemLower = item.toLowerCase();
-  
+
   try {
     // Analyze/Review items - use AI to analyze
     if (itemLower.includes('analyze') || itemLower.includes('review') || itemLower.includes('assess')) {
@@ -279,7 +292,7 @@ async function executeChecklistItem(supabase: any, task: Task, item: string): Pr
       );
       return { success: true, summary: `Analysis: ${analysis.substring(0, 200)}...` };
     }
-    
+
     // Plan/Design items - generate a plan
     if (itemLower.includes('plan') || itemLower.includes('design') || itemLower.includes('outline')) {
       const plan = await callAI(
@@ -287,7 +300,7 @@ async function executeChecklistItem(supabase: any, task: Task, item: string): Pr
       );
       return { success: true, summary: `Plan created: ${plan.substring(0, 200)}...` };
     }
-    
+
     // Document items - generate documentation
     if (itemLower.includes('document') || itemLower.includes('write') || itemLower.includes('describe')) {
       const doc = await callAI(
@@ -295,51 +308,57 @@ async function executeChecklistItem(supabase: any, task: Task, item: string): Pr
       );
       return { success: true, summary: `Documentation: ${doc.substring(0, 200)}...` };
     }
-    
+
     // Verify/Test items - simulate verification
     if (itemLower.includes('verify') || itemLower.includes('test') || itemLower.includes('check')) {
       return { success: true, summary: `Verification completed for: ${item}` };
     }
-    
+
     // Default: mark as completed with generic summary
     return { success: true, summary: `Completed: ${item}` };
-    
+
   } catch (error) {
-    return { 
-      success: false, 
-      error: error instanceof Error ? error.message : String(error) 
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : String(error)
     };
   }
 }
 
 async function callAI(prompt: string): Promise<string> {
-  const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-  if (!LOVABLE_API_KEY) {
-    return "AI analysis unavailable";
+  const GEMINI_API_KEY = Deno.env.get("GEMINI_API_KEY");
+  if (!GEMINI_API_KEY) {
+    console.error("❌ WARNING: GEMINI_API_KEY not found in secrets. AI analysis will fail.");
+    return "AI analysis unavailable (Missing GEMINI_API_KEY)";
   }
-  
+
   try {
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${GEMINI_API_KEY}`, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [{ role: 'user', content: prompt }],
-        temperature: 0.3,
-        max_tokens: 500,
+        contents: [{
+          parts: [{ text: prompt }]
+        }],
+        generationConfig: {
+          temperature: 0.3,
+          maxOutputTokens: 500,
+        }
       }),
     });
-    
+
     if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`Gemini API Error: ${response.status} - ${errorText}`);
       return "AI analysis unavailable";
     }
-    
+
     const result = await response.json();
-    return result.choices?.[0]?.message?.content || "No analysis generated";
-  } catch {
+    return result.candidates?.[0]?.content?.parts?.[0]?.text || "No analysis generated";
+  } catch (error) {
+    console.error("Gemini API Exception:", error);
     return "AI analysis unavailable";
   }
 }
