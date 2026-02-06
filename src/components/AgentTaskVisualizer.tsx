@@ -108,6 +108,20 @@ function getStageIndex(stage: string): number {
   return STAGES.findIndex(s => s.key === stage);
 }
 
+// Helper to map legacy/lowercase stages to Pipeline keys
+function normalizeStage(stage: string | null | undefined): string {
+  if (!stage) return 'NULL';
+  const s = stage.toLowerCase();
+
+  if (['planning', 'research', 'plan'].includes(s)) return 'PLAN';
+  if (['implementation', 'execute', 'doing'].includes(s)) return 'EXECUTE';
+  if (['testing', 'verification', 'verify', 'review'].includes(s)) return 'VERIFY';
+  if (['completion', 'integration', 'integrate'].includes(s)) return 'INTEGRATE';
+  if (['discuss', 'discussion'].includes(s)) return 'DISCUSS';
+
+  return s.toUpperCase();
+}
+
 interface AgentCardProps {
   agent: Agent;
   taskCount: number;
@@ -305,8 +319,8 @@ function StageColumn({
   onTaskClick
 }: StageColumnProps) {
   const Icon = stage.icon;
-  // Fix: Make stage comparison case-insensitive to handle "planning" vs "PLAN" mismatch
-  const stageTasks = tasks.filter(t => (t.stage || '').toUpperCase() === stage.key);
+  // Fix: Use normalizeStage to robustly map task stages to columns
+  const stageTasks = tasks.filter(t => normalizeStage(t.stage) === stage.key);
   const isDragOver = dragOverStage === stage.key;
 
   // Determine direction indicator
@@ -825,7 +839,9 @@ export function AgentTaskVisualizer() {
       if (profile?.selected_organization_id) {
         taskQuery = taskQuery.eq('organization_id', profile.selected_organization_id);
       } else {
-        taskQuery = taskQuery.eq('created_by_user_id', user?.id).is('organization_id', null);
+        // Personal View: Show tasks created by user OR system tasks (null creator) that have no org
+        // This ensures automated tasks (like "News Headline Analysis") are visible
+        taskQuery = taskQuery.is('organization_id', null).or(`created_by_user_id.eq.${user?.id},created_by_user_id.is.null`);
       }
 
       const [tasksRes, agentsRes] = await Promise.all([
