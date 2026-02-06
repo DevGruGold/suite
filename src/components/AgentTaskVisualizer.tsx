@@ -305,7 +305,8 @@ function StageColumn({
   onTaskClick
 }: StageColumnProps) {
   const Icon = stage.icon;
-  const stageTasks = tasks.filter(t => t.stage === stage.key);
+  // Fix: Make stage comparison case-insensitive to handle "planning" vs "PLAN" mismatch
+  const stageTasks = tasks.filter(t => (t.stage || '').toUpperCase() === stage.key);
   const isDragOver = dragOverStage === stage.key;
 
   // Determine direction indicator
