@@ -120,7 +120,7 @@ export const AgentHierarchy = () => {
                     <div className="mb-2 text-[10px] uppercase tracking-widest text-purple-500/70 font-bold flex items-center gap-1">
                         <Shield className="w-3 h-3" /> Core Command
                     </div>
-                    <div className="flex gap-4">
+                    <div className="flex gap-4 flex-wrap justify-center px-4">
                         {executives.map(agent => (
                             <AgentNode key={agent.id} agent={agent} styles={GROUPS.EXECUTIVE} />
                         ))}
@@ -133,7 +133,7 @@ export const AgentHierarchy = () => {
                 <div className="flex flex-col items-center z-10 shrink-0 w-full">
                     <div className="h-px w-3/4 max-w-[400px] bg-gradient-to-r from-transparent via-blue-500/30 to-transparent mb-3" />
 
-                    <div className="flex gap-2 flex-wrap justify-center max-w-[90%]">
+                    <div className="flex gap-2 flex-wrap justify-center w-full px-2">
                         {strategic.map(agent => (
                             <AgentNode key={agent.id} agent={agent} styles={GROUPS.STRATEGIC} compact />
                         ))}
@@ -146,7 +146,7 @@ export const AgentHierarchy = () => {
                 <div className="flex-1 w-full min-h-0 relative flex flex-col items-center">
                     <div className="h-px w-full max-w-[600px] bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent mb-3" />
 
-                    <div className="grid grid-cols-4 md:grid-cols-5 lg:grid-cols-6 gap-2 w-full max-w-5xl content-start justify-center overflow-hidden">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 lg:grid-cols-6 gap-1.5 md:gap-2 w-full max-w-5xl content-start justify-center overflow-hidden px-2">
                         {operations.map(agent => (
                             <AgentNode key={agent.id} agent={agent} styles={GROUPS.OPERATIONS} compact mini />
                         ))}
