@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { AnimatedCounter } from './AnimatedCounter';
 import { ActivityPulse } from './ActivityPulse';
 import { AgentHierarchy } from '@/components/AgentHierarchy';
+import { SystemStatusMonitor } from '@/components/SystemStatusMonitor';
 import { supabase } from '@/integrations/supabase/client';
 import { Zap, Bot, Activity, CheckCircle2, ChevronLeft, ChevronRight, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
