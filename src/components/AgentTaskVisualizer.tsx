@@ -808,7 +808,7 @@ export function AgentTaskVisualizer() {
     }
   };
 
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
 
   useEffect(() => {
     async function fetchData() {
@@ -817,12 +817,18 @@ export function AgentTaskVisualizer() {
 
       console.log('[AgentTaskVisualizer] Fetching data...');
 
+      let taskQuery = supabase
+        .from('tasks')
+        .select('id, title, stage, status, priority, category, assignee_agent_id, blocking_reason, updated_at, stage_started_at, auto_advance_threshold_hours, progress_percentage');
+
+      if (profile?.selected_organization_id) {
+        taskQuery = taskQuery.eq('organization_id', profile.selected_organization_id);
+      } else {
+        taskQuery = taskQuery.eq('created_by_user_id', user?.id).is('organization_id', null);
+      }
+
       const [tasksRes, agentsRes] = await Promise.all([
-        supabase
-          .from('tasks')
-          .select('id, title, stage, status, priority, category, assignee_agent_id, blocking_reason, updated_at, stage_started_at, auto_advance_threshold_hours, progress_percentage')
-          // Filter by current user
-          .eq('created_by_user_id', user?.id)
+        taskQuery
           .in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED'])
           .order('priority', { ascending: false })
           .limit(50),

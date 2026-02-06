@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { useAuth } from '@/contexts/AuthContext';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Workflow, User, Clock, CheckCircle2, AlertCircle, Circle, Sparkles } from 'lucide-react';
@@ -56,6 +57,7 @@ export const TaskVisualizer = () => {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [activities, setActivities] = useState<ElizaActivity[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const { user, profile } = useAuth();
 
   const fetchData = async () => {
     try {
@@ -78,9 +80,18 @@ export const TaskVisualizer = () => {
       }
 
       // Fetch tasks
-      const { data: tasksData, error: tasksError } = await supabase
+      // Fetch tasks - filtered by user/org
+      let taskQuery = supabase
         .from('tasks')
-        .select('*')
+        .select('*');
+
+      if (profile?.selected_organization_id) {
+        taskQuery = taskQuery.eq('organization_id', profile.selected_organization_id);
+      } else {
+        taskQuery = taskQuery.eq('created_by_user_id', user?.id).is('organization_id', null);
+      }
+
+      const { data: tasksData, error: tasksError } = await taskQuery
         .order('updated_at', { ascending: false })
         .limit(20);
 
@@ -99,7 +110,7 @@ export const TaskVisualizer = () => {
       const { data: agentsData, error: agentsError } = await supabase
         .from('agents')
         .select('*')
-        .order('created_at', { ascending: false});
+        .order('created_at', { ascending: false });
 
       if (!agentsError && agentsData) {
         // Remove duplicates by keeping only the latest entry for each agent ID
@@ -120,7 +131,7 @@ export const TaskVisualizer = () => {
 
   useEffect(() => {
     fetchData();
-    
+
     // Phase 1.1: Use centralized subscription manager to consolidate subscriptions
     const unsubscribers: Array<() => void> = [];
 
@@ -130,15 +141,15 @@ export const TaskVisualizer = () => {
       (payload) => {
         console.log('📋 New activity from Eliza:', payload);
         const newActivity = payload.new as ElizaActivity;
-        
+
         // Highlight auto-fix activities
-        if (newActivity.activity_type === 'python_fix_success' || 
-            newActivity.activity_type === 'agent_python_fix_success') {
+        if (newActivity.activity_type === 'python_fix_success' ||
+          newActivity.activity_type === 'agent_python_fix_success') {
           console.log('🔧 Auto-fix activity detected!', newActivity);
         } else if (newActivity.activity_type === 'code_monitoring') {
           console.log('🔍 Code monitoring activity:', newActivity);
         }
-        
+
         setActivities(prev => {
           if (prev.find(a => a.id === newActivity.id)) {
             return prev;
@@ -197,7 +208,7 @@ export const TaskVisualizer = () => {
       (payload) => {
         console.log('📋 Task updated:', payload);
         const updatedTask = payload.new as Task;
-        setTasks(prev => 
+        setTasks(prev =>
           prev.map(t => t.id === updatedTask.id ? updatedTask : t)
         );
       },
@@ -248,7 +259,7 @@ export const TaskVisualizer = () => {
       (payload) => {
         console.log('🤖 Agent updated:', payload);
         const updatedAgent = payload.new as Agent;
-        setAgents(prev => 
+        setAgents(prev =>
           prev.map(a => a.id === updatedAgent.id ? updatedAgent : a)
         );
       },
@@ -272,7 +283,7 @@ export const TaskVisualizer = () => {
       }
     );
     unsubscribers.push(agentDeleteUnsub);
-    
+
     return () => {
       unsubscribers.forEach(unsub => unsub());
     };
@@ -348,7 +359,7 @@ export const TaskVisualizer = () => {
                     className="p-2 rounded-md bg-card/50 border border-border flex items-start gap-2 text-sm"
                   >
                     <span className="text-lg">{getActivityIcon(activity.activity_type)}</span>
-                     <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0">
                       <div className="font-medium">{activity.title}</div>
                       {activity.description && (
                         <div className="text-xs text-muted-foreground truncate">{activity.description}</div>
@@ -364,14 +375,14 @@ export const TaskVisualizer = () => {
                         {formatTimestamp(activity.created_at)}
                       </div>
                     </div>
-                     <Badge
+                    <Badge
                       variant={
-                        activity.activity_type === 'python_fix_success' || activity.activity_type === 'agent_python_fix_success' 
+                        activity.activity_type === 'python_fix_success' || activity.activity_type === 'agent_python_fix_success'
                           ? 'default'
-                          : activity.status === 'completed' 
-                            ? 'default' 
-                            : activity.status === 'failed' 
-                              ? 'destructive' 
+                          : activity.status === 'completed'
+                            ? 'default'
+                            : activity.status === 'failed'
+                              ? 'destructive'
                               : 'secondary'
                       }
                       className={
@@ -406,8 +417,8 @@ export const TaskVisualizer = () => {
                   agent.status === 'BUSY'
                     ? 'bg-green-500/20 border-green-500 text-green-700 dark:text-green-300'
                     : agent.status === 'IDLE'
-                    ? 'border-primary/50'
-                    : 'opacity-50'
+                      ? 'border-primary/50'
+                      : 'opacity-50'
                 }
               >
                 {agent.name}
@@ -454,7 +465,7 @@ export const TaskVisualizer = () => {
                         </Badge>
                       </div>
                     </div>
-                    
+
                     <p className="text-sm text-muted-foreground mb-3">
                       {task.description}
                     </p>
@@ -475,9 +486,9 @@ export const TaskVisualizer = () => {
                       <div
                         className={`h-full ${statusColor} transition-all duration-500`}
                         style={{
-                          width: task.status === 'COMPLETED' ? '100%' : 
-                                 task.status === 'IN_PROGRESS' ? '60%' :
-                                 task.status === 'FAILED' ? '100%' : '20%'
+                          width: task.status === 'COMPLETED' ? '100%' :
+                            task.status === 'IN_PROGRESS' ? '60%' :
+                              task.status === 'FAILED' ? '100%' : '20%'
                         }}
                       />
                     </div>

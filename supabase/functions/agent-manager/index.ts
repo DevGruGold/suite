@@ -59,8 +59,8 @@ function errorResponse(message: string, status = 400) {
 }
 
 // ---------- Error Classes ----------
-class ValidationError extends Error {}
-class AppError extends Error {}
+class ValidationError extends Error { }
+class AppError extends Error { }
 
 // ---------- Helper: Normalize category to valid enum ----------
 function normalizeCategory(cat?: string): string {
@@ -115,7 +115,7 @@ async function callAIWithResilience(prompt: string, opts?: { temperature?: numbe
         preferProvider: 'deepseek' // Keep DeepSeek preference for CTO consistency
       }
     );
-    
+
     const text = typeof result === 'string' ? result : result?.content || '';
     return { text, raw: result };
   } catch (error) {
@@ -346,12 +346,12 @@ serve(async (req) => {
       case "update_agent_status": {
         const { agent_id, status } = data ?? {};
         if (!agent_id || !status) throw new ValidationError("update_agent_status requires agent_id and status");
-        
+
         // Validate status
         if (!(VALID_AGENT_STATUSES as readonly string[]).includes(String(status).toUpperCase())) {
           throw new ValidationError(`Invalid status "${status}". Must be one of: ${VALID_AGENT_STATUSES.join(", ")}`);
         }
-        
+
         const updateResp = await supabase.from("agents").update({ status }).eq("id", agent_id).select().single();
         if (updateResp.error) throw new AppError(updateResp.error.message);
         result = updateResp.data;
@@ -369,12 +369,12 @@ serve(async (req) => {
         }
 
         const { auto_assign = false } = taskData;
-        
+
         // Adjust required fields based on auto_assign
-        const requiredFields = auto_assign 
+        const requiredFields = auto_assign
           ? ["title", "description", "category"]  // No agent required for auto-assign
           : ["title", "description", "category", "assignee_agent_id"];
-          
+
         for (const f of requiredFields) {
           if (!taskData[f]) {
             throw new ValidationError(
@@ -387,7 +387,7 @@ serve(async (req) => {
 
         // Handle auto-assignment if requested
         let assignedAgentId = taskData.assignee_agent_id;
-        
+
         if (auto_assign && !assignedAgentId) {
           // Find best available agent using weighted scoring (least workload first)
           const { data: availableAgents, error: agentError } = await supabase
@@ -452,6 +452,7 @@ serve(async (req) => {
           status: "PENDING",
           priority: taskData.priority ?? 5,
           assignee_agent_id: assignedAgentId,
+          created_by_user_id: body.user_id || body.context?.user_id || null, // Capture user_id from request or context
           metadata: {
             auto_assigned: auto_assign,
             ...(taskData.metadata || {}),
@@ -470,7 +471,7 @@ serve(async (req) => {
         // update agent to BUSY and increment workload
         await supabase
           .from("agents")
-          .update({ 
+          .update({
             status: "BUSY",
             current_workload: supabase.rpc ? undefined : undefined // Note: workload tracked by triggers
           })
@@ -541,24 +542,24 @@ serve(async (req) => {
         const oldStatus = task?.status;
 
         // Build update payload
-        const updatePayload: any = { 
-          status, 
+        const updatePayload: any = {
+          status,
           updated_at: new Date().toISOString(),
-          ...(completion_data ?? {}) 
+          ...(completion_data ?? {})
         };
-        
+
         // If completing, set progress to 100% and mark all checklist items complete
         const completionStatuses = ["COMPLETED", "DONE"];
         if (completionStatuses.includes(status.toUpperCase())) {
           updatePayload.progress_percentage = 100;
           updatePayload.completed_at = new Date().toISOString();
-          
+
           // Mark all checklist items as completed
           const checklist = task?.metadata?.checklist || [];
           if (checklist.length > 0) {
             updatePayload.completed_checklist_items = checklist;
           }
-          
+
           if (resolution_notes) {
             updatePayload.resolution_notes = resolution_notes;
           }
@@ -569,7 +570,7 @@ serve(async (req) => {
           const existing = task?.completed_checklist_items || [];
           const merged = [...new Set([...existing, ...items_completed])];
           updatePayload.completed_checklist_items = merged;
-          
+
           const checklist = task?.metadata?.checklist || [];
           if (checklist.length > 0) {
             updatePayload.progress_percentage = Math.round((merged.length / checklist.length) * 100);
@@ -613,7 +614,7 @@ serve(async (req) => {
       case "report_progress": {
         const { agent_id, task_id, progress, notes, items_completed = [], work_summary } = data ?? {};
         if (!agent_id || !task_id) throw new ValidationError("report_progress requires agent_id and task_id");
-        
+
         // Log agent activity
         const inserted = await supabase.from("agent_activities").insert({
           agent_id,
@@ -635,7 +636,7 @@ serve(async (req) => {
                 progress_note: notes
               }
             });
-            
+
             if (staeResponse.success) {
               console.info("[agent-manager] report_progress updated task via STAE:", staeResponse);
             }
@@ -646,12 +647,12 @@ serve(async (req) => {
 
         // Also update the task's progress_percentage if numeric progress provided
         if (typeof progress === 'number' && progress >= 0 && progress <= 100) {
-          await supabase.from("tasks").update({ 
+          await supabase.from("tasks").update({
             progress_percentage: progress,
             updated_at: new Date().toISOString()
           }).eq("id", task_id);
         }
-        
+
         result = { ...inserted.data, task_updated: true };
         break;
       }
@@ -753,12 +754,12 @@ serve(async (req) => {
       case "update_agent_role": {
         const { agent_id, role } = data ?? {};
         if (!agent_id || !role) throw new ValidationError("update_agent_role requires agent_id and role");
-        
+
         // Validate role
         if (!(VALID_AGENT_ROLES as readonly string[]).includes(String(role).toLowerCase())) {
           throw new ValidationError(`Invalid role "${role}". Must be one of: ${VALID_AGENT_ROLES.join(", ")}`);
         }
-        
+
         const updated = await supabase.from("agents").update({ role: role.toLowerCase() }).eq("id", agent_id).select().single();
         if (updated.error) throw new AppError(updated.error.message);
         result = { success: true, agent: updated.data };
@@ -798,11 +799,11 @@ serve(async (req) => {
       case "update_task": {
         const { task_id, updates } = data ?? {};
         if (!task_id || !updates) throw new ValidationError("update_task requires task_id and updates");
-        
+
         // Normalize category and stage if present
         if (updates.category) updates.category = normalizeCategory(updates.category);
         if (updates.stage) updates.stage = normalizeStage(updates.stage);
-        
+
         const updated = await supabase.from("tasks").update(updates).eq("id", task_id).select().single();
         if (updated.error) throw new AppError(updated.error.message);
         result = { success: true, task: updated.data };
@@ -833,11 +834,11 @@ serve(async (req) => {
       case "bulk_update_tasks": {
         const { task_ids, updates } = data ?? {};
         if (!Array.isArray(task_ids) || !updates) throw new ValidationError("bulk_update_tasks requires task_ids array and updates");
-        
+
         // Normalize category and stage if present
         if (updates.category) updates.category = normalizeCategory(updates.category);
         if (updates.stage) updates.stage = normalizeStage(updates.stage);
-        
+
         const q = await supabase.from("tasks").update(updates).in("id", task_ids).select();
         if (q.error) throw new AppError(q.error.message);
         result = { success: true, updated_count: q.data?.length ?? 0, tasks: q.data ?? [] };
