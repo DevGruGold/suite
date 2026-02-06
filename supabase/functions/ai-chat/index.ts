@@ -4659,20 +4659,32 @@ Deno.serve(async (req) => {
     // ========== END TIERED ACCESS LOGIC ==========
 
     if (req.method === 'GET') {
-      const { count: toolCount } = await supabase
-        .from(DATABASE_CONFIG.tables.ai_tools)
-        .select('*', { count: 'exact', head: true })
-        .eq('is_active', true);
+      let toolCount = 0;
+      let agentCount = 0;
+      let summaryCount = 0;
+      let activeSessions = 0;
 
-      const { count: agentCount } = await supabase
-        .from(DATABASE_CONFIG.tables.agents)
-        .select('*', { count: 'exact', head: true });
+      try {
+        const toolCountRes = await supabase
+          .from(DATABASE_CONFIG.tables.ai_tools)
+          .select('*', { count: 'exact', head: true })
+          .eq('is_active', true);
+        toolCount = toolCountRes.count || 0;
 
-      const { count: summaryCount } = await supabase
-        .from(DATABASE_CONFIG.tables.conversation_summaries)
-        .select('*', { count: 'exact', head: true });
+        const agentCountRes = await supabase
+          .from(DATABASE_CONFIG.tables.agents)
+          .select('*', { count: 'exact', head: true });
+        agentCount = agentCountRes.count || 0;
 
-      const activeSessions = await IPSessionManager.getActiveSessionsCount();
+        const summaryCountRes = await supabase
+          .from(DATABASE_CONFIG.tables.conversation_summaries)
+          .select('*', { count: 'exact', head: true });
+        summaryCount = summaryCountRes.count || 0;
+
+        activeSessions = await IPSessionManager.getActiveSessionsCount();
+      } catch (err) {
+        console.error('Error fetching system stats:', err);
+      }
 
       return new Response(
         JSON.stringify({
