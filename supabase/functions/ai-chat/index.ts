@@ -63,7 +63,6 @@ const DATABASE_CONFIG = {
   taskStatuses: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'] as const,
   taskStages: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'] as const,
   taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const
-  taskCategories: ['code', 'infra', 'research', 'governance', 'mining', 'device', 'ops', 'other'] as const
 };
 
 // ========== AGENT DELEGATION MAP ==========
@@ -4557,9 +4556,109 @@ Deno.serve(async (req) => {
       return new Response(null, { headers: corsHeaders });
     }
 
-    if (req.method === 'GET') {
-      clearTimeout(timeoutId);
 
+    // ========== USER IDENTIFICATION & TIERED ACCESS ==========
+
+    // Get User ID from JWT (if authenticated)
+    const authHeader = req.headers.get('Authorization');
+    let userId = null;
+    let userRole = 'user'; // Default to free user
+    let userEmail = 'unknown';
+
+    if (authHeader) {
+      try {
+        const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
+        if (user && !userError) {
+          userId = user.id;
+          userEmail = user.email || 'unknown';
+
+          // Fetch User Profile for Role and Selected Org
+          const { data: profile } = await supabase
+            .from('profiles')
+            .select('role, selected_organization_id')
+            .eq('id', userId)
+            .single();
+
+          if (profile) {
+            if (profile.role) userRole = profile.role;
+
+            // Handle Organization Context
+            if (profile.selected_organization_id) {
+              const { data: org } = await supabase
+                .from('organizations')
+                .select('*')
+                .eq('id', profile.selected_organization_id)
+                .single();
+
+              if (org) {
+                console.log(`🏢 Organization Context: ${org.name} (${org.id})`);
+
+                // Inject Organization GitHub Repo
+                if (org.github_repo) {
+                  AI_PROVIDERS_CONFIG.github = { ...AI_PROVIDERS_CONFIG.github, defaultRepo: org.github_repo };
+                }
+
+                // We also capture org details to inject later into the request config
+              }
+            }
+          }
+
+          // Check hardcoded superadmins
+          if (userEmail === 'xmrtsolutions@gmail.com' || userEmail === 'xmrtnet@gmail.com') {
+            userRole = 'superadmin';
+          }
+        }
+      } catch (e) {
+        console.warn('⚠️ Auth check failed, proceeding as anonymous/free user');
+      }
+    }
+
+    console.log(`👤 User: ${userEmail} (${userId}) | Role: ${userRole}`);
+
+    // Filter Tools based on Role
+    const availableTools = ToolManager.getAvailableTools(userRole);
+    console.log(`🛠️ Available Tools for ${userRole}: ${availableTools.length}`);
+
+    // Fetch and Apply BYOK Keys (scoping to Org if selected)
+    const requestConfig = JSON.parse(JSON.stringify(AI_PROVIDERS_CONFIG)); // Deep copy
+
+    let selectedOrgId = null;
+    if (userId) {
+      const { data: p } = await supabase.from('profiles').select('selected_organization_id').eq('id', userId).single();
+      selectedOrgId = p?.selected_organization_id;
+    }
+
+    const userKeys = await ToolManager.getUserApiKeys(userId || '', selectedOrgId);
+
+    if (Object.keys(userKeys).length > 0) {
+      console.log(`🔑 Found user keys for: ${Object.keys(userKeys).join(', ')} (Org: ${selectedOrgId || 'Personal'})`);
+      ToolManager.applyUserKeys(requestConfig, userKeys);
+    }
+
+    // Inject extra Org context into requestConfig
+    if (selectedOrgId) {
+      const { data: org } = await supabase
+        .from('organizations')
+        .select('github_repo, email, typefully_set')
+        .eq('id', selectedOrgId)
+        .single();
+
+      if (org) {
+        if (org.github_repo) {
+          requestConfig.github = { ...requestConfig.github, defaultRepo: org.github_repo };
+          console.log(`📂 Using Org GitHub Repo: ${org.github_repo}`);
+        }
+        if (org.email) {
+          requestConfig.email = org.email;
+        }
+        if (org.typefully_set) {
+          requestConfig.typefully = { ...requestConfig.typefully, defaultSet: org.typefully_set };
+        }
+      }
+    }
+    // ========== END TIERED ACCESS LOGIC ==========
+
+    if (req.method === 'GET') {
       const { count: toolCount } = await supabase
         .from(DATABASE_CONFIG.tables.ai_tools)
         .select('*', { count: 'exact', head: true })
@@ -4568,107 +4667,6 @@ Deno.serve(async (req) => {
       const { count: agentCount } = await supabase
         .from(DATABASE_CONFIG.tables.agents)
         .select('*', { count: 'exact', head: true });
-
-      // ========== USER IDENTIFICATION & TIERED ACCESS ==========
-
-      // Get User ID from JWT (if authenticated)
-      const authHeader = req.headers.get('Authorization');
-      let userId = null;
-      let userRole = 'user'; // Default to free user
-      let userEmail = 'unknown';
-
-      if (authHeader) {
-        try {
-          const { data: { user }, error: userError } = await supabase.auth.getUser(authHeader.replace('Bearer ', ''));
-          if (user && !userError) {
-            userId = user.id;
-            userEmail = user.email || 'unknown';
-
-            // Fetch User Profile for Role and Selected Org
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('role, selected_organization_id')
-              .eq('id', userId)
-              .single();
-
-            if (profile) {
-              if (profile.role) userRole = profile.role;
-
-              // Handle Organization Context
-              if (profile.selected_organization_id) {
-                const { data: org } = await supabase
-                  .from('organizations')
-                  .select('*')
-                  .eq('id', profile.selected_organization_id)
-                  .single();
-
-                if (org) {
-                  console.log(`🏢 Organization Context: ${org.name} (${org.id})`);
-
-                  // Inject Organization GitHub Repo
-                  if (org.github_repo) {
-                    AI_PROVIDERS_CONFIG.github = { ...AI_PROVIDERS_CONFIG.github, defaultRepo: org.github_repo };
-                  }
-
-                  // We also capture org details to inject later into the request config
-                }
-              }
-            }
-
-            // Check hardcoded superadmins
-            if (userEmail === 'xmrtsolutions@gmail.com' || userEmail === 'xmrtnet@gmail.com') {
-              userRole = 'superadmin';
-            }
-          }
-        } catch (e) {
-          console.warn('⚠️ Auth check failed, proceeding as anonymous/free user');
-        }
-      }
-
-      console.log(`👤 User: ${userEmail} (${userId}) | Role: ${userRole}`);
-
-      // Filter Tools based on Role
-      const availableTools = ToolManager.getAvailableTools(userRole);
-      console.log(`🛠️ Available Tools for ${userRole}: ${availableTools.length}`);
-
-      // Fetch and Apply BYOK Keys (scoping to Org if selected)
-      const requestConfig = JSON.parse(JSON.stringify(AI_PROVIDERS_CONFIG)); // Deep copy
-
-      let selectedOrgId = null;
-      if (userId) {
-        const { data: p } = await supabase.from('profiles').select('selected_organization_id').eq('id', userId).single();
-        selectedOrgId = p?.selected_organization_id;
-      }
-
-      const userKeys = await ToolManager.getUserApiKeys(userId || '', selectedOrgId);
-
-      if (Object.keys(userKeys).length > 0) {
-        console.log(`🔑 Found user keys for: ${Object.keys(userKeys).join(', ')} (Org: ${selectedOrgId || 'Personal'})`);
-        ToolManager.applyUserKeys(requestConfig, userKeys);
-      }
-
-      // Inject extra Org context into requestConfig
-      if (selectedOrgId) {
-        const { data: org } = await supabase
-          .from('organizations')
-          .select('github_repo, email, typefully_set')
-          .eq('id', selectedOrgId)
-          .single();
-
-        if (org) {
-          if (org.github_repo) {
-            requestConfig.github = { ...requestConfig.github, defaultRepo: org.github_repo };
-            console.log(`📂 Using Org GitHub Repo: ${org.github_repo}`);
-          }
-          if (org.email) {
-            requestConfig.email = org.email;
-          }
-          if (org.typefully_set) {
-            requestConfig.typefully = { ...requestConfig.typefully, defaultSet: org.typefully_set };
-          }
-        }
-      }
-      // ========== END TIERED ACCESS LOGIC ==========
 
       const { count: summaryCount } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_summaries)
