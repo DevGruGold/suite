@@ -68,8 +68,8 @@ export const AgentHierarchy = () => {
                 return ['chief', 'president', 'executive', 'head of', 'vp'].some(t => name.includes(t)) ||
                     ['director'].some(t => role.includes(t));
             },
-            color: "border-purple-500/50 bg-purple-500/10 shadow-[0_0_15px_-3px_rgba(168,85,247,0.2)]",
-            text: "text-purple-300",
+            color: "border-purple-500/50 bg-purple-100/50 dark:bg-purple-500/10 shadow-[0_0_15px_-3px_rgba(168,85,247,0.2)]",
+            text: "text-purple-700 dark:text-purple-300",
             icon: Shield
         },
         STRATEGIC: {
@@ -81,15 +81,15 @@ export const AgentHierarchy = () => {
                 return ['manager', 'analyst', 'integrator', 'architect'].some(r => role.includes(r)) ||
                     ['gemmy', 'michael', 'aetherion', 'hephaestus', 'hermes'].some(n => name.includes(n));
             },
-            color: "border-blue-500/40 bg-blue-500/10",
-            text: "text-blue-300",
+            color: "border-blue-500/40 bg-blue-100/50 dark:bg-blue-500/10",
+            text: "text-blue-700 dark:text-blue-300",
             icon: Network
         },
         OPERATIONS: {
             title: "Operations Field",
             match: (a: Agent) => true,
-            color: "border-emerald-500/30 bg-emerald-500/5",
-            text: "text-emerald-300",
+            color: "border-emerald-500/30 bg-emerald-100/50 dark:bg-emerald-500/5",
+            text: "text-emerald-700 dark:text-emerald-300",
             icon: Cpu
         }
     };
@@ -99,9 +99,10 @@ export const AgentHierarchy = () => {
     const operations = agents.filter(a => !GROUPS.EXECUTIVE.match(a) && !GROUPS.STRATEGIC.match(a));
 
     return (
-        <div className="w-full h-full flex flex-col border rounded-xl bg-slate-950/80 backdrop-blur-sm overflow-hidden relative">
+    return (
+        <div className="w-full h-full flex flex-col border rounded-xl bg-card border-border overflow-hidden relative shadow-sm">
             {/* Header */}
-            <div className="px-3 py-2 border-b border-white/5 flex items-center justify-between bg-white/5 shrink-0 z-10">
+            <div className="px-3 py-2 border-b border-border flex items-center justify-between bg-muted/20 shrink-0 z-10">
                 <h3 className="text-xs font-semibold flex items-center gap-1.5 text-muted-foreground">
                     <Users className="w-3.5 h-3.5" />
                     Agent Neural Network
@@ -154,7 +155,7 @@ export const AgentHierarchy = () => {
                 </div>
 
                 {/* Background Grid Effect */}
-                <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
+                <div className="absolute inset-0 bg-[linear-gradient(rgba(0,0,0,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(0,0,0,0.02)_1px,transparent_1px)] dark:bg-[linear-gradient(rgba(255,255,255,0.02)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.02)_1px,transparent_1px)] bg-[size:32px_32px] pointer-events-none" />
             </div>
         </div>
     );
@@ -193,7 +194,7 @@ const AgentNode = ({ agent, styles, compact = false, mini = false }: { agent: Ag
 
                 <div className="flex flex-col min-w-0">
                     <h4 className={cn(
-                        "font-bold truncate tracking-tight text-white/90",
+                        "font-bold truncate tracking-tight text-foreground",
                         mini ? "text-[10px]" : compact ? "text-[11px]" : "text-xs mb-0.5"
                     )} title={agent.name}>
                         {displayName}
