@@ -170,13 +170,16 @@ const AgentNode = ({ agent, styles, compact = false, mini = false }: { agent: Ag
         }
     };
 
+    // Parse name to remove descriptions (anything after " - " or long text)
+    const displayName = agent.name.split(' - ')[0];
+
     return (
         <div className={cn(
             "relative group transition-all duration-300 hover:scale-105 hover:z-20 cursor-default",
             "border backdrop-blur-md",
             styles.color,
             compact ? "rounded-lg" : "rounded-xl",
-            mini ? "px-1.5 py-1" : compact ? "px-2.5 py-1.5" : "px-4 py-2.5 min-w-[140px]"
+            mini ? "px-1.5 py-1 max-w-[110px]" : compact ? "px-2.5 py-1.5 max-w-[150px]" : "px-4 py-2.5 min-w-[140px] max-w-[200px]"
         )}>
             {/* Connecting Lines for Tree Effect (Pseudo-visuals only for nodes) */}
 
@@ -192,8 +195,8 @@ const AgentNode = ({ agent, styles, compact = false, mini = false }: { agent: Ag
                     <h4 className={cn(
                         "font-bold truncate tracking-tight text-white/90",
                         mini ? "text-[10px]" : compact ? "text-[11px]" : "text-xs mb-0.5"
-                    )}>
-                        {agent.name}
+                    )} title={agent.name}>
+                        {displayName}
                     </h4>
                     {!mini && (
                         <p className={cn(
