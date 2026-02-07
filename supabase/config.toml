@@ -72,6 +72,18 @@ verify_jwt = false
 [functions.github-integration]
 verify_jwt = false
 
+[functions.task-orchestrator]
+verify_jwt = false
+
+[functions.task-auto-advance]
+verify_jwt = false
+
+[functions.android-control]
+verify_jwt = false
+
+[functions.opportunity-scanner]
+verify_jwt = false
+
 [api]
 enabled = true
 port = 54321
@@ -114,3 +126,427 @@ enable_signup = true
 enable_signup = true
 double_confirm_changes = true
 enable_confirmations = false
+
+[functions.agent-coordination-hub]
+verify_jwt = false
+
+[functions.agent-manager]
+verify_jwt = false
+
+[functions.aggregate-device-metrics]
+verify_jwt = false
+
+[functions.api-key-health-monitor]
+verify_jwt = false
+
+[functions.auth-health-monitor]
+verify_jwt = false
+
+[functions.autonomous-code-fixer]
+verify_jwt = false
+
+[functions.autonomous-decision-maker]
+verify_jwt = false
+
+[functions.broadcast-state-change]
+verify_jwt = false
+
+[functions.check-frontend-health]
+verify_jwt = false
+
+[functions.cleanup-duplicate-tasks]
+verify_jwt = false
+
+[functions.code-monitor-daemon]
+verify_jwt = false
+
+[functions.community-spotlight-post]
+verify_jwt = false
+
+[functions.conversation-access]
+verify_jwt = false
+
+[functions.convert-session-to-user]
+verify_jwt = false
+
+[functions.correlate-user-identity]
+verify_jwt = false
+
+[functions.create-suite-quote]
+verify_jwt = false
+
+[functions.daily-discussion-post]
+verify_jwt = false
+
+[functions.daily-news-finder]
+verify_jwt = false
+
+[functions.debug-analytics-data-flow]
+verify_jwt = false
+
+[functions.diagnose-workflow-failure]
+verify_jwt = false
+
+[functions.ecosystem-health-check]
+verify_jwt = false
+
+[functions.ecosystem-monitor]
+verify_jwt = false
+
+[functions.eliza-intelligence-coordinator]
+verify_jwt = false
+
+[functions.eliza-python-runtime]
+verify_jwt = false
+
+[functions.enhanced-learning]
+verify_jwt = false
+
+[functions.evaluate-community-idea]
+verify_jwt = false
+
+[functions.evening-summary-post]
+verify_jwt = false
+
+[functions.event-dispatcher]
+verify_jwt = false
+
+[functions.event-router]
+verify_jwt = false
+
+[functions.execute-scheduled-actions]
+verify_jwt = false
+
+[functions.fetch-auto-fix-results]
+verify_jwt = false
+
+[functions.function-usage-analytics]
+verify_jwt = false
+
+[functions.gemini-computer-use]
+verify_jwt = false
+
+[functions.generate-stripe-link]
+verify_jwt = false
+
+[functions.get-code-execution-lessons]
+verify_jwt = false
+
+[functions.get-cron-registry]
+verify_jwt = false
+
+[functions.get-edge-function-logs]
+verify_jwt = false
+
+[functions.get-embedding]
+verify_jwt = false
+
+[functions.get-function-actions]
+verify_jwt = false
+
+[functions.get-function-version-analytics]
+verify_jwt = false
+
+[functions.get-global-state]
+verify_jwt = false
+
+[functions.get-lovable-key]
+verify_jwt = false
+
+[functions.github-issue-scanner]
+verify_jwt = false
+
+[functions.google-calendar]
+verify_jwt = false
+
+[functions.google-cloud-auth]
+verify_jwt = false
+
+[functions.google-drive]
+verify_jwt = false
+
+[functions.google-gmail]
+verify_jwt = false
+
+[functions.google-oauth-handler]
+verify_jwt = false
+
+[functions.google-sheets]
+verify_jwt = false
+
+[functions.hume-access-token]
+verify_jwt = false
+
+[functions.hume-expression-measurement]
+verify_jwt = false
+
+[functions.hume-tts]
+verify_jwt = false
+
+[functions.identify-service-interest]
+verify_jwt = false
+
+[functions.ingest-github-contribution]
+verify_jwt = false
+
+[functions.issue-engagement-command]
+verify_jwt = false
+
+[functions.kimi-chat]
+verify_jwt = false
+
+[functions.knowledge-manager]
+verify_jwt = false
+
+[functions.list-available-functions]
+verify_jwt = false
+
+[functions.list-function-proposals]
+verify_jwt = false
+
+[functions.mining-proxy]
+verify_jwt = false
+
+[functions.mobile-miner-config]
+verify_jwt = false
+
+[functions.mobile-miner-register]
+verify_jwt = false
+
+[functions.mobile-miner-script]
+verify_jwt = false
+
+[functions.monitor-device-connections]
+verify_jwt = false
+
+[functions.morning-discussion-post]
+verify_jwt = false
+
+[functions.multi-step-orchestrator]
+verify_jwt = false
+
+[functions.nlg-generator]
+verify_jwt = false
+
+[functions.openai-tts]
+verify_jwt = false
+
+[functions.paragraph-publisher]
+verify_jwt = false
+
+[functions.playwright-browse]
+verify_jwt = false
+
+[functions.predictive-analytics]
+verify_jwt = false
+
+[functions.process-contributor-reward]
+verify_jwt = false
+
+[functions.process-license-application]
+verify_jwt = false
+
+[functions.progress-update-post]
+verify_jwt = false
+
+[functions.prometheus-metrics]
+verify_jwt = false
+
+[functions.propose-new-edge-function]
+verify_jwt = false
+
+[functions.python-db-bridge]
+verify_jwt = false
+
+[functions.python-executor]
+verify_jwt = false
+
+[functions.python-network-proxy]
+verify_jwt = false
+
+[functions.qualify-lead]
+verify_jwt = false
+
+[functions.query-edge-analytics]
+verify_jwt = false
+
+[functions.redis-cache]
+verify_jwt = false
+
+[functions.render-api]
+verify_jwt = false
+
+[functions.schedule-reminder]
+verify_jwt = false
+
+[functions.schema-manager]
+verify_jwt = false
+
+[functions.search-edge-functions]
+verify_jwt = false
+
+[functions.self-optimizing-agent-architecture]
+verify_jwt = false
+
+[functions.service-monetization-engine]
+verify_jwt = false
+
+[functions.share-latest-news]
+verify_jwt = false
+
+[functions.stripe-payment-webhook]
+verify_jwt = false
+
+[functions.summarize-conversation]
+verify_jwt = false
+
+[functions.superduper-business-growth]
+verify_jwt = false
+
+[functions.superduper-code-architect]
+verify_jwt = false
+
+[functions.superduper-communication-outreach]
+verify_jwt = false
+
+[functions.superduper-content-media]
+verify_jwt = false
+
+[functions.superduper-design-brand]
+verify_jwt = false
+
+[functions.superduper-development-coach]
+verify_jwt = false
+
+[functions.superduper-domain-experts]
+verify_jwt = false
+
+[functions.superduper-finance-investment]
+verify_jwt = false
+
+[functions.superduper-integration]
+verify_jwt = false
+
+[functions.superduper-research-intelligence]
+verify_jwt = false
+
+[functions.superduper-router]
+verify_jwt = false
+
+[functions.superduper-social-viral]
+verify_jwt = false
+
+[functions.supportxmr-proxy]
+verify_jwt = false
+
+[functions.sync-dashboard-data]
+verify_jwt = false
+
+[functions.sync-function-logs]
+verify_jwt = false
+
+[functions.sync-github-contributions]
+verify_jwt = false
+
+[functions.system-diagnostics]
+verify_jwt = false
+
+[functions.system-health]
+verify_jwt = false
+
+[functions.system-knowledge-builder]
+verify_jwt = false
+
+[functions.system-status]
+verify_jwt = false
+
+[functions.template-library-manager]
+verify_jwt = false
+
+[functions.text-to-speech]
+verify_jwt = false
+
+[functions.thegraph-query]
+verify_jwt = false
+
+[functions.toggle-cron-jobs]
+verify_jwt = false
+
+[functions.typefully-integration]
+verify_jwt = false
+
+[functions.universal-edge-invoker]
+verify_jwt = false
+
+[functions.universal-file-processor]
+verify_jwt = false
+
+[functions.update-api-key]
+verify_jwt = false
+
+[functions.update-payout-wallet]
+verify_jwt = false
+
+[functions.usage-monitor]
+verify_jwt = false
+
+[functions.uspto-patent-mcp]
+verify_jwt = false
+
+[functions.validate-cross-repo-data]
+verify_jwt = false
+
+[functions.validate-github-contribution]
+verify_jwt = false
+
+[functions.validate-pop-event]
+verify_jwt = false
+
+[functions.vectorize-memory]
+verify_jwt = false
+
+[functions.vercel-ai-chat-stream]
+verify_jwt = false
+
+[functions.vercel-ecosystem-api]
+verify_jwt = false
+
+[functions.vercel-manager]
+verify_jwt = false
+
+[functions.vertex-ai-chat]
+verify_jwt = false
+
+[functions.vertex-ai-image-gen]
+verify_jwt = false
+
+[functions.vote-on-proposal]
+verify_jwt = false
+
+[functions.wan-ai-chat]
+verify_jwt = false
+
+[functions.weekly-retrospective-post]
+verify_jwt = false
+
+[functions.worker-registration]
+verify_jwt = false
+
+[functions.workflow-template-manager]
+verify_jwt = false
+
+[functions.x-twitter-monitor]
+verify_jwt = false
+
+[functions.xmrig-direct-proxy]
+verify_jwt = false
+
+[functions.xmrt-integration]
+verify_jwt = false
+
+[functions.xmrt-mcp-server]
+verify_jwt = false
+
+[functions.xmrt-workflow-templates]
+verify_jwt = false
+

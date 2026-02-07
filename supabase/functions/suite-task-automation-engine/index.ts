@@ -1,41 +1,16 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-interface TaskTemplate {
-  id: string;
-  category: string;
-  template_name: string;
-  description_template: string;
-  default_stage: string;
-  default_priority: number;
-  required_skills: string[];
-  checklist: string[];
-  auto_advance_threshold_hours: number;
-  estimated_duration_hours: number | null;
-}
-
-interface Agent {
-  id: string;
-  name: string;
-  status: string;
-  skills: string[];
-  current_workload: number;
-  max_concurrent_tasks: number;
-}
+// ... interfaces ...
 
 /**
  * Suite Task Automation Engine (STAE)
- * Provides 90% automation of the task lifecycle through:
- * - Task template-based creation
- * - Intelligent skill-based agent matching
- * - Automated quality verification
- * - Knowledge extraction from completed tasks
- * - Comprehensive automation metrics
  */
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -43,7 +18,8 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
-  const usageTracker = (action: string) => console.log(`🚀 [STAE] Action: ${action}`);
+  // Use real usage tracker properly (it's an object, not a function)
+  const usageTracker = startUsageTracking('suite-task-automation-engine', undefined, { method: req.method });
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -55,7 +31,10 @@ serve(async (req) => {
     const body = await req.json();
     const { action, data = {} } = body;
 
-    usageTracker(action);
+    // usageTracker.setExecutionSource(detectExecutionSource(req, body)); // Optional: if we want to be precise about source
+
+    // Log action to console for debug, but don't call usageTracker as function
+    console.log(`🚀 [STAE] Request action: ${action}`);
 
     // --- REUSABLE CORE LOGIC ---
 
@@ -526,15 +505,28 @@ serve(async (req) => {
       }
 
       default:
-        throw new Error(`Unknown action: ${action}. Available: run_all, create_from_template, smart_assign, verify_completion, extract_knowledge, get_metrics, list_templates, checklist_based_advance, auto_resolve_blockers, update_checklist_item, get_checklist_progress, escalate_stalled_task, update_template_performance, get_optimization_recommendations, create_knowledge_relationships, advance_task_stage`);
+        // Return 400 Bad Request for unknown actions instead of 500
+        console.warn(`⚠️ [STAE] Unknown action: ${action}`);
+        await usageTracker.failure(`Unknown action: ${action}`, 400); // Log failure
+        return new Response(JSON.stringify({
+          success: false,
+          error: `Unknown action: ${action}`,
+          available_actions: ['run_all', 'create_from_template', 'smart_assign', 'verify_completion', 'extract_knowledge', 'get_metrics', 'list_templates', 'checklist_based_advance', 'auto_resolve_blockers', 'update_checklist_item', 'get_checklist_progress', 'escalate_stalled_task', 'update_template_performance', 'get_optimization_recommendations', 'create_knowledge_relationships', 'advance_task_stage']
+        }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
     const executionTime = Date.now() - startTime;
     console.log(`✅ [STAE] Action ${action} completed in ${executionTime}ms`);
+
+    // Log success
+    await usageTracker.success({ result_summary: `Action ${action} completed successfully` });
+
     return new Response(JSON.stringify({ ...result, execution_time_ms: executionTime }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
     console.error('❌ [STAE] Error:', error);
+    // Log failure
+    await usageTracker.failure(error.message, 500);
     return new Response(JSON.stringify({ success: false, error: error.message }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

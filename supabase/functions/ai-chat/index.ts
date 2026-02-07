@@ -2687,7 +2687,7 @@ class EnhancedConversationManager {
 
       const { data: ipData, error: ipError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
-        .select('messages, summary, tool_results, metadata')
+        .select('messages, summary, tool_results, metadata, updated_at')
         .eq('ip_address', this.ipAddress)
         .order('updated_at', { ascending: false })
         .limit(1);
@@ -2710,7 +2710,7 @@ class EnhancedConversationManager {
       } else {
         const { data: sessionData, error: sessionError } = await supabase
           .from(DATABASE_CONFIG.tables.conversation_memory)
-          .select('messages, summary, tool_results, metadata')
+          .select('messages, summary, tool_results, metadata, updated_at')
           .eq('session_id', this.sessionId)
           .order('updated_at', { ascending: false })
           .limit(1);

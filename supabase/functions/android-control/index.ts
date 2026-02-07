@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
             throw new Error('Missing ORGO_API_KEY environment variable');
         }
 
-        const payload: OrgoRequest = await req.json();
+        const payload: OrgoRequest = await req.json().catch(() => ({}));
         const { action } = payload;
 
         const commonHeaders = {
