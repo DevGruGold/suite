@@ -56,7 +56,14 @@ interface SystemStatus {
       total_idle?: number;
       stats?: any;
     };
-    mining?: ComponentStatus;
+    mining?: ComponentStatus & {
+      hash_rate?: number;
+      total_hashes?: number;
+      valid_shares?: number;
+      amount_due?: number;
+      amount_paid?: number;
+      active_workers?: number;
+    };
     render_service?: ComponentStatus;
     activity_log?: ComponentStatus & {
       recent_activities?: Array<{
@@ -207,6 +214,38 @@ export const SystemStatusMonitor = () => {
 
         {/* Components Grid */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Mining */}
+          {status.components.mining && (
+            <div className="border rounded-lg p-3 space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">Mining</span>
+                {getStatusIcon(status.components.mining.status)}
+              </div>
+              {status.components.mining.error && (
+                <p className="text-xs text-muted-foreground">{status.components.mining.error}</p>
+              )}
+              {status.components.mining.hash_rate !== undefined && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Hash Rate</div>
+                    <div className="font-bold">{formatHashrate(status.components.mining.hash_rate)}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Workers</div>
+                    <div className="font-bold">{status.components.mining.active_workers || 0}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Paid</div>
+                    <div className="font-bold text-green-600">{(status.components.mining.amount_paid || 0).toFixed(6)} XMR</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Due</div>
+                    <div className="font-bold text-yellow-600">{(status.components.mining.amount_due || 0).toFixed(6)} XMR</div>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
           {/* Database */}
           {status.components.database && (
             <div className="border rounded-lg p-3 space-y-2">

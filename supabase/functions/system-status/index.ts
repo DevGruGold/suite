@@ -162,7 +162,7 @@ serve(async (req) => {
       statusReport.overall_status = 'degraded';
     } else {
       const taskStats = {
-        total: tasks?.length || 0,
+        total: dbResult.data ? dbResult.data.tasks : (tasks?.length || 0), // Use true DB count if available
         pending: tasks?.filter((t: any) => t.status === 'PENDING').length || 0,
         claimed: tasks?.filter((t: any) => t.status === 'CLAIMED').length || 0,
         in_progress: tasks?.filter((t: any) => t.status === 'IN_PROGRESS').length || 0,
@@ -198,7 +198,10 @@ serve(async (req) => {
         hash_rate: miningData.hash || 0,
         total_hashes: miningData.totalHashes || 0,
         valid_shares: miningData.validShares || 0,
-        amount_due: miningData.amtDue || 0
+        amount_due: miningData.amtDue || 0,
+        amount_paid: miningData.amtPaid || 0,
+        active_workers: miningData.workers ? miningData.workers.length : 0,
+        workers: miningData.workers || []
       };
     } catch (error) {
       statusReport.components.mining = {
