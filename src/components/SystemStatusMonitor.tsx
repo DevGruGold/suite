@@ -81,6 +81,20 @@ interface SystemStatus {
   };
 }
 
+  };
+}
+
+const formatHashrate = (hashrate: number): string => {
+  if (!hashrate) return '0 H/s';
+  const units = ['H/s', 'KH/s', 'MH/s', 'GH/s', 'TH/s'];
+  let i = 0;
+  while (hashrate >= 1000 && i < units.length - 1) {
+    hashrate /= 1000;
+    i++;
+  }
+  return `${hashrate.toFixed(2)} ${units[i]}`;
+};
+
 export const SystemStatusMonitor = () => {
   const [status, setStatus] = useState<SystemStatus | null>(null);
   const [loading, setLoading] = useState(true);
