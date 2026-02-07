@@ -527,7 +527,8 @@ serve(async (req) => {
       // ------------------------
       // UPDATE TASK STATUS
       // ------------------------
-      case "update_task_status": {
+      case "update_task_status":
+      case "set_task_status": {
         const { task_id, status, completion_data, resolution_notes, items_completed = [] } = data ?? {};
         if (!task_id || !status) throw new ValidationError("update_task_status requires task_id and status");
 

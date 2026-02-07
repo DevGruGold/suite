@@ -1377,6 +1377,7 @@ export async function executeToolCall(
       case 'assign_task':
       case 'list_tasks':
       case 'update_task_status':
+      case 'set_task_status':
       case 'delete_task':
       case 'get_agent_workload':
       case 'get_agent_by_name':

@@ -1422,6 +1422,31 @@ export const ELIZA_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'set_task_status',
+      description: 'Directly set the status of a task. Alias for update_task_status. Use this to change task status to COMPLETED, FAILED, etc.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_id: { type: 'string', description: 'Task ID' },
+          status: {
+            type: 'string',
+            enum: ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'DONE', 'CANCELLED', 'COMPLETED', 'FAILED'],
+            description: 'New status - MUST be one of: PENDING, CLAIMED, IN_PROGRESS, BLOCKED, DONE, CANCELLED, COMPLETED, FAILED'
+          },
+          stage: {
+            type: 'string',
+            enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
+            description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE'
+          },
+          blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' }
+        },
+        required: ['task_id', 'status']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'list_tasks',
       description: 'Get all tasks and their status/assignments to see what agents are working on.',
       parameters: {
