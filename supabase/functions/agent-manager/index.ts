@@ -544,9 +544,12 @@ serve(async (req) => {
 
         // Build update payload
         const updatePayload: any = {
-          status,
           updated_at: new Date().toISOString(),
-          ...(completion_data ?? {})
+          // Safely merge completion_data into metadata to avoid PGRST204 (Column not found)
+          metadata: {
+            ...(task?.metadata ?? {}),
+            ...(completion_data ?? {})
+          }
         };
 
         // If completing, set progress to 100% and mark all checklist items complete
