@@ -1248,6 +1248,69 @@ serve(async (req) => {
       }
 
       // ------------------------
+      // PROVISION OPENCLAW AGENT
+      // ------------------------
+      case "provision_openclaw_agent": {
+        const payload = data ?? {};
+        const required = ["name", "id", "role"];
+        for (const f of required) {
+          if (!payload[f]) throw new ValidationError(`provision_openclaw_agent requires ${f}`);
+        }
+
+        const agentId = payload.id;
+        console.info(`[agent-manager] Provisioning OpenClaw agent: ${agentId}`);
+
+        // Check if agent already exists
+        const check = await supabase.from("agents").select("*").eq("id", agentId).maybeSingle();
+        if (check.error) throw new AppError(check.error.message);
+        if (check.data) {
+          throw new AppError(`Agent with ID ${agentId} already exists.`);
+        }
+
+        // Validate role
+        const role = String(payload.role).toLowerCase();
+        if (!(VALID_AGENT_ROLES as readonly string[]).includes(role)) {
+          throw new ValidationError(`Invalid role "${role}". Must be one of: ${VALID_AGENT_ROLES.join(", ")}`);
+        }
+
+        // Insert new agent
+        const insertBody = {
+          id: agentId,
+          name: payload.name,
+          role: role,
+          status: "IDLE",
+          metadata: {
+            source: 'openclaw',
+            provisioned_at: new Date().toISOString(),
+            description: payload.description || null,
+            priority: payload.priority || null,
+            ...(payload.metadata || {}),
+          },
+          current_workload: 0,
+          // Default max tasks if not provided
+          max_concurrent_tasks: payload.max_concurrent_tasks ?? 3,
+        };
+
+        const inserted = await supabase.from("agents").insert(insertBody).select().single();
+        if (inserted.error) {
+          console.error("[agent-manager] provision_openclaw_agent insert error:", inserted.error);
+          throw new AppError(inserted.error.message || "Agent provision failed");
+        }
+
+        // Activity log
+        await supabase.from("eliza_activity_log").insert({
+          activity_type: "agent_provisioned",
+          title: `Provisioned OpenClaw Agent: ${inserted.data.name}`,
+          description: `ID: ${inserted.data.id}, Role: ${inserted.data.role}`,
+          metadata: { agent_id: inserted.data.id, source: 'openclaw' },
+          status: "completed",
+        });
+
+        result = { success: true, agent: inserted.data };
+        break;
+      }
+
+      // ------------------------
       // FALLTHROUGH: unknown action
       // ------------------------
       default:

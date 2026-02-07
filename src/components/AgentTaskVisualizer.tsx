@@ -25,7 +25,8 @@ import {
   GripVertical,
   ExternalLink,
   UserPlus,
-  Loader2
+  Loader2,
+  Plus
 } from 'lucide-react';
 import {
   Dialog,
@@ -38,6 +39,10 @@ import { TaskProgressRing, TaskProgressBar } from './TaskProgressRing';
 import { AgentTaskSummary } from './AgentTaskSummary';
 import { TaskDetailSheet } from './TaskDetailSheet';
 import { AgentDetailSheet } from './AgentDetailSheet';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 interface Task {
   id: string;
@@ -407,6 +412,142 @@ function StageColumn({
   );
 }
 
+function ProvisionAgentDialog({
+  isOpen,
+  onOpenChange,
+  onSuccess
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  onSuccess: () => void;
+}) {
+  const [isLoading, setIsLoading] = useState(false);
+  const [formData, setFormData] = useState({
+    name: '',
+    id: '',
+    role: 'other',
+    description: '',
+    priority: 5
+  });
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('agent-manager', {
+        body: {
+          action: 'provision_openclaw_agent',
+          data: formData
+        }
+      });
+
+      if (error) throw error;
+      if (!data.ok) throw new Error(data.error || 'Failed to provision agent');
+
+      toast({
+        title: 'Agent Provisioned',
+        description: `Successfully registered ${formData.name}`,
+      });
+      onSuccess();
+      onOpenChange(false);
+      setFormData({ name: '', id: '', role: 'other', description: '', priority: 5 });
+    } catch (err) {
+      console.error('Provisioning failed:', err);
+      toast({
+        title: 'Provisioning Failed',
+        description: err instanceof Error ? err.message : 'Unknown error',
+        variant: 'destructive',
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  return (
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>Provision Existing OpenClaw Agent</DialogTitle>
+          <DialogDescription>
+            Register an existing OpenClaw agent into the XMRT-DAO ecosystem.
+          </DialogDescription>
+        </DialogHeader>
+        <form onSubmit={handleSubmit} className="space-y-4">
+          <div className="grid gap-2">
+            <Label htmlFor="name">Agent Name *</Label>
+            <Input
+              id="name"
+              required
+              value={formData.name}
+              onChange={e => setFormData({ ...formData, name: e.target.value })}
+              placeholder="e.g. Mining Overseer"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="id">OpenClaw Agent ID *</Label>
+            <Input
+              id="id"
+              required
+              value={formData.id}
+              onChange={e => setFormData({ ...formData, id: e.target.value })}
+              placeholder="Unique Agent ID"
+            />
+          </div>
+          <div className="grid grid-cols-2 gap-4">
+            <div className="grid gap-2">
+              <Label htmlFor="role">Role</Label>
+              <Select
+                value={formData.role}
+                onValueChange={val => setFormData({ ...formData, role: val })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="code">Code</SelectItem>
+                  <SelectItem value="infra">Infra</SelectItem>
+                  <SelectItem value="research">Research</SelectItem>
+                  <SelectItem value="governance">Governance</SelectItem>
+                  <SelectItem value="mining">Mining</SelectItem>
+                  <SelectItem value="device">Device</SelectItem>
+                  <SelectItem value="ops">Ops</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="grid gap-2">
+              <Label htmlFor="priority">Priority</Label>
+              <Input
+                id="priority"
+                type="number"
+                min={1}
+                max={10}
+                value={formData.priority}
+                onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
+              />
+            </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="description">Description</Label>
+            <Textarea
+              id="description"
+              value={formData.description}
+              onChange={e => setFormData({ ...formData, description: e.target.value })}
+              placeholder="Brief description of capabilities..."
+            />
+          </div>
+          <div className="flex justify-end pt-4">
+            <Button type="submit" disabled={isLoading}>
+              {isLoading && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
+              Provision Agent
+            </Button>
+          </div>
+        </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 export function AgentTaskVisualizer() {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -435,6 +576,9 @@ export function AgentTaskVisualizer() {
   const [mobileReassignTask, setMobileReassignTask] = useState<Task | null>(null);
   const [isMobileReassignOpen, setIsMobileReassignOpen] = useState(false);
   const [isGeneratingHandoff, setIsGeneratingHandoff] = useState(false);
+
+  // Provisioning dialog state
+  const [isProvisionOpen, setIsProvisionOpen] = useState(false);
 
   const handleTaskClick = (task: Task) => {
     setSelectedTask(task);
@@ -1019,6 +1163,15 @@ export function AgentTaskVisualizer() {
         >
           <RefreshCw className="w-3.5 h-3.5" />
         </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 text-xs gap-1"
+          onClick={() => setIsProvisionOpen(true)}
+        >
+          <Plus className="w-3.5 h-3.5" />
+          Provision Agent
+        </Button>
       </div>
 
       {/* Agent Grid Section */}
@@ -1153,7 +1306,14 @@ export function AgentTaskVisualizer() {
           </div>
         </DialogContent>
       </Dialog>
-    </div>
+
+      {/* Provision Agent Dialog */}
+      <ProvisionAgentDialog
+        isOpen={isProvisionOpen}
+        onOpenChange={setIsProvisionOpen}
+        onSuccess={() => setRefreshKey(k => k + 1)}
+      />
+    </div >
   );
 }
 
