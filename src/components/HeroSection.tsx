@@ -10,7 +10,8 @@ import { useLanguage } from '@/contexts/LanguageContext';
 
 
 
-interface Stats {
+
+export interface Stats {
   totalExecutions: number;
   activeAgents: number;
   activeTasks: number;
@@ -19,7 +20,11 @@ interface Stats {
   healthIssues: string[];
 }
 
-export const HeroSection = () => {
+interface HeroSectionProps {
+  stats: Stats;
+}
+
+export const HeroSection = ({ stats }: HeroSectionProps) => {
   const { t } = useLanguage();
   const [currentBanner, setCurrentBanner] = useState(0);
 
@@ -46,14 +51,6 @@ export const HeroSection = () => {
     }
   ];
   const [isPaused, setIsPaused] = useState(false);
-  const [stats, setStats] = useState<Stats>({
-    totalExecutions: 0,
-    activeAgents: 0,
-    activeTasks: 0,
-    healthScore: 100,
-    healthStatus: 'healthy',
-    healthIssues: []
-  });
 
   // Auto-rotate banners
   useEffect(() => {
@@ -66,94 +63,7 @@ export const HeroSection = () => {
     return () => clearInterval(interval);
   }, [isPaused]);
 
-  // Fetch stats from database directly (no edge function call)
-  useEffect(() => {
-    const fetchStats = async () => {
-      // Fetch basic counts directly from database
-      // Fetch basic counts directly from database
-      const [functionLogs, superduperLogs, agents, tasks, latestHealth] = await Promise.all([
-        supabase.from('function_usage_logs').select('*', { count: 'estimated', head: true }),
-        supabase.from('superduper_execution_log').select('*', { count: 'estimated', head: true }),
-        supabase.from('agents').select('*', { count: 'exact', head: true }).in('status', ['IDLE', 'BUSY']),
-        supabase.from('tasks').select('*', { count: 'exact', head: true }).in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED']),
-        // Get cached health from latest system_health_check activity log entry
-        supabase
-          .from('eliza_activity_log')
-          .select('metadata')
-          .eq('activity_type', 'system_health_check')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle()
-      ]);
-
-      // Extract health score from cached activity log entry
-      let healthScore = 100;
-      let healthStatus: 'healthy' | 'degraded' | 'critical' = 'healthy';
-      let healthIssues: string[] = [];
-
-      if (latestHealth.data?.metadata) {
-        const metadata = latestHealth.data.metadata as { health_score?: number; status?: string; issues_count?: number };
-        healthScore = metadata.health_score ?? 100;
-        healthStatus = metadata.status === 'critical' ? 'critical' :
-          metadata.status === 'degraded' ? 'degraded' : 'healthy';
-        if (metadata.issues_count && metadata.issues_count > 0) {
-          healthIssues = [`${metadata.issues_count} issue(s) detected`];
-        }
-      }
-
-      setStats({
-        totalExecutions: (functionLogs.count || 0) + (superduperLogs.count || 0),
-        activeAgents: agents.count || 0,
-        activeTasks: tasks.count || 0,
-        healthScore,
-        healthStatus,
-        healthIssues
-      });
-    };
-
-    fetchStats();
-
-    // Subscribe to updates for real-time health changes
-    const channel = supabase
-      .channel('hero-stats')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'eliza_activity_log' }, (payload) => {
-        setStats(prev => ({ ...prev, totalExecutions: prev.totalExecutions + 1 }));
-
-        // Update health score if this is a health check
-        if (payload.new.activity_type === 'system_health_check' && payload.new.metadata) {
-          const metadata = payload.new.metadata as { health_score?: number; status?: string; issues_count?: number };
-          setStats(prev => ({
-            ...prev,
-            healthScore: metadata.health_score ?? prev.healthScore,
-            healthStatus: metadata.status === 'critical' ? 'critical' :
-              metadata.status === 'degraded' ? 'degraded' : 'healthy',
-            healthIssues: metadata.issues_count && metadata.issues_count > 0
-              ? [`${metadata.issues_count} issue(s) detected`]
-              : []
-          }));
-        }
-      })
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, []);
-
   const banner = marketingBanners[currentBanner];
-
-  // Health score color coding
-  const getHealthColor = () => {
-    if (stats.healthScore >= 95) return 'text-emerald-500';
-    if (stats.healthScore >= 80) return 'text-amber-500';
-    return 'text-destructive';
-  };
-
-  const getHealthBgColor = () => {
-    if (stats.healthScore >= 95) return 'from-emerald-500/20 to-emerald-500/5';
-    if (stats.healthScore >= 80) return 'from-amber-500/20 to-amber-500/5';
-    return 'from-destructive/20 to-destructive/5';
-  };
 
   return (
     <section className="relative w-full py-4 px-4 overflow-hidden">
@@ -233,38 +143,6 @@ export const HeroSection = () => {
             icon={<Activity className="w-5 h-5 text-amber-500" />}
             label={t('hero.stats.tasks')}
             value={stats.activeTasks}
-          />
-        </div>
-
-        {/* Activity Visualization - HIGHLIGHTED */}
-        <div className="glass-card rounded-xl p-4 space-y-3 ring-2 ring-primary/30 shadow-lg shadow-primary/5">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <span className="relative flex h-3 w-3">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
-                <span className="relative inline-flex rounded-full h-3 w-3 bg-primary"></span>
-              </span>
-              <h3 className="text-sm font-semibold text-foreground">{t('hero.activity.title')}</h3>
-              <span className="text-[10px] text-muted-foreground bg-muted/50 px-2 py-0.5 rounded-full">{t('hero.activity.realtime')}</span>
-            </div>
-            {/* Dashboard Visualizers */}
-            <div className="space-y-6">
-              <AgentHierarchy />
-              <SystemStatusMonitor />
-            </div>
-          </div>
-          <ActivityPulse
-            healthScore={stats.healthScore}
-            onTaskClick={(taskId) => {
-              // Dispatch custom event to scroll to task in pipeline
-              window.dispatchEvent(new CustomEvent('navigate-to-task', { detail: { taskId } }));
-              console.log('Navigate to task:', taskId);
-            }}
-            onAgentClick={(agentId) => {
-              // Dispatch custom event to highlight agent
-              window.dispatchEvent(new CustomEvent('highlight-agent', { detail: { agentId } }));
-              console.log('Highlight agent:', agentId);
-            }}
           />
         </div>
       </div>

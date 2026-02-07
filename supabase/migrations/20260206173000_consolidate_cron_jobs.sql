@@ -15,15 +15,24 @@ SELECT cron.unschedule('task-orchestrator-blocker-check'); -- Old Orchestrator j
 -- 2. Schedule "Active Agent Work Cycle" (Every 5 minutes)
 -- Invokes `task-auto-advance` with `run_all` action
 -- Covers: Update Progress percentage based on checklists + Auto-advance time-based tasks
+-- 2. Schedule "Active Agent Work Cycle" (Every 5 minutes)
+-- Invokes `task-auto-advance` with `run_all` action
+-- Covers: Update Progress percentage based on checklists + Auto-advance time-based tasks
+-- 2. Schedule "Active Agent Work Cycle" (Every 5 minutes)
+-- Invokes `task-auto-advance` with `run_all` action
+-- Covers: Update Progress percentage based on checklists + Auto-advance time-based tasks
 SELECT cron.schedule(
     'suite-active-work-cycle',
     '*/5 * * * *',
     $$
     select
       net.http_post(
-          url:='https://dthjjnnpzbxqoeusyqsy.supabase.co/functions/v1/task-auto-advance',
-          headers:='{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('request.jwt.clam', true) || '"}',
-          body:='{"action": "run_all"}'
+          url:='https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/task-auto-advance',
+          headers:=jsonb_build_object(
+              'Content-Type', 'application/json',
+              'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
+          ),
+          body:='{"action": "run_all"}'::jsonb
       ) as request_id;
     $$
 );
@@ -37,9 +46,12 @@ SELECT cron.schedule(
     $$
     select
       net.http_post(
-          url:='https://dthjjnnpzbxqoeusyqsy.supabase.co/functions/v1/task-orchestrator',
-          headers:='{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('request.jwt.clam', true) || '"}',
-          body:='{"action": "run_orchestration_cycle"}'
+          url:='https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/task-orchestrator',
+          headers:=jsonb_build_object(
+              'Content-Type', 'application/json',
+              'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
+          ),
+          body:='{"action": "run_orchestration_cycle"}'::jsonb
       ) as request_id;
     $$
 );
@@ -53,9 +65,12 @@ SELECT cron.schedule(
     $$
     select
       net.http_post(
-          url:='https://dthjjnnpzbxqoeusyqsy.supabase.co/functions/v1/suite-task-automation-engine',
-          headers:='{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('request.jwt.clam', true) || '"}',
-          body:='{"action": "run_all"}'
+          url:='https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/suite-task-automation-engine',
+          headers:=jsonb_build_object(
+              'Content-Type', 'application/json',
+              'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
+          ),
+          body:='{"action": "run_all"}'::jsonb
       ) as request_id;
     $$
 );
@@ -69,9 +84,12 @@ SELECT cron.schedule(
     $$
     select
       net.http_post(
-          url:='https://dthjjnnpzbxqoeusyqsy.supabase.co/functions/v1/opportunity-scanner',
-          headers:='{"Content-Type": "application/json", "Authorization": "Bearer ' || current_setting('request.jwt.clam', true) || '"}',
-          body:='{}'
+          url:='https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/opportunity-scanner',
+          headers:=jsonb_build_object(
+              'Content-Type', 'application/json',
+              'Authorization', 'Bearer ' || current_setting('app.supabase_service_role_key')
+          ),
+          body:='{}'::jsonb
       ) as request_id;
     $$
 );
