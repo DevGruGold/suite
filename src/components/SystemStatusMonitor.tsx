@@ -4,7 +4,8 @@ import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Loader2, CheckCircle2, AlertCircle, XCircle, Activity } from 'lucide-react';
+import { toast } from '@/hooks/use-toast';
+import { Loader2, CheckCircle2, AlertCircle, XCircle, Activity, ShieldAlert } from 'lucide-react';
 
 interface ComponentStatus {
   status: 'healthy' | 'degraded' | 'error' | 'unknown' | 'not_configured';
@@ -24,6 +25,8 @@ interface SystemStatus {
         idle: number;
         busy: number;
         working: number;
+        working: number;
+        blocked: number;
         completed: number;
         error: number;
       };
@@ -60,13 +63,13 @@ export const SystemStatusMonitor = () => {
     try {
       setLoading(true);
       setError(null);
-      
+
       const { data, error: fetchError } = await supabase.functions.invoke('system-status', {
         body: {}
       });
 
       if (fetchError) throw fetchError;
-      
+
       if (data?.success) {
         setStatus(data.status);
       } else {
@@ -81,8 +84,18 @@ export const SystemStatusMonitor = () => {
   };
 
   useEffect(() => {
+    if (status?.components?.agents?.stats?.blocked && status.components.agents.stats.blocked > 0) {
+      toast({
+        title: "Agents Blocked",
+        description: `${status.components.agents.stats.blocked} agent(s) are currently blocked and require attention.`,
+        variant: "destructive",
+      });
+    }
+  }, [status]);
+
+  useEffect(() => {
     fetchSystemStatus();
-    
+
     // Refresh every 5 minutes (300000ms) - matches cron job schedule
     const interval = setInterval(fetchSystemStatus, 300000);
     return () => clearInterval(interval);
@@ -111,7 +124,7 @@ export const SystemStatusMonitor = () => {
       unknown: 'outline',
       not_configured: 'outline'
     };
-    
+
     return (
       <Badge variant={variants[componentStatus] || 'outline'}>
         {componentStatus}
@@ -161,7 +174,7 @@ export const SystemStatusMonitor = () => {
           {getStatusBadge(status.overall_status)}
         </div>
       </CardHeader>
-      
+
       <CardContent className="space-y-6">
         {/* Health Score */}
         <div>
@@ -195,7 +208,7 @@ export const SystemStatusMonitor = () => {
                 {getStatusIcon(status.components.agents.status)}
               </div>
               {status.components.agents.stats && (
-                <div className="grid grid-cols-3 gap-2 text-xs">
+                <div className="grid grid-cols-4 gap-2 text-xs">
                   <div>
                     <div className="text-muted-foreground">Total</div>
                     <div className="font-bold">{status.components.agents.stats.total}</div>
@@ -207,6 +220,12 @@ export const SystemStatusMonitor = () => {
                   <div>
                     <div className="text-muted-foreground">Working</div>
                     <div className="font-bold text-blue-600">{status.components.agents.stats.working}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Blocked</div>
+                    <div className={`font-bold ${status.components.agents.stats.blocked > 0 ? 'text-red-600 animate-pulse' : 'text-muted-foreground'}`}>
+                      {status.components.agents.stats.blocked || 0}
+                    </div>
                   </div>
                 </div>
               )}

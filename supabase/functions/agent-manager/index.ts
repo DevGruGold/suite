@@ -22,7 +22,7 @@ const SUPABASE_SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY") || "";
 
 // ---------- Valid Enums (match database exactly) ----------
-const VALID_AGENT_STATUSES = ["IDLE", "BUSY", "ARCHIVED", "ERROR", "OFFLINE"] as const;
+const VALID_AGENT_STATUSES = ["IDLE", "BUSY", "OFFLINE", "ARCHIVED", "BLOCKED", "PAUSED"] as const;
 const VALID_TASK_STATUSES = ["PENDING", "CLAIMED", "IN_PROGRESS", "BLOCKED", "DONE", "CANCELLED", "COMPLETED", "FAILED"] as const;
 const VALID_AGENT_ROLES = ["manager", "planner", "analyst", "developer", "integrator", "validator", "miner", "device", "generic"] as const;
 const VALID_TASK_CATEGORIES = ["code", "infra", "research", "governance", "mining", "device", "ops", "other"] as const;

@@ -83,7 +83,9 @@ const STATUS_STYLES: Record<string, { border: string; bg: string; text: string }
   IN_PROGRESS: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-400' },
   CLAIMED: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-400' },
   PENDING: { border: 'border-yellow-500/50', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
+  PENDING: { border: 'border-yellow-500/50', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
   BLOCKED: { border: 'border-red-500/50', bg: 'bg-red-500/10', text: 'text-red-400' },
+  PAUSED: { border: 'border-amber-500/50', bg: 'bg-amber-500/10', text: 'text-amber-400' },
   FAILED: { border: 'border-red-500/50', bg: 'bg-red-500/10', text: 'text-red-400' },
 };
 
@@ -223,7 +225,7 @@ function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging, onTaskC
       onDragEnd={onDragEnd}
       onClick={handleClick}
       className={`p-3 rounded-lg border ${statusStyle.border} ${statusStyle.bg} backdrop-blur-sm transition-all cursor-pointer group ${isDragging ? 'opacity-50 scale-95 cursor-grabbing' : 'hover:scale-[1.02] hover:shadow-lg hover:ring-2 hover:ring-primary/30'
-        } ${isUrgent ? 'ring-1 ring-red-500/50' : ''}`}
+        } ${isUrgent ? 'ring-1 ring-red-500/50' : ''} ${task.status === 'BLOCKED' ? 'ring-2 ring-red-500 animate-pulse' : ''}`}
     >
       {/* Progress bar at top with missing checklist warning */}
       <TaskProgressBar percentage={progressPercentage} className="mb-2" />
@@ -1181,6 +1183,12 @@ export function AgentTaskVisualizer() {
           <span className="text-sm font-medium text-foreground">Active Agents</span>
           <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
             {agents.length}
+          </Badge>
+          <div className="mx-2 h-4 w-px bg-border/50" />
+          <Bot className="w-4 h-4 text-green-500" />
+          <span className="text-sm font-medium text-foreground">Working Agents</span>
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5 text-green-400 border-green-500/20 bg-green-500/10">
+            {agents.filter(a => a.status === 'BUSY' || (a.current_workload && a.current_workload > 0)).length}
           </Badge>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">

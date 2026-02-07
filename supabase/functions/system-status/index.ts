@@ -38,13 +38,13 @@ serve(async (req) => {
     try {
       body = await req.json();
     } catch { /* empty body is fine */ }
-    
+
     const isCronSnapshot = body?.snapshot_type === 'scheduled';
     const cacheTTL = isCronSnapshot ? CRON_CACHE_TTL_MS : API_CACHE_TTL_MS;
-    
+
     // Check cache for recent results (use appropriate TTL)
     if (statusCache && Date.now() - statusCache.timestamp < cacheTTL) {
-      console.log(`📦 Returning cached system status (< ${cacheTTL/1000}s old)`);
+      console.log(`📦 Returning cached system status (< ${cacheTTL / 1000}s old)`);
       await usageTracker.success({ cached: true });
       return new Response(JSON.stringify(statusCache.data), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'X-Cache': 'HIT' }
@@ -52,30 +52,30 @@ serve(async (req) => {
     }
 
     console.log('🔍 System Status Check - Starting comprehensive diagnostics...');
-    
+
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
       db: { schema: 'public' },
       global: { headers: { 'x-statement-timeout': '10000' } } // 10s statement timeout
     });
-    
+
     const VERCEL_SERVICES = {
       io: 'https://xmrt-io.vercel.app',
       ecosystem: 'https://xmrt-ecosystem.vercel.app',
       dao: 'https://xmrt-dao-ecosystem.vercel.app'
     };
-    
+
     const statusReport: any = {
       timestamp: new Date().toISOString(),
       overall_status: 'healthy',
       components: {}
     };
-    
+
     // ========== PARALLEL GROUP 1: Core health checks ==========
     console.log('📊 Running parallel core health checks (db, agents, tasks)...');
     const coreChecksStart = Date.now();
-    
+
     const [dbResult, agentsResult, tasksResult] = await Promise.all([
       // 1. Database Health
       withTimeout(
@@ -83,15 +83,15 @@ serve(async (req) => {
         QUERY_TIMEOUT_MS,
         'database_health_check'
       ).then(({ data, error }) => ({ data, error, responseTime: Date.now() - coreChecksStart }))
-       .catch(error => ({ data: null, error, responseTime: Date.now() - coreChecksStart })),
-      
+        .catch(error => ({ data: null, error, responseTime: Date.now() - coreChecksStart })),
+
       // 2. Agents Status
       withTimeout(
         supabase.from('agents').select('id, name, role, status').order('created_at', { ascending: false }).limit(50),
         QUERY_TIMEOUT_MS,
         'agents_status_check'
       ).catch(error => ({ data: null, error })),
-      
+
       // 3. Tasks Status
       withTimeout(
         supabase.from('tasks').select('id, title, status, stage, priority').order('updated_at', { ascending: false }).limit(100),
@@ -99,9 +99,9 @@ serve(async (req) => {
         'tasks_status_check'
       ).catch(error => ({ data: null, error }))
     ]);
-    
+
     console.log(`✅ Core checks completed in ${Date.now() - coreChecksStart}ms`);
-    
+
     // Process database result
     statusReport.components.database = {
       status: dbResult.error ? 'unhealthy' : 'healthy',
@@ -109,7 +109,7 @@ serve(async (req) => {
       response_time_ms: dbResult.responseTime
     };
     if (dbResult.error) statusReport.overall_status = 'degraded';
-    
+
     // Process agents result
     const agents = agentsResult?.data;
     if (agentsResult?.error) {
@@ -120,18 +120,20 @@ serve(async (req) => {
         total: agents?.length || 0,
         idle: agents?.filter((a: any) => a.status === 'IDLE').length || 0,
         busy: agents?.filter((a: any) => a.status === 'BUSY').length || 0,
-        working: agents?.filter((a: any) => a.status === 'WORKING').length || 0,
+        working: agents?.filter((a: any) => a.status === 'BUSY').length || 0, // Map BUSY to working
+        blocked: agents?.filter((a: any) => a.status === 'BLOCKED').length || 0,
+        paused: agents?.filter((a: any) => a.status === 'PAUSED').length || 0,
         completed: agents?.filter((a: any) => a.status === 'COMPLETED').length || 0,
         error: agents?.filter((a: any) => a.status === 'ERROR').length || 0
       };
       statusReport.components.agents = {
-        status: agentStats.error > 3 ? 'degraded' : 'healthy',
+        status: (agentStats.error > 3 || agentStats.blocked > 3) ? 'degraded' : 'healthy',
         stats: agentStats,
         recent_agents: agents?.slice(0, 5).map((a: any) => ({ id: a.id, name: a.name, role: a.role, status: a.status }))
       };
-      if (agentStats.error > 3) statusReport.overall_status = 'degraded';
+      if (agentStats.error > 3 || agentStats.blocked > 3) statusReport.overall_status = 'degraded';
     }
-    
+
     // Process tasks result
     const tasks = tasksResult?.data;
     if (tasksResult?.error) {
@@ -155,21 +157,21 @@ serve(async (req) => {
       };
       if (taskStats.blocked > 5 || taskStats.failed > 5) statusReport.overall_status = 'degraded';
     }
-    
+
     // 4. Check Mining Proxy
     console.log('⛏️ Checking mining stats...');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 10000);
-      
+
       const { data: miningData, error: miningError } = await supabase.functions.invoke('mining-proxy', {
         body: {}
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (miningError) throw miningError;
-      
+
       statusReport.components.mining = {
         status: 'healthy',
         hash_rate: miningData.hash || 0,
@@ -183,7 +185,7 @@ serve(async (req) => {
         error: error.message
       };
     }
-    
+
     // 5. Check Vercel Services Status
     console.log('🚀 Checking Vercel services health...');
     try {
@@ -193,14 +195,14 @@ serve(async (req) => {
           try {
             const controller = new AbortController();
             const timeoutId = setTimeout(() => controller.abort(), 10000);
-            
+
             const response = await fetch(`${url}/health`, {
               signal: controller.signal
             });
-            
+
             clearTimeout(timeoutId);
             const responseTime = Date.now() - startTime;
-            
+
             return {
               service: name,
               status: response.ok ? 'healthy' : 'degraded',
@@ -218,33 +220,33 @@ serve(async (req) => {
           }
         })
       );
-      
+
       const allHealthy = vercelHealthChecks.every(s => s.status === 'healthy');
-      
+
       statusReport.components.vercel_services = {
         status: allHealthy ? 'healthy' : 'degraded',
         services: vercelHealthChecks
       };
-      
+
       if (!allHealthy) {
         statusReport.overall_status = 'degraded';
       }
     } catch (error) {
-        statusReport.components.vercel_services = {
-          status: 'error',
-          error: error.message
-        };
+      statusReport.components.vercel_services = {
+        status: 'error',
+        error: error.message
+      };
     }
-    
+
     // 6. Check Edge Functions Health - COMPREHENSIVE SCAN (ALL 93+ DEPLOYED FUNCTIONS)
     console.log('⚡ Checking edge functions health (all deployed functions)...');
     try {
       // Get ALL registered functions from authoritative registry
       const allRegisteredFunctions = EDGE_FUNCTIONS_REGISTRY.map(f => f.name);
       const totalDeployedFunctions = allRegisteredFunctions.length;
-      
+
       console.log(`📊 Total deployed functions in registry: ${totalDeployedFunctions}`);
-      
+
       // Get recent usage data (last 24h) for active functions - LIMITED to prevent timeout
       const { data: functionUsage, error: usageError } = await withTimeout(
         supabase
@@ -256,17 +258,17 @@ serve(async (req) => {
         QUERY_TIMEOUT_MS,
         'function_usage_check'
       );
-      
+
       if (usageError) throw usageError;
-      
+
       // Build stats for ACTIVE functions (those with recent usage)
       const functionStats: Record<string, any> = {};
       const activeFunctionNames = new Set<string>();
-      
+
       functionUsage?.forEach((usage: any) => {
         const funcName = usage.function_name;
         activeFunctionNames.add(funcName);
-        
+
         if (!functionStats[funcName]) {
           functionStats[funcName] = {
             total_calls: 0,
@@ -278,94 +280,94 @@ serve(async (req) => {
             status: 'active'
           };
         }
-        
+
         functionStats[funcName].total_calls++;
         if (usage.status === 'success') {
           functionStats[funcName].successful++;
         } else if (usage.status === 'error' || usage.status === 'failed') {
           functionStats[funcName].failed++;
         }
-        
+
         if (usage.duration_ms) {
-          functionStats[funcName].avg_duration_ms = 
-            (functionStats[funcName].avg_duration_ms * (functionStats[funcName].total_calls - 1) + usage.duration_ms) 
+          functionStats[funcName].avg_duration_ms =
+            (functionStats[funcName].avg_duration_ms * (functionStats[funcName].total_calls - 1) + usage.duration_ms)
             / functionStats[funcName].total_calls;
         }
-        
+
         if (!functionStats[funcName].last_called || new Date(usage.invoked_at) > new Date(functionStats[funcName].last_called)) {
           functionStats[funcName].last_called = usage.invoked_at;
         }
       });
-      
+
       // Calculate error rates for active functions
       Object.keys(functionStats).forEach(funcName => {
         const stats = functionStats[funcName];
         stats.error_rate = stats.total_calls > 0 ? (stats.failed / stats.total_calls) * 100 : 0;
         stats.avg_duration_ms = Math.round(stats.avg_duration_ms);
       });
-      
+
       // Identify IDLE functions (registered but no recent activity)
       const idleFunctions = allRegisteredFunctions.filter(name => !activeFunctionNames.has(name));
-      
+
       console.log(`✅ Active functions (24h): ${activeFunctionNames.size}`);
       console.log(`💤 Idle functions: ${idleFunctions.length}`);
-      
+
       // Categorize active functions by health
       const healthyFunctions = Object.values(functionStats).filter((s: any) => s.error_rate < 5).length;
       const degradedFunctions = Object.values(functionStats).filter((s: any) => s.error_rate >= 5 && s.error_rate < 20).length;
       const unhealthyFunctions = Object.values(functionStats).filter((s: any) => s.error_rate >= 20).length;
-      
+
       // Get top failing functions
       const topFailingFunctions = Object.entries(functionStats)
         .filter(([_, stats]: [string, any]) => stats.error_rate > 10)
         .sort((a: any, b: any) => b[1].error_rate - a[1].error_rate)
         .slice(0, 5)
         .map(([name, stats]) => ({ name, ...stats }));
-      
+
       // Build comprehensive report
       statusReport.components.edge_functions = {
         status: unhealthyFunctions > 3 ? 'degraded' : (degradedFunctions > 5 ? 'degraded' : 'healthy'),
         message: `Scanned ${totalDeployedFunctions} registered functions: ${activeFunctionNames.size} active in last 24h, ${idleFunctions.length} idle`,
-        
+
         // DEPLOYMENT OVERVIEW
         total_deployed: totalDeployedFunctions,
         total_active_24h: activeFunctionNames.size,
         total_idle: idleFunctions.length,
-        
+
         // ACTIVE FUNCTION HEALTH (those with recent usage)
         active_healthy: healthyFunctions,
         active_degraded: degradedFunctions,
         active_unhealthy: unhealthyFunctions,
-        
+
         // USAGE STATISTICS
         total_calls_24h: functionUsage?.length || 0,
-        overall_error_rate: functionUsage?.length > 0 
-          ? Math.round((functionUsage.filter((u: any) => u.status === 'error' || u.status === 'failed').length / functionUsage.length) * 100) 
+        overall_error_rate: functionUsage?.length > 0
+          ? Math.round((functionUsage.filter((u: any) => u.status === 'error' || u.status === 'failed').length / functionUsage.length) * 100)
           : 0,
-        
+
         // TOP ISSUES
         top_failing: topFailingFunctions,
-        
+
         // DETAILED LISTS
         idle_functions: idleFunctions.slice(0, 20), // First 20 idle functions
         idle_functions_full_list: idleFunctions, // Complete list
-        
+
         // REGISTRY INFO
         registry_source: 'EDGE_FUNCTIONS_REGISTRY',
         registry_coverage: `${activeFunctionNames.size} of ${totalDeployedFunctions} deployed functions are active`,
-        
+
         // COVERAGE METRICS
         coverage: {
           deployed_vs_active_percent: Math.round((activeFunctionNames.size / totalDeployedFunctions) * 100),
           message: `${activeFunctionNames.size} of ${totalDeployedFunctions} deployed functions active in last 24h (${idleFunctions.length} idle)`
         }
       };
-      
+
       // Update overall status based on health
       if (unhealthyFunctions > 3 || statusReport.components.edge_functions.overall_error_rate > 15) {
         statusReport.overall_status = 'degraded';
       }
-      
+
     } catch (error) {
       statusReport.components.edge_functions = {
         status: 'error',
@@ -373,44 +375,44 @@ serve(async (req) => {
       };
       statusReport.overall_status = 'degraded';
     }
-    
+
     // 7. Check Cron Jobs Health
     // 7. Check Cron Jobs Health - REAL-TIME DATA FROM PG_CRON
     console.log('⏰ Checking cron jobs health (querying pg_cron directly)...');
     try {
       const { data: cronJobs, error: cronError } = await supabase.rpc('get_cron_jobs_status');
-      
+
       if (cronError) {
         console.error('❌ Failed to query cron jobs:', cronError);
         throw cronError;
       }
-      
+
       console.log(`✅ Retrieved ${cronJobs?.length || 0} cron jobs from pg_cron`);
-      
+
       // Analyze cron job health
       const totalJobs = cronJobs?.length || 0;
       const activeJobs = cronJobs?.filter((j: any) => j.active).length || 0;
       const inactiveJobs = totalJobs - activeJobs;
-      
+
       // Jobs that have run in last 24h
-      const recentlyExecutedJobs = cronJobs?.filter((j: any) => 
+      const recentlyExecutedJobs = cronJobs?.filter((j: any) =>
         j.total_runs_24h && j.total_runs_24h > 0
       ).length || 0;
-      
+
       // Jobs with high success rate (>80%)
-      const healthyJobs = cronJobs?.filter((j: any) => 
+      const healthyJobs = cronJobs?.filter((j: any) =>
         j.success_rate !== null && j.success_rate > 80
       ).length || 0;
-      
+
       // Jobs with poor success rate (<50%)
-      const failingJobs = cronJobs?.filter((j: any) => 
+      const failingJobs = cronJobs?.filter((j: any) =>
         j.success_rate !== null && j.success_rate < 50
       ).length || 0;
-      
+
       // Use schedule-aware stalled detection from shared module
       const cronMetrics = extractCronMetrics(cronJobs || []);
       const stalledJobs = cronMetrics.stalled;
-      
+
       // Determine overall cron health status
       let cronStatus = 'healthy';
       if (failingJobs > 3 || stalledJobs > 5) {
@@ -418,7 +420,7 @@ serve(async (req) => {
       } else if (failingJobs > 0 || stalledJobs > 2) {
         cronStatus = 'warning';
       }
-      
+
       // Top 5 failing jobs for visibility
       const topFailingJobs = cronJobs
         ?.filter((j: any) => j.failed_runs_24h && j.failed_runs_24h > 0)
@@ -433,7 +435,7 @@ serve(async (req) => {
           failed_runs_24h: j.failed_runs_24h,
           total_runs_24h: j.total_runs_24h
         })) || [];
-      
+
       statusReport.components.cron_jobs = {
         status: cronStatus,
         total_jobs: totalJobs,
@@ -456,11 +458,11 @@ serve(async (req) => {
           is_overdue: j.is_overdue         // Pass through DB-calculated value
         })) || []
       };
-      
+
       if (cronStatus === 'degraded') {
         statusReport.overall_status = 'degraded';
       }
-      
+
       console.log(`✅ Cron jobs analyzed: ${healthyJobs} healthy, ${failingJobs} failing, ${stalledJobs} stalled`);
     } catch (error) {
       statusReport.components.cron_jobs = {
@@ -468,7 +470,7 @@ serve(async (req) => {
         error: error.message
       };
     }
-    
+
     // 8. Check Activity Log for Recent Errors
     console.log('📜 Checking recent activity logs...');
     try {
@@ -477,12 +479,12 @@ serve(async (req) => {
         .select('*')
         .order('created_at', { ascending: false })
         .limit(20);
-      
+
       if (activityError) throw activityError;
-      
+
       const pendingCount = recentActivity?.filter((a: any) => a.status === 'pending').length || 0;
       const failedCount = recentActivity?.filter((a: any) => a.status === 'failed').length || 0;
-      
+
       statusReport.components.activity_log = {
         status: failedCount > 10 ? 'degraded' : 'healthy',
         recent_activities: recentActivity?.slice(0, 5).map((a: any) => ({
@@ -496,7 +498,7 @@ serve(async (req) => {
           failed: failedCount
         }
       };
-      
+
       if (failedCount > 10) {
         statusReport.overall_status = 'degraded';
       }
@@ -590,8 +592,8 @@ serve(async (req) => {
         entityTypeBreakdown[k.entity_type] = (entityTypeBreakdown[k.entity_type] || 0) + 1;
       });
 
-      const avgConfidence = knowledge?.length > 0 
-        ? knowledge.reduce((sum: number, k: any) => sum + (k.confidence_score || 0), 0) / knowledge.length 
+      const avgConfidence = knowledge?.length > 0
+        ? knowledge.reduce((sum: number, k: any) => sum + (k.confidence_score || 0), 0) / knowledge.length
         : 0;
 
       statusReport.components.knowledge_base = {
@@ -623,7 +625,7 @@ serve(async (req) => {
       const totalCalls = githubActivity?.length || 0;
       const successfulCalls = githubActivity?.filter((g: any) => g.success).length || 0;
       const uniqueRepos = [...new Set(githubActivity?.map((g: any) => g.repo).filter(Boolean))];
-      const avgResponseTime = totalCalls > 0 
+      const avgResponseTime = totalCalls > 0
         ? Math.round(githubActivity!.reduce((sum: number, g: any) => sum + (g.response_time_ms || 0), 0) / totalCalls)
         : 0;
       const latestRateLimit = githubActivity?.[0]?.rate_limit_remaining;
@@ -671,8 +673,8 @@ serve(async (req) => {
         completed_24h: completed,
         failed_24h: failed,
         total_executions_24h: workflows?.length || 0,
-        success_rate: workflows && workflows.length > 0 
-          ? Math.round((completed / workflows.length) * 100) 
+        success_rate: workflows && workflows.length > 0
+          ? Math.round((completed / workflows.length) * 100)
           : 100
       };
     } catch (error) {
@@ -732,7 +734,7 @@ serve(async (req) => {
         const source = p.source || 'unknown';
         bySource[source] = (bySource[source] || 0) + 1;
       });
-      const avgExecTime = total > 0 
+      const avgExecTime = total > 0
         ? Math.round(pythonExecs!.reduce((sum: number, p: any) => sum + (p.execution_time_ms || 0), 0) / total)
         : 0;
 
@@ -761,7 +763,7 @@ serve(async (req) => {
       gemini: !!Deno.env.get('GEMINI_API_KEY'),
       openai: !!Deno.env.get('OPENAI_API_KEY')
     };
-    
+
     const configuredProviders = Object.entries(aiProviders).filter(([_, v]) => v).map(([k]) => k);
     const cascadeOrder = ['lovable_ai', 'deepseek', 'kimi_k2', 'gemini', 'openai'];
     const primaryProvider = cascadeOrder.find(p => aiProviders[p as keyof typeof aiProviders]) || 'none';
@@ -772,8 +774,8 @@ serve(async (req) => {
       cascade_order: cascadeOrder.filter(p => aiProviders[p as keyof typeof aiProviders]),
       primary_provider: primaryProvider,
       fallbacks_available: configuredProviders.length - 1,
-      message: configuredProviders.length === 0 
-        ? 'No AI providers configured!' 
+      message: configuredProviders.length === 0
+        ? 'No AI providers configured!'
         : `Using ${primaryProvider} with ${configuredProviders.length - 1} fallback(s)`
     };
 
@@ -822,7 +824,7 @@ serve(async (req) => {
       const heartbeatActiveCount = heartbeatActiveSessions?.length || 0;
       const recentlyConnectedCount = recentlyConnectedSessions?.length || 0;
       const connectionsLastHour = hourlyConnectionSessions?.length || 0;
-      
+
       // Combined active = devices with heartbeat OR recently connected
       const combinedActiveDeviceIds = new Set([
         ...(heartbeatActiveSessions || []).map((s: any) => s.device_id),
@@ -830,7 +832,7 @@ serve(async (req) => {
       ]);
       const combinedActiveCount = combinedActiveDeviceIds.size;
 
-      const activeDevices = devices?.filter((d: any) => 
+      const activeDevices = devices?.filter((d: any) =>
         d.last_seen_at && new Date(d.last_seen_at) > new Date(now - 15 * 60 * 1000)
       ).length || 0;
 
@@ -864,7 +866,7 @@ serve(async (req) => {
           hourly_connections: connectionsLastHour,
           message: heartbeatActiveCount === 0 && recentlyConnectedCount > 0
             ? 'Devices connected but not sending heartbeats - client may need to implement heartbeat calls'
-            : (heartbeatActiveCount > 0 
+            : (heartbeatActiveCount > 0
               ? `${heartbeatActiveCount} device(s) actively sending heartbeats`
               : 'No active device connections detected')
         },
@@ -918,37 +920,37 @@ serve(async (req) => {
 
     // 10. Generate Health Summary - UNIFIED SCORING SYSTEM
     const cronMetrics = extractCronMetrics(statusReport.components.cron_jobs?.all_jobs || []);
-    
+
     // Use real Python execution stats from the new section
-    const pythonFailed = statusReport.components.python_executions?.total_24h 
+    const pythonFailed = statusReport.components.python_executions?.total_24h
       ? statusReport.components.python_executions.total_24h - statusReport.components.python_executions.successful_24h
       : 0;
-    
+
     const healthMetrics = buildHealthMetrics({
       apiKeyHealth: { unhealthy: 0 }, // API key health checked separately
       pythonExecStats: { failed: pythonFailed },
       taskStats: { blocked: statusReport.components.tasks?.stats?.blocked || 0 },
-      cronStats: { 
+      cronStats: {
         failing: statusReport.components.cron_jobs?.failing_jobs || cronMetrics.failing,
         stalled: statusReport.components.cron_jobs?.stalled_jobs || cronMetrics.stalled
       },
       agentStats: { error: statusReport.components.agents?.stats?.error || 0 },
       edgeFunctionStats: { overall_error_rate: statusReport.components.edge_functions?.overall_error_rate || 0 },
-      deviceStats: { 
-        total: statusReport.components.xmrt_charger?.total_registered_devices || 0, 
-        active: statusReport.components.xmrt_charger?.active_devices_15min || 0 
+      deviceStats: {
+        total: statusReport.components.xmrt_charger?.total_registered_devices || 0,
+        active: statusReport.components.xmrt_charger?.active_devices_15min || 0
       },
       chargingStats: { avg_efficiency: 100, total: statusReport.components.xmrt_charger?.pop_events_24h || 0 },
       commandStats: { failed: 0 }
     });
-    
+
     const healthResult = calculateUnifiedHealthScore(healthMetrics);
-    
+
     statusReport.health_score = healthResult.score;
     statusReport.overall_status = healthResult.status;
     statusReport.health_issues = healthResult.issues;
     statusReport.scoring_method = 'unified_v2';
-    
+
     // Add ecosystem summary for quick reference
     statusReport.ecosystem_summary = {
       agents: `${statusReport.components.agents?.stats?.total || 0} total (${statusReport.components.agents?.stats?.busy || 0} busy)`,
@@ -963,9 +965,9 @@ serve(async (req) => {
       xmrt_charger: `${statusReport.components.xmrt_charger?.total_registered_devices || 0} devices (${statusReport.components.xmrt_charger?.active_devices_15min || 0} active)`,
       user_acquisition: `${statusReport.components.user_acquisition?.sessions_24h || 0} sessions (${statusReport.components.user_acquisition?.qualified_leads || 0} qualified leads)`
     };
-    
+
     console.log(`✅ System Status Check Complete - Overall: ${statusReport.overall_status} (${statusReport.health_score}/100)`);
-    
+
     // Log health check to activity log for HeroSection consistency
     try {
       await supabase.from('eliza_activity_log').insert({
@@ -973,9 +975,9 @@ serve(async (req) => {
         title: `System Health: ${statusReport.overall_status.toUpperCase()}`,
         description: `Health Score: ${statusReport.health_score}/100, ${statusReport.health_issues?.length || 0} issue(s) detected`,
         status: 'completed',
-        metadata: { 
-          health_score: statusReport.health_score, 
-          status: statusReport.overall_status, 
+        metadata: {
+          health_score: statusReport.health_score,
+          status: statusReport.overall_status,
           issues_count: statusReport.health_issues?.length || 0,
           issues: statusReport.health_issues?.slice(0, 5) // Store up to 5 issues
         }
@@ -984,13 +986,13 @@ serve(async (req) => {
     } catch (logError) {
       console.warn('Failed to log health check to activity log:', logError);
     }
-    
+
     // Cache the result
     const responseData = { success: true, status: statusReport };
     statusCache = { data: responseData, timestamp: Date.now() };
-    
+
     await usageTracker.success({ health_score: statusReport.health_score });
-    
+
     return new Response(
       JSON.stringify(responseData),
       { headers: { ...corsHeaders, "Content-Type": "application/json", 'X-Cache': 'MISS' } }
@@ -1000,8 +1002,8 @@ serve(async (req) => {
     console.error("System status check error:", error);
     await usageTracker.error(error instanceof Error ? error.message : 'Unknown error');
     return new Response(
-      JSON.stringify({ 
-        success: false, 
+      JSON.stringify({
+        success: false,
         error: error instanceof Error ? error.message : "Unknown error",
         status: {
           overall_status: 'error',
