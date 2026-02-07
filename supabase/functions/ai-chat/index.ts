@@ -348,7 +348,7 @@ const TOOL_CALLING_MANDATE = `
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail, set_task_status, delete_task
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
 
@@ -1421,6 +1421,28 @@ async function executeRealToolCall(
 
       if (error) throw error;
       result = { success: true, tasks: tasks || [] };
+
+    } else if (name === 'update_task_status' || name === 'set_task_status') {
+      const { task_id, status, stage, blocking_reason } = parsedArgs;
+      if (!task_id || !status) throw new Error('Missing task_id or status');
+
+      result = await invokeEdgeFunction('agent-manager', {
+        action: 'update_task_status',
+        task_id,
+        status,
+        stage,
+        blocking_reason
+      });
+
+    } else if (name === 'delete_task') {
+      const { task_id, reason } = parsedArgs;
+      if (!task_id) throw new Error('Missing task_id');
+
+      result = await invokeEdgeFunction('agent-manager', {
+        action: 'delete_task',
+        task_id,
+        reason
+      });
 
     } else if (name === 'search_knowledge') {
       const search_term = parsedArgs.search_term || parsedArgs.query;
