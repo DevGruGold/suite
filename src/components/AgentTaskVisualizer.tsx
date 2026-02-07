@@ -83,7 +83,7 @@ const STATUS_STYLES: Record<string, { border: string; bg: string; text: string }
   IN_PROGRESS: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-400' },
   CLAIMED: { border: 'border-blue-500/50', bg: 'bg-blue-500/10', text: 'text-blue-400' },
   PENDING: { border: 'border-yellow-500/50', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
-  PENDING: { border: 'border-yellow-500/50', bg: 'bg-yellow-500/10', text: 'text-yellow-400' },
+
   BLOCKED: { border: 'border-red-500/50', bg: 'bg-red-500/10', text: 'text-red-400' },
   PAUSED: { border: 'border-amber-500/50', bg: 'bg-amber-500/10', text: 'text-amber-400' },
   FAILED: { border: 'border-red-500/50', bg: 'bg-red-500/10', text: 'text-red-400' },

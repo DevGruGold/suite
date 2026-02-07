@@ -81,8 +81,7 @@ interface SystemStatus {
   };
 }
 
-  };
-}
+
 
 const formatHashrate = (hashrate: number): string => {
   if (!hashrate) return '0 H/s';
