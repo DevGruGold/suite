@@ -183,6 +183,57 @@ export async function executeToolCall(
       // ====================================================================
       // CONVERSATIONAL USER ACQUISITION TOOLS
       // ====================================================================
+      case 'dispatch_local_task':
+        console.log(`🚀 [${executiveName}] Dispatching Local Task`);
+
+        // Retrieve secrets from environment or Supabase
+        // Note: In Edge Functions, process.env is via Deno.env usually, but here we check if passed in context or fetch from simple map
+        // For this architecture we assume ANTIGRAVITY_URL is set as a secret in the Edge Function environment
+        const antigravityUrl = Deno.env.get('ANTIGRAVITY_URL');
+        const antigravityToken = Deno.env.get('ANTIGRAVITY_TOKEN') || 'default-dev-token';
+
+        if (!antigravityUrl) {
+          result = {
+            success: false,
+            error: 'Configuration Error',
+            learning_point: 'The ANTIGRAVITY_URL secret is not set in the Edge Function. Please set it to your active ngrok URL.'
+          };
+          break;
+        }
+
+        try {
+          // Add source attribution
+          const payload = {
+            ...parsedArgs.task_payload,
+            source: executiveName,
+            dispatched_at: new Date().toISOString()
+          };
+
+          const response = await fetch(`${antigravityUrl}/task`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'x-antigravity-token': antigravityToken
+            },
+            body: JSON.stringify(payload)
+          });
+
+          if (!response.ok) {
+            throw new Error(`Local bridge returned ${response.status}: ${response.statusText}`);
+          }
+
+          const responseData = await response.json();
+          result = { success: true, result: responseData };
+        } catch (bridgeError) {
+          console.error(`❌ Bridge Connection Failed:`, bridgeError);
+          result = {
+            success: false,
+            error: `Failed to connect to local bridge at ${antigravityUrl}. Is ngrok running?`,
+            details: bridgeError.message
+          };
+        }
+        break;
+
       case 'qualify_lead':
         console.log(`🎯 [${executiveName}] Qualify Lead`);
         const qualifyResult = await supabase.functions.invoke('qualify-lead', { body: parsedArgs });

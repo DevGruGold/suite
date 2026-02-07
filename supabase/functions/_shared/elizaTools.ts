@@ -3306,5 +3306,34 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: ['operation_name']
       }
     }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'dispatch_local_task',
+      description: '🚀 DISPATCH TASK TO LOCAL MACHINE - define a task to be executed or logged on the user\'s local computer via the Antigravity Direct Bridge. Use this when you need to run something physically on the user\'s dev machine or just want to notify them locally.',
+      parameters: {
+        type: 'object',
+        properties: {
+          task_payload: {
+            type: 'object',
+            description: 'The task details',
+            properties: {
+              title: { type: 'string', description: 'Task title' },
+              description: { type: 'string', description: 'Task description' },
+              command: { type: 'string', description: 'Optional: shell command to execute (use caution)' },
+              priority: { type: 'number', description: 'Priority 1-10' }
+            },
+            required: ['title']
+          },
+          target_device: {
+            type: 'string',
+            description: 'Target device ID (default: "primary")',
+            default: 'primary'
+          }
+        },
+        required: ['task_payload']
+      }
+    }
   }
 ];

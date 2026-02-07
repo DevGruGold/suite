@@ -636,3 +636,44 @@ function transformResult(result: ProviderResult): any {
     provider: result.provider
   };
 }
+
+/**
+ * Generate Embedding using Supabase Native AI (ONNX via internal Runtime)
+ * Uses Singleton pattern to prevent memory leaks/crashes
+ */
+let embeddingSession: any = null;
+
+export async function generateEmbedding(text: string): Promise<number[]> {
+  try {
+    console.log(`🧠 Generating embedding for ${text.length} chars using Supabase Native AI (gte-small)...`);
+
+    // Initialize session only once (Singleton)
+    if (!embeddingSession) {
+      // @ts-ignore: Supabase is a global in Edge Runtime
+      if (typeof Supabase === 'undefined' || !Supabase.ai) {
+        throw new Error('Supabase Native AI not available in this environment');
+      }
+      console.log('🔌 Initializing new Supabase.ai Session (gte-small)...');
+      // @ts-ignore: Supabase is a global in Edge Runtime
+      embeddingSession = new Supabase.ai.Session('gte-small');
+    }
+
+    // Generate embedding
+    const output = await embeddingSession.run(text, {
+      mean_pool: true,
+      normalize: true,
+    });
+
+    if (!output || !Array.isArray(output)) {
+      throw new Error('Invalid embedding format from Supabase AI');
+    }
+
+    return output;
+  } catch (error) {
+    console.error('❌ Embedding generation error:', error);
+    // If session is possibly corrupted, clear it for next retry
+    embeddingSession = null;
+    throw error;
+  }
+}
+
