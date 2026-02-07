@@ -63,7 +63,13 @@ verify_jwt = false
 [functions.eliza-self-evaluation]
 verify_jwt = false
 
+[functions.extract-knowledge]
+verify_jwt = false
+
 [functions.get-my-feedback]
+verify_jwt = false
+
+[functions.github-integration]
 verify_jwt = false
 
 [api]

@@ -266,10 +266,22 @@ export async function executeOfficeClerk(
   // Execute each matched function
   for (const mapping of uniqueFunctions.slice(0, 5)) { // Limit to 5 to prevent overload
     try {
+      let finalArgs = { ...mapping.args };
+
+      // Dynamic argument injection for specific functions
+      if (mapping.functionName === 'extract-knowledge') {
+        finalArgs = {
+          ...finalArgs,
+          content: userQuery, // Pass the user's query as content to extract from
+          message_id: `oc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          session_id: 'office_clerk_direct_execution'
+        };
+      }
+
       console.log(`🏢 Executing: ${mapping.functionName} (${mapping.category})`);
 
       const { data, error } = await supabase.functions.invoke(mapping.functionName, {
-        body: mapping.args
+        body: finalArgs
       });
 
       if (!error && data) {
