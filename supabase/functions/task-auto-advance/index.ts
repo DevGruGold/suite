@@ -64,7 +64,7 @@ serve(async (req) => {
 
         // PRIORITY 1: Use checklist-based progress if checklist exists
         if (checklist.length > 0) {
-          newProgress = Math.round((completedItems.length / checklist.length) * 100);
+          newProgress = Math.min(100, Math.round((completedItems.length / checklist.length) * 100));
           progressSource = 'checklist';
           checklistBased++;
         } else {

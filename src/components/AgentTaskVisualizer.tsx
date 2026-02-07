@@ -1188,7 +1188,7 @@ export function AgentTaskVisualizer() {
           <Bot className="w-4 h-4 text-green-500" />
           <span className="text-sm font-medium text-foreground">Working Agents</span>
           <Badge variant="secondary" className="text-[10px] h-5 px-1.5 text-green-400 border-green-500/20 bg-green-500/10">
-            {agents.filter(a => a.status === 'BUSY' || (a.current_workload && a.current_workload > 0)).length}
+            {agents.filter(a => a.status === 'BUSY').length}
           </Badge>
         </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
