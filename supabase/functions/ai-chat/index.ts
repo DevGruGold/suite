@@ -1,6 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.46.2";
+import { EDGE_FUNCTIONS_REGISTRY } from "../_shared/edgeFunctionRegistry.ts";
 
 // ========== ENVIRONMENT CONFIGURATION ==========
 const SUPABASE_URL = Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') || 'https://vawouugtzwmejxqkeqqj.supabase.co';
@@ -4394,6 +4395,47 @@ const ELIZA_TOOLS = [
   }
 ];
 
+
+/**
+ * Generates tool definitions dynamically from the registry.
+ * Excludes tools that are already strictly defined in ELIZA_TOOLS.
+ */
+function generateDynamicTools() {
+  const existingToolNames = new Set(ELIZA_TOOLS.map(t => t.function.name));
+
+  return EDGE_FUNCTIONS_REGISTRY
+    .filter(fn => !existingToolNames.has(fn.name))
+    .map(fn => ({
+      type: 'function',
+      function: {
+        name: fn.name,
+        description: `${fn.description} (Usage: ${fn.example_use})`,
+        parameters: {
+          type: 'object',
+          properties: {
+            // We use a generic payload/body because the registry doesn't have strict schemas yet.
+            // But we include 'action' and 'data' as common patterns, or just a free-form object.
+            // The descriptions help the LLM know what to put here.
+            action: {
+              type: 'string',
+              description: 'The specific action to perform (see example_use)'
+            },
+            data: {
+              type: 'object',
+              description: 'The data payload for the action (see example_use)'
+            },
+            // Allow top-level params for tools that don't follow action/data pattern
+            messages: { type: 'array', description: 'For chat tools' },
+            model: { type: 'string', description: 'Model name' },
+            prompt: { type: 'string', description: 'For generation tools' }
+            // We could add more specific fields but this covers 90%
+          },
+          // We don't enforce required fields strictly for dynamic tools to allow flexibility
+        }
+      }
+    }));
+}
+
 // ========== TOOL MANAGER & TIERED ACCESS ==========
 class ToolManager {
   static readonly FREE_TOOLS = [
@@ -4443,9 +4485,11 @@ class ToolManager {
     const isSuperAdmin = role === 'superadmin' || role === 'admin';
     const isModerator = role === 'moderator';
 
-    // Superadmins get everything
+    // Superadmins get everything (Hardcoded + Dynamic)
     if (isSuperAdmin) {
-      return ELIZA_TOOLS;
+      const dynamicTools = generateDynamicTools();
+      console.log(`🔌 Loaded ${dynamicTools.length} dynamic tools from registry`);
+      return [...ELIZA_TOOLS, ...dynamicTools];
     }
 
     // Moderators get Pro tools + Free tools

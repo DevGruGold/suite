@@ -1,5 +1,6 @@
 import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { logFunctionUsage } from './functionUsageLogger.ts';
+import { EDGE_FUNCTIONS_REGISTRY } from './edgeFunctionRegistry.ts';
 
 /**
  * Analyze error to provide learning points for executives
@@ -2285,6 +2286,24 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
         });
 
     default:
+      // Dynamic Fallback: Check if tool exists in the registry
+      const registryEntry = EDGE_FUNCTIONS_REGISTRY.find(f => f.name === name);
+      if (registryEntry) {
+        console.log(`🌐 [${executiveName}] Dynamic Registry Tool Execution: ${name}`);
+        console.log(`📋 [${executiveName}] Payload:`, JSON.stringify(parsedArgs).substring(0, 200));
+
+        return supabase.functions.invoke(name, {
+          body: parsedArgs
+        }).then((res: any) => {
+          if (res.error) {
+            console.error(`❌ [${executiveName}] Dynamic tool error (${name}):`, res.error);
+            return { success: false, error: res.error.message };
+          }
+          return { success: true, result: res.data, source: 'dynamic_registry' };
+        });
+      }
+
+      console.warn(`⚠️ [${executiveName}] Unknown tool call: ${name}`);
       return null;
   }
 }

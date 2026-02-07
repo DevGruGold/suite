@@ -28,7 +28,7 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     category: 'automation',
     example_use: 'Execute template: {"action":"execute_template","data":{"template_name":"acquire_new_customer","params":{"email":"new@customer.com","tier":"basic","service_name":"uspto-patent-mcp"}}}. List templates: {"action":"list_templates","data":{"category":"revenue"}}'
   },
-{
+  {
     name: 'lovable-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/lovable-chat',
     description: '✅ PRIMARY AI - Model-agnostic chat via Lovable AI Gateway (Gemini 2.5 Flash default, supports OpenAI GPT-5)',
@@ -158,196 +158,196 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ["Mining stats", "Device monitoring", "Hashrate tracking"],
     category: 'mining',
     example_use: 'Use aggregate device metrics for aggregate and analyze device mining metrics over time'
-  },  {
+  }, {
     name: 'api-key-health-monitor',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/api-key-health-monitor',
     description: 'Monitor health and usage of API keys across services',
     capabilities: ["Health checks", "Performance metrics", "Status monitoring"],
     category: 'monitoring',
     example_use: 'Use api key health monitor for monitor health and usage of api keys across services'
-  },  {
+  }, {
     name: 'check-frontend-health',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/check-frontend-health',
     description: 'Health check for frontend application status',
     capabilities: ["Health checks", "Performance metrics", "Status monitoring"],
     category: 'monitoring',
     example_use: 'Use check frontend health for health check for frontend application status'
-  },  {
+  }, {
     name: 'cleanup-duplicate-tasks',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/cleanup-duplicate-tasks',
     description: 'Remove duplicate tasks from the task management system',
     capabilities: ["Task creation", "Task assignment", "Workload balancing"],
     category: 'task-management',
     example_use: 'Use cleanup duplicate tasks for remove duplicate tasks from the task management system'
-  },  {
+  }, {
     name: 'code-monitor-daemon',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/code-monitor-daemon',
     description: 'Continuous monitoring daemon for code execution and errors',
     capabilities: ["Execute code", "Error handling", "Sandboxed execution"],
     category: 'code-execution',
     example_use: 'Use code monitor daemon for continuous monitoring daemon for code execution and errors'
-  },  {
+  }, {
     name: 'community-spotlight-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/community-spotlight-post',
     description: 'Generate and post community spotlight content',
     capabilities: ["Automated posting", "Content generation", "Scheduling"],
     category: 'autonomous',
     example_use: 'Use community spotlight post for generate and post community spotlight content'
-  },  {
+  }, {
     name: 'conversation-access',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/conversation-access',
     description: 'Manage conversation access and permissions',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use conversation access for manage conversation access and permissions'
-  },  {
+  }, {
     name: 'daily-discussion-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/daily-discussion-post',
     description: 'Generate and post daily discussion topics',
     capabilities: ["Automated posting", "Content generation", "Scheduling"],
     category: 'autonomous',
     example_use: 'Use daily discussion post for generate and post daily discussion topics'
-  },  {
+  }, {
     name: 'deepseek-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/deepseek-chat',
     description: 'AI chat via DeepSeek model',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use deepseek chat for ai chat via deepseek model'
-  },  {
+  }, {
     name: 'ecosystem-monitor',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ecosystem-monitor',
     description: 'Monitor entire XMRT Vercel ecosystem health (xmrt-io, xmrt-ecosystem, xmrt-dao-ecosystem)',
     capabilities: ["Multi-service health checks", "Performance metrics", "Status monitoring", "Vercel deployment tracking"],
     category: 'monitoring',
     example_use: 'Monitor all Vercel services health, check ecosystem performance, track deployment status'
-  },  {
+  }, {
     name: 'eliza-python-runtime',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/eliza-python-runtime',
     description: 'Python runtime environment for Eliza agent',
     capabilities: ["Execute code", "Error handling", "Sandboxed execution"],
     category: 'code-execution',
     example_use: 'Use eliza python runtime for python runtime environment for eliza agent'
-  },  {
+  }, {
     name: 'enhanced-learning',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-learning',
     description: 'Advanced machine learning and pattern recognition',
     capabilities: ["Knowledge storage", "Semantic search", "Entity relationships"],
     category: 'knowledge',
     example_use: 'Use enhanced learning for advanced machine learning and pattern recognition'
-  },  {
+  }, {
     name: 'evening-summary-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/evening-summary-post',
     description: 'Generate and post evening summary reports',
     capabilities: ["Automated posting", "Content generation", "Scheduling"],
     category: 'autonomous',
     example_use: 'Use evening summary post for generate and post evening summary reports'
-  },  {
+  }, {
     name: 'execute-scheduled-actions',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/execute-scheduled-actions',
     description: 'Execute scheduled tasks and actions',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use execute scheduled actions for execute scheduled tasks and actions'
-  },  {
+  }, {
     name: 'extract-knowledge',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/extract-knowledge',
     description: 'Extract and structure knowledge from conversations',
     capabilities: ["Knowledge storage", "Semantic search", "Entity relationships"],
     category: 'knowledge',
     example_use: 'Use extract knowledge for extract and structure knowledge from conversations'
-  },  {
+  }, {
     name: 'fetch-auto-fix-results',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/fetch-auto-fix-results',
     description: 'Retrieve results from autonomous code fixing',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use fetch auto fix results for retrieve results from autonomous code fixing'
-  },  {
+  }, {
     name: 'gemini-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/gemini-chat',
     description: 'AI chat via Google Gemini model',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use gemini chat for ai chat via google gemini model'
-  },  {
+  }, {
     name: 'get-code-execution-lessons',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-code-execution-lessons',
     description: 'Retrieve lessons learned from code executions',
     capabilities: ["Execute code", "Error handling", "Sandboxed execution"],
     category: 'code-execution',
     example_use: 'Use get code execution lessons for retrieve lessons learned from code executions'
-  },  {
+  }, {
     name: 'get-embedding',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-embedding',
     description: 'Generate vector embeddings for text',
     capabilities: ["Knowledge storage", "Semantic search", "Entity relationships"],
     category: 'knowledge',
     example_use: 'Use get embedding for generate vector embeddings for text'
-  },  {
+  }, {
     name: 'get-lovable-key',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-lovable-key',
     description: 'Retrieve Lovable API key',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use get lovable key for retrieve lovable api key'
-  },  {
+  }, {
     name: 'issue-engagement-command',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/issue-engagement-command',
     description: 'Engage with GitHub issues via commands',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use issue engagement command for engage with github issues via commands'
-  },  {
+  }, {
     name: 'kimi-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/kimi-chat',
     description: 'AI chat via Kimi model',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use kimi chat for ai chat via kimi model'
-  },  {
+  }, {
     name: 'list-available-functions',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/list-available-functions',
     description: 'List all available edge functions',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use list available functions for list all available edge functions'
-  },  {
+  }, {
     name: 'monitor-device-connections',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/monitor-device-connections',
     description: 'Monitor mining device connections and status',
     capabilities: ["Mining stats", "Device monitoring", "Hashrate tracking"],
     category: 'mining',
     example_use: 'Use monitor device connections for monitor mining device connections and status'
-  },  {
+  }, {
     name: 'morning-discussion-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/morning-discussion-post',
     description: 'Generate and post morning discussion topics',
     capabilities: ["Automated posting", "Content generation", "Scheduling"],
     category: 'autonomous',
     example_use: 'Use morning discussion post for generate and post morning discussion topics'
-  },  {
+  }, {
     name: 'nlg-generator',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/nlg-generator',
     description: 'Natural language generation for reports and content',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use nlg generator for natural language generation for reports and content'
-  },  {
+  }, {
     name: 'openai-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/openai-chat',
     description: 'AI chat via OpenAI models',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use openai chat for ai chat via openai models'
-  },  {
+  }, {
     name: 'openai-tts',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/openai-tts',
     description: 'Text-to-speech via OpenAI',
     capabilities: ["Text-to-speech", "Voice synthesis", "Audio generation"],
     category: 'ai',
     example_use: 'Use openai tts for text-to-speech via openai'
-  },  
+  },
   {
     name: 'uspto-patent-mcp',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/uspto-patent-mcp',
@@ -373,329 +373,329 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use predictive analytics for predictive analytics for mining and system metrics'
-  },  {
+  }, {
     name: 'process-contributor-reward',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/process-contributor-reward',
     description: 'Process and distribute contributor rewards',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use process contributor reward for process and distribute contributor rewards'
-  },  {
+  }, {
     name: 'progress-update-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/progress-update-post',
     description: 'Generate and post progress updates',
     capabilities: ["Automated posting", "Content generation", "Scheduling"],
     category: 'autonomous',
     example_use: 'Use progress update post for generate and post progress updates'
-  },  {
+  }, {
     name: 'prometheus-metrics',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/prometheus-metrics',
     description: 'Export Prometheus-compatible metrics',
     capabilities: ["Mining stats", "Device monitoring", "Hashrate tracking"],
     category: 'mining',
     example_use: 'Use prometheus metrics for export prometheus-compatible metrics'
-  },  {
+  }, {
     name: 'python-db-bridge',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/python-db-bridge',
     description: 'Bridge for Python code to access database',
     capabilities: ["Execute code", "Error handling", "Sandboxed execution"],
     category: 'code-execution',
     example_use: 'Use python db bridge for bridge for python code to access database'
-  },  {
+  }, {
     name: 'python-network-proxy',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/python-network-proxy',
     description: 'Network proxy for Python code execution',
     capabilities: ["Execute code", "Error handling", "Sandboxed execution"],
     category: 'code-execution',
     example_use: 'Use python network proxy for network proxy for python code execution'
-  },  {
+  }, {
     name: 'vercel-ecosystem-api',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vercel-ecosystem-api',
     description: 'Vercel multi-service management for xmrt-io, xmrt-ecosystem, and xmrt-dao-ecosystem deployments',
     capabilities: ["Deployment tracking", "Multi-service health monitoring", "Service status aggregation", "Deployment history"],
     category: 'deployment',
     example_use: 'Check health of all Vercel services, get deployment info, monitor service status'
-  },  {
+  }, {
     name: 'redis-cache',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/redis-cache',
     description: 'Upstash Redis caching service for API responses, sessions, and rate limiting',
     capabilities: ["Get/Set cache", "Delete cache", "Health check", "TTL management"],
     category: 'database',
     example_use: 'Cache ecosystem health for 5 minutes, store session data, implement rate limiting'
-  },  {
+  }, {
     name: 'schedule-reminder',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/schedule-reminder',
     description: 'Schedule and send reminders',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use schedule reminder for schedule and send reminders'
-  },  {
+  }, {
     name: 'schema-manager',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/schema-manager',
     description: 'Manage database schema and migrations',
     capabilities: ["Database operations", "Schema management", "Data access"],
     category: 'database',
     example_use: 'Use schema manager for manage database schema and migrations'
-  },  {
+  }, {
     name: 'self-optimizing-agent-architecture',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/self-optimizing-agent-architecture',
     description: 'Self-optimizing agent system architecture',
     capabilities: ["Task creation", "Task assignment", "Workload balancing"],
     category: 'task-management',
     example_use: 'Use self optimizing agent architecture for self-optimizing agent system architecture'
-  },  {
+  }, {
     name: 'summarize-conversation',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/summarize-conversation',
     description: 'Generate conversation summaries',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use summarize conversation for generate conversation summaries'
-  },  {
+  }, {
     name: 'system-health',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/system-health',
     description: 'Comprehensive system health monitoring',
     capabilities: ["Health checks", "Performance metrics", "Status monitoring"],
     category: 'monitoring',
     example_use: 'Use system health for comprehensive system health monitoring'
-  },  {
+  }, {
     name: 'universal-edge-invoker',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/universal-edge-invoker',
     description: 'Universal invoker for all edge functions',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use universal edge invoker for universal invoker for all edge functions'
-  },  {
+  }, {
     name: 'update-api-key',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/update-api-key',
     description: 'Update API keys in the system',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use update api key for update api keys in the system'
-  },  {
+  }, {
     name: 'validate-github-contribution',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/validate-github-contribution',
     description: 'Validate GitHub contributions for rewards',
     capabilities: ["GitHub API", "Repository management", "Issue tracking"],
     category: 'github',
     example_use: 'Use validate github contribution for validate github contributions for rewards'
-  },  {
+  }, {
     name: 'validate-pop-event',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/validate-pop-event',
     description: 'Validate proof-of-participation events',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use validate pop event for validate proof-of-participation events'
-  },  {
+  }, {
     name: 'vectorize-memory',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vectorize-memory',
     description: 'Convert memories to vector embeddings',
     capabilities: ["Knowledge storage", "Semantic search", "Entity relationships"],
     category: 'knowledge',
     example_use: 'Use vectorize memory for convert memories to vector embeddings'
-  },  {
+  }, {
     name: 'vercel-ai-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vercel-ai-chat',
     description: 'AI chat via Vercel AI SDK',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use vercel ai chat for ai chat via vercel ai sdk'
-  },  {
+  }, {
     name: 'vercel-ai-chat-stream',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vercel-ai-chat-stream',
     description: 'Streaming AI chat via Vercel AI SDK',
     capabilities: ["AI chat", "Context awareness", "Natural language processing"],
     category: 'ai',
     example_use: 'Use vercel ai chat stream for streaming ai chat via vercel ai sdk'
-  },  {
+  }, {
     name: 'vercel-manager',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vercel-manager',
     description: 'Manage Vercel deployments',
     capabilities: ["Deployment management", "API integration", "Service control"],
     category: 'deployment',
     example_use: 'Use vercel manager for manage vercel deployments'
-  },  {
+  }, {
     name: 'weekly-retrospective-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/weekly-retrospective-post',
     description: 'Generate and post weekly retrospective',
     capabilities: ["Automated posting", "Content generation", "Scheduling"],
     category: 'autonomous',
     example_use: 'Use weekly retrospective post for generate and post weekly retrospective'
-  },  {
+  }, {
     name: 'xmrt-mcp-server',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-mcp-server',
     description: 'XMRT Model Context Protocol server',
     capabilities: ["Multi-service integration", "Health monitoring", "Status reporting"],
     category: 'ecosystem',
     example_use: 'Use xmrt mcp server for xmrt model context protocol server'
-  },  {
+  }, {
     name: 'superduper-business-growth',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-business-growth',
     description: 'SuperDuper Agent: Business growth strategy and market expansion',
     capabilities: ["Business strategy", "Market analysis", "Growth planning", "Revenue optimization"],
     category: 'superduper',
     example_use: 'Analyze market opportunities, develop growth strategies, revenue optimization'
-  },  {
+  }, {
     name: 'superduper-code-architect',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-code-architect',
     description: 'SuperDuper Agent: Software architecture and system design',
     capabilities: ["Architecture design", "Code review", "System optimization", "Technical debt analysis"],
     category: 'superduper',
     example_use: 'Design system architecture, review code quality, optimize performance'
-  },  {
+  }, {
     name: 'superduper-communication-outreach',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-communication-outreach',
     description: 'SuperDuper Agent: Community communication and outreach',
     capabilities: ["Community engagement", "Outreach campaigns", "Stakeholder communication"],
     category: 'superduper',
     example_use: 'Manage community outreach, stakeholder communications, engagement campaigns'
-  },  {
+  }, {
     name: 'superduper-content-media',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-content-media',
     description: 'SuperDuper Agent: Content creation and media strategy',
     capabilities: ["Content creation", "Media strategy", "Marketing materials", "Social content"],
     category: 'superduper',
     example_use: 'Create marketing content, develop media strategy, social media management'
-  },  {
+  }, {
     name: 'superduper-design-brand',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-design-brand',
     description: 'SuperDuper Agent: Brand identity and visual design',
     capabilities: ["Brand strategy", "Visual design", "UI/UX", "Design systems"],
     category: 'superduper',
     example_use: 'Develop brand identity, create design systems, UI/UX improvements'
-  },  {
+  }, {
     name: 'superduper-development-coach',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-development-coach',
     description: 'SuperDuper Agent: Developer mentoring and coaching',
     capabilities: ["Developer mentoring", "Code education", "Best practices", "Career guidance"],
     category: 'superduper',
     example_use: 'Mentor developers, teach best practices, provide career guidance'
-  },  {
+  }, {
     name: 'superduper-domain-experts',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-domain-experts',
     description: 'SuperDuper Agent: Domain-specific expertise and consulting',
     capabilities: ["Domain expertise", "Technical consulting", "Industry knowledge", "Specialized advice"],
     category: 'superduper',
     example_use: 'Provide domain expertise, technical consulting, specialized guidance'
-  },  {
+  }, {
     name: 'superduper-finance-investment',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-finance-investment',
     description: 'SuperDuper Agent: Financial planning and investment strategy',
     capabilities: ["Financial analysis", "Investment strategy", "Budget planning", "ROI optimization"],
     category: 'superduper',
     example_use: 'Analyze financial health, develop investment strategy, budget planning'
-  },  {
+  }, {
     name: 'superduper-integration',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-integration',
     description: 'SuperDuper Agent: System integration and orchestration',
     capabilities: ["System integration", "API orchestration", "Service coordination", "Integration testing"],
     category: 'superduper',
     example_use: 'Integrate systems, orchestrate APIs, coordinate services'
-  },  {
+  }, {
     name: 'superduper-research-intelligence',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-research-intelligence',
     description: 'SuperDuper Agent: Research and competitive intelligence',
     capabilities: ["Market research", "Competitive analysis", "Trend monitoring", "Intelligence gathering"],
     category: 'superduper',
     example_use: 'Conduct market research, analyze competitors, monitor trends'
-  },  {
+  }, {
     name: 'superduper-social-viral',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-social-viral',
     description: 'SuperDuper Agent: Social media and viral marketing',
     capabilities: ["Viral campaigns", "Social media strategy", "Influencer outreach", "Engagement optimization"],
     category: 'superduper',
     example_use: 'Create viral campaigns, optimize social engagement, influencer partnerships'
-  },  {
+  }, {
     name: 'eliza-intelligence-coordinator',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/eliza-intelligence-coordinator',
     description: 'Coordinates intelligence gathering and knowledge synthesis across all agents',
     capabilities: ["Intelligence coordination", "Knowledge synthesis", "Multi-agent orchestration"],
     category: 'autonomous',
     example_use: 'Coordinate intelligence across agents, synthesize knowledge, orchestrate workflows'
-  },  {
+  }, {
     name: 'eliza-self-evaluation',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/eliza-self-evaluation',
     description: 'Self-evaluation and performance analysis for continuous improvement',
     capabilities: ["Performance analysis", "Self-evaluation", "Improvement recommendations"],
     category: 'autonomous',
     example_use: 'Analyze system performance, evaluate effectiveness, recommend improvements'
-  },  {
+  }, {
     name: 'evaluate-community-idea',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/evaluate-community-idea',
     description: 'Evaluate community-submitted ideas for feasibility and impact',
     capabilities: ["Idea evaluation", "Feasibility analysis", "Impact assessment"],
     category: 'governance',
     example_use: 'Evaluate community proposals, assess feasibility, determine impact'
-  },  {
+  }, {
     name: 'function-usage-analytics',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/function-usage-analytics',
     description: 'Analytics for edge function usage patterns and performance',
     capabilities: ["Usage analytics", "Performance tracking", "Pattern analysis"],
     category: 'monitoring',
     example_use: 'Analyze function usage, track performance, identify patterns'
-  },  {
+  }, {
     name: 'list-function-proposals',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/list-function-proposals',
     description: 'List all edge function proposals and their status',
     capabilities: ["Proposal listing", "Status tracking", "Governance monitoring"],
     category: 'governance',
     example_use: 'List pending proposals, check proposal status, view voting history'
-  },  {
+  }, {
     name: 'mobile-miner-config',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mobile-miner-config',
     description: 'Configuration management for mobile mining devices',
     capabilities: ["Device configuration", "Mining settings", "Mobile optimization"],
     category: 'mining',
     example_use: 'Configure mobile miners, optimize settings, manage device profiles'
-  },  {
+  }, {
     name: 'mobile-miner-register',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mobile-miner-register',
     description: 'Registration system for mobile mining devices',
     capabilities: ["Device registration", "Miner onboarding", "Identity management"],
     category: 'mining',
     example_use: 'Register mobile miners, onboard new devices, manage identities'
-  },  {
+  }, {
     name: 'mobile-miner-script',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mobile-miner-script',
     description: 'Script distribution for mobile mining clients',
     capabilities: ["Script distribution", "Client updates", "Version management"],
     category: 'mining',
     example_use: 'Distribute mining scripts, push updates, manage versions'
-  },  {
+  }, {
     name: 'opportunity-scanner',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/opportunity-scanner',
     description: 'Autonomous opportunity scanning and identification',
     capabilities: ["Opportunity detection", "Market scanning", "Trend analysis"],
     category: 'autonomous',
     example_use: 'Scan for opportunities, detect market trends, identify potential'
-  },  {
+  }, {
     name: 'propose-new-edge-function',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/propose-new-edge-function',
     description: 'Submit new edge function proposals for council voting',
     capabilities: ["Proposal submission", "Governance workflow", "Council voting"],
     category: 'governance',
     example_use: 'Propose new functions, submit to council, initiate voting'
-  },  {
+  }, {
     name: 'render-api',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/render-api',
     description: 'Render.com deployment management and monitoring',
     capabilities: ["Render deployment", "Service management", "Health monitoring"],
     category: 'deployment',
     example_use: 'Manage Render deployments, monitor services, check health'
-  },  {
+  }, {
     name: 'system-knowledge-builder',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/system-knowledge-builder',
     description: 'Autonomous knowledge base construction and maintenance',
     capabilities: ["Knowledge construction", "Entity extraction", "Relationship building"],
     category: 'knowledge',
     example_use: 'Build knowledge base, extract entities, create relationships'
-  },  {
+  }, {
     name: 'vote-on-proposal',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vote-on-proposal',
     description: 'Cast votes on edge function and governance proposals',
     capabilities: ["Voting system", "Proposal evaluation", "Decision making"],
     category: 'governance',
     example_use: 'Vote on proposals, evaluate decisions, participate in governance'
-  },  {
+  }, {
     name: 'superduper-router',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/superduper-router',
     description: 'Central router for all SuperDuper specialist agents',
@@ -919,5 +919,104 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['Usage tracking', 'Quota enforcement', 'Rate limiting'],
     category: 'monitoring',
     example_use: '{"api_key":"xmrt_pro_abc"}'
+  },
+  // ============= GOOGLE & VERTEX AI =============
+  {
+    name: 'vertex-ai-chat',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vertex-ai-chat',
+    description: '🤖 Vertex AI Chat - Chat with Google Gemini Pro/Flash models via Vertex AI',
+    capabilities: ['AI chat', 'Multimodal input', 'Gemini Pro/Flash', 'Enterprise-grade'],
+    category: 'ai',
+    example_use: '{"messages":[{"role":"user","content":"Hello"}], "model":"gemini-1.5-pro-preview-0409"}'
+  },
+  {
+    name: 'vertex-ai-image-gen',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vertex-ai-image-gen',
+    description: '🖼️ Vertex AI Image Gen - Generate high-quality images using Imagen',
+    capabilities: ['Image generation', 'Text-to-image', 'Imagen 2/3'],
+    category: 'ai',
+    example_use: '{"prompt":"A futuristic city with flying cars", "aspect_ratio":"16:9"}'
+  },
+  {
+    name: 'google-gmail',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/google-gmail',
+    description: '📧 Gmail Integration - Send emails, read threads, manage drafts',
+    capabilities: ['Send email', 'Read email', 'Create draft', 'Search threads', 'Get thread details'],
+    category: 'web',
+    example_use: '{"action":"send_email", "to":"user@example.com", "subject":"Meeting", "body":"Hello..."}'
+  },
+  {
+    name: 'google-calendar',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/google-calendar',
+    description: '📅 Google Calendar - Manage events and schedules',
+    capabilities: ['List events', 'Create event', 'Update event', 'Delete event', 'Free/busy check'],
+    category: 'web',
+    example_use: '{"action":"list_events", "timeMin":"2023-01-01T00:00:00Z"}'
+  },
+  {
+    name: 'google-drive',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/google-drive',
+    description: '📂 Google Drive - Manage files and folders',
+    capabilities: ['List files', 'Upload file', 'Get file content', 'Search files'],
+    category: 'web',
+    example_use: '{"action":"list_files", "q":"name contains \'report\'"}'
+  },
+  {
+    name: 'google-sheets',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/google-sheets',
+    description: '📊 Google Sheets - Read and write spreadsheet data',
+    capabilities: ['Read sheet', 'Write sheet', 'Append row', 'Clear range'],
+    category: 'web',
+    example_use: '{"action":"read_sheet", "spreadsheetId":"...", "range":"Sheet1!A1:B10"}'
+  },
+  // ============= SOCIAL & PUBLISHING =============
+  {
+    name: 'paragraph-publisher',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/paragraph-publisher',
+    description: '📝 Paragraph.xyz Publisher - Publish articles and newsletters',
+    capabilities: ['Publish post', 'Create draft', 'Update post', 'List posts'],
+    category: 'web',
+    example_use: '{"action":"publish", "title":"Weekly Update", "content":"..."}'
+  },
+  {
+    name: 'typefully-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/typefully-integration',
+    description: '🐦 Typefully/Twitter - Schedule and publish tweets/threads',
+    capabilities: ['Create draft', 'Schedule tweet', 'Publish thread', 'Get user info'],
+    category: 'web',
+    example_use: '{"action":"create_draft", "content":"Hello world!"}'
+  },
+  {
+    name: 'daily-news-finder',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/daily-news-finder',
+    description: '📰 Daily News Finder - Search and curate daily news topics',
+    capabilities: ['Find news', 'Analyze topics', 'Curate content', 'Search trends'],
+    category: 'autonomous',
+    example_use: '{"topic":"AI technology", "days_back":1}'
+  },
+  // ============= AGENT INFRASTRUCTURE =============
+  {
+    name: 'android-control',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/android-control',
+    description: '📱 Android Device Control - Control physical Android devices',
+    capabilities: ['Screen tap', 'Swipe', 'Type text', 'Take screenshot', 'Open app', 'Home button'],
+    category: 'automation',
+    example_use: '{"action":"tap", "x":500, "y":1000, "device_id":"emulator-5554"}'
+  },
+  {
+    name: 'agent-coordination-hub',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-coordination-hub',
+    description: '🤝 Agent Coordination Hub - Central hub for multi-agent synchronization',
+    capabilities: ['Register agent', 'Broadcast message', 'Coordinate tasks', 'Shared memory'],
+    category: 'task-management',
+    example_use: '{"action":"broadcast", "message":"System maintenance in 10 mins"}'
+  },
+  {
+    name: 'agent-deployment-coordinator',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-deployment-coordinator',
+    description: '🚀 Agent Deployment - Coordinate agent deployments and updates',
+    capabilities: ['Deploy agent', 'Update config', 'Rollback version', 'Check status'],
+    category: 'deployment',
+    example_use: '{"action":"deploy", "agent_name":"researcher", "version":"v2.0"}'
   }
 ];
