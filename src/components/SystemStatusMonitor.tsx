@@ -18,7 +18,15 @@ interface SystemStatus {
   overall_status: 'healthy' | 'degraded' | 'unhealthy' | 'error';
   health_score: number;
   components: {
-    database?: ComponentStatus;
+    database?: ComponentStatus & {
+      response_time_ms?: number;
+      stats?: {
+        total_agents: number;
+        total_tasks: number;
+        total_memories: number;
+        total_documents: number;
+      };
+    };
     agents?: ComponentStatus & {
       stats?: {
         total: number;
@@ -50,7 +58,19 @@ interface SystemStatus {
     };
     mining?: ComponentStatus;
     render_service?: ComponentStatus;
-    activity_log?: ComponentStatus;
+    activity_log?: ComponentStatus & {
+      recent_activities?: Array<{
+        type: string;
+        title: string;
+        status: string;
+        created_at: string;
+      }>;
+      stats?: {
+        pending: number;
+        failed: number;
+        total_24h: number;
+      };
+    };
   };
 }
 
@@ -197,6 +217,31 @@ export const SystemStatusMonitor = () => {
               {status.components.database.error && (
                 <p className="text-xs text-muted-foreground">{status.components.database.error}</p>
               )}
+              {status.components.database.stats && (
+                <div className="grid grid-cols-2 gap-2 text-xs">
+                  <div>
+                    <div className="text-muted-foreground">Agents</div>
+                    <div className="font-bold">{status.components.database.stats.total_agents}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Tasks</div>
+                    <div className="font-bold">{status.components.database.stats.total_tasks}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Memories</div>
+                    <div className="font-bold">{status.components.database.stats.total_memories}</div>
+                  </div>
+                  <div>
+                    <div className="text-muted-foreground">Documents</div>
+                    <div className="font-bold">{status.components.database.stats.total_documents}</div>
+                  </div>
+                </div>
+              )}
+              {status.components.database.response_time_ms && (
+                <div className="text-[10px] text-muted-foreground text-right mt-1">
+                  Latency: {status.components.database.response_time_ms}ms
+                </div>
+              )}
             </div>
           )}
 
@@ -333,11 +378,41 @@ export const SystemStatusMonitor = () => {
                 <span className="text-sm font-medium">Activity Log</span>
                 {getStatusIcon(status.components.activity_log.status)}
               </div>
+              {status.components.activity_log.recent_activities && status.components.activity_log.recent_activities.length > 0 ? (
+                <div className="space-y-2 mt-2">
+                  {status.components.activity_log.recent_activities.slice(0, 3).map((activity, idx) => (
+                    <div key={idx} className="flex gap-2 text-xs border-b border-border/50 last:border-0 pb-1.5 last:pb-0">
+                      <div className="mt-0.5">
+                        {activity.status === 'completed' ? (
+                          <CheckCircle2 className="w-3 h-3 text-green-500" />
+                        ) : activity.status === 'failed' ? (
+                          <XCircle className="w-3 h-3 text-red-500" />
+                        ) : (
+                          <Activity className="w-3 h-3 text-blue-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium truncate">{activity.title}</div>
+                        <div className="text-[10px] text-muted-foreground truncate flex justify-between">
+                          <span>{activity.type}</span>
+                          <span>{formatTime(activity.created_at)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-xs text-center text-muted-foreground py-2">No recent activity</div>
+              )}
               {status.components.activity_log.stats && (
-                <div className="grid grid-cols-2 gap-2 text-xs">
+                <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-border/50">
+                  <div>
+                    <div className="text-muted-foreground">24h</div>
+                    <div className="font-bold">{status.components.activity_log.stats.total_24h}</div>
+                  </div>
                   <div>
                     <div className="text-muted-foreground">Pending</div>
-                    <div className="font-bold">{status.components.activity_log.stats.pending}</div>
+                    <div className="font-bold md:text-yellow-600">{status.components.activity_log.stats.pending}</div>
                   </div>
                   <div>
                     <div className="text-muted-foreground">Failed</div>

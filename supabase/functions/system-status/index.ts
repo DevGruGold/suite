@@ -77,12 +77,26 @@ serve(async (req) => {
     const coreChecksStart = Date.now();
 
     const [dbResult, agentsResult, tasksResult] = await Promise.all([
-      // 1. Database Health
+      // 1. Database Health & Volume
       withTimeout(
-        supabase.from('agents').select('id').limit(1),
+        Promise.all([
+          supabase.from('agents').select('id', { count: 'exact', head: true }),
+          supabase.from('tasks').select('id', { count: 'exact', head: true }),
+          supabase.from('memories').select('id', { count: 'exact', head: true }),
+          supabase.from('documents').select('id', { count: 'exact', head: true }),
+        ]),
         QUERY_TIMEOUT_MS,
         'database_health_check'
-      ).then(({ data, error }) => ({ data, error, responseTime: Date.now() - coreChecksStart }))
+      ).then(([agents, tasks, memories, docs]) => ({
+        data: {
+          agents: agents.count,
+          tasks: tasks.count,
+          memories: memories.count,
+          documents: docs.count
+        },
+        error: agents.error || tasks.error || memories.error || docs.error,
+        responseTime: Date.now() - coreChecksStart
+      }))
         .catch(error => ({ data: null, error, responseTime: Date.now() - coreChecksStart })),
 
       // 2. Agents Status
@@ -106,7 +120,14 @@ serve(async (req) => {
     statusReport.components.database = {
       status: dbResult.error ? 'unhealthy' : 'healthy',
       error: dbResult.error?.message,
-      response_time_ms: dbResult.responseTime
+      error: dbResult.error?.message,
+      response_time_ms: dbResult.responseTime,
+      stats: dbResult.data ? {
+        total_agents: dbResult.data.agents,
+        total_tasks: dbResult.data.tasks,
+        total_memories: dbResult.data.memories,
+        total_documents: dbResult.data.documents
+      } : null
     };
     if (dbResult.error) statusReport.overall_status = 'degraded';
 
@@ -495,7 +516,8 @@ serve(async (req) => {
         })),
         stats: {
           pending: pendingCount,
-          failed: failedCount
+          failed: failedCount,
+          total_24h: recentActivity?.length || 0
         }
       };
 
