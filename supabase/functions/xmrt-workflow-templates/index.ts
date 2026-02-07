@@ -1,5 +1,5 @@
 console.info('xmrt-workflow-templates starting');
-import { createClient } from 'npm:@supabase/supabase-js@2.45.4'
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0'
 import Hono from 'npm:hono@4.6.7'
 import { cors } from 'npm:hono@4.6.7/cors'
 

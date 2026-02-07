@@ -7,7 +7,7 @@
  * This is the SINGLE SOURCE OF TRUTH for Eliza's intelligence context.
  */
 
-import { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { generateElizaSystemPrompt } from './elizaSystemPrompt.ts';
 import { buildContextualPrompt } from './contextBuilder.ts';
 import { ELIZA_TOOLS } from './elizaTools.ts';

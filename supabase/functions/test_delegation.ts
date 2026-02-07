@@ -1,5 +1,5 @@
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.46.2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { executeToolCall } from "./_shared/toolExecutor.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;

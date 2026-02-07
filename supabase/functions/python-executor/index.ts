@@ -1,5 +1,5 @@
 import { corsHeaders } from '../_shared/cors.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 // Use custom Piston instance if available (with enhanced libraries like pandas, numpy, requests, etc.)
 // Falls back to public emkc.org Piston if CUSTOM_PISTON_URL is not set

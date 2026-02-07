@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
 
 const corsHeaders = {
@@ -400,8 +400,15 @@ Return ONLY the JSON object.
         // 'extract-knowledge' IS available.
         // Let's assume 'extract-knowledge' is the one.
         if (functionName === 'search_knowledge') {
-          functionName = 'extract-knowledge'; // heuristic mapping
-          payload = { action: 'search', query: payload.query };
+          // Map to knowledge-manager which handles search
+          functionName = 'knowledge-manager';
+          payload = {
+            action: 'search_knowledge',
+            data: {
+              search_term: payload.query,
+              limit: 5
+            }
+          };
         }
       }
 

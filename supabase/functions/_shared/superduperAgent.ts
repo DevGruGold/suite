@@ -1,5 +1,5 @@
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { executeAIRequest } from "./ai-gateway.ts";
 import { executeToolCall } from "./toolExecutor.ts";
 import { startUsageTracking } from "./edgeFunctionUsageLogger.ts";

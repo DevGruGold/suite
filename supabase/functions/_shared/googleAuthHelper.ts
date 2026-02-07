@@ -4,7 +4,7 @@
  * Fetches refresh token from oauth_connections database table
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 

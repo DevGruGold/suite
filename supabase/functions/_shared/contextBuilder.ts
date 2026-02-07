@@ -5,7 +5,7 @@
  * user context, mining stats, system version, executive feedback) into AI prompts across all edge functions.
  */
 
-import { SupabaseClient } from 'jsr:@supabase/supabase-js@2';
+import { SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 interface ContextOptions {
   executiveName?: string;

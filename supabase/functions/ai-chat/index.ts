@@ -1,6 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
-import { createClient } from "npm:@supabase/supabase-js@2.46.2";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { EDGE_FUNCTIONS_REGISTRY } from "../_shared/edgeFunctionRegistry.ts";
 
 // ========== ENVIRONMENT CONFIGURATION ==========
@@ -2753,8 +2753,8 @@ class EnhancedConversationManager {
       await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .update({
-          session_id: this.sessionId,
-          updated_at: new Date().toISOString()
+          session_id: this.sessionId
+          // updated_at: removed to let DB unlock handle it
         })
         .eq('ip_address', this.ipAddress)
         .eq('updated_at', record.updated_at);
@@ -2791,8 +2791,8 @@ class EnhancedConversationManager {
           memory_version: '5.0',
           ip_based_persistence: true,
           summary_method: 'manual_immediate' // Changed from 'ai_enhanced'
-        },
-        updated_at: new Date().toISOString()
+        }
+        // updated_at: removed to let DB handle it via trigger
       };
 
       if (this.userId) {

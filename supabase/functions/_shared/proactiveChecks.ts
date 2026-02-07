@@ -3,7 +3,7 @@
  * Automatically inspects system state based on user input context
  */
 
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 export interface ProactiveCheckResult {
   reasoning: string;

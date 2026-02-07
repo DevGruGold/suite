@@ -1,4 +1,4 @@
-import { SupabaseClient, createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { SupabaseClient, createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 /**
  * Unified Edge Function Usage Logger

@@ -1,0 +1,2240 @@
+[
+  {
+    "name": "service-monetization-engine",
+    "type": "tool",
+    "description": "💰 REVENUE GENERATION - API key generation, usage tracking, tiered access control, billing, and revenue analytics for monetized services (Detailed Reference)",
+    "content": "# service-monetization-engine\n\n**Description:** 💰 REVENUE GENERATION - API key generation, usage tracking, tiered access control, billing, and revenue analytics for monetized services\n**Category:** revenue\n\n**Example Use:**\n```json\nGenerate API key: {\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `generate_api_key`\n- `validate_api_key`\n- `track_usage`\n- `get_usage_stats`\n- `upgrade_tier`\n- `suspend_api_key`\n- `calculate_revenue`\n- `create_invoice`\n- `get_top_customers`\n\n**Detected Parameters:**\n- `action`\n- `data`\n\n\n**Source Code Analysis:**\nScanned 15446 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Generate API key: {",
+      "detected_actions": [
+        "generate_api_key",
+        "validate_api_key",
+        "track_usage",
+        "get_usage_stats",
+        "upgrade_tier",
+        "suspend_api_key",
+        "calculate_revenue",
+        "create_invoice",
+        "get_top_customers"
+      ],
+      "detected_params": [
+        "action",
+        "data"
+      ]
+    }
+  },
+  {
+    "name": "workflow-template-manager",
+    "type": "tool",
+    "description": "🔄 WORKFLOW AUTOMATION - Pre-built workflow templates for revenue generation, marketing automation, financial management, and self-optimization (Detailed Reference)",
+    "content": "# workflow-template-manager\n\n**Description:** 🔄 WORKFLOW AUTOMATION - Pre-built workflow templates for revenue generation, marketing automation, financial management, and self-optimization\n**Category:** automation\n\n**Example Use:**\n```json\nExecute template: {\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `list_templates`\n- `get_template`\n- `execute_template`\n- `create_template`\n- `update_template`\n- `get_template_analytics`\n- `get_execution_status`\n- `ai_analysis`\n- `ai_generation`\n- `reporting`\n- `scoring`\n- `decision`\n- `analytics`\n- `calculation`\n- `log_retrieval`\n- `failure_calculation`\n- `severity_scoring`\n- `diagnostic_reporting`\n- `validation`\n- `api_call`\n- `database`\n- `notification`\n- `notification_batch`\n- `multi_channel`\n\n**Detected Parameters:**\n- `action`\n- `data`\n\n\n**Source Code Analysis:**\nScanned 36625 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Execute template: {",
+      "detected_actions": [
+        "list_templates",
+        "get_template",
+        "execute_template",
+        "create_template",
+        "update_template",
+        "get_template_analytics",
+        "get_execution_status",
+        "ai_analysis",
+        "ai_generation",
+        "reporting",
+        "scoring",
+        "decision",
+        "analytics",
+        "calculation",
+        "log_retrieval",
+        "failure_calculation",
+        "severity_scoring",
+        "diagnostic_reporting",
+        "validation",
+        "api_call",
+        "database",
+        "notification",
+        "notification_batch",
+        "multi_channel"
+      ],
+      "detected_params": [
+        "action",
+        "data"
+      ]
+    }
+  },
+  {
+    "name": "lovable-chat",
+    "type": "tool",
+    "description": "✅ PRIMARY AI - Model-agnostic chat via Lovable AI Gateway (Gemini 2.5 Flash default, supports OpenAI GPT-5) (Detailed Reference)",
+    "content": "# lovable-chat\n\n**Description:** ✅ PRIMARY AI - Model-agnostic chat via Lovable AI Gateway (Gemini 2.5 Flash default, supports OpenAI GPT-5)\n**Category:** ai\n\n**Example Use:**\n```json\nMain intelligent chat endpoint with full context and memory - use this for all AI chat needs\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 6088 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Main intelligent chat endpoint with full context and memory - use this for all AI chat needs",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "github-integration",
+    "type": "tool",
+    "description": "Complete GitHub OAuth operations - create issues, PRs, comments, discussions (Detailed Reference)",
+    "content": "# github-integration\n\n**Description:** Complete GitHub OAuth operations - create issues, PRs, comments, discussions\n**Category:** github\n\n**Example Use:**\n```json\nCreate GitHub issue, list repository issues, manage pull requests\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `list_issues`\n- `list_discussions`\n- `get_repo_info`\n- `list_pull_requests`\n- `get_file_content`\n- `search_code`\n- `list_files`\n- `get_branch_info`\n- `list_branches`\n- `get_issue_comments`\n- `get_discussion_comments`\n- `create_issue`\n- `comment_on_issue`\n- `comment_on_discussion`\n- `trigger_workflow`\n- `create_discussion`\n- `create_pull_request`\n- `commit_file`\n- `update_issue`\n- `close_issue`\n- `add_comment`\n- `merge_pull_request`\n- `close_pull_request`\n- `delete_file`\n- `create_branch`\n- `create_issue_comment_reply`\n- `create_discussion_comment_reply`\n- `reply_to_discussion_comment`\n- `list_commits`\n- `get_commit_details`\n- `list_repo_events`\n- `list_releases`\n- `get_release_details`\n- `list_contributors`\n- `list_repositories`\n\n**Detected Parameters:**\n- `replace`\n\n\n**Source Code Analysis:**\nScanned 54703 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Create GitHub issue, list repository issues, manage pull requests",
+      "detected_actions": [
+        "list_issues",
+        "list_discussions",
+        "get_repo_info",
+        "list_pull_requests",
+        "get_file_content",
+        "search_code",
+        "list_files",
+        "get_branch_info",
+        "list_branches",
+        "get_issue_comments",
+        "get_discussion_comments",
+        "create_issue",
+        "comment_on_issue",
+        "comment_on_discussion",
+        "trigger_workflow",
+        "create_discussion",
+        "create_pull_request",
+        "commit_file",
+        "update_issue",
+        "close_issue",
+        "add_comment",
+        "merge_pull_request",
+        "close_pull_request",
+        "delete_file",
+        "create_branch",
+        "create_issue_comment_reply",
+        "create_discussion_comment_reply",
+        "reply_to_discussion_comment",
+        "list_commits",
+        "get_commit_details",
+        "list_repo_events",
+        "list_releases",
+        "get_release_details",
+        "list_contributors",
+        "list_repositories"
+      ],
+      "detected_params": [
+        "replace"
+      ]
+    }
+  },
+  {
+    "name": "mining-proxy",
+    "type": "tool",
+    "description": "Unified mining statistics and worker management from SupportXMR (Detailed Reference)",
+    "content": "# mining-proxy\n\n**Description:** Unified mining statistics and worker management from SupportXMR\n**Category:** mining\n\n**Example Use:**\n```json\nGet comprehensive mining data including pool stats and individual worker performance\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `worker_id`\n- `wallet`\n- `alias`\n- `user_id`\n- `session_key`\n- `device_type`\n- `registration_method`\n- `timestamp`\n\n\n**Source Code Analysis:**\nScanned 8187 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Get comprehensive mining data including pool stats and individual worker performance",
+      "detected_actions": [],
+      "detected_params": [
+        "worker_id",
+        "wallet",
+        "alias",
+        "user_id",
+        "session_key",
+        "device_type",
+        "registration_method",
+        "timestamp"
+      ]
+    }
+  },
+  {
+    "name": "agent-manager",
+    "type": "tool",
+    "description": "Primary agent orchestration - create, manage, and monitor AI agents (Detailed Reference)",
+    "content": "# agent-manager\n\n**Description:** Primary agent orchestration - create, manage, and monitor AI agents\n**Category:** task-management\n\n**Example Use:**\n```json\nCreate a new agent and assign them a task, monitor agent workloads\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `list_agents`\n- `spawn_agent`\n- `update_agent_status`\n- `assign_task`\n- `list_tasks`\n- `update_task_status`\n- `set_task_status`\n- `report_progress`\n- `request_assignment`\n- `get_agent_workload`\n- `log_decision`\n- `update_agent_skills`\n- `update_agent_role`\n- `delete_agent`\n- `search_agents`\n- `update_task`\n- `search_tasks`\n- `bulk_update_tasks`\n- `delete_task`\n- `reassign_task`\n- `update_task_details`\n- `get_task_details`\n- `cleanup_duplicate_agents`\n- `execute_autonomous_workflow`\n- `analyze`\n- `execute_python`\n- `github_operation`\n- `create_subtask`\n- `query_knowledge`\n- `get_agent_by_name`\n- `get_agent_stats`\n- `batch_spawn_agents`\n- `archive_agent`\n- `provision_openclaw_agent`\n\n**Detected Parameters:**\n- `action`\n- `autonomous`\n- `...rest`\n- `user_id`\n- `context`\n\n\n**Source Code Analysis:**\nScanned 54272 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Create a new agent and assign them a task, monitor agent workloads",
+      "detected_actions": [
+        "list_agents",
+        "spawn_agent",
+        "update_agent_status",
+        "assign_task",
+        "list_tasks",
+        "update_task_status",
+        "set_task_status",
+        "report_progress",
+        "request_assignment",
+        "get_agent_workload",
+        "log_decision",
+        "update_agent_skills",
+        "update_agent_role",
+        "delete_agent",
+        "search_agents",
+        "update_task",
+        "search_tasks",
+        "bulk_update_tasks",
+        "delete_task",
+        "reassign_task",
+        "update_task_details",
+        "get_task_details",
+        "cleanup_duplicate_agents",
+        "execute_autonomous_workflow",
+        "analyze",
+        "execute_python",
+        "github_operation",
+        "create_subtask",
+        "query_knowledge",
+        "get_agent_by_name",
+        "get_agent_stats",
+        "batch_spawn_agents",
+        "archive_agent",
+        "provision_openclaw_agent"
+      ],
+      "detected_params": [
+        "action",
+        "autonomous",
+        "...rest",
+        "user_id",
+        "context"
+      ]
+    }
+  },
+  {
+    "name": "python-executor",
+    "type": "tool",
+    "description": "Sandboxed Python execution via Piston API (stdlib only, no pip) (Detailed Reference)",
+    "content": "# python-executor\n\n**Description:** Sandboxed Python execution via Piston API (stdlib only, no pip)\n**Category:** code-execution\n\n**Example Use:**\n```json\nExecute Python to analyze device connection patterns from the last 24 hours\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 10008 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Execute Python to analyze device connection patterns from the last 24 hours",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "playwright-browse",
+    "type": "tool",
+    "description": "Web browsing and scraping using Playwright automation (Detailed Reference)",
+    "content": "# playwright-browse\n\n**Description:** Web browsing and scraping using Playwright automation\n**Category:** web\n\n**Example Use:**\n```json\nBrowse websites, extract data, interact with web pages, research real-time information\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 13049 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Browse websites, extract data, interact with web pages, research real-time information",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "knowledge-manager",
+    "type": "tool",
+    "description": "Knowledge base CRUD operations - store, search, and link entities (Detailed Reference)",
+    "content": "# knowledge-manager\n\n**Description:** Knowledge base CRUD operations - store, search, and link entities\n**Category:** knowledge\n\n**Example Use:**\n```json\nStore concepts, link entities, search knowledge graph\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `store_knowledge`\n- `upsert_knowledge`\n- `create_relationship`\n- `search_knowledge`\n- `get_related_entities`\n- `update_entity_confidence`\n- `store_learning_pattern`\n- `get_patterns`\n- `list_knowledge`\n- `check_status`\n- `delete_knowledge`\n\n\n**Source Code Analysis:**\nScanned 18557 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Store concepts, link entities, search knowledge graph",
+      "detected_actions": [
+        "store_knowledge",
+        "upsert_knowledge",
+        "create_relationship",
+        "search_knowledge",
+        "get_related_entities",
+        "update_entity_confidence",
+        "store_learning_pattern",
+        "get_patterns",
+        "list_knowledge",
+        "check_status",
+        "delete_knowledge"
+      ],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "task-orchestrator",
+    "type": "tool",
+    "description": "Advanced task automation - auto-assign, rebalance, analyze bottlenecks (Detailed Reference)",
+    "content": "# task-orchestrator\n\n**Description:** Advanced task automation - auto-assign, rebalance, analyze bottlenecks\n**Category:** task-management\n\n**Example Use:**\n```json\nAutomatically distribute all pending tasks to idle agents by priority\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `run_orchestration_cycle`\n- `auto_assign_tasks`\n- `rebalance_workload`\n- `identify_blockers`\n- `performance_report`\n- `clear_all_blocked_tasks`\n- `bulk_update_task_status`\n- `clear_all_workloads`\n\n**Detected Parameters:**\n- `action`\n- `data`\n\n\n**Source Code Analysis:**\nScanned 12866 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Automatically distribute all pending tasks to idle agents by priority",
+      "detected_actions": [
+        "run_orchestration_cycle",
+        "auto_assign_tasks",
+        "rebalance_workload",
+        "identify_blockers",
+        "performance_report",
+        "clear_all_blocked_tasks",
+        "bulk_update_task_status",
+        "clear_all_workloads"
+      ],
+      "detected_params": [
+        "action",
+        "data"
+      ]
+    }
+  },
+  {
+    "name": "system-status",
+    "type": "tool",
+    "description": "Quick health check - database, agents, tasks status (Detailed Reference)",
+    "content": "# system-status\n\n**Description:** Quick health check - database, agents, tasks status\n**Category:** monitoring\n\n**Example Use:**\n```json\nGet comprehensive system health status\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 43882 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Get comprehensive system health status",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "system-diagnostics",
+    "type": "tool",
+    "description": "Detailed resource usage and performance metrics (Detailed Reference)",
+    "content": "# system-diagnostics\n\n**Description:** Detailed resource usage and performance metrics\n**Category:** monitoring\n\n**Example Use:**\n```json\nRun detailed system diagnostics when system is slow\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 2432 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Run detailed system diagnostics when system is slow",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "autonomous-code-fixer",
+    "type": "tool",
+    "description": "Self-healing code execution - auto-fixes and re-executes failed Python (Detailed Reference)",
+    "content": "# autonomous-code-fixer\n\n**Description:** Self-healing code execution - auto-fixes and re-executes failed Python\n**Category:** autonomous\n\n**Example Use:**\n```json\nAutomatically fixes failed Python executions without human intervention\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `execution_id`\n\n\n**Source Code Analysis:**\nScanned 9625 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Automatically fixes failed Python executions without human intervention",
+      "detected_actions": [],
+      "detected_params": [
+        "execution_id"
+      ]
+    }
+  },
+  {
+    "name": "multi-step-orchestrator",
+    "type": "tool",
+    "description": "Complex workflow engine for background processing with dependencies (Detailed Reference)",
+    "content": "# multi-step-orchestrator\n\n**Description:** Complex workflow engine for background processing with dependencies\n**Category:** autonomous\n\n**Example Use:**\n```json\nExecute debugging workflow: scan logs → identify errors → fix code → verify\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `ai_analysis`\n- `data_fetch`\n- `api_call`\n- `decision`\n- `code_execution`\n\n\n**Source Code Analysis:**\nScanned 25275 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Execute debugging workflow: scan logs → identify errors → fix code → verify",
+      "detected_actions": [
+        "ai_analysis",
+        "data_fetch",
+        "api_call",
+        "decision",
+        "code_execution"
+      ],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "search-edge-functions",
+    "type": "tool",
+    "description": "Semantic search for edge functions by capability, keywords, or use case (Detailed Reference)",
+    "content": "# search-edge-functions\n\n**Description:** Semantic search for edge functions by capability, keywords, or use case\n**Category:** ecosystem\n\n**Example Use:**\n```json\nFind the right function when you don\\\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `query`\n- `category`\n\n\n**Source Code Analysis:**\nScanned 3098 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Find the right function when you don\\",
+      "detected_actions": [],
+      "detected_params": [
+        "query",
+        "category"
+      ]
+    }
+  },
+  {
+    "name": "xmrt_integration",
+    "type": "tool",
+    "description": "Unified ecosystem health & integration hub - connects all XMRT repos (XMRT-Ecosystem, xmrt-wallet-public, mobilemonero, xmrtnet, xmrtdao) for comprehensive health reports and integration monitoring (Detailed Reference)",
+    "content": "# xmrt_integration\n\n**Description:** Unified ecosystem health & integration hub - connects all XMRT repos (XMRT-Ecosystem, xmrt-wallet-public, mobilemonero, xmrtnet, xmrtdao) for comprehensive health reports and integration monitoring\n**Category:** ecosystem\n\n**Example Use:**\n```json\nGenerate comprehensive ecosystem health report covering all repos, deployments, APIs, and community engagement. Check integration between services. Compare repository activity.\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 5125 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Generate comprehensive ecosystem health report covering all repos, deployments, APIs, and community engagement. Check integration between services. Compare repository activity.",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "aggregate-device-metrics",
+    "type": "tool",
+    "description": "Aggregate and analyze device mining metrics over time (Detailed Reference)",
+    "content": "# aggregate-device-metrics\n\n**Description:** Aggregate and analyze device mining metrics over time\n**Category:** mining\n\n**Example Use:**\n```json\nUse aggregate device metrics for aggregate and analyze device mining metrics over time\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `aggregate`\n- `metrics`\n- `hourly`\n- `daily`\n\n**Detected Parameters:**\n- `action`\n- `...payload`\n\n\n**Source Code Analysis:**\nScanned 10421 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use aggregate device metrics for aggregate and analyze device mining metrics over time",
+      "detected_actions": [
+        "aggregate",
+        "metrics",
+        "hourly",
+        "daily"
+      ],
+      "detected_params": [
+        "action",
+        "...payload"
+      ]
+    }
+  },
+  {
+    "name": "api-key-health-monitor",
+    "type": "tool",
+    "description": "Monitor health and usage of API keys across services (Detailed Reference)",
+    "content": "# api-key-health-monitor\n\n**Description:** Monitor health and usage of API keys across services\n**Category:** monitoring\n\n**Example Use:**\n```json\nUse api key health monitor for monitor health and usage of api keys across services\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `session_credentials`\n\n\n**Source Code Analysis:**\nScanned 18444 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use api key health monitor for monitor health and usage of api keys across services",
+      "detected_actions": [],
+      "detected_params": [
+        "session_credentials"
+      ]
+    }
+  },
+  {
+    "name": "check-frontend-health",
+    "type": "tool",
+    "description": "Health check for frontend application status (Detailed Reference)",
+    "content": "# check-frontend-health\n\n**Description:** Health check for frontend application status\n**Category:** monitoring\n\n**Example Use:**\n```json\nUse check frontend health for health check for frontend application status\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 3152 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use check frontend health for health check for frontend application status",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "cleanup-duplicate-tasks",
+    "type": "tool",
+    "description": "Remove duplicate tasks from the task management system (Detailed Reference)",
+    "content": "# cleanup-duplicate-tasks\n\n**Description:** Remove duplicate tasks from the task management system\n**Category:** task-management\n\n**Example Use:**\n```json\nUse cleanup duplicate tasks for remove duplicate tasks from the task management system\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 4259 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use cleanup duplicate tasks for remove duplicate tasks from the task management system",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "code-monitor-daemon",
+    "type": "tool",
+    "description": "Continuous monitoring daemon for code execution and errors (Detailed Reference)",
+    "content": "# code-monitor-daemon\n\n**Description:** Continuous monitoring daemon for code execution and errors\n**Category:** code-execution\n\n**Example Use:**\n```json\nUse code monitor daemon for continuous monitoring daemon for code execution and errors\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `missing_module`\n- `syntax_error`\n- `undefined_variable`\n- `network_access`\n- `timeout`\n\n\n**Source Code Analysis:**\nScanned 12663 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use code monitor daemon for continuous monitoring daemon for code execution and errors",
+      "detected_actions": [
+        "missing_module",
+        "syntax_error",
+        "undefined_variable",
+        "network_access",
+        "timeout"
+      ],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "community-spotlight-post",
+    "type": "tool",
+    "description": "Generate and post community spotlight content (Detailed Reference)",
+    "content": "# community-spotlight-post\n\n**Description:** Generate and post community spotlight content\n**Category:** autonomous\n\n**Example Use:**\n```json\nUse community spotlight post for generate and post community spotlight content\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 6084 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use community spotlight post for generate and post community spotlight content",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "conversation-access",
+    "type": "tool",
+    "description": "Manage conversation access and permissions (Detailed Reference)",
+    "content": "# conversation-access\n\n**Description:** Manage conversation access and permissions\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse conversation access for manage conversation access and permissions\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `get_session`\n- `create_session`\n- `get_messages`\n- `get_summaries`\n- `add_message`\n- `update_session`\n\n\n**Source Code Analysis:**\nScanned 11841 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use conversation access for manage conversation access and permissions",
+      "detected_actions": [
+        "get_session",
+        "create_session",
+        "get_messages",
+        "get_summaries",
+        "add_message",
+        "update_session"
+      ],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "daily-discussion-post",
+    "type": "tool",
+    "description": "Generate and post daily discussion topics (Detailed Reference)",
+    "content": "# daily-discussion-post\n\n**Description:** Generate and post daily discussion topics\n**Category:** autonomous\n\n**Example Use:**\n```json\nUse daily discussion post for generate and post daily discussion topics\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 14697 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use daily discussion post for generate and post daily discussion topics",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "deepseek-chat",
+    "type": "tool",
+    "description": "AI chat via DeepSeek model (Detailed Reference)",
+    "content": "# deepseek-chat\n\n**Description:** AI chat via DeepSeek model\n**Category:** ai\n\n**Example Use:**\n```json\nUse deepseek chat for ai chat via deepseek model\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `message`\n- `messages`\n- `conversationHistory`\n- `userContext`\n- `councilMode`\n\n\n**Source Code Analysis:**\nScanned 4177 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use deepseek chat for ai chat via deepseek model",
+      "detected_actions": [],
+      "detected_params": [
+        "message",
+        "messages",
+        "conversationHistory",
+        "userContext",
+        "councilMode"
+      ]
+    }
+  },
+  {
+    "name": "ecosystem-monitor",
+    "type": "tool",
+    "description": "Monitor entire XMRT Vercel ecosystem health (xmrt-io, xmrt-ecosystem, xmrt-dao-ecosystem) (Detailed Reference)",
+    "content": "# ecosystem-monitor\n\n**Description:** Monitor entire XMRT Vercel ecosystem health (xmrt-io, xmrt-ecosystem, xmrt-dao-ecosystem)\n**Category:** monitoring\n\n**Example Use:**\n```json\nMonitor all Vercel services health, check ecosystem performance, track deployment status\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `generate_tasks`\n\n\n**Source Code Analysis:**\nScanned 21235 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Monitor all Vercel services health, check ecosystem performance, track deployment status",
+      "detected_actions": [],
+      "detected_params": [
+        "generate_tasks"
+      ]
+    }
+  },
+  {
+    "name": "eliza-python-runtime",
+    "type": "tool",
+    "description": "Python runtime environment for Eliza agent (Detailed Reference)",
+    "content": "# eliza-python-runtime\n\n**Description:** Python runtime environment for Eliza agent\n**Category:** code-execution\n\n**Example Use:**\n```json\nUse eliza python runtime for python runtime environment for eliza agent\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `code`\n- `purpose = ''`\n- `source = 'eliza'`\n- `agent_id = null`\n- `task_id = null`\n- `timeout_ms = 30000`\n\n\n**Source Code Analysis:**\nScanned 5049 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use eliza python runtime for python runtime environment for eliza agent",
+      "detected_actions": [],
+      "detected_params": [
+        "code",
+        "purpose = ''",
+        "source = 'eliza'",
+        "agent_id = null",
+        "task_id = null",
+        "timeout_ms = 30000"
+      ]
+    }
+  },
+  {
+    "name": "enhanced-learning",
+    "type": "tool",
+    "description": "Advanced machine learning and pattern recognition (Detailed Reference)",
+    "content": "# enhanced-learning\n\n**Description:** Advanced machine learning and pattern recognition\n**Category:** knowledge\n\n**Example Use:**\n```json\nUse enhanced learning for advanced machine learning and pattern recognition\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 10702 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use enhanced learning for advanced machine learning and pattern recognition",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "evening-summary-post",
+    "type": "tool",
+    "description": "Generate and post evening summary reports (Detailed Reference)",
+    "content": "# evening-summary-post\n\n**Description:** Generate and post evening summary reports\n**Category:** autonomous\n\n**Example Use:**\n```json\nUse evening summary post for generate and post evening summary reports\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 12901 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use evening summary post for generate and post evening summary reports",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "execute-scheduled-actions",
+    "type": "tool",
+    "description": "Execute scheduled tasks and actions (Detailed Reference)",
+    "content": "# execute-scheduled-actions\n\n**Description:** Execute scheduled tasks and actions\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse execute scheduled actions for execute scheduled tasks and actions\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 5055 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use execute scheduled actions for execute scheduled tasks and actions",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "extract-knowledge",
+    "type": "tool",
+    "description": "Extract and structure knowledge from conversations (Detailed Reference)",
+    "content": "# extract-knowledge\n\n**Description:** Extract and structure knowledge from conversations\n**Category:** knowledge\n\n**Example Use:**\n```json\nUse extract knowledge for extract and structure knowledge from conversations\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `message_id`\n- `content`\n- `session_id`\n\n\n**Source Code Analysis:**\nScanned 5911 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use extract knowledge for extract and structure knowledge from conversations",
+      "detected_actions": [],
+      "detected_params": [
+        "message_id",
+        "content",
+        "session_id"
+      ]
+    }
+  },
+  {
+    "name": "fetch-auto-fix-results",
+    "type": "tool",
+    "description": "Retrieve results from autonomous code fixing (Detailed Reference)",
+    "content": "# fetch-auto-fix-results\n\n**Description:** Retrieve results from autonomous code fixing\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse fetch auto fix results for retrieve results from autonomous code fixing\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `original_execution_id`\n\n\n**Source Code Analysis:**\nScanned 3491 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use fetch auto fix results for retrieve results from autonomous code fixing",
+      "detected_actions": [],
+      "detected_params": [
+        "original_execution_id"
+      ]
+    }
+  },
+  {
+    "name": "gemini-chat",
+    "type": "tool",
+    "description": "AI chat via Google Gemini model (Detailed Reference)",
+    "content": "# gemini-chat\n\n**Description:** AI chat via Google Gemini model\n**Category:** ai\n\n**Example Use:**\n```json\nUse gemini chat for ai chat via google gemini model\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `message`\n- `messages`\n- `conversationHistory`\n- `userContext`\n- `councilMode`\n\n\n**Source Code Analysis:**\nScanned 4083 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use gemini chat for ai chat via google gemini model",
+      "detected_actions": [],
+      "detected_params": [
+        "message",
+        "messages",
+        "conversationHistory",
+        "userContext",
+        "councilMode"
+      ]
+    }
+  },
+  {
+    "name": "get-code-execution-lessons",
+    "type": "tool",
+    "description": "Retrieve lessons learned from code executions (Detailed Reference)",
+    "content": "# get-code-execution-lessons\n\n**Description:** Retrieve lessons learned from code executions\n**Category:** code-execution\n\n**Example Use:**\n```json\nUse get code execution lessons for retrieve lessons learned from code executions\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `limit = 20`\n- `include_all_functions = false`\n- `hours_back = 168`\n\n\n**Source Code Analysis:**\nScanned 9284 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use get code execution lessons for retrieve lessons learned from code executions",
+      "detected_actions": [],
+      "detected_params": [
+        "limit = 20",
+        "include_all_functions = false",
+        "hours_back = 168"
+      ]
+    }
+  },
+  {
+    "name": "get-embedding",
+    "type": "tool",
+    "description": "Generate vector embeddings for text (Detailed Reference)",
+    "content": "# get-embedding\n\n**Description:** Generate vector embeddings for text\n**Category:** knowledge\n\n**Example Use:**\n```json\nUse get embedding for generate vector embeddings for text\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `content`\n\n\n**Source Code Analysis:**\nScanned 5560 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use get embedding for generate vector embeddings for text",
+      "detected_actions": [],
+      "detected_params": [
+        "content"
+      ]
+    }
+  },
+  {
+    "name": "get-lovable-key",
+    "type": "tool",
+    "description": "Retrieve Lovable API key (Detailed Reference)",
+    "content": "# get-lovable-key\n\n**Description:** Retrieve Lovable API key\n**Category:** ai\n\n**Example Use:**\n```json\nUse get lovable key for retrieve lovable api key\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 1245 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use get lovable key for retrieve lovable api key",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "issue-engagement-command",
+    "type": "tool",
+    "description": "Engage with GitHub issues via commands (Detailed Reference)",
+    "content": "# issue-engagement-command\n\n**Description:** Engage with GitHub issues via commands\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse issue engagement command for engage with github issues via commands\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `command`\n- `pending`\n- `acknowledge`\n- `complete`\n\n**Detected Parameters:**\n- `action`\n- `...payload`\n\n\n**Source Code Analysis:**\nScanned 5658 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use issue engagement command for engage with github issues via commands",
+      "detected_actions": [
+        "command",
+        "pending",
+        "acknowledge",
+        "complete"
+      ],
+      "detected_params": [
+        "action",
+        "...payload"
+      ]
+    }
+  },
+  {
+    "name": "kimi-chat",
+    "type": "tool",
+    "description": "AI chat via Kimi model (Detailed Reference)",
+    "content": "# kimi-chat\n\n**Description:** AI chat via Kimi model\n**Category:** ai\n\n**Example Use:**\n```json\nUse kimi chat for ai chat via kimi model\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `messages`\n- `options`\n- `googleCloudOperation`\n- `service`\n- `operation`\n- `params`\n- `videoGeneration`\n- `prompt`\n- `model`\n- `gifSearch`\n- `query`\n\n\n**Source Code Analysis:**\nScanned 16657 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use kimi chat for ai chat via kimi model",
+      "detected_actions": [],
+      "detected_params": [
+        "messages",
+        "options",
+        "googleCloudOperation",
+        "service",
+        "operation",
+        "params",
+        "videoGeneration",
+        "prompt",
+        "model",
+        "gifSearch",
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "list-available-functions",
+    "type": "tool",
+    "description": "List all available edge functions (Detailed Reference)",
+    "content": "# list-available-functions\n\n**Description:** List all available edge functions\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse list available functions for list all available edge functions\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 1907 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use list available functions for list all available edge functions",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "monitor-device-connections",
+    "type": "tool",
+    "description": "Monitor mining device connections and status (Detailed Reference)",
+    "content": "# monitor-device-connections\n\n**Description:** Monitor mining device connections and status\n**Category:** mining\n\n**Example Use:**\n```json\nUse monitor device connections for monitor mining device connections and status\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `connect`\n- `disconnect`\n- `heartbeat`\n- `status`\n- `list_active`\n- `generate_claim_code`\n- `verify_claim_code`\n- `auto_pair_by_ip`\n- `list_user_devices`\n- `unclaim_device`\n\n**Detected Parameters:**\n- `data`\n\n\n**Source Code Analysis:**\nScanned 27517 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use monitor device connections for monitor mining device connections and status",
+      "detected_actions": [
+        "connect",
+        "disconnect",
+        "heartbeat",
+        "status",
+        "list_active",
+        "generate_claim_code",
+        "verify_claim_code",
+        "auto_pair_by_ip",
+        "list_user_devices",
+        "unclaim_device"
+      ],
+      "detected_params": [
+        "data"
+      ]
+    }
+  },
+  {
+    "name": "morning-discussion-post",
+    "type": "tool",
+    "description": "Generate and post morning discussion topics (Detailed Reference)",
+    "content": "# morning-discussion-post\n\n**Description:** Generate and post morning discussion topics\n**Category:** autonomous\n\n**Example Use:**\n```json\nUse morning discussion post for generate and post morning discussion topics\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 12042 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use morning discussion post for generate and post morning discussion topics",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "nlg-generator",
+    "type": "tool",
+    "description": "Natural language generation for reports and content (Detailed Reference)",
+    "content": "# nlg-generator\n\n**Description:** Natural language generation for reports and content\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse nlg generator for natural language generation for reports and content\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `content_type`\n- `audience_type = 'community'`\n- `source_data`\n- `format = 'markdown'`\n- `title`\n- `additional_context`\n\n\n**Source Code Analysis:**\nScanned 5439 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use nlg generator for natural language generation for reports and content",
+      "detected_actions": [],
+      "detected_params": [
+        "content_type",
+        "audience_type = 'community'",
+        "source_data",
+        "format = 'markdown'",
+        "title",
+        "additional_context"
+      ]
+    }
+  },
+  {
+    "name": "openai-chat",
+    "type": "tool",
+    "description": "AI chat via OpenAI models (Detailed Reference)",
+    "content": "# openai-chat\n\n**Description:** AI chat via OpenAI models\n**Category:** ai\n\n**Example Use:**\n```json\nUse openai chat for ai chat via openai models\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `message`\n- `messages`\n- `conversationHistory`\n- `userContext`\n- `councilMode`\n\n\n**Source Code Analysis:**\nScanned 4122 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use openai chat for ai chat via openai models",
+      "detected_actions": [],
+      "detected_params": [
+        "message",
+        "messages",
+        "conversationHistory",
+        "userContext",
+        "councilMode"
+      ]
+    }
+  },
+  {
+    "name": "openai-tts",
+    "type": "tool",
+    "description": "Text-to-speech via OpenAI (Detailed Reference)",
+    "content": "# openai-tts\n\n**Description:** Text-to-speech via OpenAI\n**Category:** ai\n\n**Example Use:**\n```json\nUse openai tts for text-to-speech via openai\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `text`\n- `voice = 'alloy'`\n- `speed = 1.0`\n\n\n**Source Code Analysis:**\nScanned 3116 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use openai tts for text-to-speech via openai",
+      "detected_actions": [],
+      "detected_params": [
+        "text",
+        "voice = 'alloy'",
+        "speed = 1.0"
+      ]
+    }
+  },
+  {
+    "name": "uspto-patent-mcp",
+    "type": "tool",
+    "description": "MCP server for USPTO patent and trademark database access. Search 11M+ patents, retrieve full text, download PDFs, analyze portfolios using advanced CQL queries (Detailed Reference)",
+    "content": "# uspto-patent-mcp\n\n**Description:** MCP server for USPTO patent and trademark database access. Search 11M+ patents, retrieve full text, download PDFs, analyze portfolios using advanced CQL queries\n**Category:** research\n\n**Example Use:**\n```json\nSearch patents: {\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `initialize`\n- `tools/list`\n- `tools/call`\n- `resources/list`\n- `resources/read`\n- `prompts/list`\n- `prompts/get`\n- `ping`\n- `search_patents`\n- `get_patent_fulltext`\n- `download_patent_pdf`\n- `search_by_inventor`\n- `search_by_assignee`\n- `search_by_classification`\n- `patent_search_assistant`\n- `prior_art_search`\n- `competitive_analysis`\n- `technology_landscape`\n\n**Detected Parameters:**\n- `method`\n- `params`\n\n\n**Source Code Analysis:**\nScanned 18164 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Search patents: {",
+      "detected_actions": [
+        "initialize",
+        "tools/list",
+        "tools/call",
+        "resources/list",
+        "resources/read",
+        "prompts/list",
+        "prompts/get",
+        "ping",
+        "search_patents",
+        "get_patent_fulltext",
+        "download_patent_pdf",
+        "search_by_inventor",
+        "search_by_assignee",
+        "search_by_classification",
+        "patent_search_assistant",
+        "prior_art_search",
+        "competitive_analysis",
+        "technology_landscape"
+      ],
+      "detected_params": [
+        "method",
+        "params"
+      ]
+    }
+  },
+  {
+    "name": "predictive-analytics",
+    "type": "tool",
+    "description": "Predictive analytics for mining and system metrics (Detailed Reference)",
+    "content": "# predictive-analytics\n\n**Description:** Predictive analytics for mining and system metrics\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse predictive analytics for predictive analytics for mining and system metrics\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `action`\n- `data_source`\n- `custom_data`\n\n\n**Source Code Analysis:**\nScanned 15974 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use predictive analytics for predictive analytics for mining and system metrics",
+      "detected_actions": [],
+      "detected_params": [
+        "action",
+        "data_source",
+        "custom_data"
+      ]
+    }
+  },
+  {
+    "name": "process-contributor-reward",
+    "type": "tool",
+    "description": "Process and distribute contributor rewards (Detailed Reference)",
+    "content": "# process-contributor-reward\n\n**Description:** Process and distribute contributor rewards\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse process contributor reward for process and distribute contributor rewards\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `contribution_id`\n\n\n**Source Code Analysis:**\nScanned 3865 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use process contributor reward for process and distribute contributor rewards",
+      "detected_actions": [],
+      "detected_params": [
+        "contribution_id"
+      ]
+    }
+  },
+  {
+    "name": "progress-update-post",
+    "type": "tool",
+    "description": "Generate and post progress updates (Detailed Reference)",
+    "content": "# progress-update-post\n\n**Description:** Generate and post progress updates\n**Category:** autonomous\n\n**Example Use:**\n```json\nUse progress update post for generate and post progress updates\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 11237 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use progress update post for generate and post progress updates",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "prometheus-metrics",
+    "type": "tool",
+    "description": "Export Prometheus-compatible metrics (Detailed Reference)",
+    "content": "# prometheus-metrics\n\n**Description:** Export Prometheus-compatible metrics\n**Category:** mining\n\n**Example Use:**\n```json\nUse prometheus metrics for export prometheus-compatible metrics\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 11100 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use prometheus metrics for export prometheus-compatible metrics",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "python-db-bridge",
+    "type": "tool",
+    "description": "Bridge for Python code to access database (Detailed Reference)",
+    "content": "# python-db-bridge\n\n**Description:** Bridge for Python code to access database\n**Category:** code-execution\n\n**Example Use:**\n```json\nUse python db bridge for bridge for python code to access database\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `select`\n- `insert`\n- `update`\n- `upsert`\n- `delete`\n- `count`\n- `gt`\n- `gte`\n- `lt`\n- `lte`\n- `neq`\n- `in`\n- `like`\n- `ilike`\n- `is`\n- `contains`\n- `containedBy`\n- `overlaps`\n- `textSearch`\n- `system_info`\n- `list_cron_jobs`\n- `get_cron_status`\n- `list_edge_functions`\n- `get_function_logs`\n- `call_rpc`\n- `get_schema`\n\n**Detected Parameters:**\n- `table`\n- `operation`\n- `filters`\n- `data`\n- `limit`\n- `order`\n- `columns`\n- `function_name`\n- `args`\n\n\n**Source Code Analysis:**\nScanned 18419 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use python db bridge for bridge for python code to access database",
+      "detected_actions": [
+        "select",
+        "insert",
+        "update",
+        "upsert",
+        "delete",
+        "count",
+        "gt",
+        "gte",
+        "lt",
+        "lte",
+        "neq",
+        "in",
+        "like",
+        "ilike",
+        "is",
+        "contains",
+        "containedBy",
+        "overlaps",
+        "textSearch",
+        "system_info",
+        "list_cron_jobs",
+        "get_cron_status",
+        "list_edge_functions",
+        "get_function_logs",
+        "call_rpc",
+        "get_schema"
+      ],
+      "detected_params": [
+        "table",
+        "operation",
+        "filters",
+        "data",
+        "limit",
+        "order",
+        "columns",
+        "function_name",
+        "args"
+      ]
+    }
+  },
+  {
+    "name": "python-network-proxy",
+    "type": "tool",
+    "description": "Network proxy for Python code execution (Detailed Reference)",
+    "content": "# python-network-proxy\n\n**Description:** Network proxy for Python code execution\n**Category:** code-execution\n\n**Example Use:**\n```json\nUse python network proxy for network proxy for python code execution\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 2826 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use python network proxy for network proxy for python code execution",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "vercel-ecosystem-api",
+    "type": "tool",
+    "description": "Vercel multi-service management for xmrt-io, xmrt-ecosystem, and xmrt-dao-ecosystem deployments (Detailed Reference)",
+    "content": "# vercel-ecosystem-api\n\n**Description:** Vercel multi-service management for xmrt-io, xmrt-ecosystem, and xmrt-dao-ecosystem deployments\n**Category:** deployment\n\n**Example Use:**\n```json\nCheck health of all Vercel services, get deployment info, monitor service status\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `get_deployment_info`\n- `get_service_status`\n- `get_deployments`\n\n**Detected Parameters:**\n- `action`\n\n\n**Source Code Analysis:**\nScanned 4621 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Check health of all Vercel services, get deployment info, monitor service status",
+      "detected_actions": [
+        "get_deployment_info",
+        "get_service_status",
+        "get_deployments"
+      ],
+      "detected_params": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "redis-cache",
+    "type": "tool",
+    "description": "Upstash Redis caching service for API responses, sessions, and rate limiting (Detailed Reference)",
+    "content": "# redis-cache\n\n**Description:** Upstash Redis caching service for API responses, sessions, and rate limiting\n**Category:** database\n\n**Example Use:**\n```json\nCache ecosystem health for 5 minutes, store session data, implement rate limiting\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `get`\n- `set`\n- `delete`\n- `health`\n\n**Detected Parameters:**\n- `action`\n- `key`\n- `value`\n- `ttl`\n\n\n**Source Code Analysis:**\nScanned 3010 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Cache ecosystem health for 5 minutes, store session data, implement rate limiting",
+      "detected_actions": [
+        "get",
+        "set",
+        "delete",
+        "health"
+      ],
+      "detected_params": [
+        "action",
+        "key",
+        "value",
+        "ttl"
+      ]
+    }
+  },
+  {
+    "name": "schedule-reminder",
+    "type": "tool",
+    "description": "Schedule and send reminders (Detailed Reference)",
+    "content": "# schedule-reminder\n\n**Description:** Schedule and send reminders\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse schedule reminder for schedule and send reminders\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `action_type`\n- `action_data`\n- `execute_at`\n- `session_key`\n\n\n**Source Code Analysis:**\nScanned 4258 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use schedule reminder for schedule and send reminders",
+      "detected_actions": [],
+      "detected_params": [
+        "action_type",
+        "action_data",
+        "execute_at",
+        "session_key"
+      ]
+    }
+  },
+  {
+    "name": "schema-manager",
+    "type": "tool",
+    "description": "Manage database schema and migrations (Detailed Reference)",
+    "content": "# schema-manager\n\n**Description:** Manage database schema and migrations\n**Category:** database\n\n**Example Use:**\n```json\nUse schema manager for manage database schema and migrations\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `view_schema`\n- `view_table_details`\n- `analyze_performance`\n- `view_table_sizes`\n- `suggest_optimizations`\n- `create_index`\n- `vacuum_analyze`\n- `audit_migrations`\n- `list_tables`\n\n\n**Source Code Analysis:**\nScanned 10924 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use schema manager for manage database schema and migrations",
+      "detected_actions": [
+        "view_schema",
+        "view_table_details",
+        "analyze_performance",
+        "view_table_sizes",
+        "suggest_optimizations",
+        "create_index",
+        "vacuum_analyze",
+        "audit_migrations",
+        "list_tables"
+      ],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "self-optimizing-agent-architecture",
+    "type": "tool",
+    "description": "Self-optimizing agent system architecture (Detailed Reference)",
+    "content": "# self-optimizing-agent-architecture\n\n**Description:** Self-optimizing agent system architecture\n**Category:** task-management\n\n**Example Use:**\n```json\nUse self optimizing agent architecture for self-optimizing agent system architecture\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `analyze_skill_gaps`\n- `optimize_task_routing`\n- `detect_specializations`\n- `forecast_workload`\n- `autonomous_debugging`\n- `run_full_optimization`\n\n**Detected Parameters:**\n- `action`\n\n\n**Source Code Analysis:**\nScanned 19193 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use self optimizing agent architecture for self-optimizing agent system architecture",
+      "detected_actions": [
+        "analyze_skill_gaps",
+        "optimize_task_routing",
+        "detect_specializations",
+        "forecast_workload",
+        "autonomous_debugging",
+        "run_full_optimization"
+      ],
+      "detected_params": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "summarize-conversation",
+    "type": "tool",
+    "description": "Generate conversation summaries (Detailed Reference)",
+    "content": "# summarize-conversation\n\n**Description:** Generate conversation summaries\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse summarize conversation for generate conversation summaries\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `session_id`\n- `messages`\n\n\n**Source Code Analysis:**\nScanned 5216 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use summarize conversation for generate conversation summaries",
+      "detected_actions": [],
+      "detected_params": [
+        "session_id",
+        "messages"
+      ]
+    }
+  },
+  {
+    "name": "system-health",
+    "type": "tool",
+    "description": "Comprehensive system health monitoring (Detailed Reference)",
+    "content": "# system-health\n\n**Description:** Comprehensive system health monitoring\n**Category:** monitoring\n\n**Example Use:**\n```json\nUse system health for comprehensive system health monitoring\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 23137 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use system health for comprehensive system health monitoring",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "universal-edge-invoker",
+    "type": "tool",
+    "description": "Universal invoker for all edge functions (Detailed Reference)",
+    "content": "# universal-edge-invoker\n\n**Description:** Universal invoker for all edge functions\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse universal edge invoker for universal invoker for all edge functions\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `function_name`\n- `payload`\n\n\n**Source Code Analysis:**\nScanned 2811 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use universal edge invoker for universal invoker for all edge functions",
+      "detected_actions": [],
+      "detected_params": [
+        "function_name",
+        "payload"
+      ]
+    }
+  },
+  {
+    "name": "update-api-key",
+    "type": "tool",
+    "description": "Update API keys in the system (Detailed Reference)",
+    "content": "# update-api-key\n\n**Description:** Update API keys in the system\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse update api key for update api keys in the system\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `service`\n- `secret_name`\n- `api_key`\n- `organization_id`\n\n\n**Source Code Analysis:**\nScanned 6526 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use update api key for update api keys in the system",
+      "detected_actions": [],
+      "detected_params": [
+        "service",
+        "secret_name",
+        "api_key",
+        "organization_id"
+      ]
+    }
+  },
+  {
+    "name": "validate-github-contribution",
+    "type": "tool",
+    "description": "Validate GitHub contributions for rewards (Detailed Reference)",
+    "content": "# validate-github-contribution\n\n**Description:** Validate GitHub contributions for rewards\n**Category:** github\n\n**Example Use:**\n```json\nUse validate github contribution for validate github contributions for rewards\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `contribution_id`\n\n\n**Source Code Analysis:**\nScanned 9306 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use validate github contribution for validate github contributions for rewards",
+      "detected_actions": [],
+      "detected_params": [
+        "contribution_id"
+      ]
+    }
+  },
+  {
+    "name": "validate-pop-event",
+    "type": "tool",
+    "description": "Validate proof-of-participation events (Detailed Reference)",
+    "content": "# validate-pop-event\n\n**Description:** Validate proof-of-participation events\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse validate pop event for validate proof-of-participation events\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `validate`\n- `events`\n- `leaderboard`\n- `payout`\n- `charging_session`\n- `mining_session`\n- `device_connection`\n- `task_completion`\n\n**Detected Parameters:**\n- `action`\n- `...payload`\n\n\n**Source Code Analysis:**\nScanned 7242 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use validate pop event for validate proof-of-participation events",
+      "detected_actions": [
+        "validate",
+        "events",
+        "leaderboard",
+        "payout",
+        "charging_session",
+        "mining_session",
+        "device_connection",
+        "task_completion"
+      ],
+      "detected_params": [
+        "action",
+        "...payload"
+      ]
+    }
+  },
+  {
+    "name": "vectorize-memory",
+    "type": "tool",
+    "description": "Convert memories to vector embeddings (Detailed Reference)",
+    "content": "# vectorize-memory\n\n**Description:** Convert memories to vector embeddings\n**Category:** knowledge\n\n**Example Use:**\n```json\nUse vectorize memory for convert memories to vector embeddings\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `memory_id`\n- `content`\n- `context_type`\n\n\n**Source Code Analysis:**\nScanned 4458 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use vectorize memory for convert memories to vector embeddings",
+      "detected_actions": [],
+      "detected_params": [
+        "memory_id",
+        "content",
+        "context_type"
+      ]
+    }
+  },
+  {
+    "name": "vercel-ai-chat",
+    "type": "tool",
+    "description": "AI chat via Vercel AI SDK (Detailed Reference)",
+    "content": "# vercel-ai-chat\n\n**Description:** AI chat via Vercel AI SDK\n**Category:** ai\n\n**Example Use:**\n```json\nUse vercel ai chat for ai chat via vercel ai sdk\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `message`\n- `messages`\n- `conversationHistory`\n- `userContext`\n- `councilMode`\n\n\n**Source Code Analysis:**\nScanned 4122 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use vercel ai chat for ai chat via vercel ai sdk",
+      "detected_actions": [],
+      "detected_params": [
+        "message",
+        "messages",
+        "conversationHistory",
+        "userContext",
+        "councilMode"
+      ]
+    }
+  },
+  {
+    "name": "vercel-ai-chat-stream",
+    "type": "tool",
+    "description": "Streaming AI chat via Vercel AI SDK (Detailed Reference)",
+    "content": "# vercel-ai-chat-stream\n\n**Description:** Streaming AI chat via Vercel AI SDK\n**Category:** ai\n\n**Example Use:**\n```json\nUse vercel ai chat stream for streaming ai chat via vercel ai sdk\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 5444 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use vercel ai chat stream for streaming ai chat via vercel ai sdk",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "vercel-manager",
+    "type": "tool",
+    "description": "Manage Vercel deployments (Detailed Reference)",
+    "content": "# vercel-manager\n\n**Description:** Manage Vercel deployments\n**Category:** deployment\n\n**Example Use:**\n```json\nUse vercel manager for manage vercel deployments\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `send_webhook`\n- `get_frontend_status`\n- `log_function_invocation`\n- `notify_deployment`\n- `get_project_info`\n\n**Detected Parameters:**\n- `action`\n- `data`\n\n\n**Source Code Analysis:**\nScanned 7489 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use vercel manager for manage vercel deployments",
+      "detected_actions": [
+        "send_webhook",
+        "get_frontend_status",
+        "log_function_invocation",
+        "notify_deployment",
+        "get_project_info"
+      ],
+      "detected_params": [
+        "action",
+        "data"
+      ]
+    }
+  },
+  {
+    "name": "weekly-retrospective-post",
+    "type": "tool",
+    "description": "Generate and post weekly retrospective (Detailed Reference)",
+    "content": "# weekly-retrospective-post\n\n**Description:** Generate and post weekly retrospective\n**Category:** autonomous\n\n**Example Use:**\n```json\nUse weekly retrospective post for generate and post weekly retrospective\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 16078 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use weekly retrospective post for generate and post weekly retrospective",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "xmrt-mcp-server",
+    "type": "tool",
+    "description": "XMRT Model Context Protocol server (Detailed Reference)",
+    "content": "# xmrt-mcp-server\n\n**Description:** XMRT Model Context Protocol server\n**Category:** ecosystem\n\n**Example Use:**\n```json\nUse xmrt mcp server for xmrt model context protocol server\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `initialize`\n- `tools/list`\n- `tools/call`\n- `resources/list`\n- `resources/read`\n- `resources/subscribe`\n- `prompts/list`\n- `prompts/get`\n- `ping`\n- `xmrt_chat`\n- `xmrt_deepseek_chat`\n- `xmrt_openai_chat`\n- `xmrt_github_list_repos`\n- `xmrt_github_create_issue`\n- `xmrt_github_search_code`\n- `xmrt_store_knowledge`\n- `xmrt_search_knowledge`\n- `xmrt_execute_python`\n- `xmrt_analyze_skill_gaps`\n- `xmrt_optimize_task_routing`\n- `xmrt_detect_specializations`\n- `xmrt_forecast_workload`\n- `xmrt_autonomous_debugging`\n- `xmrt_run_full_optimization`\n- `xmrt_charger_connect_device`\n- `xmrt_charger_issue_command`\n- `xmrt_charger_validate_pop`\n- `xmrt_charger_get_metrics`\n- `search_uspto_patents`\n- `get_patent_details`\n- `download_patent_pdf`\n- `analyze_inventor_patents`\n- `mining`\n- `dao`\n- `knowledge`\n- `github`\n- `xmrt_create_proposal`\n- `xmrt_code_review`\n- `xmrt_debug_issue`\n- `xmrt_mining_analysis`\n- `xmrt_ecosystem_health`\n\n**Detected Parameters:**\n- `method`\n- `params`\n\n\n**Source Code Analysis:**\nScanned 15894 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Use xmrt mcp server for xmrt model context protocol server",
+      "detected_actions": [
+        "initialize",
+        "tools/list",
+        "tools/call",
+        "resources/list",
+        "resources/read",
+        "resources/subscribe",
+        "prompts/list",
+        "prompts/get",
+        "ping",
+        "xmrt_chat",
+        "xmrt_deepseek_chat",
+        "xmrt_openai_chat",
+        "xmrt_github_list_repos",
+        "xmrt_github_create_issue",
+        "xmrt_github_search_code",
+        "xmrt_store_knowledge",
+        "xmrt_search_knowledge",
+        "xmrt_execute_python",
+        "xmrt_analyze_skill_gaps",
+        "xmrt_optimize_task_routing",
+        "xmrt_detect_specializations",
+        "xmrt_forecast_workload",
+        "xmrt_autonomous_debugging",
+        "xmrt_run_full_optimization",
+        "xmrt_charger_connect_device",
+        "xmrt_charger_issue_command",
+        "xmrt_charger_validate_pop",
+        "xmrt_charger_get_metrics",
+        "search_uspto_patents",
+        "get_patent_details",
+        "download_patent_pdf",
+        "analyze_inventor_patents",
+        "mining",
+        "dao",
+        "knowledge",
+        "github",
+        "xmrt_create_proposal",
+        "xmrt_code_review",
+        "xmrt_debug_issue",
+        "xmrt_mining_analysis",
+        "xmrt_ecosystem_health"
+      ],
+      "detected_params": [
+        "method",
+        "params"
+      ]
+    }
+  },
+  {
+    "name": "superduper-business-growth",
+    "type": "tool",
+    "description": "SuperDuper Agent: Business growth strategy and market expansion (Detailed Reference)",
+    "content": "# superduper-business-growth\n\n**Description:** SuperDuper Agent: Business growth strategy and market expansion\n**Category:** superduper\n\n**Example Use:**\n```json\nAnalyze market opportunities, develop growth strategies, revenue optimization\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 861 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Analyze market opportunities, develop growth strategies, revenue optimization",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-code-architect",
+    "type": "tool",
+    "description": "SuperDuper Agent: Software architecture and system design (Detailed Reference)",
+    "content": "# superduper-code-architect\n\n**Description:** SuperDuper Agent: Software architecture and system design\n**Category:** superduper\n\n**Example Use:**\n```json\nDesign system architecture, review code quality, optimize performance\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 893 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Design system architecture, review code quality, optimize performance",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-communication-outreach",
+    "type": "tool",
+    "description": "SuperDuper Agent: Community communication and outreach (Detailed Reference)",
+    "content": "# superduper-communication-outreach\n\n**Description:** SuperDuper Agent: Community communication and outreach\n**Category:** superduper\n\n**Example Use:**\n```json\nManage community outreach, stakeholder communications, engagement campaigns\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 895 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Manage community outreach, stakeholder communications, engagement campaigns",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-content-media",
+    "type": "tool",
+    "description": "SuperDuper Agent: Content creation and media strategy (Detailed Reference)",
+    "content": "# superduper-content-media\n\n**Description:** SuperDuper Agent: Content creation and media strategy\n**Category:** superduper\n\n**Example Use:**\n```json\nCreate marketing content, develop media strategy, social media management\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 856 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Create marketing content, develop media strategy, social media management",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-design-brand",
+    "type": "tool",
+    "description": "SuperDuper Agent: Brand identity and visual design (Detailed Reference)",
+    "content": "# superduper-design-brand\n\n**Description:** SuperDuper Agent: Brand identity and visual design\n**Category:** superduper\n\n**Example Use:**\n```json\nDevelop brand identity, create design systems, UI/UX improvements\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 903 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Develop brand identity, create design systems, UI/UX improvements",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-development-coach",
+    "type": "tool",
+    "description": "SuperDuper Agent: Developer mentoring and coaching (Detailed Reference)",
+    "content": "# superduper-development-coach\n\n**Description:** SuperDuper Agent: Developer mentoring and coaching\n**Category:** superduper\n\n**Example Use:**\n```json\nMentor developers, teach best practices, provide career guidance\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 856 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Mentor developers, teach best practices, provide career guidance",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-domain-experts",
+    "type": "tool",
+    "description": "SuperDuper Agent: Domain-specific expertise and consulting (Detailed Reference)",
+    "content": "# superduper-domain-experts\n\n**Description:** SuperDuper Agent: Domain-specific expertise and consulting\n**Category:** superduper\n\n**Example Use:**\n```json\nProvide domain expertise, technical consulting, specialized guidance\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 898 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Provide domain expertise, technical consulting, specialized guidance",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-finance-investment",
+    "type": "tool",
+    "description": "SuperDuper Agent: Financial planning and investment strategy (Detailed Reference)",
+    "content": "# superduper-finance-investment\n\n**Description:** SuperDuper Agent: Financial planning and investment strategy\n**Category:** superduper\n\n**Example Use:**\n```json\nAnalyze financial health, develop investment strategy, budget planning\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 850 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Analyze financial health, develop investment strategy, budget planning",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-integration",
+    "type": "tool",
+    "description": "SuperDuper Agent: System integration and orchestration (Detailed Reference)",
+    "content": "# superduper-integration\n\n**Description:** SuperDuper Agent: System integration and orchestration\n**Category:** superduper\n\n**Example Use:**\n```json\nIntegrate systems, orchestrate APIs, coordinate services\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 872 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Integrate systems, orchestrate APIs, coordinate services",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-research-intelligence",
+    "type": "tool",
+    "description": "SuperDuper Agent: Research and competitive intelligence (Detailed Reference)",
+    "content": "# superduper-research-intelligence\n\n**Description:** SuperDuper Agent: Research and competitive intelligence\n**Category:** superduper\n\n**Example Use:**\n```json\nConduct market research, analyze competitors, monitor trends\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 841 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Conduct market research, analyze competitors, monitor trends",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "superduper-social-viral",
+    "type": "tool",
+    "description": "SuperDuper Agent: Social media and viral marketing (Detailed Reference)",
+    "content": "# superduper-social-viral\n\n**Description:** SuperDuper Agent: Social media and viral marketing\n**Category:** superduper\n\n**Example Use:**\n```json\nCreate viral campaigns, optimize social engagement, influencer partnerships\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 1097 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Create viral campaigns, optimize social engagement, influencer partnerships",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "eliza-intelligence-coordinator",
+    "type": "tool",
+    "description": "Coordinates intelligence gathering and knowledge synthesis across all agents (Detailed Reference)",
+    "content": "# eliza-intelligence-coordinator\n\n**Description:** Coordinates intelligence gathering and knowledge synthesis across all agents\n**Category:** autonomous\n\n**Example Use:**\n```json\nCoordinate intelligence across agents, synthesize knowledge, orchestrate workflows\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `build_context`\n- `store_learning`\n- `get_memory_context`\n- `update_knowledge_entities`\n\n**Detected Parameters:**\n- `action`\n- `payload`\n\n\n**Source Code Analysis:**\nScanned 5116 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Coordinate intelligence across agents, synthesize knowledge, orchestrate workflows",
+      "detected_actions": [
+        "build_context",
+        "store_learning",
+        "get_memory_context",
+        "update_knowledge_entities"
+      ],
+      "detected_params": [
+        "action",
+        "payload"
+      ]
+    }
+  },
+  {
+    "name": "eliza-self-evaluation",
+    "type": "tool",
+    "description": "Self-evaluation and performance analysis for continuous improvement (Detailed Reference)",
+    "content": "# eliza-self-evaluation\n\n**Description:** Self-evaluation and performance analysis for continuous improvement\n**Category:** autonomous\n\n**Example Use:**\n```json\nAnalyze system performance, evaluate effectiveness, recommend improvements\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 6420 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Analyze system performance, evaluate effectiveness, recommend improvements",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "evaluate-community-idea",
+    "type": "tool",
+    "description": "Evaluate community-submitted ideas for feasibility and impact (Detailed Reference)",
+    "content": "# evaluate-community-idea\n\n**Description:** Evaluate community-submitted ideas for feasibility and impact\n**Category:** governance\n\n**Example Use:**\n```json\nEvaluate community proposals, assess feasibility, determine impact\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `action`\n- `ideaId`\n\n\n**Source Code Analysis:**\nScanned 11253 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Evaluate community proposals, assess feasibility, determine impact",
+      "detected_actions": [],
+      "detected_params": [
+        "action",
+        "ideaId"
+      ]
+    }
+  },
+  {
+    "name": "function-usage-analytics",
+    "type": "tool",
+    "description": "Analytics for edge function usage patterns and performance (Detailed Reference)",
+    "content": "# function-usage-analytics\n\n**Description:** Analytics for edge function usage patterns and performance\n**Category:** monitoring\n\n**Example Use:**\n```json\nAnalyze function usage, track performance, identify patterns\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `function_name`\n- `executive_name`\n- `time_period_hours = 168`\n- `// Default 1 week\n      min_usage_count = 1`\n\n\n**Source Code Analysis:**\nScanned 5375 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Analyze function usage, track performance, identify patterns",
+      "detected_actions": [],
+      "detected_params": [
+        "function_name",
+        "executive_name",
+        "time_period_hours = 168",
+        "// Default 1 week\n      min_usage_count = 1"
+      ]
+    }
+  },
+  {
+    "name": "list-function-proposals",
+    "type": "tool",
+    "description": "List all edge function proposals and their status (Detailed Reference)",
+    "content": "# list-function-proposals\n\n**Description:** List all edge function proposals and their status\n**Category:** governance\n\n**Example Use:**\n```json\nList pending proposals, check proposal status, view voting history\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `status`\n\n\n**Source Code Analysis:**\nScanned 2945 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "List pending proposals, check proposal status, view voting history",
+      "detected_actions": [],
+      "detected_params": [
+        "status"
+      ]
+    }
+  },
+  {
+    "name": "mobile-miner-config",
+    "type": "tool",
+    "description": "Configuration management for mobile mining devices (Detailed Reference)",
+    "content": "# mobile-miner-config\n\n**Description:** Configuration management for mobile mining devices\n**Category:** mining\n\n**Example Use:**\n```json\nConfigure mobile miners, optimize settings, manage device profiles\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `user_number`\n\n\n**Source Code Analysis:**\nScanned 1661 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Configure mobile miners, optimize settings, manage device profiles",
+      "detected_actions": [],
+      "detected_params": [
+        "user_number"
+      ]
+    }
+  },
+  {
+    "name": "mobile-miner-register",
+    "type": "tool",
+    "description": "Registration system for mobile mining devices (Detailed Reference)",
+    "content": "# mobile-miner-register\n\n**Description:** Registration system for mobile mining devices\n**Category:** mining\n\n**Example Use:**\n```json\nRegister mobile miners, onboard new devices, manage identities\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `username`\n- `device_info`\n\n\n**Source Code Analysis:**\nScanned 3350 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Register mobile miners, onboard new devices, manage identities",
+      "detected_actions": [],
+      "detected_params": [
+        "username",
+        "device_info"
+      ]
+    }
+  },
+  {
+    "name": "mobile-miner-script",
+    "type": "tool",
+    "description": "Script distribution for mobile mining clients (Detailed Reference)",
+    "content": "# mobile-miner-script\n\n**Description:** Script distribution for mobile mining clients\n**Category:** mining\n\n**Example Use:**\n```json\nDistribute mining scripts, push updates, manage versions\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 5482 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Distribute mining scripts, push updates, manage versions",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "opportunity-scanner",
+    "type": "tool",
+    "description": "Autonomous opportunity scanning and identification (Detailed Reference)",
+    "content": "# opportunity-scanner\n\n**Description:** Autonomous opportunity scanning and identification\n**Category:** autonomous\n\n**Example Use:**\n```json\nScan for opportunities, detect market trends, identify potential\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `action`\n\n\n**Source Code Analysis:**\nScanned 7334 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Scan for opportunities, detect market trends, identify potential",
+      "detected_actions": [],
+      "detected_params": [
+        "action"
+      ]
+    }
+  },
+  {
+    "name": "propose-new-edge-function",
+    "type": "tool",
+    "description": "Submit new edge function proposals for council voting (Detailed Reference)",
+    "content": "# propose-new-edge-function\n\n**Description:** Submit new edge function proposals for council voting\n**Category:** governance\n\n**Example Use:**\n```json\nPropose new functions, submit to council, initiate voting\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `function_name`\n- `description`\n- `proposed_by`\n- `// CSO`\n- `CTO`\n- `CIO`\n- `CAO`\n- `or 'eliza'\n      category`\n- `rationale`\n- `use_cases`\n- `implementation_outline`\n- `auto_vote // If true`\n- `automatically trigger executive voting`\n\n\n**Source Code Analysis:**\nScanned 6225 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Propose new functions, submit to council, initiate voting",
+      "detected_actions": [],
+      "detected_params": [
+        "function_name",
+        "description",
+        "proposed_by",
+        "// CSO",
+        "CTO",
+        "CIO",
+        "CAO",
+        "or 'eliza'\n      category",
+        "rationale",
+        "use_cases",
+        "implementation_outline",
+        "auto_vote // If true",
+        "automatically trigger executive voting"
+      ]
+    }
+  },
+  {
+    "name": "render-api",
+    "type": "tool",
+    "description": "Render.com deployment management and monitoring (Detailed Reference)",
+    "content": "# render-api\n\n**Description:** Render.com deployment management and monitoring\n**Category:** deployment\n\n**Example Use:**\n```json\nManage Render deployments, monitor services, check health\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `action`\n- `limit`\n\n\n**Source Code Analysis:**\nScanned 12184 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Manage Render deployments, monitor services, check health",
+      "detected_actions": [],
+      "detected_params": [
+        "action",
+        "limit"
+      ]
+    }
+  },
+  {
+    "name": "system-knowledge-builder",
+    "type": "tool",
+    "description": "Autonomous knowledge base construction and maintenance (Detailed Reference)",
+    "content": "# system-knowledge-builder\n\n**Description:** Autonomous knowledge base construction and maintenance\n**Category:** knowledge\n\n**Example Use:**\n```json\nBuild knowledge base, extract entities, create relationships\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 5660 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Build knowledge base, extract entities, create relationships",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "vote-on-proposal",
+    "type": "tool",
+    "description": "Cast votes on edge function and governance proposals (Detailed Reference)",
+    "content": "# vote-on-proposal\n\n**Description:** Cast votes on edge function and governance proposals\n**Category:** governance\n\n**Example Use:**\n```json\nVote on proposals, evaluate decisions, participate in governance\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `proposal_id`\n- `executive_name`\n- `// CSO`\n- `CTO`\n- `CIO`\n- `CAO`\n- `or COMMUNITY\n      vote`\n- `// approve`\n- `reject`\n- `or abstain\n      reasoning`\n- `session_key // Required for COMMUNITY votes`\n\n\n**Source Code Analysis:**\nScanned 16561 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Vote on proposals, evaluate decisions, participate in governance",
+      "detected_actions": [],
+      "detected_params": [
+        "proposal_id",
+        "executive_name",
+        "// CSO",
+        "CTO",
+        "CIO",
+        "CAO",
+        "or COMMUNITY\n      vote",
+        "// approve",
+        "reject",
+        "or abstain\n      reasoning",
+        "session_key // Required for COMMUNITY votes"
+      ]
+    }
+  },
+  {
+    "name": "superduper-router",
+    "type": "tool",
+    "description": "Central router for all SuperDuper specialist agents (Detailed Reference)",
+    "content": "# superduper-router\n\n**Description:** Central router for all SuperDuper specialist agents\n**Category:** superduper\n\n**Example Use:**\n```json\nRoute to SuperDuper agents, orchestrate specialist requests\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 10584 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Route to SuperDuper agents, orchestrate specialist requests",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "hume-expression-measurement",
+    "type": "tool",
+    "description": "🎭 Hume Expression Measurement - Analyze facial expressions and emotions (Detailed Reference)",
+    "content": "# hume-expression-measurement\n\n**Description:** 🎭 Hume Expression Measurement - Analyze facial expressions and emotions\n**Category:** hume\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `models`\n- `image`\n\n\n**Source Code Analysis:**\nScanned 7641 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "models",
+        "image"
+      ]
+    }
+  },
+  {
+    "name": "hume-tts",
+    "type": "tool",
+    "description": "🎭 Hume TTS - Empathic text-to-speech with emotional expression (Detailed Reference)",
+    "content": "# hume-tts\n\n**Description:** 🎭 Hume TTS - Empathic text-to-speech with emotional expression\n**Category:** hume\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `text`\n- `voiceId`\n\n\n**Source Code Analysis:**\nScanned 5927 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "text",
+        "voiceId"
+      ]
+    }
+  },
+  {
+    "name": "identify-service-interest",
+    "type": "tool",
+    "description": "🎯 Service Interest Detection - Identify services a lead wants (Detailed Reference)",
+    "content": "# identify-service-interest\n\n**Description:** 🎯 Service Interest Detection - Identify services a lead wants\n**Category:** acquisition\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `user_message`\n- `conversation_history = []`\n- `session_key`\n\n\n**Source Code Analysis:**\nScanned 5292 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "user_message",
+        "conversation_history = []",
+        "session_key"
+      ]
+    }
+  },
+  {
+    "name": "convert-session-to-user",
+    "type": "tool",
+    "description": "👤 Session Conversion - Convert anonymous sessions to users (Detailed Reference)",
+    "content": "# convert-session-to-user\n\n**Description:** 👤 Session Conversion - Convert anonymous sessions to users\n**Category:** acquisition\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `create_user_profile`\n- `link_api_key_to_session`\n- `enrich_user_profile`\n\n**Detected Parameters:**\n- `session_key`\n- `email`\n- `action = 'create_user_profile'`\n\n\n**Source Code Analysis:**\nScanned 5563 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "create_user_profile",
+        "link_api_key_to_session",
+        "enrich_user_profile"
+      ],
+      "detected_params": [
+        "session_key",
+        "email",
+        "action = 'create_user_profile'"
+      ]
+    }
+  },
+  {
+    "name": "stripe-payment-webhook",
+    "type": "tool",
+    "description": "💳 Stripe Webhook - Process payments and auto-upgrade keys (Detailed Reference)",
+    "content": "# stripe-payment-webhook\n\n**Description:** 💳 Stripe Webhook - Process payments and auto-upgrade keys\n**Category:** payments\n\n**Example Use:**\n```json\nWebhook endpoint for Stripe events\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 9245 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Webhook endpoint for Stripe events",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "task-auto-advance",
+    "type": "tool",
+    "description": "⏩ Task Auto-Advance - Auto-advance tasks through pipeline (Detailed Reference)",
+    "content": "# task-auto-advance\n\n**Description:** ⏩ Task Auto-Advance - Auto-advance tasks through pipeline\n**Category:** automation\n\n**Example Use:**\n```json\nRuns on cron to advance eligible tasks\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `action = 'auto_advance'`\n- `task_id`\n- `force = false`\n\n\n**Source Code Analysis:**\nScanned 13874 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Runs on cron to advance eligible tasks",
+      "detected_actions": [],
+      "detected_params": [
+        "action = 'auto_advance'",
+        "task_id",
+        "force = false"
+      ]
+    }
+  },
+  {
+    "name": "get-function-version-analytics",
+    "type": "tool",
+    "description": "📈 Function Version Analytics - Compare versions (Detailed Reference)",
+    "content": "# get-function-version-analytics\n\n**Description:** 📈 Function Version Analytics - Compare versions\n**Category:** monitoring\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `function_name`\n- `// REQUIRED`\n- `// OPTIONAL`\n- `// Compare all versions\n      time_window_hours = 168`\n- `// Default`\n\n\n**Source Code Analysis:**\nScanned 10538 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "function_name",
+        "// REQUIRED",
+        "// OPTIONAL",
+        "// Compare all versions\n      time_window_hours = 168",
+        "// Default"
+      ]
+    }
+  },
+  {
+    "name": "sync-function-logs",
+    "type": "tool",
+    "description": "🔄 Sync Function Logs - Synchronize logs from Analytics (Detailed Reference)",
+    "content": "# sync-function-logs\n\n**Description:** 🔄 Sync Function Logs - Synchronize logs from Analytics\n**Category:** monitoring\n\n**Example Use:**\n```json\nRuns on cron every 15 minutes\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 16586 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Runs on cron every 15 minutes",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "tool-usage-analytics",
+    "type": "tool",
+    "description": "📊 Tool Usage Analytics - Comprehensive tool analytics (Detailed Reference)",
+    "content": "# tool-usage-analytics\n\n**Description:** 📊 Tool Usage Analytics - Comprehensive tool analytics\n**Category:** monitoring\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `refresh_dashboard`\n- `summary`\n- `by_category`\n- `by_tool`\n- `errors`\n- `performance`\n- `trends`\n- `executive_usage`\n\n**Detected Parameters:**\n- `action = 'summary'`\n- `time_window_hours = 24`\n- `category`\n- `tool_name`\n- `executive_name`\n- `limit = 50`\n\n\n**Source Code Analysis:**\nScanned 15708 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "refresh_dashboard",
+        "summary",
+        "by_category",
+        "by_tool",
+        "errors",
+        "performance",
+        "trends",
+        "executive_usage"
+      ],
+      "detected_params": [
+        "action = 'summary'",
+        "time_window_hours = 24",
+        "category",
+        "tool_name",
+        "executive_name",
+        "limit = 50"
+      ]
+    }
+  },
+  {
+    "name": "query-edge-analytics",
+    "type": "tool",
+    "description": "🔍 Query Edge Analytics - Query Supabase Analytics (Detailed Reference)",
+    "content": "# query-edge-analytics\n\n**Description:** 🔍 Query Edge Analytics - Query Supabase Analytics\n**Category:** monitoring\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 11267 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "debug-analytics-data-flow",
+    "type": "tool",
+    "description": "🔍 Debug Analytics - Trace analytics data flow (Detailed Reference)",
+    "content": "# debug-analytics-data-flow\n\n**Description:** 🔍 Debug Analytics - Trace analytics data flow\n**Category:** monitoring\n\n**Example Use:**\n```json\nDebug analytics pipeline issues\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 14841 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "Debug analytics pipeline issues",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "handle-rejected-proposal",
+    "type": "tool",
+    "description": "❌ Handle Rejected Proposals - Generate improvement suggestions (Detailed Reference)",
+    "content": "# handle-rejected-proposal\n\n**Description:** ❌ Handle Rejected Proposals - Generate improvement suggestions\n**Category:** governance\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `proposal_id`\n\n\n**Source Code Analysis:**\nScanned 8240 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "proposal_id"
+      ]
+    }
+  },
+  {
+    "name": "execute-approved-proposal",
+    "type": "tool",
+    "description": "✅ Execute Approved Proposals - Finalize with code generation (Detailed Reference)",
+    "content": "# execute-approved-proposal\n\n**Description:** ✅ Execute Approved Proposals - Finalize with code generation\n**Category:** governance\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `proposal_id`\n\n\n**Source Code Analysis:**\nScanned 18146 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "proposal_id"
+      ]
+    }
+  },
+  {
+    "name": "request-executive-votes",
+    "type": "tool",
+    "description": "🗳️ Request Executive Votes - Trigger AI executives to vote (Detailed Reference)",
+    "content": "# request-executive-votes\n\n**Description:** 🗳️ Request Executive Votes - Trigger AI executives to vote\n**Category:** governance\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Detected Parameters:**\n- `proposal_id`\n\n\n**Source Code Analysis:**\nScanned 15548 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": [
+        "proposal_id"
+      ]
+    }
+  },
+  {
+    "name": "deploy-approved-edge-function",
+    "type": "tool",
+    "description": "🚀 Deploy Edge Function - Deploy approved functions (Detailed Reference)",
+    "content": "# deploy-approved-edge-function\n\n**Description:** 🚀 Deploy Edge Function - Deploy approved functions\n**Category:** deployment\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `process_queue`\n- `deploy_single`\n- `get_deployment_status`\n- `rollback`\n\n**Detected Parameters:**\n- `action = 'process_queue'`\n- `proposal_id`\n- `auto_deploy = true`\n- `run_health_check = true`\n- `version_tag`\n\n\n**Source Code Analysis:**\nScanned 19408 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "process_queue",
+        "deploy_single",
+        "get_deployment_status",
+        "rollback"
+      ],
+      "detected_params": [
+        "action = 'process_queue'",
+        "proposal_id",
+        "auto_deploy = true",
+        "run_health_check = true",
+        "version_tag"
+      ]
+    }
+  },
+  {
+    "name": "event-dispatcher",
+    "type": "tool",
+    "description": "🎯 Event Dispatcher - Intelligent event routing (Detailed Reference)",
+    "content": "# event-dispatcher\n\n**Description:** 🎯 Event Dispatcher - Intelligent event routing\n**Category:** ecosystem\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `trigger_workflow`\n- `assign_task`\n- `create_issue`\n- `call_function`\n\n**Detected Parameters:**\n- `event_id`\n- `event_source`\n- `event_type`\n- `priority`\n- `payload`\n- `metadata`\n\n\n**Source Code Analysis:**\nScanned 10804 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "trigger_workflow",
+        "assign_task",
+        "create_issue",
+        "call_function"
+      ],
+      "detected_params": [
+        "event_id",
+        "event_source",
+        "event_type",
+        "priority",
+        "payload",
+        "metadata"
+      ]
+    }
+  },
+  {
+    "name": "usage-monitor",
+    "type": "tool",
+    "description": "📊 Usage Monitor - Track API usage and quotas (Detailed Reference)",
+    "content": "# usage-monitor\n\n**Description:** 📊 Usage Monitor - Track API usage and quotas\n**Category:** monitoring\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 4808 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "vertex-ai-image-gen",
+    "type": "tool",
+    "description": "🖼️ Vertex AI Image Gen - Generate high-quality images using Imagen (Detailed Reference)",
+    "content": "# vertex-ai-image-gen\n\n**Description:** 🖼️ Vertex AI Image Gen - Generate high-quality images using Imagen\n**Category:** ai\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `generate_image`\n- `analyze_image`\n- `analyze_attachment`\n\n**Detected Parameters:**\n- `image`\n- `features`\n- `session_id`\n- `sessionId`\n\n\n**Source Code Analysis:**\nScanned 13024 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "generate_image",
+        "analyze_image",
+        "analyze_attachment"
+      ],
+      "detected_params": [
+        "image",
+        "features",
+        "session_id",
+        "sessionId"
+      ]
+    }
+  },
+  {
+    "name": "google-gmail",
+    "type": "tool",
+    "description": "📧 Gmail Integration - Send emails, read threads, manage drafts (Detailed Reference)",
+    "content": "# google-gmail\n\n**Description:** 📧 Gmail Integration - Send emails, read threads, manage drafts\n**Category:** web\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Formal Actions Definition:**\n```json\n{\n          service: 'google-gmail',\n          actions: [\n            { name: 'send_email', params: ['to', 'subject', 'body', 'is_html?'], description: 'Send an email' },\n            { name: 'list_emails', params: ['query?', 'max_results?'], description: 'List emails with optional search' },\n            { name: 'get_email', params: ['message_id'], description: 'Get full email content' },\n            { name: 'create_draft', params: ['to', 'subject', 'body'], description: 'Create email draft' }\n          ]\n        }\n```\n\n**Available Actions:**\n- `send_email`\n- `list_emails`\n- `get_email`\n- `create_draft`\n- `list_actions`\n\n**Detected Parameters:**\n- `to`\n- `subject`\n- `body`\n- `is_html`\n- `query`\n- `max_results`\n- `message_id`\n\n\n**Source Code Analysis:**\nScanned 6707 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "send_email",
+        "list_emails",
+        "get_email",
+        "create_draft",
+        "list_actions"
+      ],
+      "detected_params": [
+        "to",
+        "subject",
+        "body",
+        "is_html",
+        "query",
+        "max_results",
+        "message_id"
+      ]
+    }
+  },
+  {
+    "name": "google-calendar",
+    "type": "tool",
+    "description": "📅 Google Calendar - Manage events and schedules (Detailed Reference)",
+    "content": "# google-calendar\n\n**Description:** 📅 Google Calendar - Manage events and schedules\n**Category:** web\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Formal Actions Definition:**\n```json\n{\n          service: 'google-calendar',\n          actions: [\n            { name: 'list_events', params: ['calendar_id?', 'time_min?', 'time_max?', 'max_results?'], description: 'List calendar events' },\n            { name: 'create_event', params: ['title', 'start_time', 'end_time', 'description?', 'attendees?', 'calendar_id?'], description: 'Create calendar event' },\n            { name: 'update_event', params: ['event_id', 'title?', 'start_time?', 'end_time?', 'description?', 'calendar_id?'], description: 'Update event' },\n            { name: 'delete_event', params: ['event_id', 'calendar_id?'], description: 'Delete event' },\n            { name: 'get_event', params: ['event_id', 'calendar_id?'], description: 'Get event details' }\n          ]\n        }\n```\n\n**Available Actions:**\n- `list_events`\n- `create_event`\n- `update_event`\n- `delete_event`\n- `get_event`\n- `list_actions`\n\n**Detected Parameters:**\n- `calendar_id`\n- `time_min`\n- `time_max`\n- `max_results`\n- `title`\n- `start_time`\n- `end_time`\n- `description`\n- `attendees`\n- `event_id`\n\n\n**Source Code Analysis:**\nScanned 7271 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "list_events",
+        "create_event",
+        "update_event",
+        "delete_event",
+        "get_event",
+        "list_actions"
+      ],
+      "detected_params": [
+        "calendar_id",
+        "time_min",
+        "time_max",
+        "max_results",
+        "title",
+        "start_time",
+        "end_time",
+        "description",
+        "attendees",
+        "event_id"
+      ]
+    }
+  },
+  {
+    "name": "google-drive",
+    "type": "tool",
+    "description": "📂 Google Drive - Manage files and folders (Detailed Reference)",
+    "content": "# google-drive\n\n**Description:** 📂 Google Drive - Manage files and folders\n**Category:** web\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Formal Actions Definition:**\n```json\n{\n          service: 'google-drive',\n          actions: [\n            { name: 'list_files', params: ['query?', 'max_results?', 'folder_id?'], description: 'List files in Drive' },\n            { name: 'upload_file', params: ['file_name', 'content', 'mime_type?', 'folder_id?'], description: 'Upload a file' },\n            { name: 'get_file', params: ['file_id'], description: 'Get file metadata' },\n            { name: 'download_file', params: ['file_id'], description: 'Download file content' },\n            { name: 'create_folder', params: ['folder_name', 'parent_folder_id?'], description: 'Create a folder' },\n            { name: 'share_file', params: ['file_id', 'email', 'role?'], description: 'Share file with user' }\n          ]\n        }\n```\n\n**Available Actions:**\n- `list_files`\n- `upload_file`\n- `get_file`\n- `download_file`\n- `create_folder`\n- `share_file`\n- `list_actions`\n\n**Detected Parameters:**\n- `query`\n- `max_results`\n- `folder_id`\n- `file_name`\n- `content`\n- `mime_type`\n- `file_id`\n- `folder_name`\n- `parent_folder_id`\n- `email`\n- `role`\n\n\n**Source Code Analysis:**\nScanned 7028 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "list_files",
+        "upload_file",
+        "get_file",
+        "download_file",
+        "create_folder",
+        "share_file",
+        "list_actions"
+      ],
+      "detected_params": [
+        "query",
+        "max_results",
+        "folder_id",
+        "file_name",
+        "content",
+        "mime_type",
+        "file_id",
+        "folder_name",
+        "parent_folder_id",
+        "email",
+        "role"
+      ]
+    }
+  },
+  {
+    "name": "google-sheets",
+    "type": "tool",
+    "description": "📊 Google Sheets - Read and write spreadsheet data (Detailed Reference)",
+    "content": "# google-sheets\n\n**Description:** 📊 Google Sheets - Read and write spreadsheet data\n**Category:** web\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Formal Actions Definition:**\n```json\n{\n          service: 'google-sheets',\n          actions: [\n            { name: 'create_spreadsheet', params: ['title', 'sheet_name?'], description: 'Create new spreadsheet' },\n            { name: 'read_sheet', params: ['spreadsheet_id', 'range'], description: 'Read data from sheet range' },\n            { name: 'write_sheet', params: ['spreadsheet_id', 'range', 'values'], description: 'Write data to sheet range' },\n            { name: 'append_sheet', params: ['spreadsheet_id', 'range', 'values'], description: 'Append rows to sheet' },\n            { name: 'get_spreadsheet_info', params: ['spreadsheet_id'], description: 'Get spreadsheet metadata' }\n          ]\n        }\n```\n\n**Available Actions:**\n- `create_spreadsheet`\n- `read_sheet`\n- `write_sheet`\n- `append_sheet`\n- `get_spreadsheet_info`\n- `list_actions`\n\n**Detected Parameters:**\n- `title`\n- `sheet_name`\n- `spreadsheet_id`\n- `range`\n- `values`\n\n\n**Source Code Analysis:**\nScanned 5974 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "create_spreadsheet",
+        "read_sheet",
+        "write_sheet",
+        "append_sheet",
+        "get_spreadsheet_info",
+        "list_actions"
+      ],
+      "detected_params": [
+        "title",
+        "sheet_name",
+        "spreadsheet_id",
+        "range",
+        "values"
+      ]
+    }
+  },
+  {
+    "name": "typefully-integration",
+    "type": "tool",
+    "description": "🐦 Typefully/Twitter - Schedule and publish tweets/threads (Detailed Reference)",
+    "content": "# typefully-integration\n\n**Description:** 🐦 Typefully/Twitter - Schedule and publish tweets/threads\n**Category:** web\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `get-me`\n- `list-social-sets`\n- `create-draft`\n- `list-drafts`\n- `update-draft`\n\n**Detected Parameters:**\n- `action`\n- `social_set_id`\n- `...payload`\n\n\n**Source Code Analysis:**\nScanned 3151 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "get-me",
+        "list-social-sets",
+        "create-draft",
+        "list-drafts",
+        "update-draft"
+      ],
+      "detected_params": [
+        "action",
+        "social_set_id",
+        "...payload"
+      ]
+    }
+  },
+  {
+    "name": "daily-news-finder",
+    "type": "tool",
+    "description": "📰 Daily News Finder - Search and curate daily news topics (Detailed Reference)",
+    "content": "# daily-news-finder\n\n**Description:** 📰 Daily News Finder - Search and curate daily news topics\n**Category:** autonomous\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n\n**Source Code Analysis:**\nScanned 6767 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [],
+      "detected_params": []
+    }
+  },
+  {
+    "name": "agent-coordination-hub",
+    "type": "tool",
+    "description": "🤝 Agent Coordination Hub - Central hub for multi-agent synchronization (Detailed Reference)",
+    "content": "# agent-coordination-hub\n\n**Description:** 🤝 Agent Coordination Hub - Central hub for multi-agent synchronization\n**Category:** task-management\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `register_agent`\n- `request_task`\n- `report_completion`\n- `check_conflicts`\n\n**Detected Parameters:**\n- `action`\n- `agent_id`\n- `task_data`\n\n\n**Source Code Analysis:**\nScanned 3598 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "register_agent",
+        "request_task",
+        "report_completion",
+        "check_conflicts"
+      ],
+      "detected_params": [
+        "action",
+        "agent_id",
+        "task_data"
+      ]
+    }
+  },
+  {
+    "name": "agent-deployment-coordinator",
+    "type": "tool",
+    "description": "🚀 Agent Deployment - Coordinate agent deployments and updates (Detailed Reference)",
+    "content": "# agent-deployment-coordinator\n\n**Description:** 🚀 Agent Deployment - Coordinate agent deployments and updates\n**Category:** deployment\n\n**Example Use:**\n```json\n{\n```\n\n**Usage Analysis:**\n\n**Available Actions:**\n- `deploy`\n- `undeploy`\n- `status`\n- `list`\n- `update`\n- `health_check`\n\n\n**Source Code Analysis:**\nScanned 12426 bytes of code to extract usage patterns.",
+    "confidence_score": 0.95,
+    "metadata": {
+      "source": "auto_generated",
+      "registry_example": "{",
+      "detected_actions": [
+        "deploy",
+        "undeploy",
+        "status",
+        "list",
+        "update",
+        "health_check"
+      ],
+      "detected_params": []
+    }
+  }
+]

@@ -7,7 +7,7 @@
 // - First request will attempt to create helper SQL function if missing; subsequent calls reuse it.
 // - All routes are prefixed with /toggle-cron-jobs per Supabase Edge routing.
 
-import { createClient } from "npm:@supabase/supabase-js@2.45.4";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
 const requiredEnv = ["SUPABASE_URL", "SUPABASE_SERVICE_ROLE_KEY"] as const;
 for (const k of requiredEnv) {

@@ -9,7 +9,7 @@
 // - This function handles multipart/form-data uploads at POST /universal-file-processor/process.
 
 // Imports
-import { createClient } from "npm:@supabase/supabase-js@2.45.1";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
 // Simple type aliases to satisfy the requested interface shape
 // (These can be expanded based on your application needs.)

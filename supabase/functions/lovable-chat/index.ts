@@ -4,7 +4,7 @@ import { callAIWithFallback, UnifiedAIOptions } from '../_shared/unifiedAIFallba
 import { EdgeFunctionLogger } from "../_shared/logging.ts";
 import { ELIZA_TOOLS } from '../_shared/elizaTools.ts';
 import { executeToolCall } from '../_shared/toolExecutor.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { synthesizeToolResults } from '../_shared/executiveHelpers.ts';
 import { emergencyStaticFallback } from '../_shared/fallbackToolExecutor.ts';
 import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';

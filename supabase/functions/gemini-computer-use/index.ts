@@ -1,5 +1,5 @@
 import { corsHeaders } from '../_shared/cors.ts';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { GoogleGenerativeAI } from 'https://esm.sh/@google/generative-ai@0.12.0';
 
 // Interfaces for Agent Loop

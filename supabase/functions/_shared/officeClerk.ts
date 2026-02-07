@@ -7,7 +7,7 @@
  * Supports 115+ programmatic edge functions
  */
 
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
 // Configuration for Offline AI
 const OFFLINE_AI_URL = Deno.env.get('OFFLINE_AI_URL');
