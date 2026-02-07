@@ -92,6 +92,7 @@ export const TaskVisualizer = () => {
       }
 
       const { data: tasksData, error: tasksError } = await taskQuery
+        .in('status', ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED'])
         .order('updated_at', { ascending: false })
         .limit(20);
 
@@ -192,6 +193,9 @@ export const TaskVisualizer = () => {
           if (prev.find(t => t.id === newTask.id)) {
             return prev;
           }
+          if (!['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED'].includes(newTask.status)) {
+            return prev;
+          }
           return [newTask, ...prev].slice(0, 20);
         });
       },
@@ -208,9 +212,19 @@ export const TaskVisualizer = () => {
       (payload) => {
         console.log('📋 Task updated:', payload);
         const updatedTask = payload.new as Task;
-        setTasks(prev =>
-          prev.map(t => t.id === updatedTask.id ? updatedTask : t)
-        );
+        const isActive = ['PENDING', 'IN_PROGRESS', 'CLAIMED', 'BLOCKED'].includes(updatedTask.status);
+
+        setTasks(prev => {
+          // If task is no longer active, remove it
+          if (!isActive) {
+            return prev.filter(t => t.id !== updatedTask.id);
+          }
+
+          // If task is active, update it or add it if strictly necessary (though this list is usually just a feed)
+          // For simplicity, we just update existing ones, or if it wasn't there but should be, we might add it 
+          // but let's stick to update behavior for now to avoid jumping logic issues with the slice
+          return prev.map(t => t.id === updatedTask.id ? updatedTask : t);
+        });
       },
       {
         event: 'UPDATE',
