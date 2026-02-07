@@ -259,43 +259,7 @@ export const SystemStatusMonitor = () => {
               )}
             </div>
           )}
-          {/* Database */}
-          {status.components.database && (
-            <div className="border rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Database</span>
-                {getStatusIcon(status.components.database.status)}
-              </div>
-              {status.components.database.error && (
-                <p className="text-xs text-muted-foreground">{status.components.database.error}</p>
-              )}
-              {status.components.database.stats && (
-                <div className="grid grid-cols-2 gap-2 text-xs">
-                  <div>
-                    <div className="text-muted-foreground">Agents</div>
-                    <div className="font-bold">{status.components.database.stats.total_agents}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Tasks</div>
-                    <div className="font-bold">{status.components.database.stats.total_tasks}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Memories</div>
-                    <div className="font-bold">{status.components.database.stats.total_memories}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Documents</div>
-                    <div className="font-bold">{status.components.database.stats.total_documents}</div>
-                  </div>
-                </div>
-              )}
-              {status.components.database.response_time_ms && (
-                <div className="text-[10px] text-muted-foreground text-right mt-1">
-                  Latency: {status.components.database.response_time_ms}ms
-                </div>
-              )}
-            </div>
-          )}
+
 
           {/* Agents */}
           {status.components.agents && (
@@ -382,21 +346,7 @@ export const SystemStatusMonitor = () => {
             </div>
           )}
 
-          {/* Mining */}
-          {status.components.mining && (
-            <div className="border rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Mining</span>
-                {getStatusIcon(status.components.mining.status)}
-              </div>
-              {status.components.mining.hash_rate !== undefined && (
-                <div className="text-xs">
-                  <div className="text-muted-foreground">Hash Rate</div>
-                  <div className="font-bold">{status.components.mining.hash_rate} H/s</div>
-                </div>
-              )}
-            </div>
-          )}
+
 
           {/* Render Service */}
           {status.components.render_service && (
@@ -423,57 +373,7 @@ export const SystemStatusMonitor = () => {
             </div>
           )}
 
-          {/* Activity Log */}
-          {status.components.activity_log && (
-            <div className="border rounded-lg p-3 space-y-2">
-              <div className="flex items-center justify-between">
-                <span className="text-sm font-medium">Activity Log</span>
-                {getStatusIcon(status.components.activity_log.status)}
-              </div>
-              {status.components.activity_log.recent_activities && status.components.activity_log.recent_activities.length > 0 ? (
-                <div className="space-y-2 mt-2">
-                  {status.components.activity_log.recent_activities.slice(0, 3).map((activity, idx) => (
-                    <div key={idx} className="flex gap-2 text-xs border-b border-border/50 last:border-0 pb-1.5 last:pb-0">
-                      <div className="mt-0.5">
-                        {activity.status === 'completed' ? (
-                          <CheckCircle2 className="w-3 h-3 text-green-500" />
-                        ) : activity.status === 'failed' ? (
-                          <XCircle className="w-3 h-3 text-red-500" />
-                        ) : (
-                          <Activity className="w-3 h-3 text-blue-500" />
-                        )}
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium truncate">{activity.title}</div>
-                        <div className="text-[10px] text-muted-foreground truncate flex justify-between">
-                          <span>{activity.type}</span>
-                          <span>{formatTime(activity.created_at)}</span>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="text-xs text-center text-muted-foreground py-2">No recent activity</div>
-              )}
-              {status.components.activity_log.stats && (
-                <div className="grid grid-cols-3 gap-2 text-xs pt-2 border-t border-border/50">
-                  <div>
-                    <div className="text-muted-foreground">24h</div>
-                    <div className="font-bold">{status.components.activity_log.stats.total_24h}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Pending</div>
-                    <div className="font-bold md:text-yellow-600">{status.components.activity_log.stats.pending}</div>
-                  </div>
-                  <div>
-                    <div className="text-muted-foreground">Failed</div>
-                    <div className="font-bold text-red-600">{status.components.activity_log.stats.failed}</div>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
+
         </div>
       </CardContent>
     </Card>
