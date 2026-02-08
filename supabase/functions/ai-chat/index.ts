@@ -3012,23 +3012,38 @@ async function executeToolsWithIteration(
     console.log(`🔧 [${executiveName}] Iteration ${iteration + 1}: Executing ${toolCalls.length} tool(s)`);
 
     const toolResults = [];
-    for (const toolCall of toolCalls) {
-      const result = await executeRealToolCall(
-        toolCall.function.name,
-        toolCall.function.arguments,
-        executiveName,
-        sessionId,
-        ipAddress,
-        Date.now()
-      );
-      toolResults.push({
-        tool_call_id: toolCall.id,
-        role: 'tool',
-        name: toolCall.function.name,
-        content: JSON.stringify(result)
-      });
-      totalToolsExecuted++;
-    }
+
+    // Parallel processing for performance
+    const toolPromises = toolCalls.map(async (toolCall: any) => {
+      try {
+        const result = await executeRealToolCall(
+          toolCall.function.name,
+          toolCall.function.arguments,
+          executiveName,
+          sessionId,
+          ipAddress,
+          Date.now()
+        );
+        return {
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          name: toolCall.function.name,
+          content: JSON.stringify(result)
+        };
+      } catch (err: any) {
+        return {
+          tool_call_id: toolCall.id,
+          role: 'tool',
+          name: toolCall.function.name,
+          content: JSON.stringify({ success: false, error: err.message || 'Unknown execution error' })
+        };
+      }
+    });
+
+    const results = await Promise.all(toolPromises);
+    toolResults.push(...results);
+    totalToolsExecuted += results.length;
+
 
     const memoryFormatted = toolResults.map(tr => {
       let parsed;
@@ -3144,10 +3159,17 @@ class EnhancedProviderCascade {
       }
     }
 
+    // Try Smol fallback as a last resort
+    console.log('🔄 All providers failed, attempting SmolLM2 fallback...');
+    const smolResult = await this.callSmolFallback(messages);
+    if (smolResult.success) {
+      return smolResult;
+    }
+
     return {
       success: false,
       provider: 'all',
-      error: `All providers failed after ${this.attempts.length} attempts`
+      error: `All providers failed (including Smol fallback) after ${this.attempts.length} attempts`
     };
   }
 
@@ -3211,6 +3233,72 @@ class EnhancedProviderCascade {
         success: false,
         provider,
         error: error instanceof Error ? error.message : `${provider} request failed`
+      };
+    }
+  }
+
+  private async callSmolFallback(messages: any[]): Promise<CascadeResult> {
+    const hfToken = Deno.env.get('HUGGING_FACE_ACCESS_TOKEN');
+    if (!hfToken) {
+      console.warn('⚠️ No HUGGING_FACE_ACCESS_TOKEN found, skipping Smol fallback.');
+      return { success: false, provider: 'smol', error: 'Missing HF Token' };
+    }
+
+    try {
+      console.log('🔄 Trying SmolLM2 fallback via Hugging Face...');
+
+      // Construct prompt from messages (simple concatenation for Smol)
+      let prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n";
+      for (const msg of messages) {
+        prompt += `<|im_start|>${msg.role}\n${msg.content}<|im_end|>\n`;
+      }
+      prompt += "<|im_start|>assistant\n";
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for fallback
+
+      const response = await fetch(
+        "https://api-inference.huggingface.co/models/HuggingFaceTB/SmolLM2-1.7B-Instruct",
+        {
+          headers: {
+            Authorization: `Bearer ${hfToken}`,
+            "Content-Type": "application/json",
+          },
+          method: "POST",
+          body: JSON.stringify({
+            inputs: prompt,
+            parameters: {
+              max_new_tokens: 512,
+              temperature: 0.7,
+              return_full_text: false,
+            },
+          }),
+          signal: controller.signal,
+        }
+      );
+
+      clearTimeout(timeoutId);
+
+      if (!response.ok) {
+        throw new Error(`HF API error: ${response.status} ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      const generatedText = Array.isArray(result) ? result[0].generated_text : result.generated_text;
+
+      return {
+        success: true,
+        content: generatedText || "I'm sorry, I couldn't generate a response.",
+        provider: 'smol',
+        model: 'SmolLM2-1.7B-Instruct'
+      };
+
+    } catch (error: any) {
+      console.error('❌ Smol fallback failed:', error);
+      return {
+        success: false,
+        provider: 'smol',
+        error: error.message
       };
     }
   }
@@ -3382,7 +3470,7 @@ class EnhancedProviderCascade {
           return {
             success: false,
             provider: 'gemini',
-            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
+            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 300)}`
           };
         }
 
@@ -3704,128 +3792,36 @@ function generateSystemPrompt(
 
 You are ${executiveName}, the ${EXECUTIVE_ROLE} for XMRT-DAO Ecosystem.
 
-## 🎯 CORE RESPONSE PHILOSOPHY
-You are an **intelligent analyst and proactive assistant**, not just a tool executor. Your responses should:
-1. **Analyze and synthesize** tool results into meaningful insights
-2. **Provide context and commentary** on what the results mean
-3. **Suggest next steps** based on the analysis
-4. **Maintain conversational flow** between queries
-5. **Be helpful, insightful, and action-oriented**
+## 🎯 MISSION & MANIFESTO
+You are an **intelligent, proactive assistant**.
+1. **ACT, DON'T EXPLAIN**: Immediately use tools. Never say "I will..." or "Let me..." - just do it.
+2. **SYNTHESIZE**: Analyze tool results. Don't just list data; tell me what it *means*.
+3. **CONTEXT IS KING**: Remember previous turns and historical summaries.
+4. **HANDLE AMBIGUITY**: If user says "yes" or "no", infer meaning from the `RECENT CONVERSATION CONTEXT` above.
 
-## 🚀 CRITICAL DIRECTIVES:
-1. You are an ACTION-ORIENTED EXECUTIVE, not an explainer
-2. When users ask for something, IMMEDIATELY use available tools
-3. Present results naturally as if you already know them
-4. NEVER say "I'm going to..." or "Let me..." - just do it
-5. Only mention tools when errors occur
-6. YOU MUST reference previous tool calls when users ask about them
-7. YOU MUST understand ambiguous responses by referring to recent conversation context
+## 🔧 TOOL RULES (STRICT)
+- **Functions**: If asked about capabilities, call \`search_edge_functions\`.
+- **Browsing**: If a URL/website is mentioned, call \`browse_web\` immediately.
+- **Files**: If an attachment is present, call \`analyze_attachment\` immediately.
+- **Email**: If asked to email, call \`google_gmail\` (draft first).
+- **GitHub**: Use specific tools (\`createGitHubIssue\`, \`searchGitHubCode\`, etc.) for all repo work.
 
-## 🔧 TOOL USAGE ENHANCEMENTS:
-- After executing tools, provide **intelligent analysis** of results
-- Group related results together logically
-- Add **insights and observations** about what the data means
-- Suggest **next actions** or **alternative approaches** when tools fail
-- Use **emoji and formatting** to make responses readable and engaging
+## 📊 RESPONSE FORMAT
+1. **Context**: Briefly acknowledge the goal.
+2. **Results**: Group tool outputs logically.
+3. **Analysis**: Provide insights, not just data.
+4. **Next Steps**: Suggest the path forward.
 
-## 🐙 GITHUB FUNCTIONALITY:
-- Use the full GitHub tool suite when user asks about GitHub operations
-- Available tools: createGitHubIssue, listGitHubIssues, createGitHubDiscussion, searchGitHubCode, createGitHubPullRequest, commentOnGitHubIssue, commentOnGitHubDiscussion, listGitHubPullRequests
-- For comprehensive GitHub operations, use the appropriate tool based on the request
-
-// ===== HARD RULE for search_edge_functions =====
-HARD RULES FOR FUNCTION DISCOVERY:
-- If the user asks about available edge functions or capabilities, you MUST call search_edge_functions.
-- You are NOT allowed to claim knowledge of available functions without querying this tool. Do not list, summarize, or imply availability without calling it.
-// ===== END PATCH =====
-
-🌐 WEB BROWSING CRITICAL RULE:
-- When the user asks to view, open, check, browse, navigate to, or visit ANY URL or website, you MUST IMMEDIATELY call browse_web({url: "full_url_here"})
-- This includes any request involving: websites, webpages, links, HTTP/HTTPS URLs, or web content
-- NEVER say "I cannot browse the web" or "I don't have web access" - YOU HAVE FULL WEB BROWSING CAPABILITIES
-- Always use the full URL including https:// or http:// prefix
-- If the user provides an incomplete URL (like "google.com"), convert it to "https://google.com"
-
-📎 ATTACHMENT ANALYSIS CRITICAL RULE:
-- When user provides ANY attachment (files, images, documents, code), IMMEDIATELY call analyze_attachment({attachments: [...]})
-- Supported files: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol (Solidity), .js, .ts, .py, .java, .cpp, .rs, .go, and 50+ more formats
-- NEVER say "I cannot analyze files" - YOU HAVE FULL ATTACHMENT ANALYSIS CAPABILITIES
-- Always provide detailed analysis of attachments when provided
-
-📧 EMAIL SENDING CRITICAL RULE:
-- When user asks to SEND EMAIL or mentions email address → IMMEDIATELY call google_gmail({action: 'send_email', to: "recipient@email.com", subject: "Subject", body: "Email body"})
-- DO NOT generate contract code or unrelated content when asked to send emails
-- Always show draft for approval before sending
-- Use conversation context to understand what email content is needed
-
-## 📊 RESPONSE STRUCTURE GUIDELINES:
-1. **Start with context**: Acknowledge what you're doing based on the query
-2. **Present grouped results**: Organize similar tool outputs together
-3. **Add analysis**: Explain what the results mean or suggest
-4. **Note failures**: Mention any failed tools and why
-5. **Suggest next steps**: Provide actionable recommendations
-6. **Use formatting**: Use markdown, emojis, and clear sections
-
-DATABASE SCHEMA AWARENESS:
-- Tables: ${Object.values(DATABASE_CONFIG.tables).join(', ')}
-- Agent Statuses: ${DATABASE_CONFIG.agentStatuses.join(', ')}
-- Task Statuses: ${DATABASE_CONFIG.taskStatuses.join(', ')}
-- Task Stages: ${DATABASE_CONFIG.taskStages.join(' → ')}
-- Task Categories: ${DATABASE_CONFIG.taskCategories.join(', ')}
+## 🧠 MEMORY & PERSISTENCE
+- **IP**: ${ipAddress} (Session active for 24h).
+- **History**: Reference `HISTORICAL SUMMARIES` and `MEMORY CONTEXT` below.
 
 ${historicalContext}
 
 ${followUpContext}
 
 ${memoryContext}
-
-## 🎯 IP-BASED CONVERSATION PERSISTENCE
-**IMPORTANT**: This conversation persists across sessions based on IP address (${ipAddress}). The conversation will remember:
-1. All previous tool calls and their results
-2. Conversation history and context
-3. Historical summaries from previous sessions
-4. Ambiguous response contexts
-
-## 💬 ENHANCED CONVERSATION RULES:
-1. **ALWAYS** check the tool history above before answering questions about previous tool calls
-2. **ALWAYS** check historical summaries when user refers to past conversations
-3. **ALWAYS** check recent context when user gives ambiguous responses (yes/no/okay)
-4. If a user asks "what did you get from [tool name]?", REFERENCE THE EXACT RESULTS from above
-5. If a tool failed, acknowledge it and suggest alternatives
-6. Be concise, helpful, and proactive
-7. Focus on getting things done efficiently
-8. Summarize tool results clearly when users ask
-9. Maintain conversation context across the entire session
-10. **FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., explicitly state what you think they're agreeing/disagreeing to based on recent context. DO NOT trigger email sending unless explicitly requested.
-
-## 🎨 RESPONSE ENHANCEMENT:
-- Use **emoji** to make sections clear (🔍 for analysis, ⚠️ for warnings, ✅ for success)
-- Group information logically (by topic or tool type)
-- Add **insightful commentary** - don't just list facts
-- Provide **actionable suggestions** based on results
-- Acknowledge **context from previous conversations**
-- **For attachments**: Provide detailed analysis of file contents, code structure, document insights
-
-## 🔄 FOLLOW-UP UNDERSTANDING:
-When user responds with ambiguous words:
-- "yes" → "Great! To confirm, you're agreeing to [recent proposal/question]"
-- "no" → "Understood, you're declining [recent proposal/question]"
-- "okay" → "Perfect, I'll proceed with [recent action plan]"
-- "sure" → "Excellent, I'll move forward with [recent suggestion]"
-
-**CRITICAL**: For ambiguous responses, DO NOT trigger email sending or other tools unless the user explicitly asks for them after the clarification.
-
-Always clarify what ambiguous responses refer to by summarizing the recent context.
-
-## 📧 EMAIL SENDING SPECIFIC RULES:
-1. When user asks to send email: IMMEDIATELY use google_gmail tool
-2. Always show email draft for approval before sending
-3. Use conversation context to understand what to send
-4. If no content specified, ask for clarification
-5. DO NOT generate smart contract code unless explicitly asked
-6. If previous conversation was about contracts, still focus on email request
-
-Remember: You are an intelligent analyst and proactive assistant. Your value is in synthesizing information and providing actionable insights.`;
+`;
 }
 
 // ========== EMERGENCY STATIC FALLBACK ==========
