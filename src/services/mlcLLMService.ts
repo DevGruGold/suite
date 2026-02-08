@@ -46,19 +46,36 @@ export class MLCLLMService {
     progress: 0,
     message: 'Not started'
   };
-  
+
   private static progressListeners: Array<(progress: MLCLoadingProgress) => void> = [];
 
-  // Available models (ordered by preference: fastest/smallest first for fallback)
+  // Available models (ordered by preference)
+  // We prioritize SmolLM2 (Text) and SmolVLM (Vision)
+  // Note: VLM requires significantly more resources. We default to text unless vision is needed.
   private static MODELS = [
-    { id: "Phi-3-mini-4k-instruct-q4f16_1-MLC", size: "2.3GB", desc: "Best balance" },
-    { id: "Llama-3.2-1B-Instruct-q4f16_1-MLC", size: "1.2GB", desc: "Fastest (fallback)" },
-    { id: "Llama-3.2-3B-Instruct-q4f16_1-MLC", size: "2.4GB", desc: "More capable" },
+    {
+      id: "HuggingFaceTB/SmolLM2-1.7B-Instruct-q4f16_1-MLC",
+      size: "1.1GB",
+      desc: "SmolLM2 (Text Only) - Fast & Efficient",
+      type: "text"
+    },
+    {
+      id: "HuggingFaceTB/SmolVLM-Instruct-q4f16_1-MLC", // Hypothetical ID, falls back if not found
+      size: "2.2GB",
+      desc: "SmolVLM (Vision Supported)",
+      type: "vlm"
+    },
+    {
+      id: "Phi-3-mini-4k-instruct-q4f16_1-MLC",
+      size: "2.3GB",
+      desc: "Phi-3 Mini (Fallback)",
+      type: "text"
+    }
   ];
 
   private static TIMEOUTS = {
     INIT_START: 30 * 1000, // 30 seconds to start initialization
-    FULL_DOWNLOAD: 5 * 60 * 1000, // 5 minutes for full download
+    FULL_DOWNLOAD: 10 * 60 * 1000, // 10 minutes for full download (increased for larger models)
   };
 
   // Update progress and notify listeners
@@ -85,40 +102,51 @@ export class MLCLLMService {
   }
 
   // Initialize MLC-LLM WebLLM engine with progress tracking, timeouts, and fallbacks
-  private static async initializeMLCEngine(): Promise<void> {
-    if (this.isInitializing || this.isReady) return;
-    
+  // accepts 'vision' mode to prefer VLM
+  private static async initializeMLCEngine(mode: 'text' | 'vision' = 'text'): Promise<void> {
+    if (this.isInitializing) return;
+
+    // If ready and mode matches (or we have text and only need text), return
+    // If we need vision but only have text loaded, we might need to reload/swap (advanced)
+    // For now, we'll keep it simple: if *any* model is ready, we use it, but warn if capabilities mismatch.
+    if (this.isReady && this.engine) return;
+
     this.isInitializing = true;
     this.updateProgress({ status: 'checking_webgpu', progress: 0, message: 'Checking WebGPU support...' });
-    
+
     try {
-      console.log('🏢 Initializing Office Clerk (MLC-LLM WebLLM)...');
-      
+      console.log(`🏢 Initializing Office Clerk (MLC-LLM) in ${mode} mode...`);
+
       // Check for WebGPU support
       const webGPUSupported = !!(navigator as any).gpu;
       this.updateProgress({ webGPUSupported });
-      
+
       if (!webGPUSupported) {
-        this.updateProgress({ 
-          status: 'failed', 
-          progress: 0, 
+        this.updateProgress({
+          status: 'failed',
+          progress: 0,
           message: 'WebGPU not supported in this browser',
           error: 'WebGPU required for Office Clerk. Try Chrome/Edge 113+.'
         });
         throw new Error('WebGPU not supported - MLC-LLM requires WebGPU');
       }
 
-      // Try models in order with timeout
+      // Select models based on mode
+      // If vision is requested, try VLM first. Otherwise try Text first.
+      const candidateModels = mode === 'vision'
+        ? [...this.MODELS.filter(m => m.type === 'vlm'), ...this.MODELS.filter(m => m.type === 'text')]
+        : this.MODELS;
+
       let lastError: Error | null = null;
-      
-      for (let i = 0; i < this.MODELS.length; i++) {
-        const model = this.MODELS[i];
-        
+
+      for (let i = 0; i < candidateModels.length; i++) {
+        const model = candidateModels[i];
+
         try {
-          this.updateProgress({ 
-            status: 'downloading', 
-            progress: 5, 
-            message: `Loading ${model.desc} model (${model.size})...`,
+          this.updateProgress({
+            status: 'downloading',
+            progress: 5,
+            message: `Loading ${model.desc} (${model.size})...`,
             currentModel: model.id
           });
 
@@ -126,7 +154,7 @@ export class MLCLLMService {
 
           // Create timeout promise
           const timeoutPromise = new Promise<never>((_, reject) => {
-            setTimeout(() => reject(new Error(`Model download timeout (${this.TIMEOUTS.FULL_DOWNLOAD / 1000}s)`)), 
+            setTimeout(() => reject(new Error(`Model download timeout (${this.TIMEOUTS.FULL_DOWNLOAD / 1000}s)`)),
               this.TIMEOUTS.FULL_DOWNLOAD);
           });
 
@@ -135,34 +163,43 @@ export class MLCLLMService {
             initProgressCallback: (progressReport) => {
               // progressReport has: progress (0-1), timeElapsed, text
               const percent = Math.round(progressReport.progress * 100);
-              this.updateProgress({ 
-                status: 'downloading', 
+              this.updateProgress({
+                status: 'downloading',
                 progress: Math.min(95, percent),
                 message: progressReport.text || `Downloading: ${percent}%`,
                 currentModel: model.id
               });
               console.log(`📥 ${model.id}: ${percent}% - ${progressReport.text}`);
             },
+            appConfig: {
+              // Ensure we cache the model
+              useIndexedDBCache: true,
+              model_list: [{
+                model: "https://huggingface.co/" + model.id,
+                model_id: model.id,
+                model_lib: "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/latest/" + model.id.replace('MLC', 'wasm') + ".wasm",
+              }]
+            }
           });
 
           // Race between download and timeout
           this.engine = await Promise.race([enginePromise, timeoutPromise]);
-          
+
           this.updateProgress({ status: 'ready', progress: 100, message: `Office Clerk ready (${model.desc})` });
           this.isReady = true;
           console.log(`✅ Office Clerk ready with ${model.id}`);
           return; // Success!
-          
+
         } catch (modelError: any) {
           lastError = modelError;
           console.warn(`❌ Failed to load ${model.id}: ${modelError.message}`);
-          
+
           // If not the last model, try next
-          if (i < this.MODELS.length - 1) {
-            this.updateProgress({ 
-              status: 'downloading', 
-              progress: 0, 
-              message: `${model.desc} failed, trying smaller model...`
+          if (i < candidateModels.length - 1) {
+            this.updateProgress({
+              status: 'downloading',
+              progress: 0,
+              message: `${model.desc} failed, trying alternative...`
             });
             continue;
           }
@@ -170,22 +207,22 @@ export class MLCLLMService {
       }
 
       // All models failed
-      this.updateProgress({ 
-        status: 'failed', 
-        progress: 0, 
+      this.updateProgress({
+        status: 'failed',
+        progress: 0,
         message: 'All models failed to load',
         error: lastError?.message || 'Unknown error'
       });
-      
+
       this.engine = null;
       this.isReady = false;
       throw new Error(`Office Clerk unavailable: ${lastError?.message || 'All models failed'}`);
-      
+
     } catch (error: any) {
       console.error('❌ Office Clerk (MLC-LLM) initialization failed:', error);
-      this.updateProgress({ 
-        status: 'failed', 
-        progress: 0, 
+      this.updateProgress({
+        status: 'failed',
+        progress: 0,
         message: 'Initialization failed',
         error: error.message
       });
@@ -213,7 +250,7 @@ export class MLCLLMService {
         .from('active_devices_view')
         .select('*')
         .limit(100);
-      
+
       if (!devError && devices) {
         stats.push(`Active Mining Devices: ${devices.length}`);
         const totalHashrate = devices.reduce((sum, d) => sum + (d.connection_duration_seconds || 0), 0);
@@ -225,7 +262,7 @@ export class MLCLLMService {
         .from('dao_members')
         .select('voting_power, total_contributions, reputation_score')
         .eq('is_active', true);
-      
+
       if (!memError && members) {
         stats.push(`DAO Members: ${members.length}`);
         const totalVotingPower = members.reduce((sum, m) => sum + Number(m.voting_power || 0), 0);
@@ -238,7 +275,7 @@ export class MLCLLMService {
         .select('*')
         .order('timestamp', { ascending: false })
         .limit(5);
-      
+
       if (!actError && activity) {
         stats.push(`Recent Activity: ${activity.length} actions in last hour`);
       }
@@ -277,8 +314,8 @@ export class MLCLLMService {
   ): Promise<EnhancedContext> {
     // Get relevant knowledge base entries
     const knowledgeEntries = XMRT_KNOWLEDGE_BASE
-      .filter(entry => 
-        entry.keywords.some(keyword => 
+      .filter(entry =>
+        entry.keywords.some(keyword =>
           userInput.toLowerCase().includes(keyword.toLowerCase())
         )
       )
@@ -292,7 +329,7 @@ export class MLCLLMService {
     const databaseStats = await this.getDatabaseStats();
 
     // User context
-    const userContext = context.userContext 
+    const userContext = context.userContext
       ? JSON.stringify(context.userContext, null, 2)
       : 'No user context available';
 
@@ -309,21 +346,47 @@ export class MLCLLMService {
     };
   }
 
+  // Helper: Convert File attachments to Base64 images
+  private static async convertAttachmentsToImages(attachments: File[]): Promise<string[]> {
+    const promises = attachments
+      .filter(file => file.type.startsWith('image/'))
+      .map(file => new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      }));
+    return Promise.all(promises);
+  }
+
   // Generate conversation response using MLC-LLM
   static async generateConversationResponse(
     userInput: string,
-    context: { miningStats?: MiningStats; userContext?: any }
+    context: {
+      miningStats?: MiningStats;
+      userContext?: any;
+      images?: string[]; // Array of base64 images
+      attachments?: File[];
+    }
   ): Promise<AIResponse> {
     try {
-      await this.initializeMLCEngine();
-      
+      // Auto-convert attachments if images are missing
+      if ((!context.images || context.images.length === 0) && context.attachments && context.attachments.length > 0) {
+        context.images = await this.convertAttachmentsToImages(context.attachments);
+      }
+
+      const hasImages = (context.images && context.images.length > 0);
+      const mode = hasImages ? 'vision' : 'text';
+
+      await this.initializeMLCEngine(mode);
+
       if (!this.engine || !this.isReady) {
         throw new Error('Office Clerk (MLC-LLM) not initialized');
       }
 
       // Build comprehensive context
       const enhancedContext = await this.buildEnhancedContext(userInput, context);
-      
+
       // System prompt
       const systemPrompt = `You are the Office Clerk for XMRT-DAO, the autonomous browser-based AI serving as the last line of defense when all cloud executives are unavailable.
 
@@ -349,21 +412,56 @@ ${enhancedContext.memoryContext}
 
 Respond in a helpful, technically accurate manner while embodying XMRT's philosophical foundations. Be concise but comprehensive.`;
 
-      console.log('🏢 Office Clerk (MLC-LLM) processing request...');
-      
+      console.log(`🏢 Office Clerk processing request (Mode: ${mode})...`);
+
+      // Construct messages
+      const messages: any[] = [
+        { role: "system", content: systemPrompt }
+      ];
+
+      // Handle multimodal content
+      if (hasImages) {
+        // Warning: This depends on the loaded model supporting vision.
+        // If we loaded SmolLM2 (Text Only), we must fallback gracefully.
+        const currentModel = this.progressState.currentModel || '';
+        const isVisionCapable = currentModel.toLowerCase().includes('vlm') || currentModel.toLowerCase().includes('vision');
+
+        if (isVisionCapable && context.images) {
+          // Construct content array for VLM
+          const userContent: any[] = [
+            { type: "text", text: userInput }
+          ];
+
+          context.images.forEach(base64 => {
+            userContent.push({
+              type: "image_url",
+              image_url: { url: base64 } // Check if WebLLM expects base64 as data url
+            });
+          });
+
+          messages.push({ role: "user", content: userContent });
+        } else {
+          // Fallback for Text-Only models receiving images
+          messages.push({
+            role: "user",
+            content: `[SYSTEM: User attached images but you are in OFFLINE TEXT-ONLY mode. inform the user you cannot see the images but can help with the text.]\n\n${userInput}`
+          });
+        }
+      } else {
+        // Standard text
+        messages.push({ role: "user", content: userInput });
+      }
+
       // Generate response using MLC-LLM
       const response = await this.engine.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userInput }
-        ],
+        messages,
         temperature: 0.7,
-        max_tokens: 150,
+        max_tokens: 300,
       });
 
-      const generatedText = response.choices[0].message.content.trim();
-      
-      if (generatedText && generatedText.length > 10) {
+      const generatedText = response.choices[0].message.content?.trim() || '';
+
+      if (generatedText && generatedText.length > 2) {
         // Store as memory for future context
         const sessionKey = context.userContext?.sessionKey || 'unknown';
         try {
@@ -373,7 +471,7 @@ Respond in a helpful, technically accurate manner while embodying XMRT's philoso
             `Q: ${userInput}\nA: ${generatedText}`,
             'office_clerk_interaction',
             0.7,
-            { method: 'Office Clerk (MLC-LLM)', timestamp: new Date().toISOString() }
+            { method: 'Office Clerk (SmolLM2)', timestamp: new Date().toISOString() }
           );
         } catch (memError) {
           console.warn('Failed to store Office Clerk memory:', memError);
@@ -381,14 +479,14 @@ Respond in a helpful, technically accurate manner while embodying XMRT's philoso
 
         return {
           text: generatedText,
-          method: 'Office Clerk (MLC-LLM WebLLM)',
+          method: 'Office Clerk (SmolLM2/WebLLM)',
           confidence: 0.92
         };
       }
-      
-      throw new Error('Office Clerk (MLC-LLM) generated invalid response');
+
+      throw new Error('Office Clerk generated invalid response');
     } catch (error) {
-      console.error('❌ Office Clerk (MLC-LLM) failed:', error);
+      console.error('❌ Office Clerk failed:', error);
       throw error;
     }
   }
@@ -396,52 +494,72 @@ Respond in a helpful, technically accurate manner while embodying XMRT's philoso
   // Streaming support
   static async generateStreamingResponse(
     userInput: string,
-    context: { miningStats?: MiningStats; userContext?: any },
+    context: {
+      miningStats?: MiningStats;
+      userContext?: any;
+      images?: string[];
+      attachments?: File[];
+    },
     onChunk: (chunk: string) => void
   ): Promise<AIResponse> {
     try {
-      await this.initializeMLCEngine();
-      
+      // Auto-convert attachments if images are missing
+      if ((!context.images || context.images.length === 0) && context.attachments && context.attachments.length > 0) {
+        context.images = await this.convertAttachmentsToImages(context.attachments);
+      }
+
+      const hasImages = (context.images && context.images.length > 0);
+      const mode = hasImages ? 'vision' : 'text';
+
+      await this.initializeMLCEngine(mode);
+
       if (!this.engine || !this.isReady) {
-        throw new Error('Office Clerk (MLC-LLM) not initialized');
+        throw new Error('Office Clerk not initialized');
       }
 
       const enhancedContext = await this.buildEnhancedContext(userInput, context);
-      const systemPrompt = `You are the Office Clerk for XMRT-DAO, the autonomous browser-based AI serving as the last line of defense when all cloud executives are unavailable.
-
-XMRT MISSION: "We don't ask for permission. We build the infrastructure." - Joseph Andrew Lee
-
-CORE PRINCIPLES:
-- Infrastructure Sovereignty: Own the tools, control the future
-- Mobile Mining Democracy: Every phone is a node in the revolution
-- Privacy as Human Right: Zero compromise on user data
-- AI-Human Collaboration: Augment, not replace, human agency
-
-Your role: Provide accurate, technically sophisticated responses using real-time system data and the comprehensive knowledge base. You embody XMRT's philosophy of decentralized autonomy.
-
+      const systemPrompt = `You are the Office Clerk for XMRT-DAO, the autonomous browser-based AI fallback.
+      
 CURRENT SYSTEM STATUS:
 ${enhancedContext.databaseStats}
-
-RELEVANT KNOWLEDGE BASE:
-${enhancedContext.knowledgeBase}
 
 USER CONTEXT:
 ${enhancedContext.userContext}
 ${enhancedContext.memoryContext}
 
-Respond in a helpful, technically accurate manner while embodying XMRT's philosophical foundations. Be concise but comprehensive.`;
+Respond efficiently.`;
 
-      console.log('🏢 Office Clerk (MLC-LLM) processing request (streaming)...');
-      
+      const messages: any[] = [
+        { role: "system", content: systemPrompt }
+      ];
+
+      // Handle Images (Simple check)
+      const currentModel = this.progressState.currentModel || '';
+      const isVisionCapable = currentModel.toLowerCase().includes('vlm');
+
+      if (hasImages && isVisionCapable && context.images) {
+        const userContent: any[] = [{ type: "text", text: userInput }];
+        context.images.forEach(base64 => {
+          userContent.push({ type: "image_url", image_url: { url: base64 } });
+        });
+        messages.push({ role: "user", content: userContent });
+      } else if (hasImages) {
+        messages.push({
+          role: "user",
+          content: `[User attached images but you are OFFLINE TEXT-ONLY. Acknowledge this limitation.]\n\n${userInput}`
+        });
+      } else {
+        messages.push({ role: "user", content: userInput });
+      }
+
+      console.log('🏢 Office Clerk processing request (streaming)...');
+
       let fullResponse = '';
-      
+
       const chunks = await this.engine.chat.completions.create({
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: userInput }
-        ],
+        messages,
         temperature: 0.7,
-        max_tokens: 150,
+        max_tokens: 300,
         stream: true,
       });
 
@@ -453,28 +571,13 @@ Respond in a helpful, technically accurate manner while embodying XMRT's philoso
         }
       }
 
-      // Store memory
-      const sessionKey = context.userContext?.sessionKey || 'unknown';
-      try {
-        await memoryContextService.storeContext(
-          sessionKey,
-          sessionKey,
-          `Q: ${userInput}\nA: ${fullResponse}`,
-          'office_clerk_interaction',
-          0.7,
-          { method: 'Office Clerk (MLC-LLM Streaming)', timestamp: new Date().toISOString() }
-        );
-      } catch (memError) {
-        console.warn('Failed to store Office Clerk memory:', memError);
-      }
-
       return {
         text: fullResponse,
-        method: 'Office Clerk (MLC-LLM WebLLM Streaming)',
+        method: 'Office Clerk (SmolLM2 Streaming)',
         confidence: 0.92
       };
     } catch (error) {
-      console.error('❌ Office Clerk (MLC-LLM streaming) failed:', error);
+      console.error('❌ Office Clerk (streaming) failed:', error);
       throw error;
     }
   }

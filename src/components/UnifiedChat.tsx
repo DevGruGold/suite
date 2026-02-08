@@ -34,6 +34,7 @@ import { realtimeManager } from '@/services/realtimeSubscriptionManager';
 import { UnifiedElizaService } from '@/services/unifiedElizaService';
 import { unifiedDataService, type MiningStats, type UserContext } from '@/services/unifiedDataService';
 import { unifiedFallbackService } from '@/services/unifiedFallbackService';
+import { MLCLLMService } from '@/services/mlcLLMService';
 import { conversationPersistence } from '@/services/conversationPersistenceService';
 import { quickGreetingService } from '@/services/quickGreetingService';
 import { apiKeyManager } from '@/services/apiKeyManager';
@@ -457,6 +458,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     };
 
     initializeTTS();
+  }, []);
+
+  // Subscribe to Office Clerk (WebLLM) progress
+  useEffect(() => {
+    const unsubscribe = MLCLLMService.subscribeToProgress((progress) => {
+      setOfficeClerkProgress(progress);
+    });
+    return () => unsubscribe();
   }, []);
 
   // Auto-scroll within chat container only (no page-level scrolling)
@@ -1347,8 +1356,23 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         return;
       }
 
-      // Handle standard string response
-      const responseText = response as string;
+      // Handle standard string or object response
+      let responseText = '';
+      let providerUsed = '';
+      let confidence = 0.95;
+
+      if (typeof response === 'object' && response !== null && 'text' in response) {
+        // Handle object response from FallbackService (Office Clerk)
+        const responseObj = response as { text: string, method?: string, confidence?: number };
+        responseText = responseObj.text;
+        providerUsed = responseObj.method || 'Office Clerk';
+        confidence = responseObj.confidence || 0.85;
+      } else {
+        responseText = response as string;
+        // Fallback to window hack if available, otherwise default
+        providerUsed = (window as any).__lastElizaProvider || '';
+      }
+
       console.log('✅ Response generated, length:', responseText.length);
 
       // Check if this is a workflow initiation message
@@ -1389,9 +1413,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         console.log('No reasoning data in response');
       }
 
-      // Extract tool calls and provider info from window if available
+      // Extract tool calls from window if available (still relies on global state for now)
       const toolCalls = (window as any).__lastElizaToolCalls || [];
-      const providerUsed = (window as any).__lastElizaProvider || '';
       const executiveTitle = (window as any).__lastElizaExecutiveTitle || '';
 
       const elizaMessage: UnifiedMessage = {
@@ -1401,7 +1424,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           : String(displayContent || 'No response'),
         sender: 'assistant',
         timestamp: new Date(),
-        confidence: 0.95,
+        confidence,
         reasoning: reasoning.length > 0 ? reasoning : undefined,
         tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
         providerUsed: providerUsed || undefined,
@@ -1706,8 +1729,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               variant="ghost"
               size="sm"
               className={`h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 ${voiceEnabled
-                  ? (isHumanizedMode ? 'text-purple-500' : 'text-primary')
-                  : 'text-muted-foreground'
+                ? (isHumanizedMode ? 'text-purple-500' : 'text-primary')
+                : 'text-muted-foreground'
                 }`}
               title={`${voiceEnabled ? 'Disable' : 'Enable'} voice${isHumanizedMode ? ' (Humanized)' : ''}`}
             >
@@ -1805,8 +1828,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                   <div className="max-w-[80%] sm:max-w-[75%]">
                     <div
                       className={`p-3 rounded-xl ${message.sender === 'user'
-                          ? 'bg-primary text-primary-foreground rounded-br-sm'
-                          : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
+                        ? 'bg-primary text-primary-foreground rounded-br-sm'
+                        : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
                         }`}
                     >
                       {/* Show attached images */}

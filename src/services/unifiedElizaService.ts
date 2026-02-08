@@ -240,15 +240,16 @@ export class UnifiedElizaService {
     // All executives failed - use FallbackAIService (Office Clerk)
     console.log('🚨 All executives failed, falling back to Office Clerk...');
     const fallbackResult = await FallbackAIService.generateResponse(userInput, context);
-    return fallbackResult.text;
+    // Return full object to preserve method/confidence
+    return fallbackResult;
   }
 
-  // MAIN METHOD: Returns STRING as expected by frontend
+  // MAIN METHOD: Returns STRING or OBJECT as expected by frontend
   public static async generateResponse(
     userInput: string,
     context: ElizaContext = {},
     language = 'en'
-  ): Promise<string> {
+  ): Promise<string | any> {
     console.log('🚀 FIXED UnifiedElizaService.generateResponse()');
 
     try {
