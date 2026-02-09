@@ -1207,7 +1207,9 @@ async function executeRealToolCall(
   executiveName: string,
   sessionId: string,
   ipAddress: string,
-  timestamp: number = Date.now()
+  timestamp: number = Date.now(),
+  userId?: string,
+  organizationId?: string
 ): Promise<any> {
   const startTime = performance.now();
   let success = false;
@@ -1400,7 +1402,10 @@ async function executeRealToolCall(
         status: 'PENDING',
         stage: 'DISCUSS',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        updated_at: new Date().toISOString(),
+        first_created_at: new Date().toISOString(),
+        created_by_user_id: userId || null,
+        organization_id: organizationId || null
       };
 
       const { data: task, error } = await supabase
@@ -2988,7 +2993,9 @@ async function executeToolsWithIteration(
   callAIFunction: Function,
   tools: any[],
   maxIterations: number = 5,
-  memoryManager?: EnhancedConversationManager
+  memoryManager?: EnhancedConversationManager,
+  userId?: string,
+  organizationId?: string
 ): Promise<{ content: string; toolsExecuted: number }> {
   let response = initialResponse;
   let totalToolsExecuted = 0;
@@ -3022,7 +3029,9 @@ async function executeToolsWithIteration(
           executiveName,
           sessionId,
           ipAddress,
-          Date.now()
+          Date.now(),
+          userId,
+          organizationId
         );
         return {
           tool_call_id: toolCall.id,
@@ -5188,7 +5197,9 @@ Deno.serve(async (req) => {
       callAIFunction,
       tools,
       MAX_TOOL_ITERATIONS,
-      conversationManager
+      conversationManager,
+      user_id,
+      selectedOrgId
     );
 
     let responseContent = finalContent;

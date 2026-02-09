@@ -879,6 +879,11 @@ export const ELIZA_TOOLS = [
             type: 'string',
             enum: ['cso', 'cto', 'cio', 'cao', 'eliza', 'council'],
             description: 'Which executive is authoring this content. Adds rich header/footer attribution showing icon, title, specialty, and AI model.'
+          },
+          assignees: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: List of agent names (e.g., "Antigravity", "Hermes") or GitHub usernames to assign the issue to. Agent names are automatically mapped to GitHub users.'
           }
         },
         required: ['title', 'body']
@@ -1061,7 +1066,11 @@ export const ELIZA_TOOLS = [
           body: { type: 'string', description: 'New body content (optional)' },
           state: { type: 'string', enum: ['open', 'closed'], description: 'Issue state' },
           labels: { type: 'array', items: { type: 'string' }, description: 'New labels array' },
-          assignees: { type: 'array', items: { type: 'string' }, description: 'New assignees array' }
+          assignees: {
+            type: 'array',
+            items: { type: 'string' },
+            description: 'Optional: List of agent names (e.g., "Antigravity", "Hermes") or GitHub usernames to re-assign the issue to. Agent names are automatically mapped to GitHub users.'
+          }
         },
         required: ['issue_number']
       }

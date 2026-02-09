@@ -79,7 +79,7 @@ export async function executeToolCall(
       'assign_task': '{ "title": "string", "description": "string", "category": "code|infra|research|governance|mining|device|ops|other", "assignee_agent_id": "agent-xxx", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE" }',
       'update_task_status': '{ "task_id": "uuid", "status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE" }',
       'update_agent_status': '{ "agent_id": "agent-xxx", "status": "IDLE|BUSY|ARCHIVED|ERROR|OFFLINE" }',
-      'createGitHubIssue': '{ "title": "string", "body": "string", "repo": "XMRT-Ecosystem", "labels": ["bug"] }',
+      'createGitHubIssue': '{ "title": "string", "body": "string", "repo": "XMRT-Ecosystem", "labels": ["bug"], "assignees": ["Antigravity"] }',
       'invoke_edge_function': '{ "function_name": "string", "payload": {} }',
       'bulk_update_task_status': '{ "task_ids": ["uuid1", "uuid2"], "new_status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED" }'
     };
@@ -555,6 +555,7 @@ export async function executeToolCall(
               title: parsedArgs.title,
               body: parsedArgs.body,
               labels: parsedArgs.labels || [],
+              assignees: parsedArgs.assignees || [], // Pass assignees (mapped in helper)
               executive: issueExec
             },
             session_credentials

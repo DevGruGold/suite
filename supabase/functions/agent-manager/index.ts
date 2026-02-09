@@ -198,6 +198,43 @@ serve(async (req) => {
     // ---------- Start switch-case action handling ----------
     let result: any = null;
 
+    // ---------- Resolve Actor Context (User & Organization) ----------
+    let actorUserId = body.user_id || body.context?.user_id;
+    let actorOrgId = body.organization_id || body.context?.organization_id;
+
+    if (!actorUserId) {
+      const authHeader = req.headers.get("Authorization");
+      // Don't try to parse if it's the service key itself (internal call default)
+      if (authHeader && !authHeader.includes(SUPABASE_SERVICE_KEY)) {
+        try {
+          const token = authHeader.replace("Bearer ", "");
+          const { data: { user }, error: uErr } = await supabase.auth.getUser(token);
+          if (user && !uErr) {
+            actorUserId = user.id;
+            console.info(`[agent-manager] Resolved actorUserId from Auth header: ${actorUserId}`);
+
+            // Attempt to resolve org from profile if not provided
+            if (!actorOrgId) {
+              const { data: profile } = await supabase
+                .from("profiles")
+                .select("selected_organization_id")
+                .eq("id", actorUserId)
+                .single();
+              if (profile?.selected_organization_id) {
+                actorOrgId = profile.selected_organization_id;
+                console.info(`[agent-manager] Resolved actorOrgId from profile: ${actorOrgId}`);
+              } else {
+                // If the user has access to exactly one org, maybe default to it?
+                // For now, let's keep it scoped to what they explicitly selected or passed.
+              }
+            }
+          }
+        } catch (e) {
+          console.warn("[agent-manager] Failed to resolve user from Auth header", e);
+        }
+      }
+    }
+
     switch (action) {
       // ------------------------
       // LIST AGENTS (with filtering + paging)
@@ -452,7 +489,8 @@ serve(async (req) => {
           status: "PENDING",
           priority: taskData.priority ?? 5,
           assignee_agent_id: assignedAgentId,
-          created_by_user_id: body.user_id || body.context?.user_id || null, // Capture user_id from request or context
+          created_by_user_id: actorUserId || null, // Use resolved actor
+          organization_id: actorOrgId || null, // Use resolved org
           metadata: {
             auto_assigned: auto_assign,
             ...(taskData.metadata || {}),
