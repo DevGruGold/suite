@@ -807,12 +807,18 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             handleVoiceInput(result.text);
           }
         }, (error) => {
-          console.error("Voice error:", error);
           setIsRecording(false);
-          // Show visible error feedback
+
+          let userMsg = `🎤 Voice input error: ${error}`;
+          if (error.includes('not supported')) {
+            userMsg = `❌ Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.`;
+          } else if (error.includes('not-allowed') || error.includes('permission')) {
+            userMsg = `🎤 Microphone access denied. Please allow microphone permissions in your browser settings.`;
+          }
+
           const errorMessage: UnifiedMessage = {
             id: `voice-error-${Date.now()}`,
-            content: `🎤 Voice input error: ${error}. Please check microphone permissions.`,
+            content: userMsg,
             sender: 'assistant',
             timestamp: new Date()
           };
@@ -823,9 +829,15 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         if (!result.success) {
           console.error("Failed to start voice:", result.error);
           setIsRecording(false);
+
+          let initMsg = `❌ Could not start voice input: ${result.error}`;
+          if (result.error?.includes('not supported')) {
+            initMsg = `❌ Voice input is not supported in this browser. Please use Chrome, Edge, or Safari.`;
+          }
+
           const errorMessage: UnifiedMessage = {
             id: `voice-init-error-${Date.now()}`,
-            content: `❌ Could not start voice input: ${result.error || 'Unknown error'}. Please ensure your browser supports speech recognition and microphone access is allowed.`,
+            content: initMsg,
             sender: 'assistant',
             timestamp: new Date()
           };
