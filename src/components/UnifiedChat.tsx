@@ -723,6 +723,15 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         setCurrentTTSMethod('Browser Web Speech');
         console.log('🎵 TTS Method: Browser');
         setIsSpeaking(false);
+
+        // 🟢 Auto-resume listening after TTS finishes (Turn-taking)
+        if (inputMode === 'voice' || inputMode === 'multimodal') {
+          console.log('🎤 Auto-resuming listening after TTS');
+          // Small delay to ensure state updates and audio clearance
+          setTimeout(() => {
+            toggleRecording();
+          }, 500);
+        }
       } catch (error) {
         console.error('❌ TTS error:', error, 'Audio unavailable. Check browser permissions.');
         setIsSpeaking(false);
@@ -790,6 +799,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             setInterimTranscript(result.text);
           } else {
             setInterimTranscript(''); // Clear interim
+
+            // ✅ STOP LISTENING specifically to avoid picking up TTS
+            simplifiedVoiceService.stopListening();
+            setIsRecording(false);
+
             handleVoiceInput(result.text);
           }
         }, (error) => {
