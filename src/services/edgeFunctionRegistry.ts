@@ -8,7 +8,7 @@ export interface EdgeFunctionCapability {
   url: string;
   description: string;
   capabilities: string[];
-  category: 'ai' | 'mining' | 'web' | 'speech' | 'faucet' | 'ecosystem' | 'deployment' | 'github' | 'autonomous' | 'knowledge' | 'task-management' | 'monitoring' | 'code-execution' | 'database' | 'network' | 'superduper' | 'daemon' | 'governance' | 'research' | 'revenue' | 'vsco' | 'hume' | 'acquisition' | 'payments' | 'automation';
+  category: 'ai' | 'mining' | 'web' | 'speech' | 'faucet' | 'ecosystem' | 'deployment' | 'github' | 'autonomous' | 'knowledge' | 'task-management' | 'monitoring' | 'code-execution' | 'database' | 'network' | 'superduper' | 'daemon' | 'governance' | 'research' | 'revenue' | 'vsco' | 'acquisition' | 'payments' | 'automation';
   example_use: string;
 }
 
@@ -87,7 +87,7 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     description: 'Unified mining statistics and worker management - combines pool stats from SupportXMR with worker registration',
     capabilities: [
       'Mining stats (hash rate, shares, earnings)',
-      'Worker registration and tracking', 
+      'Worker registration and tracking',
       'Per-worker statistics',
       'Worker-to-wallet mapping',
       'User session tracking',
@@ -337,31 +337,7 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     category: 'vsco',
     example_use: '{"action":"create_contact","data":{"firstName":"John","lastName":"Doe","email":"john@example.com"}}'
   },
-  // ============= HUME AI (Emotional Intelligence) =============
-  {
-    name: 'hume-access-token',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/hume-access-token',
-    description: '🎭 Hume EVI Access Token - Generate tokens for Hume Empathic Voice Interface',
-    capabilities: ['OAuth token generation', 'EVI voice access', 'Client authentication'],
-    category: 'hume',
-    example_use: 'Generate access token for Hume EVI voice chat'
-  },
-  {
-    name: 'hume-expression-measurement',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/hume-expression-measurement',
-    description: '🎭 Hume Expression Measurement - Analyze facial expressions and emotions',
-    capabilities: ['Facial expression analysis', 'Emotion detection', 'Confidence scoring'],
-    category: 'hume',
-    example_use: '{"image":"base64_encoded_image"}'
-  },
-  {
-    name: 'hume-tts',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/hume-tts',
-    description: '🎭 Hume TTS - Empathic text-to-speech with emotional expression',
-    capabilities: ['Emotional voice synthesis', 'Voice ID selection', 'Expressive audio'],
-    category: 'hume',
-    example_use: '{"text":"Hello","voiceId":"c7aa10be-..."}'
-  },
+
   // ============= USER ACQUISITION =============
   {
     name: 'qualify-lead',
@@ -675,12 +651,12 @@ export async function searchEdgeFunctions(query: string): Promise<EdgeFunctionCa
   if (!query) {
     return EDGE_FUNCTIONS_REGISTRY;
   }
-  
+
   const lowerCaseQuery = query.toLowerCase();
-  
+
   const filteredFunctions = EDGE_FUNCTIONS_REGISTRY.filter(fn => {
     const { name, description, capabilities, category, example_use } = fn;
-    
+
     return (
       name.toLowerCase().includes(lowerCaseQuery) ||
       description.toLowerCase().includes(lowerCaseQuery) ||
@@ -689,7 +665,7 @@ export async function searchEdgeFunctions(query: string): Promise<EdgeFunctionCa
       example_use.toLowerCase().includes(lowerCaseQuery)
     );
   });
-  
+
   return filteredFunctions;
 }
 
@@ -699,11 +675,11 @@ export async function getFunctionByName(name: string): Promise<EdgeFunctionCapab
 
 export async function invokeEdgeFunction(functionName: string, body: any, headers?: Record<string, string>) {
   const fn = await getFunctionByName(functionName);
-  
+
   if (!fn) {
     throw new Error(`Function "${functionName}" not found in registry.`);
   }
-  
+
   const { data, error } = await supabase.functions.invoke(functionName, {
     body: body,
     headers: headers

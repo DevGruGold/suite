@@ -4,10 +4,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAPIKeyHealth, refreshAPIKeyHealth } from '@/services/credentialManager';
-import { 
-  RefreshCw, 
-  CheckCircle, 
-  AlertCircle, 
+import {
+  RefreshCw,
+  CheckCircle,
+  AlertCircle,
   XCircle,
   Bot,
   Code,
@@ -90,13 +90,7 @@ const SERVICE_INFO: Record<string, {
     icon: Mic,
     docsUrl: 'https://elevenlabs.io'
   },
-  hume: {
-    displayName: 'Hume AI',
-    description: 'Emotion detection',
-    powers: 'Voice emotion analysis, facial expression reading',
-    icon: Camera,
-    docsUrl: 'https://hume.ai'
-  },
+
   tave: {
     displayName: 'Táve/VSCO Workspace',
     description: 'Business CMS',
@@ -146,11 +140,11 @@ export function CredentialsManager() {
   };
 
   // Group credentials by category
-  const aiProviders = health.filter(h => 
+  const aiProviders = health.filter(h =>
     ['xai', 'lovable_ai', 'deepseek', 'vercel_ai', 'gemini', 'openai'].includes(h.service_name)
   );
-  const integrations = health.filter(h => 
-    ['github', 'elevenlabs', 'hume', 'tave'].includes(h.service_name)
+  const integrations = health.filter(h =>
+    ['github', 'elevenlabs', 'tave'].includes(h.service_name)
   );
 
   if (loading) {
@@ -195,9 +189,9 @@ export function CredentialsManager() {
                 <div className="flex items-center gap-2">
                   <h4 className="font-semibold">{info.displayName}</h4>
                   {info.docsUrl && (
-                    <a 
-                      href={info.docsUrl} 
-                      target="_blank" 
+                    <a
+                      href={info.docsUrl}
+                      target="_blank"
                       rel="noopener noreferrer"
                       className="text-muted-foreground hover:text-primary"
                     >

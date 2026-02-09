@@ -29,37 +29,37 @@ export interface CouncilDeliberation {
  */
 class ExecutiveCouncilService {
   private executiveConfig = {
-    'vercel-ai-chat': { 
-      title: 'Chief Strategy Officer (CSO)', 
-      icon: '🎯', 
+    'vercel-ai-chat': {
+      title: 'Chief Strategy Officer (CSO)',
+      icon: '🎯',
       color: 'blue',
       specialty: 'Strategy & Tools',
       model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
     },
-    'deepseek-chat': { 
-      title: 'Chief Technology Officer (CTO)', 
-      icon: '💻', 
+    'deepseek-chat': {
+      title: 'Chief Technology Officer (CTO)',
+      icon: '💻',
       color: 'purple',
       specialty: 'Code & Architecture',
       model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
     },
-    'gemini-chat': { 
-      title: 'Chief Information Officer (CIO)', 
-      icon: '👁️', 
+    'gemini-chat': {
+      title: 'Chief Information Officer (CIO)',
+      icon: '👁️',
       color: 'green',
       specialty: 'Vision & Multimodal',
       model: 'Lovable AI Gateway (Gemini 2.5 Pro)'
     },
-    'openai-chat': { 
-      title: 'Chief Analytics Officer (CAO)', 
-      icon: '📊', 
+    'openai-chat': {
+      title: 'Chief Analytics Officer (CAO)',
+      icon: '📊',
       color: 'orange',
       specialty: 'Complex Reasoning',
       model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
     },
-    'coo-chat': { 
-      title: 'Chief Operations Officer (COO)', 
-      icon: '⚙️', 
+    'coo-chat': {
+      title: 'Chief Operations Officer (COO)',
+      icon: '⚙️',
       color: 'red',
       specialty: 'Operations & Agent Orchestration',
       model: 'STAE-Integrated AI'
@@ -72,32 +72,32 @@ class ExecutiveCouncilService {
   async deliberate(userInput: string, context: ElizaContext): Promise<CouncilDeliberation> {
     const startTime = Date.now();
     console.log('🏛️ Executive Council: Starting deliberation...');
-    
+
     // Get all executives (prioritize healthy ones)
     const healthyExecs = await this.getHealthyExecutives();
-    const allExecs: Array<'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat'> = 
+    const allExecs: Array<'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat'> =
       ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
     const executives = allExecs.filter(exec => healthyExecs.includes(exec));
-    
+
     if (executives.length === 0) {
       console.warn('⚠️ No healthy executives available, falling back to Lovable AI Gateway');
       return this.generateFallbackResponse(userInput, context, startTime);
     }
-    
+
     console.log(`🎯 Consulting ${executives.length} executives in parallel:`, executives);
-    
+
     // Dispatch to all executives in parallel
-    const executivePromises = executives.map(exec => 
+    const executivePromises = executives.map(exec =>
       this.getExecutivePerspective(exec, userInput, context)
     );
-    
+
     const results = await Promise.allSettled(executivePromises);
     const successfulResponses = results
       .filter((r): r is PromiseFulfilledResult<ExecutiveResponse> => r.status === 'fulfilled')
       .map(r => r.value);
-    
+
     console.log(`✅ ${successfulResponses.length}/${executives.length} executives responded successfully`);
-    
+
     // If we have multiple perspectives, synthesize them
     if (successfulResponses.length > 1) {
       const synthesis = await this.synthesizePerspectives(successfulResponses, userInput, context);
@@ -106,7 +106,7 @@ class ExecutiveCouncilService {
         totalExecutionTimeMs: Date.now() - startTime
       };
     }
-    
+
     // Fallback to single executive if only one succeeded
     if (successfulResponses.length === 1) {
       return {
@@ -117,7 +117,7 @@ class ExecutiveCouncilService {
         totalExecutionTimeMs: Date.now() - startTime
       };
     }
-    
+
     // Final fallback to Lovable AI Gateway
     return this.generateFallbackResponse(userInput, context, startTime);
   }
@@ -132,7 +132,7 @@ class ExecutiveCouncilService {
   ): Promise<ExecutiveResponse> {
     const startTime = Date.now();
     const config = this.executiveConfig[executive];
-    
+
     console.log(`📡 Executive Council: Calling ${config.title} (${executive})...`);
     console.log(`📦 Sending context:`, {
       hasMessages: true,
@@ -141,7 +141,7 @@ class ExecutiveCouncilService {
       hasConversationContext: !!context.conversationContext,
       councilMode: true
     });
-    
+
     try {
       // Use retry logic with exponential backoff
       const result = await retryWithBackoff(
@@ -153,17 +153,17 @@ class ExecutiveCouncilService {
               conversationHistory: context.conversationContext,
               userContext: context.userContext,
               miningStats: context.miningStats,
-              emotionalContext: context.emotionalContext, // Pass real-time emotional data from Hume
+              emotionalContext: context.emotionalContext, // Pass real-time emotional data
               organizationContext: context.organizationContext,
               councilMode: true // Signal that this is a council deliberation
             }
           });
-          
+
           if (error) {
             console.error(`❌ ${executive} returned error:`, error);
             throw new Error(`${executive} error: ${error.message || JSON.stringify(error)}`);
           }
-          
+
           console.log(`📥 ${executive} returned data:`, {
             hasResponse: !!data?.response,
             hasContent: !!data?.content,
@@ -171,24 +171,24 @@ class ExecutiveCouncilService {
             success: data?.success,
             actualResponse: data?.response?.substring(0, 100) // Log first 100 chars
           });
-          
+
           // Validate we have a response
           if (!data || (!data.response && !data.content)) {
             throw new Error(`${executive} returned no response content`);
           }
-          
+
           return data;
         },
-        { 
+        {
           maxAttempts: 2, // Reduced to 2 for faster council response
           initialDelayMs: 500,
           timeoutMs: 20000 // Increased to 20 second timeout per attempt
         }
       );
-      
+
       const executionTime = Date.now() - startTime;
       console.log(`✅ ${config.title} responded in ${executionTime}ms`);
-      
+
       return {
         executive,
         executiveTitle: config.title,
@@ -216,10 +216,10 @@ class ExecutiveCouncilService {
     context: ElizaContext
   ): Promise<Omit<CouncilDeliberation, 'totalExecutionTimeMs'>> {
     console.log('🔄 Synthesizing perspectives from', responses.length, 'executives...');
-    
+
     // Build emotional context section if available
     const emotionalSection = context.emotionalContext ? `
-**USER EMOTIONAL STATE (Real-time Hume AI Detection):**
+**USER EMOTIONAL STATE (Real-time Emotion Detection):**
 - Primary emotion: ${context.emotionalContext.currentEmotion || 'Unknown'} (${Math.round((context.emotionalContext.emotionConfidence || 0) * 100)}% confidence)
 - Voice emotions: ${context.emotionalContext.voiceEmotions?.slice(0, 3).map((e: any) => `${e.name} (${Math.round(e.score * 100)}%)`).join(', ') || 'Not available'}
 - Facial expressions: ${context.emotionalContext.facialEmotions?.slice(0, 3).map((e: any) => `${e.name} (${Math.round(e.score * 100)}%)`).join(', ') || 'Not available'}
@@ -284,7 +284,7 @@ Format your response EXACTLY as:
       }
 
       const synthesis = data.response || 'Unable to synthesize executive perspectives at this time.';
-      
+
       return {
         responses,
         synthesis,
@@ -294,7 +294,7 @@ Format your response EXACTLY as:
       };
     } catch (error) {
       console.error('❌ Failed to synthesize with Lovable AI Gateway:', error);
-      
+
       // Fallback: simple concatenation
       return {
         responses,
@@ -309,7 +309,7 @@ Format your response EXACTLY as:
    * Simple synthesis fallback if Lovable AI Gateway fails
    */
   private simpleSynthesis(responses: ExecutiveResponse[]): string {
-    return `**Executive Council Summary**\n\n${responses.map(r => 
+    return `**Executive Council Summary**\n\n${responses.map(r =>
       `**${r.executiveIcon} ${r.executiveTitle}:**\n${r.perspective}\n`
     ).join('\n---\n')}`;
   }
@@ -319,7 +319,7 @@ Format your response EXACTLY as:
    */
   private detectConsensus(responses: ExecutiveResponse[]): boolean {
     if (responses.length < 2) return true;
-    
+
     // Simple heuristic: if all confidence scores are above 70%, likely consensus
     const avgConfidence = responses.reduce((sum, r) => sum + r.confidence, 0) / responses.length;
     return avgConfidence > 70;
@@ -330,35 +330,35 @@ Format your response EXACTLY as:
    */
   private selectLeadExecutive(responses: ExecutiveResponse[], question: string): string {
     const q = question.toLowerCase();
-    
+
     // Operations/tasks/agents → COO
     if (/task|pipeline|agent|workload|operations|progress|checklist|stae/i.test(q)) {
       const coo = responses.find(r => r.executive === 'coo-chat');
       if (coo) return coo.executiveTitle;
     }
-    
+
     // Code/technical → CTO
     if (/code|debug|technical|architecture|bug|syntax/i.test(q)) {
       const cto = responses.find(r => r.executive === 'deepseek-chat');
       if (cto) return cto.executiveTitle;
     }
-    
+
     // Vision/image → CIO
     if (/image|visual|photo|picture|diagram/i.test(q)) {
       const cio = responses.find(r => r.executive === 'gemini-chat');
       if (cio) return cio.executiveTitle;
     }
-    
+
     // Complex reasoning → CAO
     if (/analyze|forecast|predict|strategic|complex/i.test(q)) {
       const cao = responses.find(r => r.executive === 'openai-chat');
       if (cao) return cao.executiveTitle;
     }
-    
+
     // Default to CSO or highest confidence
     const cso = responses.find(r => r.executive === 'vercel-ai-chat');
     if (cso) return cso.executiveTitle;
-    
+
     // Fallback to highest confidence
     const sorted = [...responses].sort((a, b) => b.confidence - a.confidence);
     return sorted[0].executiveTitle;
@@ -369,15 +369,15 @@ Format your response EXACTLY as:
    */
   private extractDissent(responses: ExecutiveResponse[]): string[] | undefined {
     if (responses.length < 2) return undefined;
-    
+
     // Check for low confidence responses (potential dissent)
     const lowConfidence = responses.filter(r => r.confidence < 60);
     if (lowConfidence.length > 0) {
-      return lowConfidence.map(r => 
+      return lowConfidence.map(r =>
         `${r.executiveTitle} expressed lower confidence (${r.confidence}%)`
       );
     }
-    
+
     return undefined;
   }
 
@@ -387,7 +387,7 @@ Format your response EXACTLY as:
    */
   private async getHealthyExecutives(): Promise<string[]> {
     console.log('📡 Production Mode: Fetching healthy executives for council...');
-    
+
     try {
       // Fetch agent status from Supabase
       const { data: agents, error } = await supabase
@@ -423,12 +423,12 @@ Format your response EXACTLY as:
    * Generate fallback response using Lovable AI Gateway
    */
   private async generateFallbackResponse(
-    userInput: string, 
+    userInput: string,
     context: ElizaContext,
     startTime: number
   ): Promise<CouncilDeliberation> {
     console.log('🌐 Falling back to lovable-chat edge function for council response...');
-    
+
     try {
       // Use lovable-chat edge function for fallback
       const { data, error } = await supabase.functions.invoke('lovable-chat', {
@@ -444,7 +444,7 @@ Format your response EXACTLY as:
       }
 
       const response = data.response || 'Unable to generate response at this time.';
-      
+
       return {
         responses: [{
           executive: 'vercel-ai-chat',
@@ -476,16 +476,16 @@ Format your response EXACTLY as:
     councilPerspectives: any;
   }> {
     console.log(`🏛️ Executive Council: Evaluating community idea ${ideaId}...`);
-    
+
     try {
       const { data, error } = await supabase.functions.invoke('evaluate-community-idea', {
         body: { ideaId, action: 'evaluate_single' }
       });
-      
+
       if (error) throw error;
-      
+
       console.log(`✅ Idea evaluation complete: ${data.approved ? 'APPROVED' : 'REJECTED'} (${data.avgScore}/100)`);
-      
+
       return data;
     } catch (error) {
       console.error('❌ Failed to evaluate community idea:', error);
@@ -499,7 +499,7 @@ Format your response EXACTLY as:
    */
   async approveImplementation(ideaId: string, plan: any): Promise<{ taskId: string }> {
     console.log(`✅ Executive Council: Approving implementation for idea ${ideaId}...`);
-    
+
     try {
       // Create implementation task  
       const taskId = crypto.randomUUID();
@@ -515,28 +515,28 @@ Format your response EXACTLY as:
           category: 'other',
           stage: 'PLAN',
           repo: 'XMRT-Ecosystem',
-          metadata: { 
-            idea_id: ideaId, 
-            implementation_plan: plan, 
+          metadata: {
+            idea_id: ideaId,
+            implementation_plan: plan,
             is_community_idea: true
           }
         }])
         .select()
         .single();
-      
+
       if (taskError) throw taskError;
-      
+
       // Update idea status
       await supabase
         .from('community_ideas')
-        .update({ 
+        .update({
           assigned_agent_id: task.id,
           implementation_started_at: new Date().toISOString()
         })
         .eq('id', ideaId);
-      
+
       console.log(`✅ Implementation task created: ${task.id}`);
-      
+
       return { taskId: task.id };
     } catch (error) {
       console.error('❌ Failed to approve implementation:', error);
