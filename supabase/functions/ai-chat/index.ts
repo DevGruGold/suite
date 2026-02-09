@@ -3123,6 +3123,25 @@ class EnhancedProviderCascade {
   ): Promise<CascadeResult> {
     this.attempts = [];
 
+    console.log(`🔍 [Cascade] Starting content generation. Preferred: ${preferredProvider || 'auto'}`);
+    const enabledProviders = Object.entries(this.config)
+      .filter(([_, c]) => c.enabled)
+      .map(([n]) => n);
+    console.log(`🔍 [Cascade] Enabled providers from config: ${enabledProviders.join(', ') || 'NONE'}`);
+
+    // Log if API keys are missing for debugging
+    if (enabledProviders.length === 0) {
+      console.warn('⚠️ [Cascade] NO LOGIC PROVIDERS ENABLED! Check API Key environment variables.');
+      const keysCheck = {
+        OpenAI: !!this.config.openai?.apiKey,
+        Gemini: !!this.config.gemini?.apiKey,
+        DeepSeek: !!this.config.deepseek?.apiKey,
+        Anthropic: !!this.config.anthropic?.apiKey,
+        Kimi: !!this.config.kimi?.apiKey
+      };
+      console.warn('🔑 [Cascade] Key Status:', JSON.stringify(keysCheck));
+    }
+
     if (preferredProvider && preferredProvider !== 'auto') {
       const config = this.config[preferredProvider];
       if (config?.enabled) {
@@ -3139,9 +3158,19 @@ class EnhancedProviderCascade {
       .sort((a, b) => a[1].priority - b[1].priority)
       .map(([name]) => name);
 
+    console.log(`🔍 [Cascade] Execution order: ${providers.join(' -> ')}`);
+
+    if (providers.length === 0 && !preferredProvider) {
+      console.warn('⚠️ [Cascade] No primary providers available for execution loop.');
+    }
+
     for (const provider of providers) {
       const result = await this.callProvider(provider, messages, tools, images);
       this.attempts.push({ provider, success: result.success });
+
+      if (!result.success) {
+        console.warn(`⚠️ [Cascade] Provider ${provider} failed: ${result.error}`);
+      }
 
       if (result.success) {
         return result;
