@@ -29,15 +29,21 @@ export class SimplifiedVoiceService {
     }
 
     try {
-      // Ensure mobile permissions are granted
-      const permissionResult = await mobilePermissionService.initializeMobileAudio();
-      if (!permissionResult.success) {
-        return { success: false, error: permissionResult.error };
+      // Only strictly require mobile permission sequence if we are actually on mobile
+      // For desktop, we can rely on standard browser prompts which are less finicky
+      const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+      if (isMobile) {
+        const permissionResult = await mobilePermissionService.initializeMobileAudio();
+        if (!permissionResult.success) {
+          console.warn('Mobile audio init failed, attempting fallback...', permissionResult.error);
+          // Don't hard block, try standard init anyway as fallback
+        }
       }
 
       const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       this.recognition = new SpeechRecognition();
-      
+
       // Configure recognition
       this.recognition.continuous = config.continuous ?? false;
       this.recognition.interimResults = config.interimResults ?? true;
@@ -57,7 +63,7 @@ export class SimplifiedVoiceService {
           const result = event.results[i];
           const transcript = result[0].transcript;
           const confidence = result[0].confidence || 0.8;
-          
+
           this.onResultCallback({
             text: transcript,
             confidence,
@@ -69,7 +75,7 @@ export class SimplifiedVoiceService {
       this.recognition.onerror = (event) => {
         console.error('Voice recognition error:', event.error);
         this.isListening = false;
-        
+
         let errorMessage = 'Voice recognition error';
         switch (event.error) {
           case 'not-allowed':
@@ -121,7 +127,7 @@ export class SimplifiedVoiceService {
     try {
       this.onResultCallback = onResult;
       this.onErrorCallback = onError || null;
-      
+
       this.recognition!.start();
       return { success: true };
     } catch (error) {
@@ -150,7 +156,7 @@ export class SimplifiedVoiceService {
     permissionGranted: boolean;
   } {
     const permissionStatus = mobilePermissionService.getStatus();
-    
+
     return {
       supported: this.isSupported(),
       listening: this.isListening,
