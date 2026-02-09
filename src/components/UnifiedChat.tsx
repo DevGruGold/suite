@@ -13,7 +13,7 @@ import { GitHubPATInput } from './GitHubContributorRegistration';
 import { GitHubTokenStatus } from './GitHubTokenStatus';
 import { mobilePermissionService } from '@/services/mobilePermissionService';
 import { formatTime } from '@/utils/dateFormatter';
-import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X } from 'lucide-react';
+import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X, Mic, MicOff, Video, VideoOff } from 'lucide-react';
 import { AttachmentPreview, type AttachmentFile } from './AttachmentPreview';
 import { QuickResponseButtons } from './QuickResponseButtons';
 import { ExecutiveCouncilChat } from './ExecutiveCouncilChat';
@@ -21,10 +21,12 @@ import { ImageResponsePreview, extractImagesFromResponse, isLargeResponse, sanit
 import { GovernanceStatusBadge } from './GovernanceStatusBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { enhancedTTS } from '@/services/enhancedTTSService';
+import { simplifiedVoiceService } from '@/services/simplifiedVoiceService';
 import { speechLearningService } from '@/services/speechLearningService';
 import { supabase } from '@/integrations/supabase/client';
 // Toast removed for lighter UI
 import type { RealtimeChannel } from '@supabase/supabase-js';
+import { LiveCameraProcessor } from './LiveCameraProcessor';
 
 // Services
 import { realtimeManager } from '@/services/realtimeSubscriptionManager';
@@ -173,6 +175,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // Refs
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const liveProcessorRef = useRef<any>(null);
+
+  // Input Mode State
+  const [inputMode, setInputMode] = useState<'text' | 'voice' | 'multimodal'>('text');
+  const [isRecording, setIsRecording] = useState(false);
+  const [liveVideoActive, setLiveVideoActive] = useState(false);
 
   // File handling functions
   const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -741,6 +749,45 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
     console.log(`🎭 ${source} emotions updated:`, emotions.slice(0, 3).map(e => e.name).join(', '));
   }, []);
+
+  // Handle Mode Switching
+  const handleModeChange = (mode: 'text' | 'voice' | 'multimodal') => {
+    setInputMode(mode);
+
+    // Auto-enable voice for voice/multimodal modes
+    if (mode === 'voice' || mode === 'multimodal') {
+      if (!voiceEnabled) {
+        handleEnableAudio();
+      }
+    }
+
+    // Toggle camera for multimodal
+    if (mode === 'multimodal') {
+      setLiveVideoActive(true);
+    } else {
+      setLiveVideoActive(false);
+    }
+  };
+
+  // Toggle recording
+  const toggleRecording = async () => {
+    if (isRecording) {
+      simplifiedVoiceService.stopListening();
+      setIsRecording(false);
+    } else {
+      setIsRecording(true);
+      await simplifiedVoiceService.startListening((result) => {
+        if (result.isFinal) {
+          handleVoiceInput(result.text);
+          // Optional: Stop recording after one phrase if desired, but continuous is usually better for chat
+          // setIsRecording(false); 
+        }
+      }, (error) => {
+        console.error("Voice error:", error);
+        setIsRecording(false);
+      });
+    }
+  };
 
   // Voice input handler - WITH smart TTS timing and speech recognition pausing
   const handleVoiceInput = async (transcript: string) => {
@@ -1430,6 +1477,34 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             </div>
           </div>
 
+          {/* Mode Switcher */}
+          <div className="flex bg-muted/30 rounded-lg p-1 gap-1">
+            <Button
+              variant={inputMode === 'text' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => handleModeChange('text')}
+              className="h-6 px-2 text-[10px] sm:text-xs"
+            >
+              Text
+            </Button>
+            <Button
+              variant={inputMode === 'voice' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => handleModeChange('voice')}
+              className="h-6 px-2 text-[10px] sm:text-xs"
+            >
+              Voice
+            </Button>
+            <Button
+              variant={inputMode === 'multimodal' ? 'secondary' : 'ghost'}
+              size="sm"
+              onClick={() => handleModeChange('multimodal')}
+              className="h-6 px-2 text-[10px] sm:text-xs"
+            >
+              Full
+            </Button>
+          </div>
+
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
             {/* Council Mode Toggle with Tooltip */}
             <TooltipProvider>
@@ -1519,6 +1594,22 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       <div className="flex-1 overflow-hidden">
         <ScrollArea className="h-full">
           <div className="p-4 space-y-4">
+            {/* Live Camera for Multimodal Mode */}
+            {inputMode === 'multimodal' && (
+              <div className="mb-4">
+                <LiveCameraProcessor
+                  isEnabled={liveVideoActive}
+                  onEmotionDetected={(emotion, confidence) => {
+                    handleEmotionUpdate([{ name: emotion, score: confidence }], 'facial');
+                  }}
+                  onVisualContextUpdate={(context) => {
+                    // Optionally store this context
+                    console.log("Visual context:", context);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Office Clerk Loading Progress */}
             {officeClerkProgress && officeClerkProgress.status !== 'idle' && officeClerkProgress.status !== 'ready' && (
               <div className="bg-muted/50 border border-primary/30 rounded-lg p-4 space-y-3 animate-fade-in">
@@ -1733,6 +1824,17 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               title="Attach files (max 5)"
             >
               <Paperclip className="h-4 w-4" />
+            </Button>
+
+            {/* Microphone Button */}
+            <Button
+              variant={isRecording ? "destructive" : "ghost"}
+              size="sm"
+              onClick={toggleRecording}
+              className={`rounded-full min-h-[48px] min-w-[48px] ${isRecording ? 'animate-pulse' : 'hover:bg-muted/50'}`}
+              title={isRecording ? "Stop Listening" : "Start Listening"}
+            >
+              {isRecording ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
             </Button>
 
             <Input
