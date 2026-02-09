@@ -772,6 +772,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // Toggle recording
   // Toggle recording
   const toggleRecording = async () => {
+    // Mark interaction to satisfy mobile permission requirements (Safari/Chrome)
+    mobilePermissionService.markUserInteraction();
+
     if (isRecording) {
       simplifiedVoiceService.stopListening();
       setIsRecording(false);
