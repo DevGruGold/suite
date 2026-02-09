@@ -2,14 +2,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export type ExecutiveName = 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat';
 
-// Hume AI voice IDs for each executive
-const EXECUTIVE_HUME_VOICES: Record<ExecutiveName, string> = {
-  'vercel-ai-chat': '445d65ed-f002-4059-8a1b-05eb8ce2c3b4', // CSO - warm, strategic
-  'deepseek-chat': '5cad536a-66bc-4f89-8d20-2a2622fe1c78',   // CTO - technical, precise
-  'gemini-chat': '5bb7de05-b1f0-4b4d-9fc6-c47b0547e3a0',     // CIO - analytical, clear
-  'openai-chat': '5ac595dd-d5e9-4f48-8e83-be4b2c29b46a',     // CAO - authoritative, deep
-  'coo-chat': '3b554273-4299-48b9-9aaf-eefd438e3941'          // COO - operational, clear
-};
+
 
 // OpenAI TTS voice IDs for each executive (fallback)
 const EXECUTIVE_OPENAI_VOICES: Record<ExecutiveName, string> = {
@@ -54,13 +47,7 @@ class ExecutiveTTSService {
     // Truncate long text
     const truncatedText = text.slice(0, 1000);
 
-    // Try Hume AI first
-    try {
-      const success = await this.speakWithHume(truncatedText, executive);
-      if (success) return;
-    } catch (error) {
-      console.log('Hume TTS failed, trying OpenAI:', error);
-    }
+
 
     // Fallback to OpenAI TTS
     try {
@@ -74,24 +61,11 @@ class ExecutiveTTSService {
     await this.speakWithBrowser(truncatedText, executive);
   }
 
-  private async speakWithHume(text: string, executive: ExecutiveName): Promise<boolean> {
-    const voiceId = EXECUTIVE_HUME_VOICES[executive];
-    
-    const { data, error } = await supabase.functions.invoke('hume-tts', {
-      body: { text, voiceId }
-    });
 
-    if (error || !data?.audio) {
-      console.error('Hume TTS error:', error);
-      return false;
-    }
-
-    return this.playBase64Audio(data.audio);
-  }
 
   private async speakWithOpenAI(text: string, executive: ExecutiveName): Promise<boolean> {
     const voice = EXECUTIVE_OPENAI_VOICES[executive];
-    
+
     const { data, error } = await supabase.functions.invoke('openai-tts', {
       body: { text, voice, speed: 1.0 }
     });
@@ -112,27 +86,27 @@ class ExecutiveTTSService {
         for (let i = 0; i < audioData.length; i++) {
           audioArray[i] = audioData.charCodeAt(i);
         }
-        
+
         const blob = new Blob([audioArray], { type: 'audio/mpeg' });
         const audioUrl = URL.createObjectURL(blob);
-        
+
         this.currentAudio = new Audio(audioUrl);
         this.setSpeaking(true);
-        
+
         this.currentAudio.onended = () => {
           URL.revokeObjectURL(audioUrl);
           this.setSpeaking(false);
           this.currentAudio = null;
           resolve(true);
         };
-        
+
         this.currentAudio.onerror = () => {
           URL.revokeObjectURL(audioUrl);
           this.setSpeaking(false);
           this.currentAudio = null;
           resolve(false);
         };
-        
+
         this.currentAudio.play().catch(() => {
           this.setSpeaking(false);
           resolve(false);
@@ -156,14 +130,14 @@ class ExecutiveTTSService {
       const utterance = new SpeechSynthesisUtterance(text);
       utterance.pitch = EXECUTIVE_BROWSER_PITCH[executive];
       utterance.rate = 1.0;
-      
+
       this.setSpeaking(true);
-      
+
       utterance.onend = () => {
         this.setSpeaking(false);
         resolve();
       };
-      
+
       utterance.onerror = () => {
         this.setSpeaking(false);
         resolve();
@@ -179,11 +153,11 @@ class ExecutiveTTSService {
       this.currentAudio.src = '';
       this.currentAudio = null;
     }
-    
+
     if ('speechSynthesis' in window) {
       window.speechSynthesis.cancel();
     }
-    
+
     this.setSpeaking(false);
   }
 }

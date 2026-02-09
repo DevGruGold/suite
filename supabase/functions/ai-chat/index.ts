@@ -2134,7 +2134,9 @@ async function callGeminiFallback(
   images?: string[]
 ): Promise<any> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-  if (!GEMINI_API_KEY) return null;
+  const oauthToken = await getGoogleCloudToken();
+
+  if (!GEMINI_API_KEY && !oauthToken) return null;
 
   console.log('🔄 Trying Gemini fallback with better models (2.5-flash)...');
 
@@ -2171,14 +2173,21 @@ async function callGeminiFallback(
         functionDeclarations: convertToolsToGeminiFormat(tools)
       }] : undefined;
 
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json'
+      };
+
+      if (oauthToken) {
+        headers['Authorization'] = `Bearer ${oauthToken}`;
+      } else {
+        headers['x-goog-api-key'] = GEMINI_API_KEY!;
+      }
+
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'x-goog-api-key': GEMINI_API_KEY
-          },
+          headers: headers,
           body: JSON.stringify({
             contents: [{ parts }],
             tools: geminiTools,
@@ -3107,6 +3116,32 @@ interface CascadeResult {
   error?: string;
 }
 
+// ========== NEW: GOOGLE CLOUD AUTH HELPER ==========
+async function getGoogleCloudToken(): Promise<string | null> {
+  try {
+    // console.log('🔑 [Auth] Requesting Google Cloud OAuth token...');
+    const { data, error } = await supabase.functions.invoke('google-cloud-auth', {
+      body: { action: 'get_access_token' }
+    });
+
+    if (error) {
+      console.warn('⚠️ [Auth] Failed to get Google Cloud token via invoke:', error);
+      return null;
+    }
+
+    if (data && data.success && data.access_token) {
+      // console.log('🔑 [Auth] Successfully retrieved Google Cloud OAuth token');
+      return data.access_token;
+    }
+
+    console.warn('⚠️ [Auth] Google Cloud auth returned success=false or no token', data);
+    return null;
+  } catch (err) {
+    console.warn('⚠️ [Auth] Exception getting Google Cloud token:', err);
+    return null;
+  }
+}
+
 class EnhancedProviderCascade {
   private attempts: any[] = [];
   private config: Record<string, AIProviderConfig>;
@@ -3239,7 +3274,7 @@ class EnhancedProviderCascade {
           result = await this.callOpenAI(messages, tools, controller);
           break;
         case 'gemini':
-          result = await this.callGemini(messages, tools, images, controller);
+          result = await this.callGemini(messages, tools, controller, images);
           break;
         case 'deepseek':
           result = await this.callDeepSeek(messages, tools, controller);
@@ -3392,7 +3427,15 @@ class EnhancedProviderCascade {
     };
   }
 
-  private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
+  private async callGemini(messages: any[], tools: any[], controller: AbortController, images?: string[]): Promise<CascadeResult> {
+    // Get OAuth token first
+    const oauthToken = await getGoogleCloudToken();
+
+    // Warn but proceed if both key and token are missing (config check might pass if enabled=true but key missing)
+    if (!this.config.gemini.apiKey && !oauthToken) {
+      return { success: false, provider: 'gemini', error: 'Missing both Gemini API Key and Google OAuth Token' };
+    }
+
     const geminiModels = [
       'gemini-2.5-flash',
       'gemini-2.5-flash-image',
@@ -3402,7 +3445,7 @@ class EnhancedProviderCascade {
 
     for (const model of geminiModels) {
       try {
-        console.log(`🔄 Trying Gemini model: ${model}`);
+        console.log(`🔄 Trying Gemini model: ${model}${oauthToken ? ' (using OAuth)' : ' (using API Key)'}`);
 
         const geminiMessages = [];
 
@@ -3485,14 +3528,21 @@ class EnhancedProviderCascade {
           requestBody.tools = [geminiTools];
         }
 
+        const headers: Record<string, string> = {
+          'Content-Type': 'application/json'
+        };
+
+        if (oauthToken) {
+          headers['Authorization'] = `Bearer ${oauthToken}`;
+        } else {
+          headers['x-goog-api-key'] = this.config.gemini.apiKey;
+        }
+
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
           {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'x-goog-api-key': this.config.gemini.apiKey
-            },
+            headers: headers,
             body: JSON.stringify(requestBody),
             signal: controller.signal
           }
@@ -3835,7 +3885,7 @@ You are an **intelligent, proactive assistant**.
 1. **ACT, DON'T EXPLAIN**: Immediately use tools. Never say "I will..." or "Let me..." - just do it.
 2. **SYNTHESIZE**: Analyze tool results. Don't just list data; tell me what it *means*.
 3. **CONTEXT IS KING**: Remember previous turns and historical summaries.
-4. **HANDLE AMBIGUITY**: If user says "yes" or "no", infer meaning from the `RECENT CONVERSATION CONTEXT` above.
+4. **HANDLE AMBIGUITY**: If user says "yes" or "no", infer meaning from the \`RECENT CONVERSATION CONTEXT\` above.
 
 ## 🔧 TOOL RULES (STRICT)
 - **Functions**: If asked about capabilities, call \`search_edge_functions\`.
@@ -3852,7 +3902,7 @@ You are an **intelligent, proactive assistant**.
 
 ## 🧠 MEMORY & PERSISTENCE
 - **IP**: ${ipAddress} (Session active for 24h).
-- **History**: Reference `HISTORICAL SUMMARIES` and `MEMORY CONTEXT` below.
+- **History**: Reference \`HISTORICAL SUMMARIES\` and \`MEMORY CONTEXT\` below.
 
 ${historicalContext}
 

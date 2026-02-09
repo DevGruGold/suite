@@ -20,10 +20,7 @@ import { ExecutiveCouncilChat } from './ExecutiveCouncilChat';
 import { ImageResponsePreview, extractImagesFromResponse, isLargeResponse, sanitizeLargeResponse } from './ImageResponsePreview';
 import { GovernanceStatusBadge } from './GovernanceStatusBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
-import { MakeMeHumanToggle, HumeState, HumeMode } from './MakeMeHumanToggle';
-import { HumeChatControls } from './HumeChatControls';
 import { enhancedTTS } from '@/services/enhancedTTSService';
-import { humanizedTTS } from '@/services/humanizedTTSService';
 import { speechLearningService } from '@/services/speechLearningService';
 import { supabase } from '@/integrations/supabase/client';
 // Toast removed for lighter UI
@@ -138,7 +135,6 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [audioInitialized, setAudioInitialized] = useState(false);
   const [currentAIMethod, setCurrentAIMethod] = useState<string>('');
   const [currentTTSMethod, setCurrentTTSMethod] = useState<string>('');
-  const [isHumanizedMode, setIsHumanizedMode] = useState(false);
 
   // Lazy TTS initialization - only when user enables voice
   // Removed auto-initialization to improve page load performance
@@ -168,13 +164,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   // Council mode state - initialize from prop
   const [councilMode, setCouncilMode] = useState<boolean>(defaultCouncilMode);
 
-  // Hume controls state
-  const [humeState, setHumeState] = useState<HumeState>({
-    mode: 'tts',
-    isEnabled: false,
-    audioStream: null,
-    videoStream: null
-  });
+
 
   // File attachment state
   const [attachments, setAttachments] = useState<AttachmentFile[]>([]);
@@ -244,185 +234,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     });
   };
 
-  // Video frame capture for multimodal mode
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const [videoReady, setVideoReady] = useState(false);
-  const [latestVideoFrame, setLatestVideoFrame] = useState<string | null>(null);
-  const continuousCaptureRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Pre-initialize video element when multimodal mode activates
-  useEffect(() => {
-    if (humeState?.mode === 'multimodal' && humeState?.videoStream && !videoRef.current) {
-      console.log('🎬 Pre-initializing video for multimodal mode...');
-      const video = document.createElement('video');
-      video.srcObject = humeState.videoStream;
-      video.autoplay = true;
-      video.playsInline = true;
-      video.muted = true; // Required for autoplay
-      videoRef.current = video;
 
-      video.onloadeddata = () => {
-        console.log('🎬 Video data loaded, readyState:', video.readyState);
-        setVideoReady(true);
-      };
 
-      video.play().then(() => {
-        console.log('🎬 Video pre-initialized and playing for multimodal mode');
-      }).catch(err => {
-        console.error('Video pre-initialization failed:', err);
-      });
-    }
-
-    // Cleanup when mode changes or stream ends
-    if (humeState?.mode !== 'multimodal' || !humeState?.videoStream) {
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current = null;
-        setVideoReady(false);
-      }
-    }
-  }, [humeState?.mode, humeState?.videoStream]);
-
-  // Continuous video frame capture every 3 seconds in multimodal mode
-  useEffect(() => {
-    if (humeState?.mode === 'multimodal' && humeState?.videoStream && videoReady) {
-      console.log('👁️ Starting continuous video capture (every 3s)');
-
-      const captureFrame = async () => {
-        if (!videoRef.current || videoRef.current.readyState < 2) return;
-
-        try {
-          const canvas = document.createElement('canvas');
-          canvas.width = videoRef.current.videoWidth || 640;
-          canvas.height = videoRef.current.videoHeight || 480;
-          const ctx = canvas.getContext('2d');
-          if (ctx) {
-            ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-            const frame = canvas.toDataURL('image/jpeg', 0.7);
-            setLatestVideoFrame(frame);
-            console.log('📸 Continuous capture: frame updated');
-          }
-        } catch (err) {
-          console.error('Continuous capture error:', err);
-        }
-      };
-
-      // Capture immediately, then every 3 seconds
-      captureFrame();
-      continuousCaptureRef.current = setInterval(captureFrame, 3000);
-
-      return () => {
-        if (continuousCaptureRef.current) {
-          clearInterval(continuousCaptureRef.current);
-          continuousCaptureRef.current = null;
-        }
-      };
-    } else {
-      // Clear capture when not in multimodal mode
-      if (continuousCaptureRef.current) {
-        clearInterval(continuousCaptureRef.current);
-        continuousCaptureRef.current = null;
-      }
-      setLatestVideoFrame(null);
-    }
-  }, [humeState?.mode, humeState?.videoStream, videoReady]);
-
-  const captureVideoFrame = useCallback(async (): Promise<string | null> => {
-    // Use pre-captured frame if available (from continuous capture)
-    if (latestVideoFrame) {
-      console.log('📸 Using pre-captured continuous frame');
-      return latestVideoFrame;
-    }
-
-    console.log('📹 Video capture attempt:', {
-      mode: humeState?.mode,
-      hasVideoStream: !!humeState?.videoStream,
-      videoRefExists: !!videoRef.current,
-      videoReady,
-      readyState: videoRef.current?.readyState
-    });
-
-    if (!humeState?.videoStream) {
-      console.log('⚠️ No video stream available');
-      return null;
-    }
-
-    try {
-      // Create video element if needed and wait for it to be ready
-      if (!videoRef.current) {
-        console.log('🎬 Creating video element on-demand...');
-        const video = document.createElement('video');
-        video.srcObject = humeState.videoStream;
-        video.autoplay = true;
-        video.playsInline = true;
-        video.muted = true;
-        videoRef.current = video;
-
-        // Wait for video to be ready with timeout
-        await new Promise<void>((resolve, reject) => {
-          const timeout = setTimeout(() => reject(new Error('Video load timeout')), 3000);
-          video.onloadeddata = () => {
-            clearTimeout(timeout);
-            setVideoReady(true);
-            resolve();
-          };
-          video.onerror = () => {
-            clearTimeout(timeout);
-            reject(new Error('Video load failed'));
-          };
-          video.play().catch(reject);
-        });
-      }
-
-      const video = videoRef.current;
-
-      // Ensure video is ready
-      if (video.readyState < 2) {
-        console.log('⏳ Video not ready yet, waiting...', video.readyState);
-        await new Promise<void>((resolve) => {
-          const checkReady = () => {
-            if (video.readyState >= 2) {
-              resolve();
-            } else {
-              setTimeout(checkReady, 100);
-            }
-          };
-          setTimeout(checkReady, 100);
-          // Timeout after 2 seconds
-          setTimeout(resolve, 2000);
-        });
-      }
-
-      // Capture frame
-      const canvas = document.createElement('canvas');
-      canvas.width = video.videoWidth || 640;
-      canvas.height = video.videoHeight || 480;
-      const ctx = canvas.getContext('2d');
-
-      if (!ctx) {
-        console.error('Failed to get canvas context');
-        return null;
-      }
-
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-      console.log('📸 Successfully captured video frame:', canvas.width, 'x', canvas.height);
-      return dataUrl;
-    } catch (error) {
-      console.error('Failed to capture video frame:', error);
-      return null;
-    }
-  }, [humeState?.videoStream, humeState?.mode, videoReady, latestVideoFrame]);
-
-  // Clean up video element on unmount
-  useEffect(() => {
-    return () => {
-      if (videoRef.current) {
-        videoRef.current.srcObject = null;
-        videoRef.current = null;
-      }
-    };
-  }, []);
 
   // Enable audio after user interaction (required for mobile browsers)
   const handleEnableAudio = async () => {
@@ -447,8 +261,6 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         // Initialize TTS silently so it's ready when user sends first message
         try {
           await enhancedTTS.initialize();
-          await humanizedTTS.restoreMode();
-          setIsHumanizedMode(humanizedTTS.isHumanized());
           setAudioInitialized(true);
           console.log('✅ TTS pre-initialized and ready');
         } catch (error) {
@@ -896,15 +708,11 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
         setIsSpeaking(true);
 
-        // Use humanized TTS if enabled
-        await humanizedTTS.speak({
-          text: responseText,
-          emotion: currentEmotion,
-          language
-        });
+        // Use normal TTS
+        await enhancedTTS.speak(responseText, { language });
 
-        setCurrentTTSMethod(isHumanizedMode ? 'Hume AI EVI' : 'Browser Web Speech');
-        console.log(`🎵 TTS Method: ${isHumanizedMode ? 'Humanized' : 'Browser'}`);
+        setCurrentTTSMethod('Browser Web Speech');
+        console.log('🎵 TTS Method: Browser');
         setIsSpeaking(false);
       } catch (error) {
         console.error('❌ TTS error:', error, 'Audio unavailable. Check browser permissions.');
@@ -940,20 +748,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
     // If Eliza is speaking, interrupt her
     if (isSpeaking) {
-      humanizedTTS.stop();
+      enhancedTTS.stop();
       setIsSpeaking(false);
     }
 
-    // 📹 Capture video frame in multimodal mode - Eliza can SEE the user!
+    // 📹 Capture video frame in multimodal mode - Removed Hume support
     const imageBase64Array: string[] = [];
-    if (humeState?.mode === 'multimodal' && humeState?.videoStream) {
-      console.log('📹 Capturing live video frame for voice input in multimodal mode...');
-      const videoFrame = await captureVideoFrame();
-      if (videoFrame) {
-        imageBase64Array.push(videoFrame);
-        console.log('📹 Added LIVE video frame to voice message - Eliza can see you!');
-      }
-    }
 
     const userMessage: UnifiedMessage = {
       id: `voice-user-${Date.now()}`,
@@ -1081,9 +881,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           await new Promise(resolve => setTimeout(resolve, 500));
 
           // Stop any previous speech before starting new one
-          humanizedTTS.stop();
-          await humanizedTTS.speak({ text: responseText, language });
-          setCurrentTTSMethod(humanizedTTS.isHumanized() ? 'Hume AI EVI' : 'Browser Web Speech');
+          enhancedTTS.stop();
+          await enhancedTTS.speak(responseText, { language });
+          setCurrentTTSMethod('Browser Web Speech');
           setIsSpeaking(false);
         } catch (error) {
           console.error('TTS failed:', error);
@@ -1176,27 +976,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     const currentAttachments: File[] = attachments.map(a => a.file);
     console.log('📎 Preparing attachments:', currentAttachments.length, currentAttachments.map(f => f.name));
 
-    // ✅ Capture video frame in multimodal mode (if camera is active)
+    // ✅ Capture video frame in multimodal mode - Removed Hume support
     let hasLiveVideo = false;
-    if (humeState?.mode === 'multimodal' && humeState?.videoStream) {
-      console.log('📹 Attempting to capture video frame for multimodal message...');
-      const videoFrame = await captureVideoFrame();
-      if (videoFrame) {
-        try {
-          // Convert base64 to File object
-          const res = await fetch(videoFrame);
-          const blob = await res.blob();
-          const file = new File([blob], "camera_frame.jpg", { type: "image/jpeg" });
-          currentAttachments.push(file);
-          hasLiveVideo = true;
-          console.log('📹 Added live video frame to attachments');
-        } catch (err) {
-          console.error('Failed to convert video frame to file:', err);
-        }
-      } else {
-        console.warn('⚠️ Could not capture video frame - video may not be ready');
-      }
-    }
 
     const userMessage: UnifiedMessage = {
       id: `user-${Date.now()}`,
@@ -1332,17 +1113,13 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           // Build spoken text based on what's available
           console.log('🎵 Speaking council deliberation with executive voices...');
 
-          // Use the new council deliberation method with per-executive voices
-          humanizedTTS.speakCouncilDeliberation(
-            deliberation.responses.map(r => ({
-              executive: r.executive,
-              executiveTitle: r.executiveTitle,
-              perspective: r.perspective
-            })),
-            deliberation.synthesis
-          )
+          // Use standard TTS for council responses now
+          const combinedText = deliberation.responses.map(r => `${r.executiveTitle} says: ${r.perspective}`).join('. ') +
+            (deliberation.synthesis ? `. Unified Recommendation: ${deliberation.synthesis}` : '');
+
+          enhancedTTS.speak(combinedText, { language })
             .then(() => {
-              setCurrentTTSMethod(humanizedTTS.isHumanized() ? 'Hume AI EVI' : 'Browser Web Speech');
+              setCurrentTTSMethod('Browser Web Speech');
               setIsSpeaking(false);
             })
             .catch((error) => {
@@ -1484,9 +1261,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
             setIsSpeaking(true);
             // Stop any previous speech before starting new one
-            humanizedTTS.stop();
-            await humanizedTTS.speak({ text: cleanResponse, language });
-            setCurrentTTSMethod(humanizedTTS.isHumanized() ? 'Hume AI EVI' : 'Browser Web Speech');
+            enhancedTTS.stop();
+            await enhancedTTS.speak(cleanResponse, { language });
+            setCurrentTTSMethod('Browser Web Speech');
             setIsSpeaking(false);
           } catch (error) {
             console.error('❌ TTS failed:', error, 'Check browser audio permissions');
@@ -1568,6 +1345,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       // Toggle on/off
       const newState = !voiceEnabled;
       setVoiceEnabled(newState);
+      setVoiceEnabled(newState);
       localStorage.setItem('audioEnabled', newState.toString());
 
       // If disabling, stop any ongoing speech
@@ -1602,10 +1380,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   return (
     <Card className={`bg-card border-border/60 flex flex-col h-[500px] sm:h-[600px] ${className}`}>
       {/* Voice Intelligence Toggle */}
-      <MakeMeHumanToggle
-        onModeChange={(mode, enabled) => setIsHumanizedMode(enabled)}
-        onStateChange={(state) => setHumeState(state)}
-      />
+      {/* Voice Intelligence Toggle Removed */}
 
       {/* Clean Header */}
       <div className="px-4 py-3 border-b border-border/60">
@@ -1729,10 +1504,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               variant="ghost"
               size="sm"
               className={`h-7 w-7 sm:h-8 sm:w-8 p-0 flex-shrink-0 ${voiceEnabled
-                ? (isHumanizedMode ? 'text-purple-500' : 'text-primary')
+                ? 'text-primary'
                 : 'text-muted-foreground'
                 }`}
-              title={`${voiceEnabled ? 'Disable' : 'Enable'} voice${isHumanizedMode ? ' (Humanized)' : ''}`}
+              title={`${voiceEnabled ? 'Disable' : 'Enable'} voice`}
             >
               {voiceEnabled ? <Volume2 className="h-4 w-4" /> : <VolumeX className="h-4 w-4" />}
             </Button>
@@ -1936,26 +1711,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           />
 
           <div className="flex gap-3 items-center">
-            {/* Hume Voice/Video Controls */}
-            <HumeChatControls
-              mode={humeState.mode}
-              isEnabled={humeState.isEnabled}
-              audioStream={humeState.audioStream}
-              videoStream={humeState.videoStream}
-              onVoiceInput={handleVoiceInput}
-              onEmotionUpdate={handleEmotionUpdate}
-            />
 
-            {/* Camera Active Indicator */}
-            {humeState?.mode === 'multimodal' && humeState?.videoStream && (
-              <Badge
-                variant="outline"
-                className={`text-[10px] flex items-center gap-1 ${videoReady ? 'bg-suite-success/10 text-suite-success border-suite-success/30' : 'bg-suite-warning/10 text-suite-warning border-suite-warning/30 animate-pulse-subtle'}`}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${videoReady ? 'bg-suite-success animate-pulse-subtle' : 'bg-suite-warning'}`}></span>
-                {videoReady ? 'Camera active' : 'Initializing...'}
-              </Badge>
-            )}
+
+
 
             {/* File Attachment Button */}
             <input
@@ -1993,11 +1751,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                   ? "Configure API key to continue..."
                   : attachments.length > 0
                     ? `${attachments.length} file${attachments.length > 1 ? 's' : ''} attached`
-                    : humeState.mode === 'voice' && humeState.isEnabled
-                      ? "Speak or type..."
-                      : isSpeaking
-                        ? "Type to interrupt..."
-                        : "Ask anything..."
+                    : "Ask anything..."
               }
               className="flex-1 rounded-lg border-border/60 bg-background min-h-[44px] text-sm px-4"
               disabled={isProcessing}
