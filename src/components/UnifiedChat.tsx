@@ -770,22 +770,50 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   };
 
   // Toggle recording
+  // Toggle recording
   const toggleRecording = async () => {
     if (isRecording) {
       simplifiedVoiceService.stopListening();
       setIsRecording(false);
     } else {
+      // Optimistically set recording state to show immediate feedback
       setIsRecording(true);
-      await simplifiedVoiceService.startListening((result) => {
-        if (result.isFinal) {
-          handleVoiceInput(result.text);
-          // Optional: Stop recording after one phrase if desired, but continuous is usually better for chat
-          // setIsRecording(false); 
+
+      try {
+        const result = await simplifiedVoiceService.startListening((result) => {
+          if (result.isFinal) {
+            handleVoiceInput(result.text);
+            // Optional: for single-turn, you might stop here. For chat, continuous is good.
+          }
+        }, (error) => {
+          console.error("Voice error:", error);
+          setIsRecording(false);
+          // Show visible error feedback
+          const errorMessage: UnifiedMessage = {
+            id: `voice-error-${Date.now()}`,
+            content: `🎤 Voice input error: ${error}. Please check microphone permissions.`,
+            sender: 'assistant',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, errorMessage]);
+        });
+
+        // Check if initialization failed instantly (e.g. permission denied)
+        if (!result.success) {
+          console.error("Failed to start voice:", result.error);
+          setIsRecording(false);
+          const errorMessage: UnifiedMessage = {
+            id: `voice-init-error-${Date.now()}`,
+            content: `❌ Could not start voice input: ${result.error || 'Unknown error'}. Please ensure your browser supports speech recognition and microphone access is allowed.`,
+            sender: 'assistant',
+            timestamp: new Date()
+          };
+          setMessages(prev => [...prev, errorMessage]);
         }
-      }, (error) => {
-        console.error("Voice error:", error);
+      } catch (err) {
+        console.error("Unexpected voice start error:", err);
         setIsRecording(false);
-      });
+      }
     }
   };
 
