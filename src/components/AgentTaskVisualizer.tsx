@@ -8,26 +8,29 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import {
-  MessageSquare,
-  FileText,
-  Play,
-  CheckCircle2,
-  GitMerge,
-  User,
-  AlertTriangle,
-  Clock,
-  ChevronRight,
-  RefreshCw,
-  Bot,
-  Cpu,
-  ArrowLeft,
-  ArrowRight,
-  GripVertical,
-  ExternalLink,
-  UserPlus,
-  Loader2,
-  Plus
-} from 'lucide-react';
+import {
+    MessageSquare,
+    FileText,
+    Play,
+    CheckCircle2,
+    GitMerge,
+    User,
+    AlertTriangle,
+    Clock,
+    ChevronRight,
+    RefreshCw,
+    Bot,
+    Cpu,
+    ArrowLeft,
+    ArrowRight,
+    GripVertical,
+    ExternalLink,
+    UserPlus,
+    Loader2,
+    Plus,
+    Circle,
+    UserCheck
+  } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -70,6 +73,8 @@ interface Agent {
 }
 
 const STAGES = [
+  { key: 'PENDING', label: 'Pending', icon: Circle },
+  { key: 'CLAIMED', label: 'Claimed', icon: UserCheck },
   { key: 'DISCUSS', label: 'Discuss', icon: MessageSquare },
   { key: 'PLAN', label: 'Plan', icon: FileText },
   { key: 'EXECUTE', label: 'Execute', icon: Play },
@@ -127,6 +132,17 @@ function normalizeStage(stage: string | null | undefined): string {
   if (['discuss', 'discussion'].includes(s)) return 'DISCUSS';
 
   return s.toUpperCase();
+}
+
+/**
+ * Determines which column a task belongs to.
+ * PENDING and CLAIMED statuses have their own columns.
+ * Other statuses fall back to the task's stage.
+ */
+function getColumnForTask(task: Task): string {
+  if (task.status === 'PENDING') return 'PENDING';
+  if (task.status === 'CLAIMED') return 'CLAIMED';
+  return normalizeStage(task.stage);
 }
 
 interface AgentCardProps {
@@ -326,8 +342,8 @@ function StageColumn({
   onTaskClick
 }: StageColumnProps) {
   const Icon = stage.icon;
-  // Fix: Use normalizeStage to robustly map task stages to columns
-  const stageTasks = tasks.filter(t => normalizeStage(t.stage) === stage.key);
+  // Fix: Use getColumnForTask to robustly map task stages/statuses to columns
+  const stageTasks = tasks.filter(t => getColumnForTask(t) === stage.key);
   const isDragOver = dragOverStage === stage.key;
 
   // Determine direction indicator
@@ -897,27 +913,44 @@ export function AgentTaskVisualizer() {
     e.preventDefault();
     setDragOverStage(null);
 
-    if (!draggedTask || draggedTask.stage === targetStage) {
+    if (!draggedTask) return;
+
+    const currentColumn = getColumnForTask(draggedTask);
+    if (currentColumn === targetStage) {
       setDraggedTask(null);
       return;
     }
 
-    const fromIdx = getStageIndex(draggedTask.stage);
+    const fromIdx = getStageIndex(currentColumn);
     const toIdx = getStageIndex(targetStage);
     const isForward = toIdx > fromIdx;
-    const fromLabel = STAGES[fromIdx]?.label || draggedTask.stage;
+    const fromLabel = STAGES[fromIdx]?.label || currentColumn;
     const toLabel = STAGES[toIdx]?.label || targetStage;
 
     setIsUpdating(true);
 
     try {
-      // Update the task stage in database
+      // Calculate updates
+      const updates: any = { updated_at: new Date().toISOString() };
+
+      if (targetStage === 'PENDING') {
+        updates.status = 'PENDING';
+      } else if (targetStage === 'CLAIMED') {
+        updates.status = 'CLAIMED';
+      } else {
+        // Moving to a stage column
+        updates.stage = targetStage as 'DISCUSS' | 'PLAN' | 'EXECUTE' | 'VERIFY' | 'INTEGRATE';
+
+        // If coming from PENDING/CLAIMED, set to IN_PROGRESS to activate task
+        if (['PENDING', 'CLAIMED'].includes(draggedTask.status)) {
+          updates.status = 'IN_PROGRESS';
+        }
+      }
+
+      // Update the task stage/status in database
       const { error: updateError } = await supabase
         .from('tasks')
-        .update({
-          stage: targetStage as 'DISCUSS' | 'PLAN' | 'EXECUTE' | 'VERIFY' | 'INTEGRATE',
-          updated_at: new Date().toISOString()
-        })
+        .update(updates)
         .eq('id', draggedTask.id);
 
       if (updateError) throw updateError;
