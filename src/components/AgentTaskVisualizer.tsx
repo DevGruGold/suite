@@ -8,29 +8,28 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from '@/hooks/use-toast';
 import { useIsMobile } from '@/hooks/useIsMobile';
 import {
-import {
-    MessageSquare,
-    FileText,
-    Play,
-    CheckCircle2,
-    GitMerge,
-    User,
-    AlertTriangle,
-    Clock,
-    ChevronRight,
-    RefreshCw,
-    Bot,
-    Cpu,
-    ArrowLeft,
-    ArrowRight,
-    GripVertical,
-    ExternalLink,
-    UserPlus,
-    Loader2,
-    Plus,
-    Circle,
-    UserCheck
-  } from 'lucide-react';
+  MessageSquare,
+  FileText,
+  Play,
+  CheckCircle2,
+  GitMerge,
+  User,
+  AlertTriangle,
+  Clock,
+  ChevronRight,
+  RefreshCw,
+  Bot,
+  Cpu,
+  ArrowLeft,
+  ArrowRight,
+  GripVertical,
+  ExternalLink,
+  UserPlus,
+  Loader2,
+  Plus,
+  Circle,
+  UserCheck
+} from 'lucide-react';
 import {
   Dialog,
   DialogContent,
