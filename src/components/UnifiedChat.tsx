@@ -135,6 +135,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     return localStorage.getItem('audioEnabled') === 'true';
   });
   const [audioInitialized, setAudioInitialized] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState(''); // New state for real-time feedback
   const [currentAIMethod, setCurrentAIMethod] = useState<string>('');
   const [currentTTSMethod, setCurrentTTSMethod] = useState<string>('');
 
@@ -784,9 +785,12 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
       try {
         const result = await simplifiedVoiceService.startListening((result) => {
-          if (result.isFinal) {
+          // Handle interim results for real-time feedback
+          if (!result.isFinal) {
+            setInterimTranscript(result.text);
+          } else {
+            setInterimTranscript(''); // Clear interim
             handleVoiceInput(result.text);
-            // Optional: for single-turn, you might stop here. For chat, continuous is good.
           }
         }, (error) => {
           console.error("Voice error:", error);
@@ -1856,6 +1860,13 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             >
               <Paperclip className="h-4 w-4" />
             </Button>
+
+            {/* Interim Transcript Feedback */}
+            {interimTranscript && (
+              <div className="absolute bottom-full left-0 right-0 p-2 bg-background/80 backdrop-blur-sm text-sm text-muted-foreground animate-pulse border-t border-border">
+                Listening: "{interimTranscript}..."
+              </div>
+            )}
 
             {/* Microphone Button */}
             <Button
