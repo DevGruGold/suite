@@ -50,32 +50,37 @@ export class MLCLLMService {
   private static progressListeners: Array<(progress: MLCLoadingProgress) => void> = [];
 
   // Available models (ordered by preference)
-  // We prioritize SmolLM2 (Text) and SmolVLM (Vision)
-  // Note: VLM requires significantly more resources. We default to text unless vision is needed.
+  // We prioritize Llama-3.2-3B for text speed, but offer Phi-3.5-vision for multimodal analysis.
   private static MODELS = [
     {
-      id: "HuggingFaceTB/SmolLM2-1.7B-Instruct-q4f16_1-MLC",
-      size: "1.1GB",
-      desc: "SmolLM2 (Text Only) - Fast & Efficient",
+      id: "mlc-ai/Llama-3.2-3B-Instruct-q4f16_1-MLC",
+      size: "2.3GB",
+      desc: "Llama 3.2 3B (Fast Text)",
       type: "text"
     },
     {
-      id: "HuggingFaceTB/SmolVLM-Instruct-q4f16_1-MLC", // Hypothetical ID, falls back if not found
-      size: "2.2GB",
-      desc: "SmolVLM (Vision Supported)",
+      id: "mlc-ai/Phi-3.5-vision-instruct-q4f16_1-MLC",
+      size: "2.4GB",
+      desc: "Phi-3.5 Vision (Image Analysis)",
       type: "vlm"
     },
     {
-      id: "Phi-3-mini-4k-instruct-q4f16_1-MLC",
-      size: "2.3GB",
-      desc: "Phi-3 Mini (Fallback)",
+      id: "mlc-ai/Qwen2-VL-7B-Instruct-q4f16_1-MLC",
+      size: "4.1GB",
+      desc: "Qwen2-VL 7B (High-Res Vision)",
+      type: "vlm"
+    },
+    {
+      id: "HuggingFaceTB/SmolLM2-1.7B-Instruct-q4f16_1-MLC",
+      size: "1.1GB",
+      desc: "SmolLM2 (Fallback)",
       type: "text"
     }
   ];
 
   private static TIMEOUTS = {
-    INIT_START: 30 * 1000, // 30 seconds to start initialization
-    FULL_DOWNLOAD: 10 * 60 * 1000, // 10 minutes for full download (increased for larger models)
+    INIT_START: 60 * 1000,
+    FULL_DOWNLOAD: 20 * 60 * 1000, // 20 minutes for vision models
   };
 
   // Update progress and notify listeners
@@ -106,10 +111,19 @@ export class MLCLLMService {
   private static async initializeMLCEngine(mode: 'text' | 'vision' = 'text'): Promise<void> {
     if (this.isInitializing) return;
 
-    // If ready and mode matches (or we have text and only need text), return
-    // If we need vision but only have text loaded, we might need to reload/swap (advanced)
-    // For now, we'll keep it simple: if *any* model is ready, we use it, but warn if capabilities mismatch.
-    if (this.isReady && this.engine) return;
+    // Check if current engine matches the requested mode
+    // If we have a text engine but need vision, we MUST reload unless the text engine happens to be a VLM
+    if (this.isReady && this.engine) {
+      const currentModelId = this.progressState.currentModel || '';
+      const isCurrentVLM = currentModelId.toLowerCase().includes('vision') || currentModelId.toLowerCase().includes('vl');
+
+      if (mode === 'text') return; // Any engine is fine for text
+      if (mode === 'vision' && isCurrentVLM) return; // Already have a VLM
+
+      console.log('🔄 Switching engine to Vision mode...');
+      // If we need vision but have a text model, we need to re-init (which WebLLM handles by loading new weights)
+      // However, we should be careful about memory. unique WebLLM engine instance usually handles switching.
+    }
 
     this.isInitializing = true;
     this.updateProgress({ status: 'checking_webgpu', progress: 0, message: 'Checking WebGPU support...' });
@@ -118,34 +132,39 @@ export class MLCLLMService {
       console.log(`🏢 Initializing Office Clerk (MLC-LLM) in ${mode} mode...`);
 
       // Check for WebGPU support
-      const webGPUSupported = !!(navigator as any).gpu;
+      const webGPUSupported = await this.detectWebGPU();
       this.updateProgress({ webGPUSupported });
 
       if (!webGPUSupported) {
-        this.updateProgress({
-          status: 'failed',
-          progress: 0,
-          message: 'WebGPU not supported in this browser',
-          error: 'WebGPU required for Office Clerk. Try Chrome/Edge 113+.'
-        });
         throw new Error('WebGPU not supported - MLC-LLM requires WebGPU');
       }
 
-      // Select models based on mode
-      // If vision is requested, try VLM first. Otherwise try Text first.
-      const candidateModels = mode === 'vision'
-        ? [...this.MODELS.filter(m => m.type === 'vlm'), ...this.MODELS.filter(m => m.type === 'text')]
+      // precise Model Selection Strategy
+      // 1. If Vision needed: Filter for VLM types ONLY.
+      // 2. If Text needed: Use ALL models, but prioritize 'text' types for speed/size.
+      let candidateModels = mode === 'vision'
+        ? this.MODELS.filter(m => m.type === 'vlm')
         : this.MODELS;
 
+      // Ensure we have candidates. If vision finds none (e.g. all removed), fallback to text and warn later
+      if (candidateModels.length === 0) {
+        console.warn('⚠️ No VLM candidates found configuration. Falling back to text models.');
+        candidateModels = this.MODELS;
+      }
+
       let lastError: Error | null = null;
+      let success = false;
 
       for (let i = 0; i < candidateModels.length; i++) {
         const model = candidateModels[i];
 
+        // Skip if we already failed this model in this session to save time?
+        // For now, try fresh.
+
         try {
           this.updateProgress({
             status: 'downloading',
-            progress: 5,
+            progress: 1,
             message: `Loading ${model.desc} (${model.size})...`,
             currentModel: model.id
           });
@@ -161,65 +180,55 @@ export class MLCLLMService {
           // Initialize engine with progress callback
           const enginePromise = CreateMLCEngine(model.id, {
             initProgressCallback: (progressReport) => {
-              // progressReport has: progress (0-1), timeElapsed, text
               const percent = Math.round(progressReport.progress * 100);
               this.updateProgress({
                 status: 'downloading',
-                progress: Math.min(95, percent),
-                message: progressReport.text || `Downloading: ${percent}%`,
+                progress: Math.min(99, percent),
+                message: progressReport.text || `Loading: ${percent}%`,
                 currentModel: model.id
               });
-              console.log(`📥 ${model.id}: ${percent}% - ${progressReport.text}`);
             },
             appConfig: {
-              // Ensure we cache the model
               useIndexedDBCache: true,
-              model_list: [{
-                model: "https://huggingface.co/" + model.id,
-                model_id: model.id,
-                model_lib: "https://raw.githubusercontent.com/mlc-ai/binary-mlc-llm-libs/main/web-llm-models/latest/" + model.id.replace('MLC', 'wasm') + ".wasm",
-              }]
+              // We rely on the implicit config from the mlc-ai CDN or HuggingFace
+              // Specifying 'model' explicitly for custom paths if needed
             }
           });
 
-          // Race between download and timeout
           this.engine = await Promise.race([enginePromise, timeoutPromise]);
-
-          this.updateProgress({ status: 'ready', progress: 100, message: `Office Clerk ready (${model.desc})` });
           this.isReady = true;
+          success = true;
+
+          // If we successfully loaded a model, update state and break loop
+          this.updateProgress({ status: 'ready', progress: 100, message: `Office Clerk ready (${model.desc})` });
           console.log(`✅ Office Clerk ready with ${model.id}`);
-          return; // Success!
+          break;
 
         } catch (modelError: any) {
+          console.warn(`❌ Failed to load ${model.id}:`, modelError.message);
           lastError = modelError;
-          console.warn(`❌ Failed to load ${model.id}: ${modelError.message}`);
 
-          // If not the last model, try next
-          if (i < candidateModels.length - 1) {
-            this.updateProgress({
-              status: 'downloading',
-              progress: 0,
-              message: `${model.desc} failed, trying alternative...`
-            });
-            continue;
+          // If this was a 401/Unauthorized (Gated model), explicitly log it
+          if (modelError.message.includes('401') || modelError.message.includes('Unauthorized')) {
+            console.warn(`🔒 Model ${model.id} appears to be gated or private.`);
           }
         }
       }
 
-      // All models failed
-      this.updateProgress({
-        status: 'failed',
-        progress: 0,
-        message: 'All models failed to load',
-        error: lastError?.message || 'Unknown error'
-      });
+      if (!success) {
+        // If we were trying to load Vision and failed ALL of them, try falling back to a text model
+        if (mode === 'vision') {
+          console.warn('⚠️ All Vision models failed. Falling back to Text-Only mode.');
+          this.isInitializing = false; // Reset flag to allow recursion
+          await this.initializeMLCEngine('text');
+          return;
+        }
 
-      this.engine = null;
-      this.isReady = false;
-      throw new Error(`Office Clerk unavailable: ${lastError?.message || 'All models failed'}`);
+        throw new Error(`Office Clerk unavailable: ${lastError?.message || 'All models failed'}`);
+      }
 
     } catch (error: any) {
-      console.error('❌ Office Clerk (MLC-LLM) initialization failed:', error);
+      console.error('❌ Office Clerk initialization failed:', error);
       this.updateProgress({
         status: 'failed',
         progress: 0,
@@ -231,6 +240,17 @@ export class MLCLLMService {
       throw error;
     } finally {
       this.isInitializing = false;
+    }
+  }
+
+  // Wrapper for WebGPU check
+  private static async detectWebGPU(): Promise<boolean> {
+    if (!(navigator as any).gpu) return false;
+    try {
+      const adapter = await (navigator as any).gpu.requestAdapter();
+      return !!adapter;
+    } catch (e) {
+      return false;
     }
   }
 
@@ -422,7 +442,6 @@ Respond in a helpful, technically accurate manner while embodying XMRT's philoso
       // Handle multimodal content
       if (hasImages) {
         // Warning: This depends on the loaded model supporting vision.
-        // If we loaded SmolLM2 (Text Only), we must fallback gracefully.
         const currentModel = this.progressState.currentModel || '';
         const isVisionCapable = currentModel.toLowerCase().includes('vlm') || currentModel.toLowerCase().includes('vision');
 
@@ -435,16 +454,20 @@ Respond in a helpful, technically accurate manner while embodying XMRT's philoso
           context.images.forEach(base64 => {
             userContent.push({
               type: "image_url",
-              image_url: { url: base64 } // Check if WebLLM expects base64 as data url
+              image_url: { url: base64 }
             });
           });
 
           messages.push({ role: "user", content: userContent });
         } else {
           // Fallback for Text-Only models receiving images
+          console.warn('⚠️ Office Clerk: Images attached but current model is text-only. Sending text fallback.');
           messages.push({
             role: "user",
-            content: `[SYSTEM: User attached images but you are in OFFLINE TEXT-ONLY mode. inform the user you cannot see the images but can help with the text.]\n\n${userInput}`
+            content: `[SYSTEM: User attached images but you are in OFFLINE TEXT-ONLY mode (${currentModel}). 
+            INFORM the user that you cannot see the images because the Vision model needs a token, but you can still help with the text.]
+            
+            USER QUERY: ${userInput}`
           });
         }
       } else {

@@ -5417,3 +5417,67 @@ Deno.serve(async (req) => {
     );
   }
 });
+
+// ========== MULTIPART FORM DATA PARSER ==========
+async function parseMultipartFormData(req: Request): Promise<any> {
+  const formData = await req.formData();
+  const result: any = {};
+
+  // Iterate through all entries
+  for (const [key, value] of formData.entries()) {
+    // If it's a file, we need to handle it differently
+    if (value instanceof File) {
+      // Check if we already have an array for this key
+      if (!result.attachments) {
+        result.attachments = [];
+      }
+
+      // Convert File to a plain object with base64 content
+      const buffer = await value.arrayBuffer();
+      const bytes = new Uint8Array(buffer);
+      const binaryString = Array.from(bytes).map(byte => String.fromCharCode(byte)).join('');
+      const base64 = btoa(binaryString);
+
+      result.attachments.push({
+        filename: value.name,
+        mime_type: value.type,
+        size: value.size,
+        content: base64, // We store full content for analysis
+        url: null
+      });
+
+      // Special handling for images - add to images array for Vision models
+      if (value.type.startsWith('image/')) {
+        if (!result.images) {
+          result.images = [];
+        }
+        // Format as data URI for AI providers
+        result.images.push(`data:${value.type};base64,${base64}`);
+      }
+    } else {
+      // It's a string
+      if (key === 'messages' || key === 'organizationContext') {
+        try {
+          result[key] = JSON.parse(value as string);
+        } catch (e) {
+          result[key] = value;
+        }
+      } else {
+        result[key] = value;
+      }
+    }
+  }
+
+  // Ensure defaults
+  if (!result.messages) result.messages = [];
+
+  // If userQuery was passed as a simple string, format it as a message
+  if (result.userQuery && result.messages.length === 0) {
+    result.messages.push({
+      role: 'user',
+      content: result.userQuery
+    });
+  }
+
+  return result;
+}

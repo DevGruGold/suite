@@ -11,7 +11,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 
 // Configuration for Offline AI
 const OFFLINE_AI_URL = Deno.env.get('OFFLINE_AI_URL');
-const OFFLINE_MODEL_NAME = "SmolVLM-500M-Instruct (Offline)";
+const OFFLINE_MODEL_NAME = "Llama 3.2 3B (Offline)";
 
 /**
  * Call the Offline AI Endpoint (e.g., local llama.cpp server)

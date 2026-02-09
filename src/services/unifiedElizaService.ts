@@ -259,6 +259,13 @@ export class UnifiedElizaService {
 
       console.log('📋 Safe input length:', safeInput.length);
 
+      // VISION/ATTACHMENT OVERRIDE:
+      // If we have attachments or vision mode, we MUST try the backend first.
+      // The backend (Gemini/OpenAI) has far superior vision capabilities.
+      if (safeContext.inputMode === 'vision' || (safeContext.attachments && safeContext.attachments.length > 0)) {
+        console.log('👁️ Vision/Attachment detected - Prioritizing Backend AI Gateway');
+      }
+
       // Executive council mode (if requested)
       if (safeContext.councilMode) {
         console.log('🏛️ Trying executive council...');
