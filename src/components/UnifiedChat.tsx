@@ -21,7 +21,7 @@ import { ImageResponsePreview, extractImagesFromResponse, isLargeResponse, sanit
 import { GovernanceStatusBadge } from './GovernanceStatusBadge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './ui/tooltip';
 import { enhancedTTS } from '@/services/enhancedTTSService';
-import { simplifiedVoiceService } from '@/services/simplifiedVoiceService';
+import { SimplifiedVoiceService as simplifiedVoiceService } from '@/services/simplifiedVoiceService';
 import { speechLearningService } from '@/services/speechLearningService';
 import { supabase } from '@/integrations/supabase/client';
 // Toast removed for lighter UI
