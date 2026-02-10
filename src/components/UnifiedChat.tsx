@@ -189,13 +189,14 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     if (files.length === 0) return;
 
     const MAX_FILES = 5;
-    const MAX_SIZE = 10 * 1024 * 1024; // 10MB
+    const MAX_SIZE = 6 * 1024 * 1024; // 6MB (Safety limit for Edge Functions)
 
     const newAttachments: AttachmentFile[] = [];
 
     for (const file of files.slice(0, MAX_FILES - attachments.length)) {
       if (file.size > MAX_SIZE) {
-        console.warn(`File ${file.name} exceeds 10MB limit`);
+        console.warn(`File ${file.name} exceeds 6MB limit`);
+        // Optional: Add a toast notification here
         continue;
       }
 
@@ -1087,15 +1088,26 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     // ✅ Capture video frame in multimodal mode - Removed Hume support
     let hasLiveVideo = false;
 
+    // 🖼️ Convert attachments to Base64 for immediate UI display
+    const base64Attachments: string[] = [];
+
+    // Process images for preview
+    for (const attachment of attachments) {
+      if (attachment.type === 'image') {
+        // We can use the object URL directly for preview or convert to base64
+        // Since the message component expects strings (usually URLs or base64), 
+        // using the Blob URL is fastest and most memory efficient for local preview
+        base64Attachments.push(attachment.url);
+      }
+    }
+
     const userMessage: UnifiedMessage = {
       id: `user-${Date.now()}`,
       content: messageText,
       sender: 'user',
       timestamp: new Date(),
-      // Display first image from attachments if any (for UI feedback)
-      // We can't easily preview non-images here without logic, but this is just for local display state
-      // We'll skip adding 'attachments' prop to local message for now as it expects base64 structure 
-      // or we update the type. For now, we trust the persistence layer will handle it.
+      // ✅ FIX: Add attachments to local message state for immediate display
+      attachments: base64Attachments.length > 0 ? { images: base64Attachments } : undefined
     };
 
     setMessages(prev => [...prev, userMessage]);
