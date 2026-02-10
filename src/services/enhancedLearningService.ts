@@ -33,7 +33,7 @@ export interface LearningAnalytics {
 class EnhancedLearningService {
   private static instance: EnhancedLearningService;
 
-  private constructor() {}
+  private constructor() { }
 
   static getInstance(): EnhancedLearningService {
     if (!EnhancedLearningService.instance) {
@@ -49,7 +49,9 @@ class EnhancedLearningService {
           action: 'learn',
           experience: {
             ...experience,
-            timestamp: experience.timestamp || new Date().toISOString()
+            timestamp: (experience.timestamp && experience.timestamp !== 'undefined')
+              ? experience.timestamp
+              : new Date().toISOString()
           }
         }
       });

@@ -32,7 +32,7 @@ export class LearningPatternsService {
         .from('learning_patterns')
         .select('*')
         .eq('pattern_type', patternType)
-        .single();
+        .maybeSingle();
 
       if (existing) {
         // Update existing pattern
@@ -53,7 +53,8 @@ export class LearningPatternsService {
             pattern_type: patternType,
             pattern_data: patternData,
             confidence_score: confidenceScore,
-            usage_count: 1
+            usage_count: 1,
+            last_used: new Date().toISOString()
           });
       }
 
