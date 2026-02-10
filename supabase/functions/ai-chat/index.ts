@@ -820,7 +820,7 @@ class AttachmentAnalyzer {
   static readonly SUPPORTED_EXTENSIONS = [
     '.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.csv', '.html', '.htm',
     '.pdf', '.doc', '.docx', '.rtf',
-    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg',
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.tif',
     '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.cs',
     '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
     '.sol', '.vy',
@@ -838,7 +838,7 @@ class AttachmentAnalyzer {
   static getFileType(filename: string): string {
     const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
 
-    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(extension)) {
+    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.tif'].includes(extension)) {
       return 'image';
     } else if (['.pdf', '.doc', '.docx', '.rtf'].includes(extension)) {
       return 'document';
@@ -2927,7 +2927,33 @@ class EnhancedConversationManager {
             }
           }
           else if (tool.name === 'analyze_attachment') {
-            context += `   Analyzed ${tool.result.total_attachments || 0} attachments\n`;
+            const analyses = tool.result.analyses || [];
+            context += `   Analyzed ${tool.result.total_attachments || 0} attachments:\n`;
+
+            analyses.forEach((analysis: any) => {
+              const status = analysis.success ? '✅' : '❌';
+              context += `   - ${status} [${analysis.file_type.toUpperCase()}] ${analysis.filename}: `;
+
+              if (analysis.success) {
+                if (analysis.file_type === 'image') {
+                  context += `Available for vision analysis\n`;
+                } else {
+                  context += `\n`;
+                  if (analysis.key_findings && analysis.key_findings.length > 0) {
+                    context += `     Key Findings: ${analysis.key_findings.join(', ')}\n`;
+                  }
+                  if (analysis.content_preview) {
+                    // Truncate preview if too long to avoid token limit issues
+                    const preview = analysis.content_preview.length > 2000
+                      ? analysis.content_preview.substring(0, 2000) + '... (truncated)'
+                      : analysis.content_preview;
+                    context += `     Content Preview: \n"""\n${preview}\n"""\n`;
+                  }
+                }
+              } else {
+                context += `Error: ${analysis.error}\n`;
+              }
+            });
           }
           else if (tool.name === 'google_gmail') {
             context += `   Email action: ${tool.result.action || 'sent'}\n`;
