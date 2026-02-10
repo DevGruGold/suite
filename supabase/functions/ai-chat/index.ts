@@ -2016,59 +2016,58 @@ async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   return [];
 }
 
-async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
-  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-  if (!DEEPSEEK_API_KEY) return null;
+const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+if (!DEEPSEEK_API_KEY) return null;
 
-  console.log('🔄 Trying DeepSeek fallback...');
+console.log('🔄 Trying DeepSeek fallback...');
 
-  const enhancedMessages = messages.map(m =>
-    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
-  );
+const enhancedMessages = messages.map(m =>
+  m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+);
 
-  const forceTools = needsDataRetrieval(messages);
-  console.log(`📊 DeepSeek - Data retrieval needed: ${forceTools}`);
+const forceTools = needsDataRetrieval(messages);
+console.log(`📊 DeepSeek - Data retrieval needed: ${forceTools}`);
 
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 30000);
+try {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${this.config.deepseek.apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'deepseek-chat',
-        messages: enhancedMessages,
-        tools,
-        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
-        temperature: 0.7,
-        max_tokens: 8000,
-      }),
-      signal: controller.signal
-    });
+  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'deepseek-chat',
+      messages: enhancedMessages,
+      tools,
+      tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
+      temperature: 0.7,
+      max_tokens: 8000,
+    }),
+    signal: controller.signal
+  });
 
-    clearTimeout(timeoutId);
+  clearTimeout(timeoutId);
 
-    if (response.ok) {
-      const data = await response.json();
-      console.log('✅ DeepSeek fallback successful');
-      return {
-        content: data.choices?.[0]?.message?.content || '',
-        tool_calls: data.choices?.[0]?.message?.tool_calls || [],
-        provider: 'deepseek',
-        model: 'deepseek-chat'
-      };
-    } else {
-      const errorText = await response.text();
-      console.warn('⚠️ DeepSeek API error:', response.status, errorText);
-    }
-  } catch (error) {
-    console.warn('⚠️ DeepSeek fallback failed:', error);
+  if (response.ok) {
+    const data = await response.json();
+    console.log('✅ DeepSeek fallback successful');
+    return {
+      content: data.choices?.[0]?.message?.content || '',
+      tool_calls: data.choices?.[0]?.message?.tool_calls || [],
+      provider: 'deepseek',
+      model: 'deepseek-chat'
+    };
+  } else {
+    const errorText = await response.text();
+    console.warn('⚠️ DeepSeek API error:', response.status, errorText);
   }
-  return null;
+} catch (error) {
+  console.warn('⚠️ DeepSeek fallback failed:', error);
+}
+return null;
 }
 
 async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
@@ -2091,7 +2090,7 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${this.config.kimi.apiKey}`,
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://xmrt.pro',
         'X-Title': 'XMRT Eliza'
@@ -3271,7 +3270,7 @@ class EnhancedProviderCascade {
 
       switch (provider) {
         case 'openai':
-          result = await this.callOpenAI(messages, tools, controller);
+          result = await this.callOpenAI(messages, tools, controller, images);
           break;
         case 'gemini':
           result = await this.callGemini(messages, tools, controller, images);
@@ -3376,8 +3375,29 @@ class EnhancedProviderCascade {
     }
   }
 
-  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+  private async callOpenAI(messages: any[], tools: any[], controller: AbortController, images?: string[]): Promise<CascadeResult> {
     const forceTools = needsDataRetrieval(messages);
+
+    // Filter messages to ensure text content is valid
+    const formattedMessages = messages.map(msg => {
+      // Check if this is the last user message and we have images
+      if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0) {
+        const content = [{ type: 'text', text: msg.content || 'Analyze this image.' }];
+
+        images.forEach(img => {
+          content.push({
+            type: 'image_url',
+            image_url: {
+              url: img, // Assuming img is data URI
+              detail: 'auto'
+            }
+          });
+        });
+
+        return { ...msg, content };
+      }
+      return msg;
+    });
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -3386,8 +3406,8 @@ class EnhancedProviderCascade {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: messages,
+        model: 'gpt-4o-mini', // gpt-4o-mini supports vision
+        messages: formattedMessages,
         temperature: 0.7,
         max_tokens: 4000,
         ...(tools.length > 0 && {
@@ -3437,8 +3457,8 @@ class EnhancedProviderCascade {
     }
 
     const geminiModels = [
-      'gemini-2.5-flash',
       'gemini-2.5-flash-image',
+      'gemini-2.5-flash',
       'gemini-2.0-flash-exp',
       'gemini-1.5-flash'
     ];
@@ -3462,8 +3482,9 @@ class EnhancedProviderCascade {
           } else if (msg.role === 'user') {
             const parts: any[] = [{ text: msg.content }];
 
+            // FIXED: Allow images for all flash/pro/image models
             if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
-              (model.includes('image') || model === 'gemini-1.5-flash')) {
+              (model.includes('image') || model.includes('flash') || model.includes('pro') || model.includes('exp'))) {
               for (const imageBase64 of images) {
                 const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
                 if (matches) {
@@ -4683,6 +4704,7 @@ class ToolManager {
 }
 
 // ========== MULTIPART PARSER ==========
+
 async function parseMultipartFormData(req: Request): Promise<any> {
   const contentType = req.headers.get('content-type') || '';
   if (!contentType.includes('multipart/form-data')) {
@@ -4693,6 +4715,7 @@ async function parseMultipartFormData(req: Request): Promise<any> {
     const formData = await req.formData();
     const body: any = {};
     const attachments: any[] = [];
+    const images: string[] = []; // Store images for Vision models
 
     // Log the keys found to debug
     const keys = Array.from(formData.keys());
@@ -4726,6 +4749,12 @@ async function parseMultipartFormData(req: Request): Promise<any> {
           mime_type: value.type,
           size: value.size
         });
+
+        // Special handling for images - add to images array for Vision models
+        if (value.type.startsWith('image/')) {
+          // Format as data URI for AI providers
+          images.push(`data:${value.type};base64,${base64}`);
+        }
       } else {
         // Text fields
         let parsedValue = value;
@@ -4745,6 +4774,23 @@ async function parseMultipartFormData(req: Request): Promise<any> {
     // Add attachments to body
     if (attachments.length > 0) {
       body.attachments = attachments;
+    }
+
+    // Add images to body (merging with existing images if any)
+    if (images.length > 0) {
+      if (body.images && Array.isArray(body.images)) {
+        body.images = [...body.images, ...images];
+      } else {
+        body.images = images;
+      }
+    }
+
+    // Ensure userQuery is handled if passed independently
+    if (body.userQuery && (!body.messages || body.messages.length === 0)) {
+      body.messages = [{
+        role: 'user',
+        content: body.userQuery
+      }];
     }
 
     return body;
@@ -5417,67 +5463,3 @@ Deno.serve(async (req) => {
     );
   }
 });
-
-// ========== MULTIPART FORM DATA PARSER ==========
-async function parseMultipartFormData(req: Request): Promise<any> {
-  const formData = await req.formData();
-  const result: any = {};
-
-  // Iterate through all entries
-  for (const [key, value] of formData.entries()) {
-    // If it's a file, we need to handle it differently
-    if (value instanceof File) {
-      // Check if we already have an array for this key
-      if (!result.attachments) {
-        result.attachments = [];
-      }
-
-      // Convert File to a plain object with base64 content
-      const buffer = await value.arrayBuffer();
-      const bytes = new Uint8Array(buffer);
-      const binaryString = Array.from(bytes).map(byte => String.fromCharCode(byte)).join('');
-      const base64 = btoa(binaryString);
-
-      result.attachments.push({
-        filename: value.name,
-        mime_type: value.type,
-        size: value.size,
-        content: base64, // We store full content for analysis
-        url: null
-      });
-
-      // Special handling for images - add to images array for Vision models
-      if (value.type.startsWith('image/')) {
-        if (!result.images) {
-          result.images = [];
-        }
-        // Format as data URI for AI providers
-        result.images.push(`data:${value.type};base64,${base64}`);
-      }
-    } else {
-      // It's a string
-      if (key === 'messages' || key === 'organizationContext') {
-        try {
-          result[key] = JSON.parse(value as string);
-        } catch (e) {
-          result[key] = value;
-        }
-      } else {
-        result[key] = value;
-      }
-    }
-  }
-
-  // Ensure defaults
-  if (!result.messages) result.messages = [];
-
-  // If userQuery was passed as a simple string, format it as a message
-  if (result.userQuery && result.messages.length === 0) {
-    result.messages.push({
-      role: 'user',
-      content: result.userQuery
-    });
-  }
-
-  return result;
-}
