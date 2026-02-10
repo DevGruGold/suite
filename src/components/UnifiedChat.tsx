@@ -1088,17 +1088,24 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     // ✅ Capture video frame in multimodal mode - Removed Hume support
     let hasLiveVideo = false;
 
-    // 🖼️ Convert attachments to Base64 for immediate UI display
+    // 🖼️ Convert attachments to Base64 for immediate UI display (Async ensure no race conditions with cleanup)
     const base64Attachments: string[] = [];
 
-    // Process images for preview
-    for (const attachment of attachments) {
-      if (attachment.type === 'image') {
-        // We can use the object URL directly for preview or convert to base64
-        // Since the message component expects strings (usually URLs or base64), 
-        // using the Blob URL is fastest and most memory efficient for local preview
-        base64Attachments.push(attachment.url);
+    try {
+      // Process images for preview
+      for (const attachment of attachments) {
+        if (attachment.type === 'image') {
+          // Convert to true Base64 Data URL to safely survive clearAttachments()
+          const base64 = await new Promise<string>((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => resolve(e.target?.result as string);
+            reader.readAsDataURL(attachment.file);
+          });
+          base64Attachments.push(base64);
+        }
       }
+    } catch (e) {
+      console.error('Error processing attachment previews:', e);
     }
 
     const userMessage: UnifiedMessage = {
@@ -1110,7 +1117,16 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       attachments: base64Attachments.length > 0 ? { images: base64Attachments } : undefined
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    console.log('📝 Adding user message to state:', userMessage);
+
+    // Use functional update to ensure we have the latest state and log the result
+    setMessages(prev => {
+      console.log('Previous messages count:', prev.length);
+      const newMessages = [...prev, userMessage];
+      console.log('New messages count:', newMessages.length);
+      return newMessages;
+    });
+
     setTextInput('');
     clearAttachments();
     setIsProcessing(true);
