@@ -5094,6 +5094,50 @@ Deno.serve(async (req) => {
     const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
 
+    // ========== ATTACHMENT PERSISTENCE & AWARENESS ==========
+    if (attachments && attachments.length > 0) {
+      console.log(`💾 Persisting ${attachments.length} attachments for session ${sessionId}`);
+
+      const persistPromises = attachments.map(async (att: any) => {
+        const { error: dbError } = await supabase
+          .from(DATABASE_CONFIG.tables.attachment_analysis)
+          .insert({
+            session_id: sessionId,
+            filename: att.filename,
+            file_type: att.contentType?.startsWith('image/') ? 'image' : 'text',
+            content_preview: att.content ? (att.content.length > 200 ? att.content.substring(0, 200) + '...' : att.content) : '[Binary Data]',
+            metadata: {
+              size: att.size,
+              mime_type: att.contentType,
+              uploaded_by: user_id || 'anonymous',
+              request_id: requestId
+            }
+          });
+
+        if (dbError) {
+          console.error(`❌ DB Save Error (${att.filename}):`, dbError);
+        } else {
+          console.log(`✅ Saved attachment metadata: ${att.filename}`);
+        }
+      });
+
+      // Don't await strictly if we want speed, but better to await to ensure DB is consistent
+      await Promise.allSettled(persistPromises);
+
+      // Inject awareness text into the last user message
+      const fileList = attachments.map((a: any) => `[File: ${a.filename} (${a.contentType})]`).join(', ');
+      const notification = `\n\n[SYSTEM CHECK: User uploaded ${attachments.length} file(s): ${fileList}. The file content is attached to this message. Please analyze it if relevant.]`;
+
+      const lastMsg = messages[messages.length - 1];
+      if (lastMsg && lastMsg.role === 'user') {
+        lastMsg.content += notification;
+        console.log(`🔔 Injected attachment notification into last message`);
+      } else if (messages.length === 0 && userQuery) {
+        // If we only have userQuery, we push a new message to the array so it's included
+        messages.push({ role: 'user', content: userQuery + notification });
+      }
+    }
+
     // ========== AGENT DELEGATION ROUTING ==========
     // Intercept requests for specific Named Agents and route to Specialists
     if (DELEGATION_MAP[executive_name]) {
