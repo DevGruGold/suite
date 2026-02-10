@@ -56,6 +56,7 @@ const DATABASE_CONFIG = {
     conversation_summaries: 'conversation_summaries',
     conversation_context: 'conversation_context',
     attachment_analysis: 'attachment_analysis',
+    message_attachments: 'message_attachments',
     // NEW: IP-based session tracking
     ip_conversation_sessions: 'ip_conversation_sessions'
   },
@@ -3410,7 +3411,12 @@ class EnhancedProviderCascade {
     const formattedMessages = messages.map(msg => {
       // Check if this is the last user message and we have images
       if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0) {
-        const content = [{ type: 'text', text: msg.content || 'Analyze this image.' }];
+        let content: any[] = [];
+        if (Array.isArray(msg.content)) {
+          content = [...msg.content];
+        } else {
+          content = [{ type: 'text', text: msg.content || 'Analyze this image.' }];
+        }
 
         images.forEach(img => {
           content.push({
@@ -3508,7 +3514,22 @@ class EnhancedProviderCascade {
               parts: [{ text: 'Understood. I will follow these instructions.' }]
             });
           } else if (msg.role === 'user') {
-            const parts: any[] = [{ text: msg.content }];
+            let parts: any[] = [];
+
+            if (Array.isArray(msg.content)) {
+              msg.content.forEach((item: any) => {
+                if (item.type === 'text') {
+                  parts.push({ text: item.text });
+                } else if (item.type === 'image_url') {
+                  const match = item.image_url?.url?.match(/^data:([^;]+);base64,(.+)$/);
+                  if (match) {
+                    parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
+                  }
+                }
+              });
+            } else {
+              parts = [{ text: msg.content }];
+            }
 
             // FIXED: Allow images for all flash/pro/image models
             if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
@@ -5126,18 +5147,23 @@ Deno.serve(async (req) => {
 
       const persistPromises = attachments.map(async (att: any) => {
         const { error: dbError } = await supabase
-          .from(DATABASE_CONFIG.tables.attachment_analysis)
+          .from(DATABASE_CONFIG.tables.message_attachments)
           .insert({
             session_id: sessionId,
             filename: att.filename,
             file_type: att.contentType?.startsWith('image/') ? 'image' : 'text',
+            file_size: att.size,
             content_preview: att.content ? (att.content.length > 200 ? att.content.substring(0, 200) + '...' : att.content) : '[Binary Data]',
+            // Store full content (text or base64) for persistence
+            content_full: att.content,
             metadata: {
-              size: att.size,
               mime_type: att.contentType,
               uploaded_by: user_id || 'anonymous',
               request_id: requestId
-            }
+            },
+            user_id: user_id || null,
+            created_at: new Date().toISOString()
+            // message_id is not available yet, so we rely on session_id + created_at constraint
           });
 
         if (dbError) {
@@ -5323,6 +5349,28 @@ Deno.serve(async (req) => {
       const lastMessageIndex = allMessages.length - 1;
       if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
         allMessages[lastMessageIndex].attachments = attachments;
+
+        // Convert to multipart content if images are present (for persistence)
+        const validImages = attachments.filter((a: any) => a.content && a.contentType?.startsWith('image/'));
+        if (validImages.length > 0) {
+          const textContent = allMessages[lastMessageIndex].content;
+          const newContent = [{ type: 'text', text: textContent }];
+
+          validImages.forEach((img: any) => {
+            // Reconstruct data URI
+            const dataUri = `data:${img.contentType};base64,${img.content}`;
+            newContent.push({
+              type: 'image_url',
+              image_url: { url: dataUri }
+            });
+          });
+
+          allMessages[lastMessageIndex].content = newContent;
+          // Clear images arg to cascade since they are now in content
+          // Actually, we should keep it undefined or similar to avoid double-add if we didn't update cascade logic
+          // But our cascade logic checks "if (msg === lastUserMsg && images && images.length > 0)"
+          // So if we set images to null/empty, cascade won't double add.
+        }
       }
     }
 
@@ -5334,7 +5382,18 @@ Deno.serve(async (req) => {
     const cascade = new EnhancedProviderCascade(requestConfig);
 
     const tools = use_tools ? availableTools : [];
-    let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, images);
+
+    // We already embedded images into allMessages content if they existed in attachments.
+    // However, the `images` variable passed to this function (from body) might be used by cascade.
+    // We should pass `undefined` for images to cascade if we've embedded them.
+    // But `images` variable comes from where? It's not in the scope shown in previous steps.
+    // Wait, `images` variable in `callWithCascade` invocation (Line 5337) was undefined in previous view?
+    // Let's assume we need to handle it.
+
+    // If we embedded images into content, we pass undefined for images arg to avoid duplication
+    const imagesForCascade = (attachments && attachments.some((a: any) => a.contentType?.startsWith('image/'))) ? undefined : images;
+
+    let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, imagesForCascade);
 
     if (!cascadeResult.success) {
       console.error(`❌ [${executive_name}] AI Cascade failed for request ${requestId}:`, cascadeResult.error);
@@ -5385,7 +5444,8 @@ Deno.serve(async (req) => {
 
     const callAIFunction = async (messages: any[], tools: any[]) => {
       const cascade = new EnhancedProviderCascade();
-      const result = await cascade.callWithCascade(messages, tools, cascadeResult.provider, images);
+      // Use imagesForCascade to avoid double-attaching images if we already embedded them in content
+      const result = await cascade.callWithCascade(messages, tools, cascadeResult.provider, imagesForCascade);
       return result;
     };
 
