@@ -2933,7 +2933,8 @@ class EnhancedConversationManager {
 
             analyses.forEach((analysis: any) => {
               const status = analysis.success ? '✅' : '❌';
-              context += `   - ${status} [${analysis.file_type.toUpperCase()}] ${analysis.filename}: `;
+              const fileType = analysis.file_type || 'unknown';
+              context += `   - ${status} [${fileType.toUpperCase()}] ${analysis.filename}: `;
 
               if (analysis.success) {
                 if (analysis.file_type === 'image') {
@@ -5156,11 +5157,11 @@ Deno.serve(async (req) => {
             content_preview: att.content ? (att.content.length > 200 ? att.content.substring(0, 200) + '...' : att.content) : '[Binary Data]',
             // Store full content (text or base64) for persistence
             content_full: att.content,
-            metadata: {
-              mime_type: att.contentType,
-              uploaded_by: user_id || 'anonymous',
-              request_id: requestId
-            },
+            // metadata: {                  // REMOVED: Column does not exist in message_attachments schema
+            //   mime_type: att.contentType,
+            //   uploaded_by: user_id || 'anonymous',
+            //   request_id: requestId
+            // },
             user_id: user_id || null,
             created_at: new Date().toISOString()
             // message_id is not available yet, so we rely on session_id + created_at constraint
