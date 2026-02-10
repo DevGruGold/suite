@@ -20,6 +20,12 @@ export class LearningPatternsService {
     return LearningPatternsService.instance;
   }
 
+  // Helper to safely convert dates/strings to ISO strings
+  private toIso(d: unknown): string | null {
+    if (d instanceof Date && !isNaN(+d)) return d.toISOString();
+    return null; // DB default will handle now() if null, or explicit null if allowed
+  }
+
   // Record a learning pattern
   public async recordPattern(
     patternType: string,
@@ -34,15 +40,17 @@ export class LearningPatternsService {
         .eq('pattern_type', patternType)
         .maybeSingle();
 
+      const nowIso = this.toIso(new Date());
+
       if (existing) {
         // Update existing pattern
         await supabase
           .from('learning_patterns')
           .update({
             pattern_data: patternData,
-            usage_count: existing.usage_count + 1,
-            confidence_score: Math.min(existing.confidence_score + 0.05, 1.0),
-            last_used: new Date().toISOString()
+            usage_count: (existing.usage_count || 0) + 1,
+            confidence_score: Math.min((existing.confidence_score || 0) + 0.05, 1.0),
+            last_used: nowIso || undefined // Let DB default or existing value persist if somehow null
           })
           .eq('id', existing.id);
       } else {
@@ -54,7 +62,7 @@ export class LearningPatternsService {
             pattern_data: patternData,
             confidence_score: confidenceScore,
             usage_count: 1,
-            last_used: new Date().toISOString()
+            last_used: nowIso || undefined
           });
       }
 

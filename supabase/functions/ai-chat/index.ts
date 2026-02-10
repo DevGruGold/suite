@@ -2016,58 +2016,60 @@ async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   return [];
 }
 
-const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
-if (!DEEPSEEK_API_KEY) return null;
 
-console.log('🔄 Trying DeepSeek fallback...');
+async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
+  const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
+  if (!DEEPSEEK_API_KEY) return null;
 
-const enhancedMessages = messages.map(m =>
-  m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
-);
+  console.log('🔄 Trying DeepSeek fallback...');
 
-const forceTools = needsDataRetrieval(messages);
-console.log(`📊 DeepSeek - Data retrieval needed: ${forceTools}`);
+  const enhancedMessages = messages.map(m =>
+    m.role === 'system' ? { ...m, content: TOOL_CALLING_MANDATE + m.content } : m
+  );
 
-try {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 30000);
+  const forceTools = needsDataRetrieval(messages);
+  console.log(`📊 DeepSeek - Data retrieval needed: ${forceTools}`);
 
-  const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({
-      model: 'deepseek-chat',
-      messages: enhancedMessages,
-      tools,
-      tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
-      temperature: 0.7,
-      max_tokens: 8000,
-    }),
-    signal: controller.signal
-  });
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-  clearTimeout(timeoutId);
+    const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        model: 'deepseek-chat',
+        messages: enhancedMessages,
+        tools,
+        tool_choice: tools ? (forceTools ? 'required' : 'auto') : undefined,
+        temperature: 0.7,
+        max_tokens: 8000,
+      }),
+      signal: controller.signal
+    });
 
-  if (response.ok) {
-    const data = await response.json();
-    console.log('✅ DeepSeek fallback successful');
-    return {
-      content: data.choices?.[0]?.message?.content || '',
-      tool_calls: data.choices?.[0]?.message?.tool_calls || [],
-      provider: 'deepseek',
-      model: 'deepseek-chat'
-    };
-  } else {
-    const errorText = await response.text();
-    console.warn('⚠️ DeepSeek API error:', response.status, errorText);
+    clearTimeout(timeoutId);
+
+    if (response.ok) {
+      const data = await response.json();
+      console.log('✅ DeepSeek fallback successful');
+      return {
+        content: data.choices?.[0]?.message?.content || '',
+        tool_calls: data.choices?.[0]?.message?.tool_calls || [],
+        provider: 'deepseek',
+        model: 'deepseek-chat'
+      };
+    } else {
+      const errorText = await response.text();
+      console.warn('⚠️ DeepSeek API error:', response.status, errorText);
+    }
+  } catch (error) {
+    console.warn('⚠️ DeepSeek fallback failed:', error);
   }
-} catch (error) {
-  console.warn('⚠️ DeepSeek fallback failed:', error);
-}
-return null;
+  return null;
 }
 
 async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
@@ -4552,7 +4554,11 @@ function generateDynamicTools() {
               description: 'The data payload for the action (see example_use)'
             },
             // Allow top-level params for tools that don't follow action/data pattern
-            messages: { type: 'array', description: 'For chat tools' },
+            messages: {
+              type: 'array',
+              description: 'For chat tools',
+              items: { type: 'object' }
+            },
             model: { type: 'string', description: 'Model name' },
             prompt: { type: 'string', description: 'For generation tools' }
             // We could add more specific fields but this covers 90%

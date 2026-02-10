@@ -215,6 +215,18 @@ if __name__ == "__main__":
     process_learning_request(request_data)
 `;
 
+/**
+ * Helper to safely convert dates/strings to ISO strings
+ */
+function toIso(d: unknown): string | null {
+  if (d instanceof Date && !isNaN(+d)) return d.toISOString();
+  if (typeof d === 'string') {
+    const parsed = new Date(d);
+    if (!isNaN(+parsed)) return parsed.toISOString();
+  }
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -257,7 +269,8 @@ serve(async (req) => {
         pattern_type: 'enhanced_ml',
         pattern_data: pythonResult,
         confidence_score: experience?.confidence || 0.5,
-        usage_count: 1
+        usage_count: 1,
+        last_used: toIso(new Date())
       });
     }
 

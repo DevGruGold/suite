@@ -289,7 +289,17 @@ serve(async (req) => {
         const extractedKnowledge = [];
         for (const task of tasksToProcess) {
           const learnings = { task_id: task.id, title: task.title, category: task.category, resolution: task.resolution || task.result, duration_hours: task.metadata?.actual_duration_hours, template_used: task.metadata?.created_from_template, skills_used: task.metadata?.required_skills || [], blockers_encountered: task.blocked_reason ? [task.blocked_reason] : [], stage_progression: task.stage, success: task.status === 'COMPLETED' };
-          await supabase.from('learning_patterns').insert({ learning_type: 'task_completion', context: JSON.stringify({ task_category: task.category, template: task.metadata?.created_from_template, skills: task.metadata?.required_skills }), pattern_data: learnings, confidence: task.status === 'COMPLETED' ? 0.9 : 0.5, application_count: 1, last_applied: new Date().toISOString() });
+
+          await supabase.from('learning_patterns').insert({
+            pattern_type: 'task_completion',
+            pattern_data: {
+              ...learnings,
+              context: { task_category: task.category, template: task.metadata?.created_from_template, skills: task.metadata?.required_skills }
+            },
+            confidence_score: task.status === 'COMPLETED' ? 0.9 : 0.5,
+            usage_count: 1,
+            last_used: toIso(new Date())
+          });
           await supabase.from('tasks').update({ metadata: { ...task.metadata, knowledge_extracted: true, extracted_at: new Date().toISOString() } }).eq('id', task.id);
           extractedKnowledge.push(learnings);
         }
@@ -534,6 +544,20 @@ serve(async (req) => {
 // ====================================================================
 // HELPER FUNCTIONS
 // ====================================================================
+// ====================================================================
+
+/**
+ * Helper to safely convert dates/strings to ISO strings
+ */
+function toIso(d: unknown): string | null {
+  if (d instanceof Date && !isNaN(+d)) return d.toISOString();
+  if (typeof d === 'string') {
+    const parsed = new Date(d);
+    if (!isNaN(+parsed)) return parsed.toISOString();
+  }
+  return null;
+}
+
 
 /**
  * Intelligent agent matching using weighted scoring algorithm
