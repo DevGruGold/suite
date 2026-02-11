@@ -9,8 +9,8 @@ import { SEOHead } from "@/components/SEOHead";
 import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
-import { 
-  User, Wallet, GitCommit, Cpu, Battery, Coins, 
+import {
+  User, Wallet, GitCommit, Cpu, Battery, Coins,
   ExternalLink, Copy, CheckCircle, Edit2, Save, X,
   Shield, Zap
 } from "lucide-react";
@@ -19,6 +19,7 @@ import { MiningSessionsList } from "@/components/MiningSessionsList";
 import { ChargerSessionsList } from "@/components/ChargerSessionsList";
 import { ClaimedDevicesSection } from "@/components/ClaimedDevicesSection";
 import { OrganizationProfile } from "@/components/OrganizationProfile";
+import { GoogleCloudConnect } from "@/components/GoogleCloudConnect";
 
 interface UserEarnings {
   github_xmrt: number;
@@ -58,14 +59,14 @@ const Profile = () => {
 
   const fetchLinkedWorkerIds = async () => {
     if (!user?.id) return;
-    
+
     try {
       const { data, error } = await supabase
         .from('profiles')
         .select('linked_worker_ids')
         .eq('id', user.id)
         .single();
-      
+
       if (!error && data?.linked_worker_ids) {
         setLinkedWorkerIds(data.linked_worker_ids);
       }
@@ -76,12 +77,12 @@ const Profile = () => {
 
   const fetchEarnings = async () => {
     if (!user?.id) return;
-    
+
     try {
       const { data, error } = await supabase.rpc('get_user_earnings', {
         user_profile_id: user.id
       });
-      
+
       if (!error && data && typeof data === 'object') {
         setEarnings(data as unknown as UserEarnings);
       }
@@ -93,7 +94,7 @@ const Profile = () => {
   const handleSaveProfile = async () => {
     if (!user?.id) return;
     setSaving(true);
-    
+
     try {
       const { error } = await supabase
         .from('profiles')
@@ -107,7 +108,7 @@ const Profile = () => {
         .eq('id', user.id);
 
       if (error) throw error;
-      
+
       toast.success('Profile updated successfully');
       setIsEditing(false);
       fetchEarnings();
@@ -258,6 +259,10 @@ const Profile = () => {
             </CardContent>
           </Card>
 
+
+          {/* Service Integrations */}
+          <GoogleCloudConnect />
+
           {/* Business & Organizations Section */}
           <OrganizationProfile />
 
@@ -283,7 +288,7 @@ const Profile = () => {
                     {earnings?.total_xmrt?.toLocaleString() || '0'}
                   </p>
                 </div>
-                
+
                 <div className="p-4 rounded-lg bg-blue-500/10 border border-blue-500/20">
                   <div className="flex items-center gap-2 mb-2">
                     <GitCommit className="w-4 h-4 text-blue-500" />
@@ -296,7 +301,7 @@ const Profile = () => {
                     {earnings?.github_contributions || 0} contributions
                   </p>
                 </div>
-                
+
                 <div className="p-4 rounded-lg bg-orange-500/10 border border-orange-500/20">
                   <div className="flex items-center gap-2 mb-2">
                     <Cpu className="w-4 h-4 text-orange-500" />
@@ -307,7 +312,7 @@ const Profile = () => {
                   </p>
                   <p className="text-xs text-muted-foreground">shares submitted</p>
                 </div>
-                
+
                 <div className="p-4 rounded-lg bg-green-500/10 border border-green-500/20">
                   <div className="flex items-center gap-2 mb-2">
                     <Battery className="w-4 h-4 text-green-500" />
