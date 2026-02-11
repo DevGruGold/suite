@@ -208,7 +208,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const adminEmails = ['xmrtnet@gmail.com', 'xmrtsolutions@gmail.com'];
     const isAdminEmail = email && adminEmails.includes(email.toLowerCase());
 
-    const isAdminEmail = email && adminEmails.includes(email.toLowerCase());
+
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
