@@ -91,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         .eq('provider', 'google_cloud')
         .eq('is_active', true)
         .maybeSingle();
-      
+
       setHasGoogleCloudConnection(!!oauthData);
     } catch (error) {
       console.error('Error in fetchProfile:', error);
@@ -121,7 +121,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           setTimeout(() => {
             fetchProfile(session.user.id);
           }, 0);
-          
+
           // Only store Google Cloud token if we have a refresh token (from extended scopes)
           // Check for both SIGNED_IN and INITIAL_SESSION as the token might arrive in either
           if ((event === 'SIGNED_IN' || event === 'INITIAL_SESSION') && session.provider_refresh_token) {
@@ -143,7 +143,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session);
       setUser(session?.user ?? null);
-      
+
       if (session?.user) {
         fetchProfile(session.user.id);
       }
@@ -155,8 +155,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const getRedirectUrl = () => {
     // Always redirect to dashboard after auth
-    if (window.location.hostname.includes('lovable') || 
-        window.location.hostname.includes('lovableproject')) {
+    if (window.location.hostname.includes('lovable') ||
+      window.location.hostname.includes('lovableproject')) {
       return 'https://suite-beta.vercel.app/dashboard';
     }
     return `${window.location.origin}/dashboard`;
@@ -207,8 +207,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const redirectUrl = getRedirectUrl();
     const adminEmails = ['xmrtnet@gmail.com', 'xmrtsolutions@gmail.com'];
     const isAdminEmail = email && adminEmails.includes(email.toLowerCase());
-    
-    console.log(`Signing in with Google. Email: ${email}, IsAdmin: ${isAdminEmail}`);
+
+    const isAdminEmail = email && adminEmails.includes(email.toLowerCase());
 
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -237,7 +237,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // Connect Google Cloud services - for superadmins only
   const connectGoogleCloud = async () => {
     const redirectUrl = getRedirectUrl();
-    
+
     const { error } = await supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -285,7 +285,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUpWithEmail = async (email: string, password: string, fullName?: string) => {
     const redirectUrl = getRedirectUrl();
-    
+
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -316,7 +316,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = async () => {
     const { error } = await supabase.auth.signOut();
-    
+
     if (error) {
       toast({
         title: 'Sign out failed',
