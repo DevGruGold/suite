@@ -13,20 +13,20 @@ interface ContinuousVoiceProps {
   disabled?: boolean;
 }
 
-export const ContinuousVoice = ({ 
-  onTranscript, 
-  isListening: externalListening, 
-  isProcessing, 
+export const ContinuousVoice = ({
+  onTranscript,
+  isListening: externalListening,
+  isProcessing,
   isSpeaking,
   className,
-  disabled 
+  disabled
 }: ContinuousVoiceProps) => {
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [interimTranscript, setInterimTranscript] = useState('');
   const [audioLevel, setAudioLevel] = useState(0);
   const [silenceTimer, setSilenceTimer] = useState(0);
-  
+
   const speechRecognitionRef = useRef<SpeechRecognition | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -47,11 +47,11 @@ export const ContinuousVoice = ({
       speechRecognitionRef.current.continuous = true;
       speechRecognitionRef.current.interimResults = true;
       speechRecognitionRef.current.lang = 'en-US';
-      
+
       speechRecognitionRef.current.onresult = (event) => {
         let interim = '';
         let final = '';
-        
+
         for (let i = event.resultIndex; i < event.results.length; i++) {
           const transcript = event.results[i][0].transcript;
           if (event.results[i].isFinal) {
@@ -60,15 +60,15 @@ export const ContinuousVoice = ({
             interim += transcript;
           }
         }
-        
+
         if (final) {
           finalTranscriptRef.current += (finalTranscriptRef.current ? ' ' : '') + final;
           setTranscript(finalTranscriptRef.current);
           resetSilenceTimer();
         }
-        
+
         setInterimTranscript(interim);
-        
+
         // Reset silence timer when we get speech
         if (final || interim) {
           resetSilenceTimer();
@@ -115,7 +115,7 @@ export const ContinuousVoice = ({
       clearTimeout(silenceTimerRef.current);
     }
     setSilenceTimer(0);
-    
+
     silenceTimerRef.current = setTimeout(() => {
       // Process the accumulated transcript if we have meaningful content
       if (finalTranscriptRef.current.trim().length > 0) {
@@ -129,39 +129,38 @@ export const ContinuousVoice = ({
 
   const updateAudioLevel = () => {
     if (!analyserRef.current) return;
-    
+
     const dataArray = new Uint8Array(analyserRef.current.frequencyBinCount);
     analyserRef.current.getByteFrequencyData(dataArray);
-    
+
     const average = dataArray.reduce((sum, value) => sum + value, 0) / dataArray.length;
     const normalizedLevel = average / 255;
     setAudioLevel(normalizedLevel);
-    
+
     // Check for silence
     if (normalizedLevel < SILENCE_THRESHOLD && finalTranscriptRef.current.trim()) {
       setSilenceTimer(prev => prev + 50); // Update every ~50ms
     } else if (normalizedLevel >= SILENCE_THRESHOLD) {
       setSilenceTimer(0);
     }
-    
+
     animationFrameRef.current = requestAnimationFrame(updateAudioLevel);
   };
 
   const startListening = async () => {
     if (disabled || isProcessing) return;
-    
+
     try {
       // Get microphone access
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
+          noiseSuppression: true
         }
       });
-      
+
       streamRef.current = stream;
-      
+
       // Set up audio analysis
       audioContextRef.current = new AudioContext();
       analyserRef.current = audioContextRef.current.createAnalyser();
@@ -169,17 +168,17 @@ export const ContinuousVoice = ({
       const source = audioContextRef.current.createMediaStreamSource(stream);
       source.connect(analyserRef.current);
       updateAudioLevel();
-      
+
       // Start speech recognition
       if (speechRecognitionRef.current) {
         speechRecognitionRef.current.start();
       }
-      
+
       setIsListening(true);
       finalTranscriptRef.current = '';
       setTranscript('');
       setInterimTranscript('');
-      
+
     } catch (error) {
       console.error('Failed to start listening:', error);
     }
@@ -187,12 +186,12 @@ export const ContinuousVoice = ({
 
   const stopListening = () => {
     setIsListening(false);
-    
+
     // Process any remaining transcript
     if (finalTranscriptRef.current.trim()) {
       onTranscript(finalTranscriptRef.current.trim());
     }
-    
+
     cleanup();
   };
 
@@ -200,27 +199,27 @@ export const ContinuousVoice = ({
     if (speechRecognitionRef.current) {
       speechRecognitionRef.current.stop();
     }
-    
+
     if (streamRef.current) {
       streamRef.current.getTracks().forEach(track => track.stop());
       streamRef.current = null;
     }
-    
+
     if (audioContextRef.current) {
       audioContextRef.current.close();
       audioContextRef.current = null;
     }
-    
+
     if (animationFrameRef.current) {
       cancelAnimationFrame(animationFrameRef.current);
       animationFrameRef.current = null;
     }
-    
+
     if (silenceTimerRef.current) {
       clearTimeout(silenceTimerRef.current);
       silenceTimerRef.current = null;
     }
-    
+
     finalTranscriptRef.current = '';
     setTranscript('');
     setInterimTranscript('');
@@ -260,12 +259,12 @@ export const ContinuousVoice = ({
             <Mic className="h-8 w-8" />
           )}
         </Button>
-        
+
         {/* Audio level ring */}
         {listening && (
-          <div 
+          <div
             className="absolute inset-0 rounded-full border-4 border-primary transition-all duration-100"
-            style={{ 
+            style={{
               transform: `scale(${1 + audioLevel * 0.3})`,
               opacity: audioLevel * 0.7 + 0.3
             }}
@@ -281,14 +280,14 @@ export const ContinuousVoice = ({
             Listening
           </Badge>
         )}
-        
+
         {isProcessing && (
           <Badge variant="secondary" className="flex items-center gap-1">
             <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse" />
             Processing
           </Badge>
         )}
-        
+
         {isSpeaking && (
           <Badge variant="outline" className="flex items-center gap-1">
             <Volume2 className="w-3 h-3" />
@@ -308,7 +307,7 @@ export const ContinuousVoice = ({
                 <span className="text-muted-foreground italic"> {interimTranscript}</span>
               )}
             </div>
-            
+
             {/* Silence countdown */}
             {listening && transcript && silenceTimer > 0 && (
               <div className="mt-2 text-xs text-muted-foreground">

@@ -54,10 +54,10 @@ export const EnhancedContinuousVoice = ({
   useEffect(() => {
     console.group('🎤 Voice Component Initialization');
     BrowserCompatibilityService.logCapabilities();
-    
+
     const capabilities = BrowserCompatibilityService.detectCapabilities();
     setBrowserSupported(capabilities.speechRecognition);
-    
+
     if (!capabilities.speechRecognition) {
       const recommendations = BrowserCompatibilityService.getRecommendations();
       setErrorMessage(`Voice not supported. Try: ${recommendations.join(', ')}`);
@@ -84,7 +84,7 @@ export const EnhancedContinuousVoice = ({
     console.log('🔧 Setting up NEW Speech Recognition instance...');
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
     const recognition = new SpeechRecognition();
-    
+
     recognition.continuous = true;
     recognition.interimResults = true;
     recognition.lang = 'en-US';
@@ -103,7 +103,7 @@ export const EnhancedContinuousVoice = ({
         const transcript = event.results[i][0].transcript;
         const confidence = event.results[i][0].confidence;
         console.log(`📝 Result ${i}:`, transcript, `(confidence: ${confidence || 'interim'})`);
-        
+
         if (event.results[i].isFinal) {
           final += transcript;
         } else {
@@ -131,7 +131,7 @@ export const EnhancedContinuousVoice = ({
 
     recognition.onerror = (event) => {
       console.error('❌ Speech recognition error:', event.error, event);
-      
+
       switch (event.error) {
         case 'not-allowed':
           setHasPermission(false);
@@ -159,23 +159,23 @@ export const EnhancedContinuousVoice = ({
 
     recognition.onend = () => {
       console.log('🔄 Speech recognition ENDED');
-      
+
       // Enhanced restart logic with mobile-specific handling and TTS awareness
       const capabilities = BrowserCompatibilityService.detectCapabilities();
-      
+
       // Don't restart if Eliza is speaking (prevents feedback loop)
-      const shouldRestart = isListening && !isSpeaking && hasPermission && 
+      const shouldRestart = isListening && !isSpeaking && hasPermission &&
         (parentControlledListening == null || parentControlledListening) && // Respect parent control
         (capabilities.isMobile ? retryCount < 5 : retryCount < 3);
-      
+
       if (shouldRestart) {
-        console.log('🔄 Auto-restarting speech recognition...', { 
-          mobile: capabilities.isMobile, 
-          retryCount, 
-          elizaSpeaking: isSpeaking 
+        console.log('🔄 Auto-restarting speech recognition...', {
+          mobile: capabilities.isMobile,
+          retryCount,
+          elizaSpeaking: isSpeaking
         });
         const restartDelay = capabilities.isMobile ? 300 : 100;
-        
+
         setTimeout(() => {
           if (recognitionRef.current && isListening && !isSpeaking && (parentControlledListening == null || parentControlledListening)) {
             try {
@@ -192,11 +192,11 @@ export const EnhancedContinuousVoice = ({
           }
         }, restartDelay);
       } else {
-        console.log('🛑 Not restarting recognition:', { 
-          isListening, 
-          isSpeaking, 
-          hasPermission, 
-          retryCount, 
+        console.log('🛑 Not restarting recognition:', {
+          isListening,
+          isSpeaking,
+          hasPermission,
+          retryCount,
           mobile: capabilities.isMobile,
           parentControlled: parentControlledListening
         });
@@ -281,47 +281,39 @@ export const EnhancedContinuousVoice = ({
     }
 
     console.log('🚀 Starting voice capture...');
-    
+
     try {
       setErrorMessage(''); // Clear previous errors
-      
+
       // Request microphone access with mobile-optimized settings
       console.log('🎤 Requesting microphone access...');
       const capabilities = BrowserCompatibilityService.detectCapabilities();
-      
-      const audioConstraints = capabilities.isMobile ? {
-        // Mobile-optimized audio settings
-        echoCancellation: true,
-        noiseSuppression: true,
-        autoGainControl: true,
-        sampleRate: 16000, // Lower sample rate for mobile performance
-        channelCount: 1     // Mono for mobile efficiency
-      } : {
-        // Desktop settings
+
+      const audioConstraints = {
         echoCancellation: true,
         noiseSuppression: true,
         autoGainControl: true
       };
-      
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: audioConstraints
       });
-      
+
       console.log('✅ Microphone access granted');
       streamRef.current = stream;
       setHasPermission(true);
 
       // Set up audio analysis
       const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-      
+
       if (audioContext.state === 'suspended') {
         console.log('🔄 Resuming audio context...');
         await audioContext.resume();
       }
-      
+
       const analyser = audioContext.createAnalyser();
       const microphone = audioContext.createMediaStreamSource(stream);
-      
+
       analyser.fftSize = 256;
       microphone.connect(analyser);
 
@@ -354,10 +346,10 @@ export const EnhancedContinuousVoice = ({
       setIsListening(true);
       setRetryCount(0);
       console.log('✅ Voice capture started successfully');
-      
+
     } catch (error) {
       console.error('❌ Failed to start listening:', error);
-      
+
       if (error.name === 'NotAllowedError') {
         setHasPermission(false);
         setErrorMessage('Microphone access denied. Please allow microphone permissions.');
@@ -433,7 +425,7 @@ export const EnhancedContinuousVoice = ({
   // Auto-listen effect - Fixed to actually start listening
   useEffect(() => {
     console.log('🔄 Auto-listen effect triggered:', { autoListen, disabled, isListening, browserSupported, hasPermission });
-    
+
     if (autoListen && !disabled && !isListening && browserSupported) {
       console.log('🚀 Auto-starting voice capture...');
       startListening();
@@ -446,14 +438,14 @@ export const EnhancedContinuousVoice = ({
 
   // Enhanced sync with external listening state and TTS awareness
   useEffect(() => {
-    console.log('🔗 External listening state sync:', { 
-      externalListening, 
+    console.log('🔗 External listening state sync:', {
+      externalListening,
       parentControlledListening,
-      isListening, 
-      disabled, 
-      isSpeaking 
+      isListening,
+      disabled,
+      isSpeaking
     });
-    
+
     // If parent explicitly controls listening (like when TTS is playing)
     if (parentControlledListening !== undefined) {
       if (parentControlledListening && !isListening && !disabled && browserSupported && !isSpeaking) {
@@ -480,7 +472,7 @@ export const EnhancedContinuousVoice = ({
   const toggleListening = () => {
     console.log('🎯 Toggle listening clicked:', { isListening, browserSupported, hasPermission });
     handleUserGesture(); // Mark user interaction
-    
+
     if (isListening) {
       console.log('🛑 User requested stop listening');
       stopListening();
@@ -523,7 +515,7 @@ export const EnhancedContinuousVoice = ({
 
   return (
     <div className={cn(
-      "p-3 sm:p-6 bg-gradient-to-b from-background to-secondary/20", 
+      "p-3 sm:p-6 bg-gradient-to-b from-background to-secondary/20",
       capabilities.isMobile ? "min-h-[200px]" : "min-h-[280px]", // Reduced mobile height
       className
     )}>
@@ -552,9 +544,8 @@ export const EnhancedContinuousVoice = ({
       {/* Status Header - Compact for mobile */}
       <div className="flex items-center justify-between mb-4 sm:mb-6">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className={`h-2 w-2 sm:h-3 sm:w-3 rounded-full ${getStatusColor()} ${
-            isListening ? 'animate-pulse' : ''
-          }`} />
+          <div className={`h-2 w-2 sm:h-3 sm:w-3 rounded-full ${getStatusColor()} ${isListening ? 'animate-pulse' : ''
+            }`} />
           <Badge variant="outline" className="text-xs sm:text-sm">
             {getStatusText()}
           </Badge>
@@ -599,7 +590,7 @@ export const EnhancedContinuousVoice = ({
 
           {/* Audio level indicator ring */}
           {isListening && (
-            <div 
+            <div
               className="absolute inset-0 rounded-full border-4 border-primary/30 transition-transform duration-150"
               style={{
                 transform: `scale(${1 + audioLevel * 0.3})`,
@@ -644,8 +635,8 @@ export const EnhancedContinuousVoice = ({
                 className={cn(
                   "bg-primary/30 rounded-full transition-all duration-150",
                   capabilities.isMobile ? "w-0.5" : "w-1",
-                  audioLevel * (capabilities.isMobile ? 8 : 12) > i 
-                    ? capabilities.isMobile ? 'h-4 bg-primary' : 'h-8 bg-primary' 
+                  audioLevel * (capabilities.isMobile ? 8 : 12) > i
+                    ? capabilities.isMobile ? 'h-4 bg-primary' : 'h-8 bg-primary'
                     : 'h-1 sm:h-2'
                 )}
               />
@@ -669,13 +660,13 @@ export const EnhancedContinuousVoice = ({
             ) : (
               <div className="space-y-2">
                 <p className={capabilities.isMobile ? "text-xs" : "text-sm"}>
-                  {pushToTalk 
-                    ? "Press and hold the microphone to speak" 
+                  {pushToTalk
+                    ? "Press and hold the microphone to speak"
                     : "Click the microphone to start voice conversation"}
                 </p>
                 <p className="text-xs opacity-70">
-                  {capabilities.isMobile 
-                    ? "Voice processed after you stop speaking" 
+                  {capabilities.isMobile
+                    ? "Voice processed after you stop speaking"
                     : "Voice input will be processed automatically after you stop speaking"}
                 </p>
               </div>

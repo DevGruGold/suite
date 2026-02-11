@@ -25,13 +25,13 @@ export const useMediaAccess = () => {
     try {
       const micPermission = await navigator.permissions.query({ name: 'microphone' as PermissionName });
       const cameraPermission = await navigator.permissions.query({ name: 'camera' as PermissionName });
-      
+
       const newPermissions = {
         microphone: micPermission.state === 'granted',
         camera: cameraPermission.state === 'granted',
         granted: micPermission.state === 'granted' || cameraPermission.state === 'granted'
       };
-      
+
       setPermissions(newPermissions);
       return newPermissions;
     } catch (err) {
@@ -43,16 +43,15 @@ export const useMediaAccess = () => {
   const requestMicrophoneAccess = useCallback(async () => {
     setIsRequesting(true);
     setError(null);
-    
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
-        } 
+          noiseSuppression: true
+        }
       });
-      
+
       setStreams(prev => ({ ...prev, audio: stream }));
       setPermissions(prev => ({ ...prev, microphone: true, granted: true }));
       return stream;
@@ -68,16 +67,16 @@ export const useMediaAccess = () => {
   const requestCameraAccess = useCallback(async () => {
     setIsRequesting(true);
     setError(null);
-    
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: {
           width: { ideal: 1280 },
           height: { ideal: 720 },
           facingMode: 'user'
-        } 
+        }
       });
-      
+
       setStreams(prev => ({ ...prev, video: stream }));
       setPermissions(prev => ({ ...prev, camera: true, granted: true }));
       return stream;
@@ -93,13 +92,12 @@ export const useMediaAccess = () => {
   const requestBothAccess = useCallback(async () => {
     setIsRequesting(true);
     setError(null);
-    
+
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           echoCancellation: true,
-          noiseSuppression: true,
-          sampleRate: 44100
+          noiseSuppression: true
         },
         video: {
           width: { ideal: 1280 },
@@ -107,7 +105,7 @@ export const useMediaAccess = () => {
           facingMode: 'user'
         }
       });
-      
+
       setStreams({ audio: stream, video: stream });
       setPermissions({ microphone: true, camera: true, granted: true });
       return stream;
@@ -130,7 +128,7 @@ export const useMediaAccess = () => {
         setPermissions(prev => ({ ...prev, microphone: false, granted: prev.camera }));
       }
     }
-    
+
     if (type === 'video' || type === 'both') {
       streams.video?.getTracks().forEach(track => track.stop());
       setStreams(prev => ({ ...prev, video: undefined }));
@@ -142,18 +140,18 @@ export const useMediaAccess = () => {
 
   const captureImage = useCallback(async (): Promise<string | null> => {
     if (!streams.video) return null;
-    
+
     const video = document.createElement('video');
     video.srcObject = streams.video;
     await video.play();
-    
+
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    
+
     const ctx = canvas.getContext('2d');
     if (!ctx) return null;
-    
+
     ctx.drawImage(video, 0, 0);
     return canvas.toDataURL('image/jpeg', 0.8);
   }, [streams.video]);
