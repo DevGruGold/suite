@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { EDGE_FUNCTIONS_REGISTRY } from "../_shared/edgeFunctionRegistry.ts";
+import { checkToolAccess, MembershipTier } from "../_shared/rbacPolicy.ts";
 
 // ========== ENVIRONMENT CONFIGURATION ==========
 const SUPABASE_URL = Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') || 'https://vawouugtzwmejxqkeqqj.supabase.co';
@@ -1210,7 +1211,8 @@ async function executeRealToolCall(
   ipAddress: string,
   timestamp: number = Date.now(),
   userId?: string,
-  organizationId?: string
+  organizationId?: string,
+  membershipTier: string = 'user'
 ): Promise<any> {
   const startTime = performance.now();
   let success = false;
@@ -1218,6 +1220,16 @@ async function executeRealToolCall(
   let error_message: string | null = null;
 
   try {
+    // RBAC CHECK
+    const { allowed, requiredTier, currentTier } = checkToolAccess(name, membershipTier);
+    if (!allowed) {
+      console.warn(`⛔ [RBAC] Access Denied: User ${userId || 'anon'} (${currentTier}) tried to use ${name} (required: ${requiredTier})`);
+      return {
+        success: false,
+        error: `Access Denied: You are a '${currentTier}' but this tool requires '${requiredTier}' access.`
+      };
+    }
+
     const parsedArgs = parseToolArguments(args);
 
     // Use parseToolArguments for consistent parsing
@@ -3033,7 +3045,8 @@ async function executeToolsWithIteration(
   maxIterations: number = 5,
   memoryManager?: EnhancedConversationManager,
   userId?: string,
-  organizationId?: string
+  organizationId?: string,
+  membershipTier?: string
 ): Promise<{ content: string; toolsExecuted: number }> {
   let response = initialResponse;
   let totalToolsExecuted = 0;
@@ -3069,7 +3082,9 @@ async function executeToolsWithIteration(
           ipAddress,
           Date.now(),
           userId,
-          organizationId
+          userId,
+          organizationId,
+          membershipTier
         );
         return {
           tool_call_id: toolCall.id,
@@ -5139,6 +5154,24 @@ Deno.serve(async (req) => {
     const ipAddress = IPSessionManager.extractIP(req);
     console.log(`🌐 IP Address detected: ${ipAddress}`);
 
+    // Fetch user membership tier if authenticated
+    let membershipTier = 'user';
+    if (user_id) {
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('membership_tier')
+          .eq('id', user_id)
+          .single();
+        if (profile?.membership_tier) {
+          membershipTier = profile.membership_tier;
+        }
+      } catch (e) {
+        console.warn('⚠️ Failed to fetch membership tier:', e);
+      }
+    }
+    console.log(`👤 User: ${user_id || 'anon'} | Tier: ${membershipTier}`);
+
     const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
 
@@ -5461,7 +5494,9 @@ Deno.serve(async (req) => {
       MAX_TOOL_ITERATIONS,
       conversationManager,
       user_id,
-      selectedOrgId
+      user_id,
+      selectedOrgId,
+      membershipTier
     );
 
     let responseContent = finalContent;

@@ -13,6 +13,22 @@ export interface EdgeFunctionCapability {
 
 export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
   {
+    name: 'activity-monitor-api',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/activity-monitor-api',
+    description: 'XMRT Ecosystem: activity monitor api',
+    capabilities: ['python service', 'activity monitor api'],
+    category: 'ecosystem',
+    example_use: 'Interact with activity-monitor-api'
+  },
+  {
+    name: 'advanced-analytics-engine',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/advanced-analytics-engine',
+    description: 'XMRT Ecosystem: advanced analytics engine',
+    capabilities: ['python service', 'advanced analytics engine'],
+    category: 'ecosystem',
+    example_use: 'Interact with advanced-analytics-engine'
+  },
+  {
     name: 'agent-coordination-hub',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-coordination-hub',
     description: '🤝 Agent Coordination Hub - Central hub for multi-agent synchronization',
@@ -29,12 +45,28 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: '{"action":"deploy", "agent_name":"researcher", "version":"v2.0"}'
   },
   {
+    name: 'agent-github-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-github-integration',
+    description: 'XMRT Ecosystem: agent github integration',
+    capabilities: ['python service', 'agent github integration'],
+    category: 'ecosystem',
+    example_use: 'Interact with agent-github-integration'
+  },
+  {
     name: 'agent-manager',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-manager',
     description: 'Primary agent orchestration - create, manage, and monitor AI agents',
     capabilities: ['List agents', 'Spawn agent', 'Update agent status', 'Assign task', 'List tasks', 'Update task', 'Delete task', 'Get workload'],
     category: 'task-management',
     example_use: 'Create a new agent and assign them a task, monitor agent workloads'
+  },
+  {
+    name: 'agent-webhook-handler',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-webhook-handler',
+    description: 'XMRT Ecosystem: agent webhook handler',
+    capabilities: ['python service', 'agent webhook handler'],
+    category: 'ecosystem',
+    example_use: 'Interact with agent-webhook-handler'
   },
   {
     name: 'agent-work-executor',
@@ -61,12 +93,68 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Invoke ai-chat'
   },
   {
+    name: 'ai-driven-mining-optimization-platform',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-driven-mining-optimization-platform',
+    description: 'XMRT Ecosystem App: Ai Driven Mining Optimization Platform',
+    capabilities: ['ecosystem app', 'ai driven mining optimization platform'],
+    category: 'ecosystem',
+    example_use: 'Interact with ai-driven-mining-optimization-platform'
+  },
+  {
+    name: 'ai-powered-mobile-mining-insights',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-powered-mobile-mining-insights',
+    description: 'XMRT Ecosystem App: Ai Powered Mobile Mining Insights',
+    capabilities: ['ecosystem app', 'ai powered mobile mining insights'],
+    category: 'ecosystem',
+    example_use: 'Interact with ai-powered-mobile-mining-insights'
+  },
+  {
+    name: 'ai-powered-privacy-guardian',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-powered-privacy-guardian',
+    description: 'XMRT Ecosystem App: Ai Powered Privacy Guardian',
+    capabilities: ['ecosystem app', 'ai powered privacy guardian'],
+    category: 'ecosystem',
+    example_use: 'Interact with ai-powered-privacy-guardian'
+  },
+  {
+    name: 'ai-powered-privacy-shield',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-powered-privacy-shield',
+    description: 'XMRT Ecosystem App: Ai Powered Privacy Shield',
+    capabilities: ['ecosystem app', 'ai powered privacy shield'],
+    category: 'ecosystem',
+    example_use: 'Interact with ai-powered-privacy-shield'
+  },
+  {
+    name: 'ai-tool-framework',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-tool-framework',
+    description: 'XMRT Ecosystem: ai tool framework',
+    capabilities: ['python service', 'ai tool framework'],
+    category: 'ecosystem',
+    example_use: 'Interact with ai-tool-framework'
+  },
+  {
+    name: 'analytics-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/analytics-system',
+    description: 'XMRT Ecosystem: analytics system',
+    capabilities: ['python service', 'analytics system'],
+    category: 'ecosystem',
+    example_use: 'Interact with analytics-system'
+  },
+  {
     name: 'android-control',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/android-control',
     description: '📱 Android Device Control - Control physical Android devices',
     capabilities: ['Screen tap', 'Swipe', 'Type text', 'Take screenshot', 'Open app', 'Home button'],
     category: 'automation',
     example_use: '{"action":"tap", "x":500, "y":1000, "device_id":"emulator-5554"}'
+  },
+  {
+    name: 'api-docs-generator',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/api-docs-generator',
+    description: 'XMRT Ecosystem: api docs generator',
+    capabilities: ['python service', 'api docs generator'],
+    category: 'ecosystem',
+    example_use: 'Interact with api-docs-generator'
   },
   {
     name: 'api-key-health-monitor',
@@ -93,12 +181,44 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Automatically fixes failed Python executions without human intervention'
   },
   {
+    name: 'autonomous-controller',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-controller',
+    description: 'XMRT Ecosystem: autonomous controller',
+    capabilities: ['python service', 'autonomous controller'],
+    category: 'ecosystem',
+    example_use: 'Interact with autonomous-controller'
+  },
+  {
+    name: 'autonomous-core',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-core',
+    description: 'XMRT Ecosystem: autonomous core',
+    capabilities: ['python service', 'autonomous core'],
+    category: 'ecosystem',
+    example_use: 'Interact with autonomous-core'
+  },
+  {
     name: 'autonomous-decision-maker',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-decision-maker',
     description: '🧠 Autonomous Decision Maker - AI-driven decisions',
     capabilities: ['Decision analysis', 'Impact assessment', 'Recommendations'],
     category: 'autonomous',
     example_use: '{"decision_type":"task_assignment","context":{...}}'
+  },
+  {
+    name: 'autonomous-learning-core',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-learning-core',
+    description: 'XMRT Ecosystem: autonomous learning core',
+    capabilities: ['python service', 'autonomous learning core'],
+    category: 'ecosystem',
+    example_use: 'Interact with autonomous-learning-core'
+  },
+  {
+    name: 'brightdata-mcp-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/brightdata-mcp-integration',
+    description: 'XMRT Ecosystem: brightdata mcp integration',
+    capabilities: ['python service', 'brightdata mcp integration'],
+    category: 'ecosystem',
+    example_use: 'Interact with brightdata-mcp-integration'
   },
   {
     name: 'broadcast-state-change',
@@ -109,12 +229,44 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Invoke broadcast-state-change'
   },
   {
+    name: 'c-suite-autonomous-workflows',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/c-suite-autonomous-workflows',
+    description: 'XMRT Ecosystem App: C Suite Autonomous Workflows',
+    capabilities: ['ecosystem app', 'c suite autonomous workflows'],
+    category: 'ecosystem',
+    example_use: 'Interact with c-suite-autonomous-workflows'
+  },
+  {
+    name: 'chat-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/chat-system',
+    description: 'XMRT Ecosystem: chat system',
+    capabilities: ['python service', 'chat system'],
+    category: 'ecosystem',
+    example_use: 'Interact with chat-system'
+  },
+  {
+    name: 'check-faucet-eligibility',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/check-faucet-eligibility',
+    description: 'Check if user is eligible for XMRT faucet claim',
+    capabilities: ['Eligibility verification', 'Cooldown checking', 'User validation'],
+    category: 'faucet',
+    example_use: 'Verify if user can claim XMRT tokens from faucet'
+  },
+  {
     name: 'check-frontend-health',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/check-frontend-health',
     description: 'Health check for frontend application status',
     capabilities: ['Health checks', 'Performance metrics', 'Status monitoring'],
     category: 'monitoring',
     example_use: 'Use check frontend health for health check for frontend application status'
+  },
+  {
+    name: 'claim-faucet-tokens',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/claim-faucet-tokens',
+    description: 'Process XMRT token faucet claims',
+    capabilities: ['Token distribution', 'Claim processing', 'Transaction creation'],
+    category: 'faucet',
+    example_use: 'Help users claim free XMRT tokens from the faucet'
   },
   {
     name: 'cleanup-duplicate-tasks',
@@ -131,6 +283,22 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['Execute code', 'Error handling', 'Sandboxed execution'],
     category: 'code-execution',
     example_use: 'Use code monitor daemon for continuous monitoring daemon for code execution and errors'
+  },
+  {
+    name: 'community-governance-dashboard',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/community-governance-dashboard',
+    description: 'XMRT Ecosystem App: Community Governance Dashboard',
+    capabilities: ['ecosystem app', 'community governance dashboard'],
+    category: 'ecosystem',
+    example_use: 'Interact with community-governance-dashboard'
+  },
+  {
+    name: 'community-intelligence-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/community-intelligence-system',
+    description: 'XMRT Ecosystem: community intelligence system',
+    capabilities: ['python service', 'community intelligence system'],
+    category: 'ecosystem',
+    example_use: 'Interact with community-intelligence-system'
   },
   {
     name: 'community-spotlight-post',
@@ -205,6 +373,38 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Debug analytics pipeline issues'
   },
   {
+    name: 'decentralized-identity-management-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-identity-management-system',
+    description: 'XMRT Ecosystem App: Decentralized Identity Management System',
+    capabilities: ['ecosystem app', 'decentralized identity management system'],
+    category: 'ecosystem',
+    example_use: 'Interact with decentralized-identity-management-system'
+  },
+  {
+    name: 'decentralized-identity-verification-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-identity-verification-system',
+    description: 'XMRT Ecosystem App: Decentralized Identity Verification System',
+    capabilities: ['ecosystem app', 'decentralized identity verification system'],
+    category: 'ecosystem',
+    example_use: 'Interact with decentralized-identity-verification-system'
+  },
+  {
+    name: 'decentralized-mobile-mining-hub',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-mobile-mining-hub',
+    description: 'XMRT Ecosystem App: Decentralized Mobile Mining Hub',
+    capabilities: ['ecosystem app', 'decentralized mobile mining hub'],
+    category: 'ecosystem',
+    example_use: 'Interact with decentralized-mobile-mining-hub'
+  },
+  {
+    name: 'decentralized-mobile-mining-network',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-mobile-mining-network',
+    description: 'XMRT Ecosystem App: Decentralized Mobile Mining Network',
+    capabilities: ['ecosystem app', 'decentralized mobile mining network'],
+    category: 'ecosystem',
+    example_use: 'Interact with decentralized-mobile-mining-network'
+  },
+  {
     name: 'deepseek-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/deepseek-chat',
     description: 'AI chat via DeepSeek model',
@@ -219,6 +419,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['Function deployment', 'Config updates', 'Verification'],
     category: 'deployment',
     example_use: '{"proposal_id":"uuid"}'
+  },
+  {
+    name: 'deployment-health-check',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/deployment-health-check',
+    description: 'XMRT Ecosystem: deployment health check',
+    capabilities: ['python service', 'deployment health check'],
+    category: 'ecosystem',
+    example_use: 'Interact with deployment-health-check'
   },
   {
     name: 'diagnose-workflow-failure',
@@ -245,6 +453,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Monitor all Vercel services health, check ecosystem performance, track deployment status'
   },
   {
+    name: 'ecosystem-webhook',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ecosystem-webhook',
+    description: 'Handle ecosystem events and webhooks',
+    capabilities: ['Event processing', 'Webhook handling', 'System notifications'],
+    category: 'ecosystem',
+    example_use: 'Process ecosystem events and integrate with external services'
+  },
+  {
     name: 'eliza-intelligence-coordinator',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/eliza-intelligence-coordinator',
     description: 'Coordinates intelligence gathering and knowledge synthesis across all agents',
@@ -269,12 +485,44 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Analyze system performance, evaluate effectiveness, recommend improvements'
   },
   {
+    name: 'enhanced-api-endpoints',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-api-endpoints',
+    description: 'XMRT Ecosystem: enhanced api endpoints',
+    capabilities: ['python service', 'enhanced api endpoints'],
+    category: 'ecosystem',
+    example_use: 'Interact with enhanced-api-endpoints'
+  },
+  {
+    name: 'enhanced-autonomous-controller',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-autonomous-controller',
+    description: 'XMRT Ecosystem: enhanced autonomous controller',
+    capabilities: ['python service', 'enhanced autonomous controller'],
+    category: 'ecosystem',
+    example_use: 'Interact with enhanced-autonomous-controller'
+  },
+  {
+    name: 'enhanced-chat-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-chat-system',
+    description: 'XMRT Ecosystem: enhanced chat system',
+    capabilities: ['python service', 'enhanced chat system'],
+    category: 'ecosystem',
+    example_use: 'Interact with enhanced-chat-system'
+  },
+  {
     name: 'enhanced-learning',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-learning',
     description: 'Advanced machine learning and pattern recognition',
     capabilities: ['Knowledge storage', 'Semantic search', 'Entity relationships'],
     category: 'knowledge',
     example_use: 'Use enhanced learning for advanced machine learning and pattern recognition'
+  },
+  {
+    name: 'enhanced-multi-agent-coordinator',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-multi-agent-coordinator',
+    description: 'XMRT Ecosystem: enhanced multi agent coordinator',
+    capabilities: ['python service', 'enhanced multi agent coordinator'],
+    category: 'ecosystem',
+    example_use: 'Interact with enhanced-multi-agent-coordinator'
   },
   {
     name: 'evaluate-community-idea',
@@ -413,6 +661,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Use get embedding for generate vector embeddings for text'
   },
   {
+    name: 'get-faucet-stats',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-faucet-stats',
+    description: 'Get XMRT faucet statistics and status',
+    capabilities: ['Faucet statistics', 'Distribution data', 'Claim history'],
+    category: 'faucet',
+    example_use: 'Display faucet usage statistics and availability'
+  },
+  {
     name: 'get-function-actions',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/get-function-actions',
     description: 'Auto-detected function: get-function-actions',
@@ -469,6 +725,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Invoke github-issue-scanner'
   },
   {
+    name: 'github-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/github-manager',
+    description: 'XMRT Ecosystem: github manager',
+    capabilities: ['python service', 'github manager'],
+    category: 'ecosystem',
+    example_use: 'Interact with github-manager'
+  },
+  {
     name: 'google-calendar',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/google-calendar',
     description: '📅 Google Calendar - Manage events and schedules',
@@ -490,7 +754,7 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     description: '📂 Google Drive - Manage files and folders',
     capabilities: ['List files', 'Upload file', 'Get file content', 'Search files'],
     category: 'web',
-    example_use: '{"action":"list_files", "q":"name contains \'
+    example_use: '{"action":"list_files", "q":"name contains \'invoice\'"}'
   },
   {
     name: 'google-gmail',
@@ -531,6 +795,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['Rejection handling', 'Improvement suggestions', 'Feedback'],
     category: 'governance',
     example_use: '{"proposal_id":"uuid"}'
+  },
+  {
+    name: 'health-monitor',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/health-monitor',
+    description: 'XMRT Ecosystem: health monitor',
+    capabilities: ['python service', 'health monitor'],
+    category: 'ecosystem',
+    example_use: 'Interact with health-monitor'
   },
   {
     name: 'hume-access-token',
@@ -597,6 +869,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Store concepts, link entities, search knowledge graph'
   },
   {
+    name: 'learning-optimizer',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/learning-optimizer',
+    description: 'XMRT Ecosystem: learning optimizer',
+    capabilities: ['python service', 'learning optimizer'],
+    category: 'ecosystem',
+    example_use: 'Interact with learning-optimizer'
+  },
+  {
     name: 'list-available-functions',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/list-available-functions',
     description: 'List all available edge functions',
@@ -619,6 +899,30 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['Advanced AI chat', 'Context awareness', 'Multi-model support', 'Memory integration', 'Tool calling', 'Multi-step workflows'],
     category: 'ai',
     example_use: 'Main intelligent chat endpoint with full context and memory - use this for all AI chat needs'
+  },
+  {
+    name: 'memory-optimizer',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/memory-optimizer',
+    description: 'XMRT Ecosystem: memory optimizer',
+    capabilities: ['python service', 'memory optimizer'],
+    category: 'ecosystem',
+    example_use: 'Interact with memory-optimizer'
+  },
+  {
+    name: 'memory-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/memory-system',
+    description: 'XMRT Ecosystem: memory system',
+    capabilities: ['python service', 'memory system'],
+    category: 'ecosystem',
+    example_use: 'Interact with memory-system'
+  },
+  {
+    name: 'mesh-health-beacons',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mesh-health-beacons',
+    description: 'XMRT Ecosystem App: Mesh Health Beacons',
+    capabilities: ['ecosystem app', 'mesh health beacons'],
+    category: 'ecosystem',
+    example_use: 'Interact with mesh-health-beacons'
   },
   {
     name: 'mining-proxy',
@@ -653,6 +957,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Distribute mining scripts, push updates, manage versions'
   },
   {
+    name: 'mobile-mining-incentive-program',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mobile-mining-incentive-program',
+    description: 'XMRT Ecosystem App: Mobile Mining Incentive Program',
+    capabilities: ['ecosystem app', 'mobile mining incentive program'],
+    category: 'ecosystem',
+    example_use: 'Interact with mobile-mining-incentive-program'
+  },
+  {
     name: 'monitor-device-connections',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/monitor-device-connections',
     description: 'Monitor mining device connections and status',
@@ -669,6 +981,22 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Use morning discussion post for generate and post morning discussion topics'
   },
   {
+    name: 'multi-agent-slack-bridge',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/multi-agent-slack-bridge',
+    description: 'XMRT Ecosystem: multi agent slack bridge',
+    capabilities: ['python service', 'multi agent slack bridge'],
+    category: 'ecosystem',
+    example_use: 'Interact with multi-agent-slack-bridge'
+  },
+  {
+    name: 'multi-agent-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/multi-agent-system',
+    description: 'XMRT Ecosystem: multi agent system',
+    capabilities: ['python service', 'multi agent system'],
+    category: 'ecosystem',
+    example_use: 'Interact with multi-agent-system'
+  },
+  {
     name: 'multi-step-orchestrator',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/multi-step-orchestrator',
     description: 'Complex workflow engine for background processing with dependencies',
@@ -677,12 +1005,28 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Execute debugging workflow: scan logs → identify errors → fix code → verify'
   },
   {
+    name: 'n8n-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/n8n-integration',
+    description: 'XMRT Ecosystem: n8n integration',
+    capabilities: ['python service', 'n8n integration'],
+    category: 'ecosystem',
+    example_use: 'Interact with n8n-integration'
+  },
+  {
     name: 'n8n-workflow-generator',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/n8n-workflow-generator',
     description: 'Auto-detected function: n8n-workflow-generator',
     capabilities: ['n8n workflow generator'],
     category: 'task-management',
     example_use: 'Invoke n8n-workflow-generator'
+  },
+  {
+    name: 'n8n-workflow-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/n8n-workflow-manager',
+    description: 'XMRT Ecosystem: n8n workflow manager',
+    capabilities: ['python service', 'n8n workflow manager'],
+    category: 'ecosystem',
+    example_use: 'Interact with n8n-workflow-manager'
   },
   {
     name: 'nlg-generator',
@@ -725,6 +1069,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: '{"action":"publish", "title":"Weekly Update", "content":"..."}'
   },
   {
+    name: 'performance-analyzer',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/performance-analyzer',
+    description: 'XMRT Ecosystem: performance analyzer',
+    capabilities: ['python service', 'performance analyzer'],
+    category: 'ecosystem',
+    example_use: 'Interact with performance-analyzer'
+  },
+  {
     name: 'playwright-browse',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/playwright-browse',
     description: 'Web browsing and scraping using Playwright automation',
@@ -739,6 +1091,78 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['Multi-service integration', 'Health monitoring', 'Status reporting'],
     category: 'ecosystem',
     example_use: 'Use predictive analytics for predictive analytics for mining and system metrics'
+  },
+  {
+    name: 'privacy-first-ai-training-platform',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-ai-training-platform',
+    description: 'XMRT Ecosystem App: Privacy First Ai Training Platform',
+    capabilities: ['ecosystem app', 'privacy first ai training platform'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-first-ai-training-platform'
+  },
+  {
+    name: 'privacy-first-ai-workflows',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-ai-workflows',
+    description: 'XMRT Ecosystem App: Privacy First Ai Workflows',
+    capabilities: ['ecosystem app', 'privacy first ai workflows'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-first-ai-workflows'
+  },
+  {
+    name: 'privacy-first-decentralized-wallet',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-decentralized-wallet',
+    description: 'XMRT Ecosystem App: Privacy First Decentralized Wallet',
+    capabilities: ['ecosystem app', 'privacy first decentralized wallet'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-first-decentralized-wallet'
+  },
+  {
+    name: 'privacy-first-digital-wallet',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-digital-wallet',
+    description: 'XMRT Ecosystem App: Privacy First Digital Wallet',
+    capabilities: ['ecosystem app', 'privacy first digital wallet'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-first-digital-wallet'
+  },
+  {
+    name: 'privacy-focused-data-sharing-framework',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-focused-data-sharing-framework',
+    description: 'XMRT Ecosystem App: Privacy Focused Data Sharing Framework',
+    capabilities: ['ecosystem app', 'privacy focused data sharing framework'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-focused-data-sharing-framework'
+  },
+  {
+    name: 'privacy-focused-decentralized-identity-did-system',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-focused-decentralized-identity-did-system',
+    description: 'XMRT Ecosystem App: Privacy Focused Decentralized Identity Did System',
+    capabilities: ['ecosystem app', 'privacy focused decentralized identity did system'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-focused-decentralized-identity-did-system'
+  },
+  {
+    name: 'privacy-focused-wallet-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-focused-wallet-integration',
+    description: 'XMRT Ecosystem App: Privacy Focused Wallet Integration',
+    capabilities: ['ecosystem app', 'privacy focused wallet integration'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-focused-wallet-integration'
+  },
+  {
+    name: 'privacy-preserving-communication-layer',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-preserving-communication-layer',
+    description: 'XMRT Ecosystem App: Privacy Preserving Communication Layer',
+    capabilities: ['ecosystem app', 'privacy preserving communication layer'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-preserving-communication-layer'
+  },
+  {
+    name: 'privacy-preserving-communication-protocol',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-preserving-communication-protocol',
+    description: 'XMRT Ecosystem App: Privacy Preserving Communication Protocol',
+    capabilities: ['ecosystem app', 'privacy preserving communication protocol'],
+    category: 'ecosystem',
+    example_use: 'Interact with privacy-preserving-communication-protocol'
   },
   {
     name: 'process-contributor-reward',
@@ -845,6 +1269,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: '{"proposal_id":"uuid"}'
   },
   {
+    name: 'reward-program-for-network-participation',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/reward-program-for-network-participation',
+    description: 'XMRT Ecosystem App: Reward Program For Network Participation',
+    capabilities: ['ecosystem app', 'reward program for network participation'],
+    category: 'ecosystem',
+    example_use: 'Interact with reward-program-for-network-participation'
+  },
+  {
     name: 'schedule-reminder',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/schedule-reminder',
     description: 'Schedule and send reminders',
@@ -866,7 +1298,7 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     description: 'Semantic search for edge functions by capability, keywords, or use case',
     capabilities: ['Search functions', 'Find by capability', 'Keyword search', 'Category filter', 'Ranked results'],
     category: 'ecosystem',
-    example_use: 'Find the right function when you don\'
+    example_use: 'Find the right function when you don\'t know the name'
   },
   {
     name: 'self-optimizing-agent-architecture',
@@ -891,6 +1323,30 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     capabilities: ['share latest news'],
     category: 'ecosystem',
     example_use: 'Invoke share-latest-news'
+  },
+  {
+    name: 'slack-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/slack-integration',
+    description: 'XMRT Ecosystem: slack integration',
+    capabilities: ['python service', 'slack integration'],
+    category: 'ecosystem',
+    example_use: 'Interact with slack-integration'
+  },
+  {
+    name: 'smart-contract-auditing-tool',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/smart-contract-auditing-tool',
+    description: 'XMRT Ecosystem App: Smart Contract Auditing Tool',
+    capabilities: ['ecosystem app', 'smart contract auditing tool'],
+    category: 'ecosystem',
+    example_use: 'Interact with smart-contract-auditing-tool'
+  },
+  {
+    name: 'speech-to-text',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/speech-to-text',
+    description: 'Convert speech audio to text',
+    capabilities: ['Audio transcription', 'Voice input processing', 'Speech recognition'],
+    category: 'speech',
+    example_use: 'Process voice input from users for voice-based interactions'
   },
   {
     name: 'stripe-payment-webhook',
@@ -1301,6 +1757,22 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Invoke wan-ai-chat'
   },
   {
+    name: 'web3-dapp-factory',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/web3-dapp-factory',
+    description: 'XMRT Ecosystem: web3 dapp factory',
+    capabilities: ['python service', 'web3 dapp factory'],
+    category: 'ecosystem',
+    example_use: 'Interact with web3-dapp-factory'
+  },
+  {
+    name: 'webhook-endpoints',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/webhook-endpoints',
+    description: 'XMRT Ecosystem: webhook endpoints',
+    capabilities: ['python service', 'webhook endpoints'],
+    category: 'ecosystem',
+    example_use: 'Interact with webhook-endpoints'
+  },
+  {
     name: 'weekly-retrospective-post',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/weekly-retrospective-post',
     description: 'Generate and post weekly retrospective',
@@ -1349,228 +1821,12 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Invoke xmrig-direct-proxy'
   },
   {
-    name: 'xmrt-integration',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-integration',
-    description: 'Auto-detected function: xmrt-integration',
-    capabilities: ['xmrt integration'],
-    category: 'ecosystem',
-    example_use: 'Invoke xmrt-integration'
-  },
-  {
-    name: 'xmrt-mcp-server',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-mcp-server',
-    description: 'XMRT Model Context Protocol server',
-    capabilities: ['Multi-service integration', 'Health monitoring', 'Status reporting'],
-    category: 'ecosystem',
-    example_use: 'Use xmrt mcp server for xmrt model context protocol server'
-  },
-  {
-    name: 'xmrt-workflow-templates',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-workflow-templates',
-    description: 'Auto-detected function: xmrt-workflow-templates',
-    capabilities: ['xmrt workflow templates'],
-    category: 'task-management',
-    example_use: 'Invoke xmrt-workflow-templates'
-  },
-  {
     name: 'xmrt_integration',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt_integration',
     description: 'Unified ecosystem health & integration hub - connects all XMRT repos (XMRT-Ecosystem, xmrt-wallet-public, mobilemonero, xmrtnet, xmrtdao) for comprehensive health reports and integration monitoring',
     capabilities: ['Multi-repository health monitoring', 'Cross-repo integration verification', 'Deployment status (Vercel', 'Render', 'Supabase)', 'API health checks (mining', 'faucet', 'edge functions)', 'Database performance metrics', 'Community engagement analytics', 'Comprehensive markdown reports', 'Repository comparison', 'Integration debugging', 'Ecosystem-wide status overview'],
     category: 'ecosystem',
     example_use: 'Generate comprehensive ecosystem health report covering all repos, deployments, APIs, and community engagement. Check integration between services. Compare repository activity.'
-  },
-  {
-    name: 'ai-driven-mining-optimization-platform',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-driven-mining-optimization-platform',
-    description: 'XMRT Ecosystem App: Ai Driven Mining Optimization Platform',
-    capabilities: ['ecosystem app', 'ai driven mining optimization platform'],
-    category: 'ecosystem',
-    example_use: 'Interact with ai-driven-mining-optimization-platform'
-  },
-  {
-    name: 'ai-powered-mobile-mining-insights',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-powered-mobile-mining-insights',
-    description: 'XMRT Ecosystem App: Ai Powered Mobile Mining Insights',
-    capabilities: ['ecosystem app', 'ai powered mobile mining insights'],
-    category: 'ecosystem',
-    example_use: 'Interact with ai-powered-mobile-mining-insights'
-  },
-  {
-    name: 'ai-powered-privacy-guardian',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-powered-privacy-guardian',
-    description: 'XMRT Ecosystem App: Ai Powered Privacy Guardian',
-    capabilities: ['ecosystem app', 'ai powered privacy guardian'],
-    category: 'ecosystem',
-    example_use: 'Interact with ai-powered-privacy-guardian'
-  },
-  {
-    name: 'ai-powered-privacy-shield',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-powered-privacy-shield',
-    description: 'XMRT Ecosystem App: Ai Powered Privacy Shield',
-    capabilities: ['ecosystem app', 'ai powered privacy shield'],
-    category: 'ecosystem',
-    example_use: 'Interact with ai-powered-privacy-shield'
-  },
-  {
-    name: 'c-suite-autonomous-workflows',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/c-suite-autonomous-workflows',
-    description: 'XMRT Ecosystem App: C Suite Autonomous Workflows',
-    capabilities: ['ecosystem app', 'c suite autonomous workflows'],
-    category: 'ecosystem',
-    example_use: 'Interact with c-suite-autonomous-workflows'
-  },
-  {
-    name: 'community-governance-dashboard',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/community-governance-dashboard',
-    description: 'XMRT Ecosystem App: Community Governance Dashboard',
-    capabilities: ['ecosystem app', 'community governance dashboard'],
-    category: 'ecosystem',
-    example_use: 'Interact with community-governance-dashboard'
-  },
-  {
-    name: 'decentralized-identity-management-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-identity-management-system',
-    description: 'XMRT Ecosystem App: Decentralized Identity Management System',
-    capabilities: ['ecosystem app', 'decentralized identity management system'],
-    category: 'ecosystem',
-    example_use: 'Interact with decentralized-identity-management-system'
-  },
-  {
-    name: 'decentralized-identity-verification-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-identity-verification-system',
-    description: 'XMRT Ecosystem App: Decentralized Identity Verification System',
-    capabilities: ['ecosystem app', 'decentralized identity verification system'],
-    category: 'ecosystem',
-    example_use: 'Interact with decentralized-identity-verification-system'
-  },
-  {
-    name: 'decentralized-mobile-mining-hub',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-mobile-mining-hub',
-    description: 'XMRT Ecosystem App: Decentralized Mobile Mining Hub',
-    capabilities: ['ecosystem app', 'decentralized mobile mining hub'],
-    category: 'ecosystem',
-    example_use: 'Interact with decentralized-mobile-mining-hub'
-  },
-  {
-    name: 'decentralized-mobile-mining-network',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/decentralized-mobile-mining-network',
-    description: 'XMRT Ecosystem App: Decentralized Mobile Mining Network',
-    capabilities: ['ecosystem app', 'decentralized mobile mining network'],
-    category: 'ecosystem',
-    example_use: 'Interact with decentralized-mobile-mining-network'
-  },
-  {
-    name: 'mesh-health-beacons',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mesh-health-beacons',
-    description: 'XMRT Ecosystem App: Mesh Health Beacons',
-    capabilities: ['ecosystem app', 'mesh health beacons'],
-    category: 'ecosystem',
-    example_use: 'Interact with mesh-health-beacons'
-  },
-  {
-    name: 'mobile-mining-incentive-program',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/mobile-mining-incentive-program',
-    description: 'XMRT Ecosystem App: Mobile Mining Incentive Program',
-    capabilities: ['ecosystem app', 'mobile mining incentive program'],
-    category: 'ecosystem',
-    example_use: 'Interact with mobile-mining-incentive-program'
-  },
-  {
-    name: 'privacy-first-ai-training-platform',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-ai-training-platform',
-    description: 'XMRT Ecosystem App: Privacy First Ai Training Platform',
-    capabilities: ['ecosystem app', 'privacy first ai training platform'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-first-ai-training-platform'
-  },
-  {
-    name: 'privacy-first-ai-workflows',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-ai-workflows',
-    description: 'XMRT Ecosystem App: Privacy First Ai Workflows',
-    capabilities: ['ecosystem app', 'privacy first ai workflows'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-first-ai-workflows'
-  },
-  {
-    name: 'privacy-first-decentralized-wallet',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-decentralized-wallet',
-    description: 'XMRT Ecosystem App: Privacy First Decentralized Wallet',
-    capabilities: ['ecosystem app', 'privacy first decentralized wallet'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-first-decentralized-wallet'
-  },
-  {
-    name: 'privacy-first-digital-wallet',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-first-digital-wallet',
-    description: 'XMRT Ecosystem App: Privacy First Digital Wallet',
-    capabilities: ['ecosystem app', 'privacy first digital wallet'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-first-digital-wallet'
-  },
-  {
-    name: 'privacy-focused-data-sharing-framework',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-focused-data-sharing-framework',
-    description: 'XMRT Ecosystem App: Privacy Focused Data Sharing Framework',
-    capabilities: ['ecosystem app', 'privacy focused data sharing framework'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-focused-data-sharing-framework'
-  },
-  {
-    name: 'privacy-focused-decentralized-identity-did-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-focused-decentralized-identity-did-system',
-    description: 'XMRT Ecosystem App: Privacy Focused Decentralized Identity Did System',
-    capabilities: ['ecosystem app', 'privacy focused decentralized identity did system'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-focused-decentralized-identity-did-system'
-  },
-  {
-    name: 'privacy-focused-wallet-integration',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-focused-wallet-integration',
-    description: 'XMRT Ecosystem App: Privacy Focused Wallet Integration',
-    capabilities: ['ecosystem app', 'privacy focused wallet integration'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-focused-wallet-integration'
-  },
-  {
-    name: 'privacy-preserving-communication-layer',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-preserving-communication-layer',
-    description: 'XMRT Ecosystem App: Privacy Preserving Communication Layer',
-    capabilities: ['ecosystem app', 'privacy preserving communication layer'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-preserving-communication-layer'
-  },
-  {
-    name: 'privacy-preserving-communication-protocol',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/privacy-preserving-communication-protocol',
-    description: 'XMRT Ecosystem App: Privacy Preserving Communication Protocol',
-    capabilities: ['ecosystem app', 'privacy preserving communication protocol'],
-    category: 'ecosystem',
-    example_use: 'Interact with privacy-preserving-communication-protocol'
-  },
-  {
-    name: 'reward-program-for-network-participation',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/reward-program-for-network-participation',
-    description: 'XMRT Ecosystem App: Reward Program For Network Participation',
-    capabilities: ['ecosystem app', 'reward program for network participation'],
-    category: 'ecosystem',
-    example_use: 'Interact with reward-program-for-network-participation'
-  },
-  {
-    name: 'smart-contract-auditing-tool',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/smart-contract-auditing-tool',
-    description: 'XMRT Ecosystem App: Smart Contract Auditing Tool',
-    capabilities: ['ecosystem app', 'smart contract auditing tool'],
-    category: 'ecosystem',
-    example_use: 'Interact with smart-contract-auditing-tool'
-  },
-  {
-    name: 'xmrt-mine-guardian',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-mine-guardian',
-    description: 'XMRT Ecosystem: xmrt mine guardian',
-    capabilities: ['python service', 'xmrt mine guardian'],
-    category: 'ecosystem',
-    example_use: 'Interact with xmrt-mine-guardian'
   },
   {
     name: 'xmrt-bridge',
@@ -1581,6 +1837,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Interact with xmrt-bridge'
   },
   {
+    name: 'xmrt-coordination-core',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-coordination-core',
+    description: 'XMRT Ecosystem: xmrt coordination core',
+    capabilities: ['python service', 'xmrt coordination core'],
+    category: 'ecosystem',
+    example_use: 'Interact with xmrt-coordination-core'
+  },
+  {
     name: 'xmrt-ecosystem-dashboard',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-ecosystem-dashboard',
     description: 'XMRT Ecosystem: xmrt ecosystem dashboard',
@@ -1589,12 +1853,36 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Interact with xmrt-ecosystem-dashboard'
   },
   {
+    name: 'xmrt-integration',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-integration',
+    description: 'Auto-detected function: xmrt-integration',
+    capabilities: ['xmrt integration'],
+    category: 'ecosystem',
+    example_use: 'Invoke xmrt-integration'
+  },
+  {
     name: 'xmrt-integration-bridge',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-integration-bridge',
     description: 'XMRT Ecosystem: xmrt integration bridge',
     capabilities: ['python service', 'xmrt integration bridge'],
     category: 'ecosystem',
     example_use: 'Interact with xmrt-integration-bridge'
+  },
+  {
+    name: 'xmrt-mcp-server',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-mcp-server',
+    description: 'XMRT Model Context Protocol server',
+    capabilities: ['Multi-service integration', 'Health monitoring', 'Status reporting'],
+    category: 'ecosystem',
+    example_use: 'Use xmrt mcp server for xmrt model context protocol server'
+  },
+  {
+    name: 'xmrt-mine-guardian',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-mine-guardian',
+    description: 'XMRT Ecosystem: xmrt mine guardian',
+    capabilities: ['python service', 'xmrt mine guardian'],
+    category: 'ecosystem',
+    example_use: 'Interact with xmrt-mine-guardian'
   },
   {
     name: 'xmrt-mining-optimizer',
@@ -1637,267 +1925,19 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Interact with xmrt-repository-monitor'
   },
   {
-    name: 'activity-monitor-api',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/activity-monitor-api',
-    description: 'XMRT Ecosystem: activity monitor api',
-    capabilities: ['python service', 'activity monitor api'],
-    category: 'ecosystem',
-    example_use: 'Interact with activity-monitor-api'
-  },
-  {
-    name: 'advanced-analytics-engine',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/advanced-analytics-engine',
-    description: 'XMRT Ecosystem: advanced analytics engine',
-    capabilities: ['python service', 'advanced analytics engine'],
-    category: 'ecosystem',
-    example_use: 'Interact with advanced-analytics-engine'
-  },
-  {
-    name: 'agent-github-integration',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-github-integration',
-    description: 'XMRT Ecosystem: agent github integration',
-    capabilities: ['python service', 'agent github integration'],
-    category: 'ecosystem',
-    example_use: 'Interact with agent-github-integration'
-  },
-  {
-    name: 'agent-webhook-handler',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/agent-webhook-handler',
-    description: 'XMRT Ecosystem: agent webhook handler',
-    capabilities: ['python service', 'agent webhook handler'],
-    category: 'ecosystem',
-    example_use: 'Interact with agent-webhook-handler'
-  },
-  {
-    name: 'ai-tool-framework',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/ai-tool-framework',
-    description: 'XMRT Ecosystem: ai tool framework',
-    capabilities: ['python service', 'ai tool framework'],
-    category: 'ecosystem',
-    example_use: 'Interact with ai-tool-framework'
-  },
-  {
-    name: 'analytics-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/analytics-system',
-    description: 'XMRT Ecosystem: analytics system',
-    capabilities: ['python service', 'analytics system'],
-    category: 'ecosystem',
-    example_use: 'Interact with analytics-system'
-  },
-  {
-    name: 'api-docs-generator',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/api-docs-generator',
-    description: 'XMRT Ecosystem: api docs generator',
-    capabilities: ['python service', 'api docs generator'],
-    category: 'ecosystem',
-    example_use: 'Interact with api-docs-generator'
-  },
-  {
-    name: 'autonomous-controller',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-controller',
-    description: 'XMRT Ecosystem: autonomous controller',
-    capabilities: ['python service', 'autonomous controller'],
-    category: 'ecosystem',
-    example_use: 'Interact with autonomous-controller'
-  },
-  {
-    name: 'autonomous-core',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-core',
-    description: 'XMRT Ecosystem: autonomous core',
-    capabilities: ['python service', 'autonomous core'],
-    category: 'ecosystem',
-    example_use: 'Interact with autonomous-core'
-  },
-  {
-    name: 'autonomous-learning-core',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/autonomous-learning-core',
-    description: 'XMRT Ecosystem: autonomous learning core',
-    capabilities: ['python service', 'autonomous learning core'],
-    category: 'ecosystem',
-    example_use: 'Interact with autonomous-learning-core'
-  },
-  {
-    name: 'brightdata-mcp-integration',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/brightdata-mcp-integration',
-    description: 'XMRT Ecosystem: brightdata mcp integration',
-    capabilities: ['python service', 'brightdata mcp integration'],
-    category: 'ecosystem',
-    example_use: 'Interact with brightdata-mcp-integration'
-  },
-  {
-    name: 'chat-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/chat-system',
-    description: 'XMRT Ecosystem: chat system',
-    capabilities: ['python service', 'chat system'],
-    category: 'ecosystem',
-    example_use: 'Interact with chat-system'
-  },
-  {
-    name: 'community-intelligence-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/community-intelligence-system',
-    description: 'XMRT Ecosystem: community intelligence system',
-    capabilities: ['python service', 'community intelligence system'],
-    category: 'ecosystem',
-    example_use: 'Interact with community-intelligence-system'
-  },
-  {
-    name: 'deployment-health-check',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/deployment-health-check',
-    description: 'XMRT Ecosystem: deployment health check',
-    capabilities: ['python service', 'deployment health check'],
-    category: 'ecosystem',
-    example_use: 'Interact with deployment-health-check'
-  },
-  {
-    name: 'enhanced-api-endpoints',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-api-endpoints',
-    description: 'XMRT Ecosystem: enhanced api endpoints',
-    capabilities: ['python service', 'enhanced api endpoints'],
-    category: 'ecosystem',
-    example_use: 'Interact with enhanced-api-endpoints'
-  },
-  {
-    name: 'enhanced-autonomous-controller',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-autonomous-controller',
-    description: 'XMRT Ecosystem: enhanced autonomous controller',
-    capabilities: ['python service', 'enhanced autonomous controller'],
-    category: 'ecosystem',
-    example_use: 'Interact with enhanced-autonomous-controller'
-  },
-  {
-    name: 'enhanced-chat-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-chat-system',
-    description: 'XMRT Ecosystem: enhanced chat system',
-    capabilities: ['python service', 'enhanced chat system'],
-    category: 'ecosystem',
-    example_use: 'Interact with enhanced-chat-system'
-  },
-  {
-    name: 'enhanced-multi-agent-coordinator',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/enhanced-multi-agent-coordinator',
-    description: 'XMRT Ecosystem: enhanced multi agent coordinator',
-    capabilities: ['python service', 'enhanced multi agent coordinator'],
-    category: 'ecosystem',
-    example_use: 'Interact with enhanced-multi-agent-coordinator'
-  },
-  {
-    name: 'github-manager',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/github-manager',
-    description: 'XMRT Ecosystem: github manager',
-    capabilities: ['python service', 'github manager'],
-    category: 'ecosystem',
-    example_use: 'Interact with github-manager'
-  },
-  {
-    name: 'health-monitor',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/health-monitor',
-    description: 'XMRT Ecosystem: health monitor',
-    capabilities: ['python service', 'health monitor'],
-    category: 'ecosystem',
-    example_use: 'Interact with health-monitor'
-  },
-  {
-    name: 'learning-optimizer',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/learning-optimizer',
-    description: 'XMRT Ecosystem: learning optimizer',
-    capabilities: ['python service', 'learning optimizer'],
-    category: 'ecosystem',
-    example_use: 'Interact with learning-optimizer'
-  },
-  {
-    name: 'memory-optimizer',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/memory-optimizer',
-    description: 'XMRT Ecosystem: memory optimizer',
-    capabilities: ['python service', 'memory optimizer'],
-    category: 'ecosystem',
-    example_use: 'Interact with memory-optimizer'
-  },
-  {
-    name: 'memory-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/memory-system',
-    description: 'XMRT Ecosystem: memory system',
-    capabilities: ['python service', 'memory system'],
-    category: 'ecosystem',
-    example_use: 'Interact with memory-system'
-  },
-  {
-    name: 'multi-agent-slack-bridge',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/multi-agent-slack-bridge',
-    description: 'XMRT Ecosystem: multi agent slack bridge',
-    capabilities: ['python service', 'multi agent slack bridge'],
-    category: 'ecosystem',
-    example_use: 'Interact with multi-agent-slack-bridge'
-  },
-  {
-    name: 'multi-agent-system',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/multi-agent-system',
-    description: 'XMRT Ecosystem: multi agent system',
-    capabilities: ['python service', 'multi agent system'],
-    category: 'ecosystem',
-    example_use: 'Interact with multi-agent-system'
-  },
-  {
-    name: 'n8n-integration',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/n8n-integration',
-    description: 'XMRT Ecosystem: n8n integration',
-    capabilities: ['python service', 'n8n integration'],
-    category: 'ecosystem',
-    example_use: 'Interact with n8n-integration'
-  },
-  {
-    name: 'n8n-workflow-manager',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/n8n-workflow-manager',
-    description: 'XMRT Ecosystem: n8n workflow manager',
-    capabilities: ['python service', 'n8n workflow manager'],
-    category: 'ecosystem',
-    example_use: 'Interact with n8n-workflow-manager'
-  },
-  {
-    name: 'performance-analyzer',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/performance-analyzer',
-    description: 'XMRT Ecosystem: performance analyzer',
-    capabilities: ['python service', 'performance analyzer'],
-    category: 'ecosystem',
-    example_use: 'Interact with performance-analyzer'
-  },
-  {
-    name: 'slack-integration',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/slack-integration',
-    description: 'XMRT Ecosystem: slack integration',
-    capabilities: ['python service', 'slack integration'],
-    category: 'ecosystem',
-    example_use: 'Interact with slack-integration'
-  },
-  {
-    name: 'web3-dapp-factory',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/web3-dapp-factory',
-    description: 'XMRT Ecosystem: web3 dapp factory',
-    capabilities: ['python service', 'web3 dapp factory'],
-    category: 'ecosystem',
-    example_use: 'Interact with web3-dapp-factory'
-  },
-  {
-    name: 'webhook-endpoints',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/webhook-endpoints',
-    description: 'XMRT Ecosystem: webhook endpoints',
-    capabilities: ['python service', 'webhook endpoints'],
-    category: 'ecosystem',
-    example_use: 'Interact with webhook-endpoints'
-  },
-  {
-    name: 'xmrt-coordination-core',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-coordination-core',
-    description: 'XMRT Ecosystem: xmrt coordination core',
-    capabilities: ['python service', 'xmrt coordination core'],
-    category: 'ecosystem',
-    example_use: 'Interact with xmrt-coordination-core'
-  },
-  {
     name: 'xmrt-slack-main',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-slack-main',
     description: 'XMRT Ecosystem: xmrt slack main',
     capabilities: ['python service', 'xmrt slack main'],
     category: 'ecosystem',
     example_use: 'Interact with xmrt-slack-main'
-  }
+  },
+  {
+    name: 'xmrt-workflow-templates',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/xmrt-workflow-templates',
+    description: 'Auto-detected function: xmrt-workflow-templates',
+    capabilities: ['xmrt workflow templates'],
+    category: 'task-management',
+    example_use: 'Invoke xmrt-workflow-templates'
+  },
 ];
