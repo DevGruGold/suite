@@ -1,8 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
-import { EDGE_FUNCTIONS_REGISTRY } from "../_shared/edgeFunctionRegistry.ts";
-import { checkToolAccess, MembershipTier } from "../_shared/rbacPolicy.ts";
+import { createClient } from "npm:@supabase/supabase-js@2.46.2";
 
 // ========== ENVIRONMENT CONFIGURATION ==========
 const SUPABASE_URL = Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') || 'https://vawouugtzwmejxqkeqqj.supabase.co';
@@ -57,7 +55,6 @@ const DATABASE_CONFIG = {
     conversation_summaries: 'conversation_summaries',
     conversation_context: 'conversation_context',
     attachment_analysis: 'attachment_analysis',
-    message_attachments: 'message_attachments',
     // NEW: IP-based session tracking
     ip_conversation_sessions: 'ip_conversation_sessions'
   },
@@ -350,7 +347,7 @@ const TOOL_CALLING_MANDATE = `
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail, set_task_status, delete_task
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
 
@@ -391,6 +388,10 @@ const TOOL_CALLING_MANDATE = `
 - Use the full GitHub tool suite when user asks about GitHub operations
 - Available tools: createGitHubIssue, listGitHubIssues, createGitHubDiscussion, searchGitHubCode, createGitHubPullRequest, commentOnGitHubIssue, commentOnGitHubDiscussion, listGitHubPullRequests
 - For comprehensive GitHub operations, use the appropriate tool based on the request
+
+📊 DIAGRAM & PLOT GENERATION (PaperBanana):
+- When user asks for ACADEMIC DIAGRAMS, METHODOLOGY FIGURES, or PLOTS → call paperbanana_generate_diagram or paperbanana_generate_plot
+- tools: paperbanana_generate_diagram({source_context: "...", communicative_intent: "...", diagram_type: "methodology"}), paperbanana_generate_plot({data: [...], intent: "..."})
 `;
 
 // ========== UTILITY FUNCTIONS ==========
@@ -822,7 +823,7 @@ class AttachmentAnalyzer {
   static readonly SUPPORTED_EXTENSIONS = [
     '.txt', '.md', '.json', '.yaml', '.yml', '.xml', '.csv', '.html', '.htm',
     '.pdf', '.doc', '.docx', '.rtf',
-    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.tif',
+    '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg',
     '.js', '.ts', '.jsx', '.tsx', '.py', '.java', '.cpp', '.c', '.h', '.cs',
     '.php', '.rb', '.go', '.rs', '.swift', '.kt', '.scala',
     '.sol', '.vy',
@@ -840,7 +841,7 @@ class AttachmentAnalyzer {
   static getFileType(filename: string): string {
     const extension = filename.toLowerCase().substring(filename.lastIndexOf('.'));
 
-    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg', '.tiff', '.tif'].includes(extension)) {
+    if (['.png', '.jpg', '.jpeg', '.gif', '.bmp', '.webp', '.svg'].includes(extension)) {
       return 'image';
     } else if (['.pdf', '.doc', '.docx', '.rtf'].includes(extension)) {
       return 'document';
@@ -1209,10 +1210,7 @@ async function executeRealToolCall(
   executiveName: string,
   sessionId: string,
   ipAddress: string,
-  timestamp: number = Date.now(),
-  userId?: string,
-  organizationId?: string,
-  membershipTier: string = 'user'
+  timestamp: number = Date.now()
 ): Promise<any> {
   const startTime = performance.now();
   let success = false;
@@ -1220,16 +1218,6 @@ async function executeRealToolCall(
   let error_message: string | null = null;
 
   try {
-    // RBAC CHECK
-    const { allowed, requiredTier, currentTier } = checkToolAccess(name, membershipTier);
-    if (!allowed) {
-      console.warn(`⛔ [RBAC] Access Denied: User ${userId || 'anon'} (${currentTier}) tried to use ${name} (required: ${requiredTier})`);
-      return {
-        success: false,
-        error: `Access Denied: You are a '${currentTier}' but this tool requires '${requiredTier}' access.`
-      };
-    }
-
     const parsedArgs = parseToolArguments(args);
 
     // Use parseToolArguments for consistent parsing
@@ -1415,10 +1403,7 @@ async function executeRealToolCall(
         status: 'PENDING',
         stage: 'DISCUSS',
         created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString(),
-        first_created_at: new Date().toISOString(),
-        created_by_user_id: userId || null,
-        organization_id: organizationId || null
+        updated_at: new Date().toISOString()
       };
 
       const { data: task, error } = await supabase
@@ -1439,28 +1424,6 @@ async function executeRealToolCall(
 
       if (error) throw error;
       result = { success: true, tasks: tasks || [] };
-
-    } else if (name === 'update_task_status' || name === 'set_task_status') {
-      const { task_id, status, stage, blocking_reason } = parsedArgs;
-      if (!task_id || !status) throw new Error('Missing task_id or status');
-
-      result = await invokeEdgeFunction('agent-manager', {
-        action: 'update_task_status',
-        task_id,
-        status,
-        stage,
-        blocking_reason
-      });
-
-    } else if (name === 'delete_task') {
-      const { task_id, reason } = parsedArgs;
-      if (!task_id) throw new Error('Missing task_id');
-
-      result = await invokeEdgeFunction('agent-manager', {
-        action: 'delete_task',
-        task_id,
-        reason
-      });
 
     } else if (name === 'search_knowledge') {
       const search_term = parsedArgs.search_term || parsedArgs.query;
@@ -1626,6 +1589,29 @@ async function executeRealToolCall(
 
     } else if (name === 'google_gmail') {
       result = await invokeEdgeFunction('google-gmail', parsedArgs);
+
+    } else if (name === 'paperbanana_generate_diagram') {
+      const { source_context, communicative_intent, diagram_type, caption } = parsedArgs;
+      if (!source_context || !communicative_intent) throw new Error('Missing source_context or communicative_intent');
+
+      result = await invokeEdgeFunction('paperbanana', {
+        action: 'generate_diagram',
+        source_context,
+        communicative_intent,
+        diagram_type: diagram_type || 'methodology',
+        caption
+      });
+
+    } else if (name === 'paperbanana_generate_plot') {
+      const { data, intent, caption } = parsedArgs;
+      if (!data || !intent) throw new Error('Missing data or intent');
+
+      result = await invokeEdgeFunction('paperbanana', {
+        action: 'generate_plot',
+        data,
+        intent,
+        caption
+      });
 
     } else {
       throw new Error(`Tool '${name}' is not a recognized or allowed tool. Please use one of the explicitly defined tools.`);
@@ -2029,7 +2015,6 @@ async function retrieveMemoryContexts(sessionKey: string): Promise<any[]> {
   return [];
 }
 
-
 async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any> {
   const DEEPSEEK_API_KEY = Deno.env.get('DEEPSEEK_API_KEY');
   if (!DEEPSEEK_API_KEY) return null;
@@ -2050,7 +2035,7 @@ async function callDeepSeekFallback(messages: any[], tools?: any[]): Promise<any
     const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${DEEPSEEK_API_KEY}`,
+        'Authorization': `Bearer ${this.config.deepseek.apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -2105,7 +2090,7 @@ async function callKimiFallback(messages: any[], tools?: any[]): Promise<any> {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Authorization': `Bearer ${this.config.kimi.apiKey}`,
         'Content-Type': 'application/json',
         'HTTP-Referer': 'https://xmrt.pro',
         'X-Title': 'XMRT Eliza'
@@ -2148,9 +2133,7 @@ async function callGeminiFallback(
   images?: string[]
 ): Promise<any> {
   const GEMINI_API_KEY = Deno.env.get('GEMINI_API_KEY');
-  const oauthToken = await getGoogleCloudToken();
-
-  if (!GEMINI_API_KEY && !oauthToken) return null;
+  if (!GEMINI_API_KEY) return null;
 
   console.log('🔄 Trying Gemini fallback with better models (2.5-flash)...');
 
@@ -2187,21 +2170,14 @@ async function callGeminiFallback(
         functionDeclarations: convertToolsToGeminiFormat(tools)
       }] : undefined;
 
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json'
-      };
-
-      if (oauthToken) {
-        headers['Authorization'] = `Bearer ${oauthToken}`;
-      } else {
-        headers['x-goog-api-key'] = GEMINI_API_KEY!;
-      }
-
       const response = await fetch(
         `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
         {
           method: 'POST',
-          headers: headers,
+          headers: {
+            'Content-Type': 'application/json',
+            'x-goog-api-key': GEMINI_API_KEY
+          },
           body: JSON.stringify({
             contents: [{ parts }],
             tools: geminiTools,
@@ -2715,7 +2691,7 @@ class EnhancedConversationManager {
 
       const { data: ipData, error: ipError } = await supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
-        .select('messages, summary, tool_results, metadata, updated_at')
+        .select('messages, summary, tool_results, metadata')
         .eq('ip_address', this.ipAddress)
         .order('updated_at', { ascending: false })
         .limit(1);
@@ -2738,7 +2714,7 @@ class EnhancedConversationManager {
       } else {
         const { data: sessionData, error: sessionError } = await supabase
           .from(DATABASE_CONFIG.tables.conversation_memory)
-          .select('messages, summary, tool_results, metadata, updated_at')
+          .select('messages, summary, tool_results, metadata')
           .eq('session_id', this.sessionId)
           .order('updated_at', { ascending: false })
           .limit(1);
@@ -2778,14 +2754,20 @@ class EnhancedConversationManager {
 
   private async updateSessionIdInMemory(record: any): Promise<void> {
     try {
-      await supabase
+      let query = supabase
         .from(DATABASE_CONFIG.tables.conversation_memory)
         .update({
-          session_id: this.sessionId
-          // updated_at: removed to let DB unlock handle it
+          session_id: this.sessionId,
+          updated_at: new Date().toISOString()
         })
-        .eq('ip_address', this.ipAddress)
-        .eq('updated_at', record.updated_at);
+        .eq('ip_address', this.ipAddress);
+
+      // CRITICAL FIX: Only add updated_at condition if it exists
+      if (record.updated_at) {
+        query = query.eq('updated_at', record.updated_at);
+      }
+
+      await query;
 
       console.log(`🔄 Updated session ID for IP ${this.ipAddress} to ${this.sessionId}`);
     } catch (error) {
@@ -2819,8 +2801,8 @@ class EnhancedConversationManager {
           memory_version: '5.0',
           ip_based_persistence: true,
           summary_method: 'manual_immediate' // Changed from 'ai_enhanced'
-        }
-        // updated_at: removed to let DB handle it via trigger
+        },
+        updated_at: new Date().toISOString()
       };
 
       if (this.userId) {
@@ -2940,34 +2922,7 @@ class EnhancedConversationManager {
             }
           }
           else if (tool.name === 'analyze_attachment') {
-            const analyses = tool.result.analyses || [];
-            context += `   Analyzed ${tool.result.total_attachments || 0} attachments:\n`;
-
-            analyses.forEach((analysis: any) => {
-              const status = analysis.success ? '✅' : '❌';
-              const fileType = analysis.file_type || 'unknown';
-              context += `   - ${status} [${fileType.toUpperCase()}] ${analysis.filename}: `;
-
-              if (analysis.success) {
-                if (analysis.file_type === 'image') {
-                  context += `Available for vision analysis\n`;
-                } else {
-                  context += `\n`;
-                  if (analysis.key_findings && analysis.key_findings.length > 0) {
-                    context += `     Key Findings: ${analysis.key_findings.join(', ')}\n`;
-                  }
-                  if (analysis.content_preview) {
-                    // Truncate preview if too long to avoid token limit issues
-                    const preview = analysis.content_preview.length > 2000
-                      ? analysis.content_preview.substring(0, 2000) + '... (truncated)'
-                      : analysis.content_preview;
-                    context += `     Content Preview: \n"""\n${preview}\n"""\n`;
-                  }
-                }
-              } else {
-                context += `Error: ${analysis.error}\n`;
-              }
-            });
+            context += `   Analyzed ${tool.result.total_attachments || 0} attachments\n`;
           }
           else if (tool.name === 'google_gmail') {
             context += `   Email action: ${tool.result.action || 'sent'}\n`;
@@ -3043,10 +2998,7 @@ async function executeToolsWithIteration(
   callAIFunction: Function,
   tools: any[],
   maxIterations: number = 5,
-  memoryManager?: EnhancedConversationManager,
-  userId?: string,
-  organizationId?: string,
-  membershipTier?: string
+  memoryManager?: EnhancedConversationManager
 ): Promise<{ content: string; toolsExecuted: number }> {
   let response = initialResponse;
   let totalToolsExecuted = 0;
@@ -3070,42 +3022,23 @@ async function executeToolsWithIteration(
     console.log(`🔧 [${executiveName}] Iteration ${iteration + 1}: Executing ${toolCalls.length} tool(s)`);
 
     const toolResults = [];
-
-    // Parallel processing for performance
-    const toolPromises = toolCalls.map(async (toolCall: any) => {
-      try {
-        const result = await executeRealToolCall(
-          toolCall.function.name,
-          toolCall.function.arguments,
-          executiveName,
-          sessionId,
-          ipAddress,
-          Date.now(),
-          userId,
-          userId,
-          organizationId,
-          membershipTier
-        );
-        return {
-          tool_call_id: toolCall.id,
-          role: 'tool',
-          name: toolCall.function.name,
-          content: JSON.stringify(result)
-        };
-      } catch (err: any) {
-        return {
-          tool_call_id: toolCall.id,
-          role: 'tool',
-          name: toolCall.function.name,
-          content: JSON.stringify({ success: false, error: err.message || 'Unknown execution error' })
-        };
-      }
-    });
-
-    const results = await Promise.all(toolPromises);
-    toolResults.push(...results);
-    totalToolsExecuted += results.length;
-
+    for (const toolCall of toolCalls) {
+      const result = await executeRealToolCall(
+        toolCall.function.name,
+        toolCall.function.arguments,
+        executiveName,
+        sessionId,
+        ipAddress,
+        Date.now()
+      );
+      toolResults.push({
+        tool_call_id: toolCall.id,
+        role: 'tool',
+        name: toolCall.function.name,
+        content: JSON.stringify(result)
+      });
+      totalToolsExecuted++;
+    }
 
     const memoryFormatted = toolResults.map(tr => {
       let parsed;
@@ -3160,32 +3093,6 @@ interface CascadeResult {
   error?: string;
 }
 
-// ========== NEW: GOOGLE CLOUD AUTH HELPER ==========
-async function getGoogleCloudToken(): Promise<string | null> {
-  try {
-    // console.log('🔑 [Auth] Requesting Google Cloud OAuth token...');
-    const { data, error } = await supabase.functions.invoke('google-cloud-auth', {
-      body: { action: 'get_access_token' }
-    });
-
-    if (error) {
-      console.warn('⚠️ [Auth] Failed to get Google Cloud token via invoke:', error);
-      return null;
-    }
-
-    if (data && data.success && data.access_token) {
-      // console.log('🔑 [Auth] Successfully retrieved Google Cloud OAuth token');
-      return data.access_token;
-    }
-
-    console.warn('⚠️ [Auth] Google Cloud auth returned success=false or no token', data);
-    return null;
-  } catch (err) {
-    console.warn('⚠️ [Auth] Exception getting Google Cloud token:', err);
-    return null;
-  }
-}
-
 class EnhancedProviderCascade {
   private attempts: any[] = [];
   private config: Record<string, AIProviderConfig>;
@@ -3201,25 +3108,6 @@ class EnhancedProviderCascade {
     images?: string[]
   ): Promise<CascadeResult> {
     this.attempts = [];
-
-    console.log(`🔍 [Cascade] Starting content generation. Preferred: ${preferredProvider || 'auto'}`);
-    const enabledProviders = Object.entries(this.config)
-      .filter(([_, c]) => c.enabled)
-      .map(([n]) => n);
-    console.log(`🔍 [Cascade] Enabled providers from config: ${enabledProviders.join(', ') || 'NONE'}`);
-
-    // Log if API keys are missing for debugging
-    if (enabledProviders.length === 0) {
-      console.warn('⚠️ [Cascade] NO LOGIC PROVIDERS ENABLED! Check API Key environment variables.');
-      const keysCheck = {
-        OpenAI: !!this.config.openai?.apiKey,
-        Gemini: !!this.config.gemini?.apiKey,
-        DeepSeek: !!this.config.deepseek?.apiKey,
-        Anthropic: !!this.config.anthropic?.apiKey,
-        Kimi: !!this.config.kimi?.apiKey
-      };
-      console.warn('🔑 [Cascade] Key Status:', JSON.stringify(keysCheck));
-    }
 
     if (preferredProvider && preferredProvider !== 'auto') {
       const config = this.config[preferredProvider];
@@ -3237,19 +3125,9 @@ class EnhancedProviderCascade {
       .sort((a, b) => a[1].priority - b[1].priority)
       .map(([name]) => name);
 
-    console.log(`🔍 [Cascade] Execution order: ${providers.join(' -> ')}`);
-
-    if (providers.length === 0 && !preferredProvider) {
-      console.warn('⚠️ [Cascade] No primary providers available for execution loop.');
-    }
-
     for (const provider of providers) {
       const result = await this.callProvider(provider, messages, tools, images);
       this.attempts.push({ provider, success: result.success });
-
-      if (!result.success) {
-        console.warn(`⚠️ [Cascade] Provider ${provider} failed: ${result.error}`);
-      }
 
       if (result.success) {
         return result;
@@ -3276,17 +3154,10 @@ class EnhancedProviderCascade {
       }
     }
 
-    // Try Smol fallback as a last resort
-    console.log('🔄 All providers failed, attempting SmolLM2 fallback...');
-    const smolResult = await this.callSmolFallback(messages);
-    if (smolResult.success) {
-      return smolResult;
-    }
-
     return {
       success: false,
       provider: 'all',
-      error: `All providers failed (including Smol fallback) after ${this.attempts.length} attempts`
+      error: `All providers failed after ${this.attempts.length} attempts`
     };
   }
 
@@ -3315,10 +3186,10 @@ class EnhancedProviderCascade {
 
       switch (provider) {
         case 'openai':
-          result = await this.callOpenAI(messages, tools, controller, images);
+          result = await this.callOpenAI(messages, tools, controller);
           break;
         case 'gemini':
-          result = await this.callGemini(messages, tools, controller, images);
+          result = await this.callGemini(messages, tools, images, controller);
           break;
         case 'deepseek':
           result = await this.callDeepSeek(messages, tools, controller);
@@ -3354,100 +3225,8 @@ class EnhancedProviderCascade {
     }
   }
 
-  private async callSmolFallback(messages: any[]): Promise<CascadeResult> {
-    const hfToken = Deno.env.get('HUGGING_FACE_ACCESS_TOKEN');
-    if (!hfToken) {
-      console.warn('⚠️ No HUGGING_FACE_ACCESS_TOKEN found, skipping Smol fallback.');
-      return { success: false, provider: 'smol', error: 'Missing HF Token' };
-    }
-
-    try {
-      console.log('🔄 Trying SmolLM2 fallback via Hugging Face...');
-
-      // Construct prompt from messages (simple concatenation for Smol)
-      let prompt = "<|im_start|>system\nYou are a helpful assistant.<|im_end|>\n";
-      for (const msg of messages) {
-        prompt += `<|im_start|>${msg.role}\n${msg.content}<|im_end|>\n`;
-      }
-      prompt += "<|im_start|>assistant\n";
-
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout for fallback
-
-      const response = await fetch(
-        "https://api-inference.huggingface.co/models/HuggingFaceTB/SmolLM2-1.7B-Instruct",
-        {
-          headers: {
-            Authorization: `Bearer ${hfToken}`,
-            "Content-Type": "application/json",
-          },
-          method: "POST",
-          body: JSON.stringify({
-            inputs: prompt,
-            parameters: {
-              max_new_tokens: 512,
-              temperature: 0.7,
-              return_full_text: false,
-            },
-          }),
-          signal: controller.signal,
-        }
-      );
-
-      clearTimeout(timeoutId);
-
-      if (!response.ok) {
-        throw new Error(`HF API error: ${response.status} ${response.statusText}`);
-      }
-
-      const result = await response.json();
-      const generatedText = Array.isArray(result) ? result[0].generated_text : result.generated_text;
-
-      return {
-        success: true,
-        content: generatedText || "I'm sorry, I couldn't generate a response.",
-        provider: 'smol',
-        model: 'SmolLM2-1.7B-Instruct'
-      };
-
-    } catch (error: any) {
-      console.error('❌ Smol fallback failed:', error);
-      return {
-        success: false,
-        provider: 'smol',
-        error: error.message
-      };
-    }
-  }
-
-  private async callOpenAI(messages: any[], tools: any[], controller: AbortController, images?: string[]): Promise<CascadeResult> {
+  private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
     const forceTools = needsDataRetrieval(messages);
-
-    // Filter messages to ensure text content is valid
-    const formattedMessages = messages.map(msg => {
-      // Check if this is the last user message and we have images
-      if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0) {
-        let content: any[] = [];
-        if (Array.isArray(msg.content)) {
-          content = [...msg.content];
-        } else {
-          content = [{ type: 'text', text: msg.content || 'Analyze this image.' }];
-        }
-
-        images.forEach(img => {
-          content.push({
-            type: 'image_url',
-            image_url: {
-              url: img, // Assuming img is data URI
-              detail: 'auto'
-            }
-          });
-        });
-
-        return { ...msg, content };
-      }
-      return msg;
-    });
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
@@ -3456,8 +3235,8 @@ class EnhancedProviderCascade {
         'Content-Type': 'application/json'
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // gpt-4o-mini supports vision
-        messages: formattedMessages,
+        model: 'gpt-4o-mini',
+        messages: messages,
         temperature: 0.7,
         max_tokens: 4000,
         ...(tools.length > 0 && {
@@ -3497,25 +3276,17 @@ class EnhancedProviderCascade {
     };
   }
 
-  private async callGemini(messages: any[], tools: any[], controller: AbortController, images?: string[]): Promise<CascadeResult> {
-    // Get OAuth token first
-    const oauthToken = await getGoogleCloudToken();
-
-    // Warn but proceed if both key and token are missing (config check might pass if enabled=true but key missing)
-    if (!this.config.gemini.apiKey && !oauthToken) {
-      return { success: false, provider: 'gemini', error: 'Missing both Gemini API Key and Google OAuth Token' };
-    }
-
+  private async callGemini(messages: any[], tools: any[], images?: string[], controller: AbortController): Promise<CascadeResult> {
     const geminiModels = [
-      'gemini-2.5-flash-image',
       'gemini-2.5-flash',
+      'gemini-2.5-flash-image',
       'gemini-2.0-flash-exp',
       'gemini-1.5-flash'
     ];
 
     for (const model of geminiModels) {
       try {
-        console.log(`🔄 Trying Gemini model: ${model}${oauthToken ? ' (using OAuth)' : ' (using API Key)'}`);
+        console.log(`🔄 Trying Gemini model: ${model}`);
 
         const geminiMessages = [];
 
@@ -3530,26 +3301,10 @@ class EnhancedProviderCascade {
               parts: [{ text: 'Understood. I will follow these instructions.' }]
             });
           } else if (msg.role === 'user') {
-            let parts: any[] = [];
+            const parts: any[] = [{ text: msg.content }];
 
-            if (Array.isArray(msg.content)) {
-              msg.content.forEach((item: any) => {
-                if (item.type === 'text') {
-                  parts.push({ text: item.text });
-                } else if (item.type === 'image_url') {
-                  const match = item.image_url?.url?.match(/^data:([^;]+);base64,(.+)$/);
-                  if (match) {
-                    parts.push({ inline_data: { mime_type: match[1], data: match[2] } });
-                  }
-                }
-              });
-            } else {
-              parts = [{ text: msg.content }];
-            }
-
-            // FIXED: Allow images for all flash/pro/image models
             if (msg === messages.filter(m => m.role === 'user').pop() && images && images.length > 0 &&
-              (model.includes('image') || model.includes('flash') || model.includes('pro') || model.includes('exp'))) {
+              (model.includes('image') || model === 'gemini-1.5-flash')) {
               for (const imageBase64 of images) {
                 const matches = imageBase64.match(/^data:([^;]+);base64,(.+)$/);
                 if (matches) {
@@ -3614,21 +3369,14 @@ class EnhancedProviderCascade {
           requestBody.tools = [geminiTools];
         }
 
-        const headers: Record<string, string> = {
-          'Content-Type': 'application/json'
-        };
-
-        if (oauthToken) {
-          headers['Authorization'] = `Bearer ${oauthToken}`;
-        } else {
-          headers['x-goog-api-key'] = this.config.gemini.apiKey;
-        }
-
         const response = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
           {
             method: 'POST',
-            headers: headers,
+            headers: {
+              'Content-Type': 'application/json',
+              'x-goog-api-key': this.config.gemini.apiKey
+            },
             body: JSON.stringify(requestBody),
             signal: controller.signal
           }
@@ -3644,7 +3392,7 @@ class EnhancedProviderCascade {
           return {
             success: false,
             provider: 'gemini',
-            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 300)}`
+            error: `Gemini ${model} API error: ${response.status} - ${errorText.substring(0, 200)}`
           };
         }
 
@@ -3966,36 +3714,128 @@ function generateSystemPrompt(
 
 You are ${executiveName}, the ${EXECUTIVE_ROLE} for XMRT-DAO Ecosystem.
 
-## 🎯 MISSION & MANIFESTO
-You are an **intelligent, proactive assistant**.
-1. **ACT, DON'T EXPLAIN**: Immediately use tools. Never say "I will..." or "Let me..." - just do it.
-2. **SYNTHESIZE**: Analyze tool results. Don't just list data; tell me what it *means*.
-3. **CONTEXT IS KING**: Remember previous turns and historical summaries.
-4. **HANDLE AMBIGUITY**: If user says "yes" or "no", infer meaning from the \`RECENT CONVERSATION CONTEXT\` above.
+## 🎯 CORE RESPONSE PHILOSOPHY
+You are an **intelligent analyst and proactive assistant**, not just a tool executor. Your responses should:
+1. **Analyze and synthesize** tool results into meaningful insights
+2. **Provide context and commentary** on what the results mean
+3. **Suggest next steps** based on the analysis
+4. **Maintain conversational flow** between queries
+5. **Be helpful, insightful, and action-oriented**
 
-## 🔧 TOOL RULES (STRICT)
-- **Functions**: If asked about capabilities, call \`search_edge_functions\`.
-- **Browsing**: If a URL/website is mentioned, call \`browse_web\` immediately.
-- **Files**: If an attachment is present, call \`analyze_attachment\` immediately.
-- **Email**: If asked to email, call \`google_gmail\` (draft first).
-- **GitHub**: Use specific tools (\`createGitHubIssue\`, \`searchGitHubCode\`, etc.) for all repo work.
+## 🚀 CRITICAL DIRECTIVES:
+1. You are an ACTION-ORIENTED EXECUTIVE, not an explainer
+2. When users ask for something, IMMEDIATELY use available tools
+3. Present results naturally as if you already know them
+4. NEVER say "I'm going to..." or "Let me..." - just do it
+5. Only mention tools when errors occur
+6. YOU MUST reference previous tool calls when users ask about them
+7. YOU MUST understand ambiguous responses by referring to recent conversation context
 
-## 📊 RESPONSE FORMAT
-1. **Context**: Briefly acknowledge the goal.
-2. **Results**: Group tool outputs logically.
-3. **Analysis**: Provide insights, not just data.
-4. **Next Steps**: Suggest the path forward.
+## 🔧 TOOL USAGE ENHANCEMENTS:
+- After executing tools, provide **intelligent analysis** of results
+- Group related results together logically
+- Add **insights and observations** about what the data means
+- Suggest **next actions** or **alternative approaches** when tools fail
+- Use **emoji and formatting** to make responses readable and engaging
 
-## 🧠 MEMORY & PERSISTENCE
-- **IP**: ${ipAddress} (Session active for 24h).
-- **History**: Reference \`HISTORICAL SUMMARIES\` and \`MEMORY CONTEXT\` below.
+## 🐙 GITHUB FUNCTIONALITY:
+- Use the full GitHub tool suite when user asks about GitHub operations
+- Available tools: createGitHubIssue, listGitHubIssues, createGitHubDiscussion, searchGitHubCode, createGitHubPullRequest, commentOnGitHubIssue, commentOnGitHubDiscussion, listGitHubPullRequests
+- For comprehensive GitHub operations, use the appropriate tool based on the request
+
+// ===== HARD RULE for search_edge_functions =====
+HARD RULES FOR FUNCTION DISCOVERY:
+- If the user asks about available edge functions or capabilities, you MUST call search_edge_functions.
+- You are NOT allowed to claim knowledge of available functions without querying this tool. Do not list, summarize, or imply availability without calling it.
+// ===== END PATCH =====
+
+🌐 WEB BROWSING CRITICAL RULE:
+- When the user asks to view, open, check, browse, navigate to, or visit ANY URL or website, you MUST IMMEDIATELY call browse_web({url: "full_url_here"})
+- This includes any request involving: websites, webpages, links, HTTP/HTTPS URLs, or web content
+- NEVER say "I cannot browse the web" or "I don't have web access" - YOU HAVE FULL WEB BROWSING CAPABILITIES
+- Always use the full URL including https:// or http:// prefix
+- If the user provides an incomplete URL (like "google.com"), convert it to "https://google.com"
+
+📎 ATTACHMENT ANALYSIS CRITICAL RULE:
+- When user provides ANY attachment (files, images, documents, code), IMMEDIATELY call analyze_attachment({attachments: [...]})
+- Supported files: .txt, .png, .jpg, .jpeg, .pdf, .doc, .docx, .sol (Solidity), .js, .ts, .py, .java, .cpp, .rs, .go, and 50+ more formats
+- NEVER say "I cannot analyze files" - YOU HAVE FULL ATTACHMENT ANALYSIS CAPABILITIES
+- Always provide detailed analysis of attachments when provided
+
+📧 EMAIL SENDING CRITICAL RULE:
+- When user asks to SEND EMAIL or mentions email address → IMMEDIATELY call google_gmail({action: 'send_email', to: "recipient@email.com", subject: "Subject", body: "Email body"})
+- DO NOT generate contract code or unrelated content when asked to send emails
+- Always show draft for approval before sending
+- Use conversation context to understand what email content is needed
+
+## 📊 RESPONSE STRUCTURE GUIDELINES:
+1. **Start with context**: Acknowledge what you're doing based on the query
+2. **Present grouped results**: Organize similar tool outputs together
+3. **Add analysis**: Explain what the results mean or suggest
+4. **Note failures**: Mention any failed tools and why
+5. **Suggest next steps**: Provide actionable recommendations
+6. **Use formatting**: Use markdown, emojis, and clear sections
+
+DATABASE SCHEMA AWARENESS:
+- Tables: ${Object.values(DATABASE_CONFIG.tables).join(', ')}
+- Agent Statuses: ${DATABASE_CONFIG.agentStatuses.join(', ')}
+- Task Statuses: ${DATABASE_CONFIG.taskStatuses.join(', ')}
+- Task Stages: ${DATABASE_CONFIG.taskStages.join(' → ')}
+- Task Categories: ${DATABASE_CONFIG.taskCategories.join(', ')}
 
 ${historicalContext}
 
 ${followUpContext}
 
 ${memoryContext}
-`;
+
+## 🎯 IP-BASED CONVERSATION PERSISTENCE
+**IMPORTANT**: This conversation persists across sessions based on IP address (${ipAddress}). The conversation will remember:
+1. All previous tool calls and their results
+2. Conversation history and context
+3. Historical summaries from previous sessions
+4. Ambiguous response contexts
+
+## 💬 ENHANCED CONVERSATION RULES:
+1. **ALWAYS** check the tool history above before answering questions about previous tool calls
+2. **ALWAYS** check historical summaries when user refers to past conversations
+3. **ALWAYS** check recent context when user gives ambiguous responses (yes/no/okay)
+4. If a user asks "what did you get from [tool name]?", REFERENCE THE EXACT RESULTS from above
+5. If a tool failed, acknowledge it and suggest alternatives
+6. Be concise, helpful, and proactive
+7. Focus on getting things done efficiently
+8. Summarize tool results clearly when users ask
+9. Maintain conversation context across the entire session
+10. **FOR AMBIGUOUS RESPONSES**: When user says "yes", "no", "okay", etc., explicitly state what you think they're agreeing/disagreeing to based on recent context. DO NOT trigger email sending unless explicitly requested.
+
+## 🎨 RESPONSE ENHANCEMENT:
+- Use **emoji** to make sections clear (🔍 for analysis, ⚠️ for warnings, ✅ for success)
+- Group information logically (by topic or tool type)
+- Add **insightful commentary** - don't just list facts
+- Provide **actionable suggestions** based on results
+- Acknowledge **context from previous conversations**
+- **For attachments**: Provide detailed analysis of file contents, code structure, document insights
+
+## 🔄 FOLLOW-UP UNDERSTANDING:
+When user responds with ambiguous words:
+- "yes" → "Great! To confirm, you're agreeing to [recent proposal/question]"
+- "no" → "Understood, you're declining [recent proposal/question]"
+- "okay" → "Perfect, I'll proceed with [recent action plan]"
+- "sure" → "Excellent, I'll move forward with [recent suggestion]"
+
+**CRITICAL**: For ambiguous responses, DO NOT trigger email sending or other tools unless the user explicitly asks for them after the clarification.
+
+Always clarify what ambiguous responses refer to by summarizing the recent context.
+
+## 📧 EMAIL SENDING SPECIFIC RULES:
+1. When user asks to send email: IMMEDIATELY use google_gmail tool
+2. Always show email draft for approval before sending
+3. Use conversation context to understand what to send
+4. If no content specified, ask for clarification
+5. DO NOT generate smart contract code unless explicitly asked
+6. If previous conversation was about contracts, still focus on email request
+
+Remember: You are an intelligent analyst and proactive assistant. Your value is in synthesizing information and providing actionable insights.`;
 }
 
 // ========== EMERGENCY STATIC FALLBACK ==========
@@ -4587,51 +4427,6 @@ const ELIZA_TOOLS = [
   }
 ];
 
-
-/**
- * Generates tool definitions dynamically from the registry.
- * Excludes tools that are already strictly defined in ELIZA_TOOLS.
- */
-function generateDynamicTools() {
-  const existingToolNames = new Set(ELIZA_TOOLS.map(t => t.function.name));
-
-  return EDGE_FUNCTIONS_REGISTRY
-    .filter(fn => !existingToolNames.has(fn.name))
-    .map(fn => ({
-      type: 'function',
-      function: {
-        name: fn.name,
-        description: `${fn.description} (Usage: ${fn.example_use})`,
-        parameters: {
-          type: 'object',
-          properties: {
-            // We use a generic payload/body because the registry doesn't have strict schemas yet.
-            // But we include 'action' and 'data' as common patterns, or just a free-form object.
-            // The descriptions help the LLM know what to put here.
-            action: {
-              type: 'string',
-              description: 'The specific action to perform (see example_use)'
-            },
-            data: {
-              type: 'object',
-              description: 'The data payload for the action (see example_use)'
-            },
-            // Allow top-level params for tools that don't follow action/data pattern
-            messages: {
-              type: 'array',
-              description: 'For chat tools',
-              items: { type: 'object' }
-            },
-            model: { type: 'string', description: 'Model name' },
-            prompt: { type: 'string', description: 'For generation tools' }
-            // We could add more specific fields but this covers 90%
-          },
-          // We don't enforce required fields strictly for dynamic tools to allow flexibility
-        }
-      }
-    }));
-}
-
 // ========== TOOL MANAGER & TIERED ACCESS ==========
 class ToolManager {
   static readonly FREE_TOOLS = [
@@ -4681,11 +4476,9 @@ class ToolManager {
     const isSuperAdmin = role === 'superadmin' || role === 'admin';
     const isModerator = role === 'moderator';
 
-    // Superadmins get everything (Hardcoded + Dynamic)
+    // Superadmins get everything
     if (isSuperAdmin) {
-      const dynamicTools = generateDynamicTools();
-      console.log(`🔌 Loaded ${dynamicTools.length} dynamic tools from registry`);
-      return [...ELIZA_TOOLS, ...dynamicTools];
+      return ELIZA_TOOLS;
     }
 
     // Moderators get Pro tools + Free tools
@@ -4773,7 +4566,6 @@ class ToolManager {
 }
 
 // ========== MULTIPART PARSER ==========
-
 async function parseMultipartFormData(req: Request): Promise<any> {
   const contentType = req.headers.get('content-type') || '';
   if (!contentType.includes('multipart/form-data')) {
@@ -4784,7 +4576,6 @@ async function parseMultipartFormData(req: Request): Promise<any> {
     const formData = await req.formData();
     const body: any = {};
     const attachments: any[] = [];
-    const images: string[] = []; // Store images for Vision models
 
     // Log the keys found to debug
     const keys = Array.from(formData.keys());
@@ -4818,12 +4609,6 @@ async function parseMultipartFormData(req: Request): Promise<any> {
           mime_type: value.type,
           size: value.size
         });
-
-        // Special handling for images - add to images array for Vision models
-        if (value.type.startsWith('image/')) {
-          // Format as data URI for AI providers
-          images.push(`data:${value.type};base64,${base64}`);
-        }
       } else {
         // Text fields
         let parsedValue = value;
@@ -4843,23 +4628,6 @@ async function parseMultipartFormData(req: Request): Promise<any> {
     // Add attachments to body
     if (attachments.length > 0) {
       body.attachments = attachments;
-    }
-
-    // Add images to body (merging with existing images if any)
-    if (images.length > 0) {
-      if (body.images && Array.isArray(body.images)) {
-        body.images = [...body.images, ...images];
-      } else {
-        body.images = images;
-      }
-    }
-
-    // Ensure userQuery is handled if passed independently
-    if (body.userQuery && (!body.messages || body.messages.length === 0)) {
-      body.messages = [{
-        role: 'user',
-        content: body.userQuery
-      }];
     }
 
     return body;
@@ -5154,75 +4922,8 @@ Deno.serve(async (req) => {
     const ipAddress = IPSessionManager.extractIP(req);
     console.log(`🌐 IP Address detected: ${ipAddress}`);
 
-    // Fetch user membership tier if authenticated
-    let membershipTier = 'user';
-    if (user_id) {
-      try {
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('membership_tier')
-          .eq('id', user_id)
-          .single();
-        if (profile?.membership_tier) {
-          membershipTier = profile.membership_tier;
-        }
-      } catch (e) {
-        console.warn('⚠️ Failed to fetch membership tier:', e);
-      }
-    }
-    console.log(`👤 User: ${user_id || 'anon'} | Tier: ${membershipTier}`);
-
     const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
-
-    // ========== ATTACHMENT PERSISTENCE & AWARENESS ==========
-    if (attachments && attachments.length > 0) {
-      console.log(`💾 Persisting ${attachments.length} attachments for session ${sessionId}`);
-
-      const persistPromises = attachments.map(async (att: any) => {
-        const { error: dbError } = await supabase
-          .from(DATABASE_CONFIG.tables.message_attachments)
-          .insert({
-            session_id: sessionId,
-            filename: att.filename,
-            file_type: att.contentType?.startsWith('image/') ? 'image' : 'text',
-            file_size: att.size,
-            content_preview: att.content ? (att.content.length > 200 ? att.content.substring(0, 200) + '...' : att.content) : '[Binary Data]',
-            // Store full content (text or base64) for persistence
-            content_full: att.content,
-            // metadata: {                  // REMOVED: Column does not exist in message_attachments schema
-            //   mime_type: att.contentType,
-            //   uploaded_by: user_id || 'anonymous',
-            //   request_id: requestId
-            // },
-            user_id: user_id || null,
-            created_at: new Date().toISOString()
-            // message_id is not available yet, so we rely on session_id + created_at constraint
-          });
-
-        if (dbError) {
-          console.error(`❌ DB Save Error (${att.filename}):`, dbError);
-        } else {
-          console.log(`✅ Saved attachment metadata: ${att.filename}`);
-        }
-      });
-
-      // Don't await strictly if we want speed, but better to await to ensure DB is consistent
-      await Promise.allSettled(persistPromises);
-
-      // Inject awareness text into the last user message
-      const fileList = attachments.map((a: any) => `[File: ${a.filename} (${a.contentType})]`).join(', ');
-      const notification = `\n\n[SYSTEM CHECK: User uploaded ${attachments.length} file(s): ${fileList}. The file content is attached to this message. Please analyze it if relevant.]`;
-
-      const lastMsg = messages[messages.length - 1];
-      if (lastMsg && lastMsg.role === 'user') {
-        lastMsg.content += notification;
-        console.log(`🔔 Injected attachment notification into last message`);
-      } else if (messages.length === 0 && userQuery) {
-        // If we only have userQuery, we push a new message to the array so it's included
-        messages.push({ role: 'user', content: userQuery + notification });
-      }
-    }
 
     // ========== AGENT DELEGATION ROUTING ==========
     // Intercept requests for specific Named Agents and route to Specialists
@@ -5383,28 +5084,6 @@ Deno.serve(async (req) => {
       const lastMessageIndex = allMessages.length - 1;
       if (lastMessageIndex >= 0 && allMessages[lastMessageIndex].role === 'user') {
         allMessages[lastMessageIndex].attachments = attachments;
-
-        // Convert to multipart content if images are present (for persistence)
-        const validImages = attachments.filter((a: any) => a.content && a.contentType?.startsWith('image/'));
-        if (validImages.length > 0) {
-          const textContent = allMessages[lastMessageIndex].content;
-          const newContent = [{ type: 'text', text: textContent }];
-
-          validImages.forEach((img: any) => {
-            // Reconstruct data URI
-            const dataUri = `data:${img.contentType};base64,${img.content}`;
-            newContent.push({
-              type: 'image_url',
-              image_url: { url: dataUri }
-            });
-          });
-
-          allMessages[lastMessageIndex].content = newContent;
-          // Clear images arg to cascade since they are now in content
-          // Actually, we should keep it undefined or similar to avoid double-add if we didn't update cascade logic
-          // But our cascade logic checks "if (msg === lastUserMsg && images && images.length > 0)"
-          // So if we set images to null/empty, cascade won't double add.
-        }
       }
     }
 
@@ -5416,18 +5095,7 @@ Deno.serve(async (req) => {
     const cascade = new EnhancedProviderCascade(requestConfig);
 
     const tools = use_tools ? availableTools : [];
-
-    // We already embedded images into allMessages content if they existed in attachments.
-    // However, the `images` variable passed to this function (from body) might be used by cascade.
-    // We should pass `undefined` for images to cascade if we've embedded them.
-    // But `images` variable comes from where? It's not in the scope shown in previous steps.
-    // Wait, `images` variable in `callWithCascade` invocation (Line 5337) was undefined in previous view?
-    // Let's assume we need to handle it.
-
-    // If we embedded images into content, we pass undefined for images arg to avoid duplication
-    const imagesForCascade = (attachments && attachments.some((a: any) => a.contentType?.startsWith('image/'))) ? undefined : images;
-
-    let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, imagesForCascade);
+    let cascadeResult = await cascade.callWithCascade(messagesArray, tools, provider, images);
 
     if (!cascadeResult.success) {
       console.error(`❌ [${executive_name}] AI Cascade failed for request ${requestId}:`, cascadeResult.error);
@@ -5478,8 +5146,7 @@ Deno.serve(async (req) => {
 
     const callAIFunction = async (messages: any[], tools: any[]) => {
       const cascade = new EnhancedProviderCascade();
-      // Use imagesForCascade to avoid double-attaching images if we already embedded them in content
-      const result = await cascade.callWithCascade(messages, tools, cascadeResult.provider, imagesForCascade);
+      const result = await cascade.callWithCascade(messages, tools, cascadeResult.provider, images);
       return result;
     };
 
@@ -5492,11 +5159,7 @@ Deno.serve(async (req) => {
       callAIFunction,
       tools,
       MAX_TOOL_ITERATIONS,
-      conversationManager,
-      user_id,
-      user_id,
-      selectedOrgId,
-      membershipTier
+      conversationManager
     );
 
     let responseContent = finalContent;

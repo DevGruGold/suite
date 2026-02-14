@@ -1,0 +1,28 @@
+
+fastapi
+uvicorn
+google-generativeai
+paperbanana
+python-dotenv
+pytest
+# Web Scraping & HTTP
+beautifulsoup4
+lxml
+requests
+httpx
+# Data Analysis & Science
+pandas
+numpy
+scipy
+scikit-learn
+openpyxl
+xlrd
+# Visualization
+matplotlib
+seaborn
+plotly
+networkx
+pydot
+# System
+google-cloud-storage
+google-cloud-secret-manager
