@@ -54,7 +54,7 @@ interface TokenResponse {
 async function getAccessToken(): Promise<string | null> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  let refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
+  let refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN') || Deno.env.get('GMAIL_REFRESH_TOKEN');
 
   // Fallback to database if not in env
   if (!refreshToken) {
@@ -64,16 +64,23 @@ async function getAccessToken(): Promise<string | null> {
       if (supabaseUrl && supabaseKey) {
         const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
         const supabase = createClient(supabaseUrl, supabaseKey);
+
+        // Try to find a valid token from the database
+        // We order by connected_at to get the most recent one
         const { data } = await supabase
           .from('oauth_connections')
           .select('refresh_token')
           .eq('provider', 'google_cloud')
-          .eq('is_active', true)
+          // Removed .eq('is_active', true) as the column typically doesn't exist in standard Supabase auth tables or simple custom tables
           .order('connected_at', { ascending: false })
           .limit(1)
           .maybeSingle();
+
         if (data?.refresh_token) {
+          console.log('Using refresh token from oauth_connections table');
           refreshToken = data.refresh_token;
+        } else {
+          console.log('No refresh token found in oauth_connections');
         }
       }
     } catch (err) {
