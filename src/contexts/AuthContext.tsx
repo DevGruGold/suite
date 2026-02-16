@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState, useCallback } fr
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { ToastAction } from '@/components/ui/toast';
 
 type AppRole = 'user' | 'contributor' | 'moderator' | 'admin' | 'superadmin';
 
@@ -153,6 +154,35 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return () => subscription.unsubscribe();
   }, [fetchProfile]);
 
+  // Prompt paid users to connect Google Cloud if not already connected
+  useEffect(() => {
+    if (user && !isLoading && !hasGoogleCloudConnection && (roles.includes('contributor') || roles.includes('moderator') || roles.includes('admin') || roles.includes('superadmin'))) {
+      const hasSeenPrompt = localStorage.getItem(`google_cloud_prompt_${user.id}`);
+      if (!hasSeenPrompt) {
+        toast({
+          title: "Setup Google Integration",
+          description: "Connect your Google account to enable email, drive, and calendar features.",
+          action: (
+            <ToastAction altText="Connect" onClick={() => {
+              connectGoogleCloud();
+              localStorage.setItem(`google_cloud_prompt_${user.id}`, 'true');
+            }}>
+              Connect
+            </ToastAction>
+          ),
+          duration: 10000,
+        });
+        // Mark as seen so we don't spam on every refresh immediately, but maybe clear on logout?
+        // Or specific logic. For now, just prompt once per session load if not set.
+        // Actually, let's not persist heavily or it might never show again if dismissed.
+        // Let's use session storage or just a simple check.
+        // For better UX during dev, maybe just check if not connected.
+        // But user might want to skip.
+        localStorage.setItem(`google_cloud_prompt_${user.id}`, 'true');
+      }
+    }
+  }, [user, isLoading, hasGoogleCloudConnection, roles]);
+
   const getRedirectUrl = () => {
     // Always redirect to dashboard after auth
     if (window.location.hostname.includes('lovable') ||
@@ -234,7 +264,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
-  // Connect Google Cloud services - for superadmins only
+  // Connect Google Cloud services - for contributors and above
   const connectGoogleCloud = async () => {
     const redirectUrl = getRedirectUrl();
 

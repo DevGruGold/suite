@@ -270,7 +270,7 @@ async function processTaskWork(supabase: any, task: Task): Promise<any> {
           ...task.metadata,
           last_work_at: new Date().toISOString(),
           last_work_item: nextItem,
-          last_work_result: workResult.summary
+          last_work_result: workResult.summary ? String(workResult.summary) : `No summary provided for item: "${nextItem}"`
         }
       })
       .eq('id', task.id);

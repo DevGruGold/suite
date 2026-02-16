@@ -13,7 +13,7 @@ const EXECUTIVE_CONFIG = {
   name: "vertex-ai-chat",
   personality: "ML Operations Specialist",
   aiService: "vertex",
-  primaryModel: "gemini-1.5-pro",
+  primaryModel: "gemini-2.5-flash",
   specializations: ["ml_ops", "ai_training", "model_deployment", "image_generation", "video_creation"],
   googleCloudServices: ["vertex_ai", "ml_engine", "automl", "gmail", "drive"],
   version: "5.0.0"
