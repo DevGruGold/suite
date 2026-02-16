@@ -299,6 +299,55 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       const messages = toolCall.parameters?.messages || [];
       const systemPrompt = getExecutiveSystemPrompt();
 
+      const tools = [
+        {
+          function_declarations: [
+            {
+              name: "read_inbox",
+              description: "Read recent emails from Gmail inbox",
+              parameters: { type: "OBJECT", properties: {} }
+            },
+            {
+              name: "send_email",
+              description: "Send an email using Gmail",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  to: { type: "STRING", description: "Recipient email address" },
+                  subject: { type: "STRING", description: "Email subject" },
+                  body: { type: "STRING", description: "Email body content" }
+                },
+                required: ["to", "subject", "body"]
+              }
+            },
+            {
+              name: "list_drive_files",
+              description: "List files in Google Drive",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  query: { type: "STRING", description: "Optional search query" }
+                }
+              }
+            },
+            {
+              name: "create_calendar_event",
+              description: "Create a Google Calendar event",
+              parameters: {
+                type: "OBJECT",
+                properties: {
+                  title: { type: "STRING", description: "Event title" },
+                  startTime: { type: "STRING", description: "Start time (ISO string)" },
+                  endTime: { type: "STRING", description: "End time (ISO string)" },
+                  description: { type: "STRING", description: "Event description" }
+                },
+                required: ["title", "startTime", "endTime"]
+              }
+            }
+          ]
+        }
+      ];
+
       const vertexResponse = await fetch(
         `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${EXECUTIVE_CONFIG.primaryModel}:streamGenerateContent`,
         {
@@ -313,6 +362,7 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
               parts: [{ text: msg.content }]
             })),
             systemInstruction: { parts: [{ text: systemPrompt }] },
+            tools: tools,
             generationConfig: {
               temperature: 0.7,
               maxOutputTokens: 1000
@@ -327,15 +377,64 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       }
 
       const result = await vertexResponse.json();
-      // Handle streaming or non-streaming response format
-      const content = Array.isArray(result)
-        ? result.map(r => r.candidates?.[0]?.content?.parts?.[0]?.text || '').join('')
-        : result.candidates?.[0]?.content?.parts?.[0]?.text || 'No response';
+
+      let content = '';
+      let tool_calls = [];
+
+      // Check for candidates
+      if (Array.isArray(result) && result.length > 0) {
+        // Handle streaming response array
+        for (const chunk of result) {
+          const parts = chunk.candidates?.[0]?.content?.parts || [];
+          for (const part of parts) {
+            if (part.text) content += part.text;
+            if (part.functionCall) {
+              tool_calls.push(part.functionCall);
+            }
+          }
+        }
+      } else if (result.candidates?.[0]?.content?.parts) {
+        // Handle non-streaming response
+        const parts = result.candidates[0].content.parts;
+        for (const part of parts) {
+          if (part.text) content += part.text;
+          if (part.functionCall) {
+            tool_calls.push(part.functionCall);
+          }
+        }
+      } else {
+        content = 'No response';
+      }
+
+      // If we have tool calls, execute them or return them?
+      // Since vertex-ai-chat seems to be used as a backend service, we should probably return them 
+      // in a format the caller expects, OR execute them here if we can.
+      // But wait, lines 343+ handle 'google_cloud' requests explicitly. 
+      // If we execute here, we need the USER'S access token (not Service Account).
+      // But we only have SA token here (line 294).
+      // So we must RETURN the tool call to the client (ai-chat) so IT can execute it (or call us back with the right type).
+      // OR, we use the user's refresh token if we can get it.
+
+      // Adaptation: Map Gemini function calls to OpenAI tool_calls format for ai-chat compatibility
+      const mappedToolCalls = tool_calls.map((fc: any, index: number) => ({
+        id: `call_${index}_${Date.now()}`,
+        type: 'function',
+        function: {
+          name: fc.name,
+          arguments: JSON.stringify(fc.args)
+        }
+      }));
 
       return {
         success: true,
         result: {
-          choices: [{ message: { role: 'assistant', content } }],
+          choices: [{
+            message: {
+              role: 'assistant',
+              content: content || null,
+              tool_calls: mappedToolCalls.length > 0 ? mappedToolCalls : undefined
+            }
+          }],
           provider: 'vertex',
           executive: EXECUTIVE_CONFIG.personality
         }
