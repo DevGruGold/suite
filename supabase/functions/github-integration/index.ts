@@ -480,8 +480,45 @@ serve(async (req) => {
               title: data.title,
               body: issueBody,
               labels: data.labels || [],
-              labels: data.labels || [],
               assignees: (data.assignees || []).map((a: string) => resolveGitHubAssignee(a)),
+            }),
+          }
+        );
+        break;
+      }
+
+      case 'close_issue': {
+        const repoValidation = validateRepoForWriteAction(action, data);
+        if (repoValidation.error) {
+          return new Response(
+            JSON.stringify({ success: false, error: repoValidation.error }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        const repo = repoValidation.repo;
+
+        if (!data.issue_number) {
+          return new Response(
+            JSON.stringify({
+              success: false,
+              error: 'Missing required field: issue_number'
+            }),
+            {
+              status: 400,
+              headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+            }
+          );
+        }
+
+        console.log(`🔐 Closing issue #${data.issue_number} in ${GITHUB_OWNER}/${repo}`);
+
+        result = await fetch(
+          `https://api.github.com/repos/${GITHUB_OWNER}/${repo}/issues/${data.issue_number}`,
+          {
+            method: 'PATCH',
+            headers,
+            body: JSON.stringify({
+              state: 'closed'
             }),
           }
         );
