@@ -382,48 +382,173 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       let tool_calls = [];
 
       // Check for candidates
-      if (Array.isArray(result) && result.length > 0) {
-        // Handle streaming response array
-        for (const chunk of result) {
-          const parts = chunk.candidates?.[0]?.content?.parts || [];
-          for (const part of parts) {
-            if (part.text) content += part.text;
-            if (part.functionCall) {
-              tool_calls.push(part.functionCall);
+      // Helper to extract text and function calls from Gemini response
+      const extractResponse = (responseJson: any) => {
+        let text = '';
+        let calls = [];
+
+        if (Array.isArray(responseJson) && responseJson.length > 0) {
+          // Streaming response
+          for (const chunk of responseJson) {
+            const parts = chunk.candidates?.[0]?.content?.parts || [];
+            for (const part of parts) {
+              if (part.text) text += part.text;
+              if (part.functionCall) calls.push(part.functionCall);
             }
           }
-        }
-      } else if (result.candidates?.[0]?.content?.parts) {
-        // Handle non-streaming response
-        const parts = result.candidates[0].content.parts;
-        for (const part of parts) {
-          if (part.text) content += part.text;
-          if (part.functionCall) {
-            tool_calls.push(part.functionCall);
+        } else if (responseJson.candidates?.[0]?.content?.parts) {
+          // Non-streaming
+          const parts = responseJson.candidates[0].content.parts;
+          for (const part of parts) {
+            if (part.text) text += part.text;
+            if (part.functionCall) calls.push(part.functionCall);
           }
         }
-      } else {
-        content = 'No response';
+        return { text, calls };
+      };
+
+      const initialExtraction = extractResponse(result);
+      content = initialExtraction.text;
+      tool_calls = initialExtraction.calls;
+
+      // EXECUTE TOOLS IF PRESENT (Server-side Loop)
+      if (tool_calls.length > 0) {
+        console.log(`🛠️ [Eliza] Executing ${tool_calls.length} tool calls...`);
+        const functionResponses = [];
+
+        for (const call of tool_calls) {
+          console.log(`  > Calling tool: ${call.name}`);
+          let toolResult: any = { error: "Tool execution failed" };
+
+          try {
+            // Map Gemini tools to google-cloud-auth actions
+            if (call.name === 'read_inbox') {
+              const { data, error } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+                body: { action: 'list_emails', max_results: 5 }
+              });
+              if (error) throw error;
+              toolResult = data;
+            }
+            else if (call.name === 'send_email') {
+              const { data, error } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+                body: {
+                  action: 'send_email',
+                  to: call.args.to,
+                  subject: call.args.subject,
+                  body: call.args.body
+                }
+              });
+              if (error) throw error;
+              toolResult = data;
+            }
+            else if (call.name === 'list_drive_files') {
+              const { data, error } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+                body: {
+                  action: 'list_files',
+                  query: call.args.query,
+                  max_results: 10
+                }
+              });
+              if (error) throw error;
+              toolResult = data;
+            }
+            else if (call.name === 'create_calendar_event') {
+              const { data, error } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+                body: {
+                  action: 'create_event',
+                  title: call.args.title,
+                  start_time: call.args.startTime, // Map camelCase to snake_case
+                  end_time: call.args.endTime,
+                  description: call.args.description
+                }
+              });
+              if (error) throw error;
+              toolResult = data;
+            }
+            else {
+              toolResult = { error: `Unknown tool: ${call.name}` };
+            }
+          } catch (err) {
+            console.error(`  ❌ Tool execution error:`, err);
+            toolResult = { error: err.message || "Execution error" };
+          }
+
+          functionResponses.push({
+            functionResponse: {
+              name: call.name,
+              response: { name: call.name, content: toolResult }
+            }
+          });
+        }
+
+        // Send results back to Gemini (Turn 2)
+        console.log('🔄 Sending tool results back to Gemini...');
+
+        // Construct conversation history for Turn 2
+        // 1. User Message (Original)
+        // 2. Model Response (Function Call)
+        // 3. User Response (Function Results)
+
+        const turn2Content = [
+          // Original User Message
+          ...messages.map(msg => ({
+            role: msg.role === 'assistant' ? 'model' : 'user',
+            parts: [{ text: msg.content }]
+          })),
+          // Model's Function Call
+          {
+            role: 'model',
+            parts: tool_calls.map(call => ({ functionCall: call }))
+          },
+          // Function Responses
+          {
+            role: 'function', // Role 'function' is correct for Gemini API v1beta? Or 'user'? 
+            // Gemini API expects 'function' role or just parts with functionResponse in a 'user' turn?
+            // Checking docs: usually it's a new turn with role='function' or just 'user'?
+            // For 'gemini-1.5/2.0', function responses are sent in local parts.
+            // It seems specifically role 'function' is used in some SDKs, but raw REST API usually takes 'functionResponse' parts.
+            // Let's try role 'function'.
+            parts: functionResponses
+          }
+        ];
+
+        const turn2Response = await fetch(
+          `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${EXECUTIVE_CONFIG.primaryModel}:streamGenerateContent`,
+          {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${accessToken}`,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              contents: turn2Content,
+              tools: tools, // Keep tools available (though unlikely to call again immediately)
+              generationConfig: {
+                temperature: 0.7,
+                maxOutputTokens: 1000
+              }
+            })
+          }
+        );
+
+        if (!turn2Response.ok) {
+          const errText = await turn2Response.text();
+          console.error('Turn 2 Generation failed:', errText);
+          // Fallback: return the tool result as content if generation fails
+          content = `I executed the tools but couldn't generate a summary. Result: ${JSON.stringify(functionResponses)}`;
+        } else {
+          const turn2Result = await turn2Response.json();
+          const turn2Extraction = extractResponse(turn2Result);
+          content = turn2Extraction.text; // Replace content with the final answer
+        }
+
+        // Clear tool_calls so we don't return them to the client as specific actions to take
+        // We have handled them server-side.
+        tool_calls = [];
       }
 
-      // If we have tool calls, execute them or return them?
-      // Since vertex-ai-chat seems to be used as a backend service, we should probably return them 
-      // in a format the caller expects, OR execute them here if we can.
-      // But wait, lines 343+ handle 'google_cloud' requests explicitly. 
-      // If we execute here, we need the USER'S access token (not Service Account).
-      // But we only have SA token here (line 294).
-      // So we must RETURN the tool call to the client (ai-chat) so IT can execute it (or call us back with the right type).
-      // OR, we use the user's refresh token if we can get it.
-
-      // Adaptation: Map Gemini function calls to OpenAI tool_calls format for ai-chat compatibility
-      const mappedToolCalls = tool_calls.map((fc: any, index: number) => ({
-        id: `call_${index}_${Date.now()}`,
-        type: 'function',
-        function: {
-          name: fc.name,
-          arguments: JSON.stringify(fc.args)
-        }
-      }));
+      // Adaptation logic for mappedToolCalls can be removed or kept empty since we handled it.
+      const mappedToolCalls = []; // Empty since we executed them
 
       return {
         success: true,
@@ -431,8 +556,8 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
           choices: [{
             message: {
               role: 'assistant',
-              content: content || null,
-              tool_calls: mappedToolCalls.length > 0 ? mappedToolCalls : undefined
+              content: content || "I've processed your request.",
+              // No tool_calls returned to client
             }
           }],
           provider: 'vertex',
