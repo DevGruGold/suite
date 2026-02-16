@@ -13,6 +13,8 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
 import { corsHeaders } from "../_shared/cors.ts";
 import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { recordTaskCompletion, getAgentMetrics } from '../_shared/agentMetrics.ts';
+
 
 const FUNCTION_NAME = 'agent-manager';
 
@@ -622,6 +624,22 @@ serve(async (req) => {
         const updated = await supabase.from("tasks").update(updatePayload).eq("id", task_id).select().single();
         if (updated.error) throw new AppError(updated.error.message);
 
+        // Record metrics if task is finished
+        if (["COMPLETED", "DONE", "FAILED"].includes(status.toUpperCase()) && task?.assignee_agent_id) {
+          try {
+            await recordTaskCompletion(
+              task_id,
+              task.assignee_agent_id,
+              status.toUpperCase(),
+              task.category || 'other',
+              task.metadata
+            );
+          } catch (e) {
+            console.error("[agent-manager] Failed to record task completion metric:", e);
+          }
+        }
+
+
         // free agent if COMPLETED/DONE/FAILED/CANCELLED
         const freeAgentStatuses = ["COMPLETED", "DONE", "FAILED", "CANCELLED"];
         if (freeAgentStatuses.includes(status.toUpperCase()) && task?.assignee_agent_id) {
@@ -759,6 +777,23 @@ serve(async (req) => {
         result = { success: true, active_tasks: tasksResp.data?.length ?? 0, tasks: tasksResp.data ?? [] };
         break;
       }
+
+      // ------------------------
+      // GET AGENT METRICS
+      // ------------------------
+      case "get_agent_metrics": {
+        const { agent_id } = data ?? {};
+        if (!agent_id) throw new ValidationError("get_agent_metrics requires agent_id");
+
+        try {
+          const metrics = await getAgentMetrics(agent_id);
+          result = { success: true, ...metrics };
+        } catch (e: any) {
+          throw new AppError(`Failed to get metrics: ${e.message}`);
+        }
+        break;
+      }
+
 
       // ------------------------
       // LOG DECISION

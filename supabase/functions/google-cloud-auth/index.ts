@@ -52,44 +52,43 @@ interface TokenResponse {
 
 // Helper to get fresh access token
 async function getAccessToken(): Promise<string | null> {
-  const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  let refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN') || Deno.env.get('GMAIL_REFRESH_TOKEN');
+  const clientId = Deno.env.get('GOOGLE_CLIENT_ID')?.trim();
+  const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')?.trim();
+  let refreshToken = (Deno.env.get('GOOGLE_REFRESH_TOKEN') || Deno.env.get('GMAIL_REFRESH_TOKEN'))?.trim();
+  try {
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (supabaseUrl && supabaseKey) {
+      const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
+      const supabase = createClient(supabaseUrl, supabaseKey);
 
-  // Fallback to database if not in env
-  if (!refreshToken) {
-    try {
-      const supabaseUrl = Deno.env.get('SUPABASE_URL');
-      const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-      if (supabaseUrl && supabaseKey) {
-        const { createClient } = await import('https://esm.sh/@supabase/supabase-js@2');
-        const supabase = createClient(supabaseUrl, supabaseKey);
+      // Try to find a valid token from the database
+      // We order by connected_at to get the most recent one
+      const { data } = await supabase
+        .from('oauth_connections')
+        .select('refresh_token')
+        .eq('provider', 'google_cloud')
+        .order('connected_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-        // Try to find a valid token from the database
-        // We order by connected_at to get the most recent one
-        const { data } = await supabase
-          .from('oauth_connections')
-          .select('refresh_token')
-          .eq('provider', 'google_cloud')
-          // Removed .eq('is_active', true) as the column typically doesn't exist in standard Supabase auth tables or simple custom tables
-          .order('connected_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-
-        if (data?.refresh_token) {
-          console.log('Using refresh token from oauth_connections table');
-          refreshToken = data.refresh_token;
-        } else {
-          console.log('No refresh token found in oauth_connections');
-        }
+      if (data?.refresh_token) {
+        console.log('Using refresh token from oauth_connections table');
+        refreshToken = data.refresh_token;
       }
-    } catch (err) {
-      console.error('Error fetching refresh token from DB in getAccessToken:', err);
     }
+  } catch (err) {
+    console.error('Error fetching refresh token from DB in getAccessToken:', err);
+  }
+
+  // 2. Fallback to Env Vars if not in DB
+  if (!refreshToken) {
+    refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN') || Deno.env.get('GMAIL_REFRESH_TOKEN');
+    if (refreshToken) console.log('Using refresh token from Environment Variables');
   }
 
   if (!clientId || !clientSecret || !refreshToken) {
-    console.error('Missing Google OAuth credentials');
+    console.error(`Missing Google OAuth credentials: clientId=${!!clientId}, clientSecret=${!!clientSecret}, refreshToken=${!!refreshToken}`);
     return null;
   }
 
@@ -546,9 +545,9 @@ serve(async (req) => {
     const hasAuthCode = url.searchParams.get('code');
     const action = hasAuthCode ? 'callback' : (body.action || url.searchParams.get('action') || 'status');
 
-    const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
-    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-    const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
+    const clientId = Deno.env.get('GOOGLE_CLIENT_ID')?.trim();
+    const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET')?.trim();
+    const refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN')?.trim();
 
     console.log(`🔐 google-cloud-auth: action=${action}`);
 
@@ -579,7 +578,7 @@ serve(async (req) => {
           authorization_url: authUrl.toString(),
           redirect_uri: redirectUri,
           scopes_requested: SCOPES.split(' '),
-          instructions: 'Open this URL, sign in as xmrtsolutions@gmail.com, authorize, then store the refresh_token in Supabase secrets as GOOGLE_REFRESH_TOKEN'
+          instructions: 'Open this URL, sign in with the target Google account, authorize, and the system will automatically update.'
         }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
