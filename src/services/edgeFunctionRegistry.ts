@@ -210,7 +210,7 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
   },
   {
     name: 'knowledge-manager',
-    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/knowledge-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/knowledge-manager/store',
     description: 'Manages the knowledge base and vector embeddings',
     capabilities: ['Vectorize text', 'Knowledge search', 'Data retrieval'],
     category: 'knowledge',
@@ -680,10 +680,12 @@ export async function invokeEdgeFunction(functionName: string, body: any, header
     throw new Error(`Function "${functionName}" not found in registry.`);
   }
 
-  const { data, error } = await supabase.functions.invoke(functionName, {
-    body: body,
-    headers: headers
-  });
+  const { data, error } = await supabase.functions.invoke(
+    functionName === 'knowledge-manager' ? 'knowledge-manager/store' : functionName,
+    {
+      body: body,
+      headers: headers
+    });
 
   if (error) {
     throw new Error(`Error invoking ${functionName}: ${error.message}`);

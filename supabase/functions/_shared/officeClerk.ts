@@ -118,7 +118,7 @@ const INTENT_MAPPINGS: Array<{
     { patterns: ['community idea', 'evaluate idea'], functionName: 'evaluate-community-idea', args: {}, category: 'Governance' },
 
     // Knowledge & Memory
-    { patterns: ['knowledge', 'memory', 'search knowledge'], functionName: 'knowledge-manager', args: { action: 'list' }, category: 'Knowledge' },
+    { patterns: ['knowledge', 'memory', 'search knowledge'], functionName: 'knowledge-manager/store', args: { action: 'list_knowledge' }, category: 'Knowledge' },
     { patterns: ['extract knowledge', 'knowledge extraction'], functionName: 'extract-knowledge', args: {}, category: 'Knowledge' },
     { patterns: ['system knowledge', 'knowledge build'], functionName: 'system-knowledge-builder', args: {}, category: 'Knowledge' },
     { patterns: ['vectorize', 'embedding'], functionName: 'vectorize-memory', args: {}, category: 'Knowledge' },

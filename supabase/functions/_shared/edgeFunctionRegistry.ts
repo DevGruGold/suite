@@ -1677,6 +1677,14 @@ export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [
     example_use: 'Use vectorize memory for convert memories to vector embeddings'
   },
   {
+    name: 'knowledge-manager',
+    url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/knowledge-manager/store',
+    description: 'Manages the knowledge base and vector embeddings',
+    capabilities: ['Vectorize text', 'Knowledge search', 'Data retrieval'],
+    category: 'knowledge',
+    example_use: 'Search the knowledge base for relevant information'
+  },
+  {
     name: 'vercel-ai-chat',
     url: 'https://vawouugtzwmejxqkeqqj.supabase.co/functions/v1/vercel-ai-chat',
     description: 'AI chat via Vercel AI SDK',

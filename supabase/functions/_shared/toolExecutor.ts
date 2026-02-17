@@ -420,6 +420,11 @@ export async function executeToolCall(
 
         // Auto-correct common VSCO function name hallucinations
         // AI sometimes hallucinates "vsco-manage-events" instead of using vsco_manage_events tool
+        if (targetFunction === 'knowledge-manager') {
+          console.log(`REDIRECT: Redirecting 'knowledge-manager' to 'knowledge-manager/store'`);
+          targetFunction = 'knowledge-manager/store';
+        }
+
         if (targetFunction && (targetFunction.startsWith('vsco-manage-') || targetFunction.startsWith('vsco_manage_'))) {
           const entityType = targetFunction.replace(/^vsco[-_]manage[-_]/, '');
           console.warn(`⚠️ Auto-correcting hallucinated function "${targetFunction}" → vsco-workspace`);
@@ -1449,7 +1454,7 @@ export async function executeToolCall(
       // ====================================================================
       case 'store_knowledge':
         console.log(`🧠 [${executiveName}] Store Knowledge: ${parsedArgs.name}`);
-        const storeKnowledgeResult = await supabase.functions.invoke('knowledge-manager', {
+        const storeKnowledgeResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'store_knowledge', data: parsedArgs }
         });
         result = storeKnowledgeResult.error
@@ -1459,7 +1464,7 @@ export async function executeToolCall(
 
       case 'search_knowledge':
         console.log(`🔍 [${executiveName}] Search Knowledge: ${parsedArgs.search_term || parsedArgs.entity_type || 'all'}`);
-        const searchKnowledgeResult = await supabase.functions.invoke('knowledge-manager', {
+        const searchKnowledgeResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'search_knowledge', data: parsedArgs }
         });
         result = searchKnowledgeResult.error
@@ -1469,7 +1474,7 @@ export async function executeToolCall(
 
       case 'recall_entity':
         console.log(`🧠 [${executiveName}] Recall Entity: ${parsedArgs.name}`);
-        const recallResult = await supabase.functions.invoke('knowledge-manager', {
+        const recallResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'search_knowledge', data: { search_term: parsedArgs.name } }
         });
         result = recallResult.error
@@ -1479,7 +1484,7 @@ export async function executeToolCall(
 
       case 'create_knowledge_relationship':
         console.log(`🔗 [${executiveName}] Create Knowledge Relationship`);
-        const createRelResult = await supabase.functions.invoke('knowledge-manager', {
+        const createRelResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'create_relationship', data: parsedArgs }
         });
         result = createRelResult.error
@@ -1489,7 +1494,7 @@ export async function executeToolCall(
 
       case 'get_related_knowledge':
         console.log(`🕸️ [${executiveName}] Get Related Knowledge: ${parsedArgs.entity_id}`);
-        const relatedResult = await supabase.functions.invoke('knowledge-manager', {
+        const relatedResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'get_related_entities', data: parsedArgs }
         });
         result = relatedResult.error
@@ -1499,7 +1504,7 @@ export async function executeToolCall(
 
       case 'get_knowledge_status':
         console.log(`📊 [${executiveName}] Get Knowledge Status`);
-        const statusResult = await supabase.functions.invoke('knowledge-manager', {
+        const statusResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'check_status', data: {} }
         });
         result = statusResult.error
@@ -1509,7 +1514,7 @@ export async function executeToolCall(
 
       case 'delete_knowledge':
         console.log(`🗑️ [${executiveName}] Delete Knowledge: ${parsedArgs.entity_id}`);
-        const deleteKnowledgeResult = await supabase.functions.invoke('knowledge-manager', {
+        const deleteKnowledgeResult = await supabase.functions.invoke('knowledge-manager/store', {
           body: { action: 'delete_knowledge', data: parsedArgs }
         });
         result = deleteKnowledgeResult.error

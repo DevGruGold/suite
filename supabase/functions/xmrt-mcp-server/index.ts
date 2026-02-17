@@ -107,8 +107,8 @@ serve(async (req) => {
 
   } catch (error) {
     console.error('MCP Server Error:', error);
-    return new Response(JSON.stringify({ 
-      error: error instanceof Error ? error.message : 'Unknown error' 
+    return new Response(JSON.stringify({
+      error: error instanceof Error ? error.message : 'Unknown error'
     }), {
       status: 500,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
@@ -118,7 +118,7 @@ serve(async (req) => {
 
 async function handleToolCall(params: any, supabase: any): Promise<MCPResponse> {
   const { name, arguments: args } = params;
-  
+
   const tool = TOOL_REGISTRY.find((t: Tool) => t.name === name);
   if (!tool) {
     throw new Error(`Tool not found: ${name}`);
@@ -132,38 +132,38 @@ async function handleToolCall(params: any, supabase: any): Promise<MCPResponse> 
     'xmrt_chat': 'gemini-chat',
     'xmrt_deepseek_chat': 'deepseek-chat',
     'xmrt_openai_chat': 'openai-chat',
-    
+
     // GitHub
     'xmrt_github_list_repos': 'github-integration',
     'xmrt_github_create_issue': 'github-integration',
     'xmrt_github_search_code': 'github-integration',
     'xmrt_github_get_commits': 'github-integration',
-    
+
     // Mining
     'xmrt_get_mining_stats': 'mining-proxy',
     'xmrt_check_faucet_eligibility': 'system-status',
     'xmrt_claim_faucet': 'system-status',
-    
+
     // Task Orchestration
     'xmrt_create_workflow': 'multi-step-orchestrator',
     'xmrt_assign_task_to_agent': 'task-orchestrator',
     'xmrt_get_task_status': 'task-orchestrator',
-    
+
     // Knowledge & Memory
-    'xmrt_store_knowledge': 'knowledge-manager',
-    'xmrt_search_knowledge': 'knowledge-manager',
-    'xmrt_search_memories': 'knowledge-manager',
+    'xmrt_store_knowledge': 'knowledge-manager/store',
+    'xmrt_search_knowledge': 'knowledge-manager/store',
+    'xmrt_search_memories': 'knowledge-manager/store',
     'xmrt_extract_knowledge': 'extract-knowledge',
-    
+
     // Python Execution
     'xmrt_execute_python': 'python-executor',
     'xmrt_fix_python_code': 'autonomous-code-fixer',
-    
+
     // Monitoring
     'xmrt_get_system_status': 'system-status',
     'xmrt_get_ecosystem_metrics': 'ecosystem-monitor',
     'xmrt_get_diagnostics': 'system-diagnostics',
-    
+
     // Self-Optimization
     'xmrt_analyze_skill_gaps': 'self-optimizing-agent-architecture',
     'xmrt_optimize_task_routing': 'self-optimizing-agent-architecture',
@@ -171,13 +171,13 @@ async function handleToolCall(params: any, supabase: any): Promise<MCPResponse> 
     'xmrt_forecast_workload': 'self-optimizing-agent-architecture',
     'xmrt_autonomous_debugging': 'self-optimizing-agent-architecture',
     'xmrt_run_full_optimization': 'self-optimizing-agent-architecture',
-    
+
     // USPTO Patent Research
     'search_uspto_patents': 'uspto-patent-mcp',
     'get_patent_details': 'uspto-patent-mcp',
     'download_patent_pdf': 'uspto-patent-mcp',
     'analyze_inventor_patents': 'uspto-patent-mcp',
-    
+
     // XMRTCharger
     'xmrt_charger_connect_device': 'monitor-device-connections',
     'xmrt_charger_issue_command': 'issue-engagement-command',
@@ -218,22 +218,22 @@ function transformArgsForFunction(toolName: string, args: any): any {
     case 'xmrt_deepseek_chat':
     case 'xmrt_openai_chat':
       return { message: args.message, session_id: args.session_id };
-    
+
     case 'xmrt_github_list_repos':
       return { action: 'list_repos', org: args.org || 'DevGruGold' };
-    
+
     case 'xmrt_github_create_issue':
-      return { 
-        action: 'create_issue', 
-        repo: args.repo, 
-        title: args.title, 
+      return {
+        action: 'create_issue',
+        repo: args.repo,
+        title: args.title,
         body: args.body,
-        labels: args.labels 
+        labels: args.labels
       };
-    
+
     case 'xmrt_github_search_code':
       return { action: 'search_code', query: args.query, repos: args.repos };
-    
+
     case 'xmrt_store_knowledge':
       return {
         action: 'store_knowledge',
@@ -242,43 +242,43 @@ function transformArgsForFunction(toolName: string, args: any): any {
         description: args.description,
         metadata: args.metadata
       };
-    
+
     case 'xmrt_search_knowledge':
       return {
         action: 'search_knowledge',
         query: args.query,
         entity_types: args.entity_types
       };
-    
+
     case 'xmrt_execute_python':
       return {
         code: args.code,
         purpose: args.purpose,
         timeout: args.timeout || 30
       };
-    
+
     // Self-Optimization tools
     case 'xmrt_analyze_skill_gaps':
       return { action: 'analyze_skill_gaps' };
-    
+
     case 'xmrt_optimize_task_routing':
       return { action: 'optimize_task_routing' };
-    
+
     case 'xmrt_detect_specializations':
       return { action: 'detect_specializations' };
-    
+
     case 'xmrt_forecast_workload':
       return { action: 'forecast_workload', timeframe: args.timeframe || '24h' };
-    
+
     case 'xmrt_autonomous_debugging':
       return { action: 'autonomous_debugging' };
-    
+
     case 'xmrt_run_full_optimization':
       return { action: 'run_full_optimization' };
-    
+
     // XMRTCharger tools
     case 'xmrt_charger_connect_device':
-      return { 
+      return {
         action: 'connect',
         device_fingerprint: args.device_fingerprint,
         battery_level: args.battery_level,
@@ -286,7 +286,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
         ip_address: args.ip_address,
         user_agent: args.user_agent
       };
-    
+
     case 'xmrt_charger_issue_command':
       return {
         action: 'command',
@@ -297,7 +297,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
         priority: args.priority,
         expires_in_minutes: args.expires_in_minutes
       };
-    
+
     case 'xmrt_charger_validate_pop':
       return {
         action: 'validate',
@@ -307,7 +307,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
         event_data: args.event_data,
         session_id: args.session_id
       };
-    
+
     case 'xmrt_charger_get_metrics':
       return {
         action: 'metrics',
@@ -315,7 +315,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
         start_date: args.start_date,
         end_date: args.end_date
       };
-    
+
     // USPTO Patent tools
     case 'search_uspto_patents':
       return {
@@ -328,7 +328,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
           }
         }
       };
-    
+
     case 'get_patent_details':
       return {
         method: 'tools/call',
@@ -339,7 +339,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
           }
         }
       };
-    
+
     case 'download_patent_pdf':
       return {
         method: 'tools/call',
@@ -350,7 +350,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
           }
         }
       };
-    
+
     case 'analyze_inventor_patents':
       return {
         method: 'tools/call',
@@ -363,7 +363,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
           }
         }
       };
-    
+
     default:
       return args;
   }
@@ -371,7 +371,7 @@ function transformArgsForFunction(toolName: string, args: any): any {
 
 async function handleResourceRead(params: any, supabase: any): Promise<MCPResponse> {
   const { uri } = params;
-  
+
   console.log(`Reading resource: ${uri}`);
 
   // Parse resource URI
@@ -461,7 +461,7 @@ async function fetchGithubResource(path: string, supabase: any): Promise<any> {
 
 async function handleResourceSubscribe(params: any, supabase: any): Promise<MCPResponse> {
   const { uri } = params;
-  
+
   // For now, return success - actual subscriptions would use Supabase Realtime
   return {
     subscribed: true,
@@ -471,7 +471,7 @@ async function handleResourceSubscribe(params: any, supabase: any): Promise<MCPR
 
 async function handlePromptGet(params: any): Promise<MCPResponse> {
   const { name, arguments: args } = params;
-  
+
   const prompt = PROMPT_REGISTRY.find(p => p.name === name);
   if (!prompt) {
     throw new Error(`Prompt not found: ${name}`);

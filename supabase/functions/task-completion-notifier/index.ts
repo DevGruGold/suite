@@ -43,7 +43,7 @@ serve(async (req) => {
         console.log(`Processing completion for task: ${taskTitle} (${taskId})`);
 
         // Call knowledge-manager to store the fact
-        const { data: knowledgeData, error: knowledgeError } = await supabaseClient.functions.invoke('knowledge-manager', {
+        const { data: knowledgeData, error: knowledgeError } = await supabaseClient.functions.invoke('knowledge-manager/store', {
             body: {
                 action: 'store_knowledge',
                 data: {

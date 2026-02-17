@@ -401,7 +401,7 @@ Return ONLY the JSON object.
         // Let's assume 'extract-knowledge' is the one.
         if (functionName === 'search_knowledge') {
           // Map to knowledge-manager which handles search
-          functionName = 'knowledge-manager';
+          functionName = 'knowledge-manager/store';
           payload = {
             action: 'search_knowledge',
             data: {
@@ -414,6 +414,10 @@ Return ONLY the JSON object.
 
       // Invoke the function
       try {
+        if (functionName === 'knowledge-manager') {
+          functionName = 'knowledge-manager/store';
+        }
+
         const { data, error } = await supabase.functions.invoke(functionName, {
           body: payload
         });
