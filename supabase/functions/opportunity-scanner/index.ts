@@ -34,8 +34,8 @@ serve(async (req) => {
   const timeoutPromise = new Promise<Response>((resolve) =>
     setTimeout(() => {
       console.warn('⚠️ Overall scan timeout reached');
-      resolve(new Response(JSON.stringify({ 
-        success: true, 
+      resolve(new Response(JSON.stringify({
+        success: true,
         timeout: true,
         message: 'Scan timed out - partial results'
       }), {
@@ -149,7 +149,8 @@ serve(async (req) => {
         success: true,
         opportunities_found: opportunities.length,
         high_priority: opportunities.filter(o => o.priority >= 7).length,
-        actionable: opportunities.filter(o => o.actionable).length
+        actionable: opportunities.filter(o => o.actionable).length,
+        opportunities: opportunities // Include full details
       }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
@@ -169,7 +170,7 @@ serve(async (req) => {
 
 async function generateDailyReport(supabase: any) {
   const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000);
-  
+
   const result = await withTimeout(
     supabase.from('opportunity_log').select('*').gte('created_at', yesterday.toISOString()).order('priority', { ascending: false }).limit(50),
     QUERY_TIMEOUT_MS,
@@ -182,7 +183,8 @@ async function generateDailyReport(supabase: any) {
     date: new Date().toISOString().split('T')[0],
     total_opportunities: opportunities.length,
     high_priority: opportunities.filter((o: any) => o.priority >= 7).length,
-    actioned: opportunities.filter((o: any) => o.action_taken !== 'pending').length
+    actioned: opportunities.filter((o: any) => o.action_taken !== 'pending').length,
+    opportunities: opportunities // Include full details
   };
 
   await withTimeout(
