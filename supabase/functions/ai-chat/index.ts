@@ -1,8 +1,10 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.46.2";
+import { executeToolCall } from '../_shared/toolExecutor.ts';
 
 // ========== ENVIRONMENT CONFIGURATION ==========
+// Deployment Trigger: 2026-02-16 Fix ai-chat assignment bug
 const SUPABASE_URL = Deno.env.get('NEXT_PUBLIC_SUPABASE_URL') || 'https://vawouugtzwmejxqkeqqj.supabase.co';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
@@ -1498,7 +1500,8 @@ async function executeRealToolCall(
         data: {
           title: parsedArgs.title,
           body: parsedArgs.body,
-          labels: parsedArgs.labels || []
+          repo: parsedArgs.repo || 'XMRT-Ecosystem',
+          category: parsedArgs.category || 'General'
         }
       });
 
@@ -1508,16 +1511,6 @@ async function executeRealToolCall(
         data: {
           state: parsedArgs.state || 'open',
           limit: parsedArgs.limit || 10
-        }
-      });
-
-    } else if (name === 'createGitHubDiscussion') {
-      result = await invokeEdgeFunction('github-integration', {
-        action: 'create_discussion',
-        data: {
-          title: parsedArgs.title,
-          body: parsedArgs.body,
-          category: parsedArgs.category || 'General'
         }
       });
 
@@ -1614,13 +1607,33 @@ async function executeRealToolCall(
       });
 
     } else {
-      throw new Error(`Tool '${name}' is not a recognized or allowed tool. Please use one of the explicitly defined tools.`);
+      // Fallback to shared tool executor for all other tools (STAE, etc.)
+      console.log(`🔄 [${executiveName}] Delegating tool '${name}' to shared toolExecutor`);
+
+      const toolCallObj = {
+        function: {
+          name: name,
+          arguments: typeof args === 'string' ? args : JSON.stringify(args)
+        }
+      };
+
+      // We pass 'any' for supabase client to avoid version mismatch issues between npm and esm.sh
+      result = await executeToolCall(
+        supabase as any,
+        toolCallObj,
+        executiveName,
+        SUPABASE_URL,
+        SUPABASE_SERVICE_ROLE_KEY,
+        null // session_credentials - ai-chat currently doesn't pass this down explicitly, handled via service key mostly
+      );
     }
 
-    success = true;
+    const executionTimeMs = Date.now() - startTime;
+    // console.log(\`✅ [\${executiveName}] Tool '\${name}' executed in \${executionTimeMs}ms. Success: \${result?.success}\`);
+
     return {
       ...result,
-      execution_time_ms: Math.round(performance.now() - startTime),
+      execution_time_ms: executionTimeMs,
       tool_name: name,
       timestamp
     };
