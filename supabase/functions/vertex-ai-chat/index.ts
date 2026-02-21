@@ -106,39 +106,38 @@ const VertexAI = {
     };
   },
 
-  async generateImage(prompt, model = "imagen-3.0-generate-002", aspectRatio = "1:1") {
+  async generateImage(prompt: string, model = "imagen-3.0-generate-002", aspectRatio = "1:1") {
     const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
     const location = 'us-central1';
 
-    console.log(`🎨 [Eliza] Calling Imagen API: ${model}`);
+    if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID env var is not set');
 
-    // Create Service Role client to bypass RLS/Auth checks for internal function calls
+    console.log(`🎨 [vertex-ai-chat] Imagen request — model: ${model}, project: ${projectId}, aspect: ${aspectRatio}`);
+
     const supabaseAdmin = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    // Get Access Token using Service Role client
     const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
       body: { action: 'get_access_token', auth_type: 'service_account' }
     });
 
     if (authError || !authData?.access_token) {
-      console.error('❌ [Eliza] Auth Error:', authError);
-      throw new Error(`Auth failed: ${authError?.message || 'No token'}`);
+      const msg = authError?.message || JSON.stringify(authError) || 'No token returned';
+      console.error('❌ [vertex-ai-chat] google-cloud-auth failed:', msg);
+      throw new Error(`google-cloud-auth failed: ${msg}`);
     }
 
     const accessToken = authData.access_token;
-    console.log('🔑 [Eliza] Successfully obtained access token');
+    console.log('🔑 [vertex-ai-chat] Access token obtained');
 
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predict`;
+    console.log(`📡 [vertex-ai-chat] Imagen URL: ${url}`);
 
     const requestBody = {
-      instances: [{ prompt: prompt }],
-      parameters: {
-        sampleCount: 1,
-        aspectRatio: aspectRatio
-      }
+      instances: [{ prompt }],
+      parameters: { sampleCount: 1, aspectRatio }
     };
 
     const response = await fetch(url, {
@@ -152,30 +151,19 @@ const VertexAI = {
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error(`❌ [Eliza] Imagen API Error (${response.status}): ${errorText}`);
-      throw new Error(`Imagen API call failed: ${errorText}`);
+      console.error(`❌ [vertex-ai-chat] Imagen API ${response.status} from ${url}:\n${errorText}`);
+      throw new Error(`Imagen API ${response.status}: ${errorText}`);
     }
 
     const data = await response.json();
-
-    // Extract base64 image from prediction response
     const predictions = data.predictions || [];
-    if (predictions.length === 0) {
-      throw new Error('No image generated');
-    }
+    if (predictions.length === 0) throw new Error('Imagen returned 200 but no predictions in response');
 
-    // Imagen 3 response structure
     const base64Image = predictions[0].bytesBase64Encoded;
     const mimeType = predictions[0].mimeType || 'image/png';
+    console.log(`✅ [vertex-ai-chat] Image generated — mimeType: ${mimeType}, size: ${base64Image?.length} chars`);
 
-    return {
-      success: true,
-      format: "base64",
-      mimeType: mimeType,
-      data: base64Image,
-      model: model,
-      prompt: prompt
-    };
+    return { success: true, format: 'base64', mimeType, data: base64Image, model, prompt };
   },
 
   async analyzeVideo(videoUrl) {
@@ -598,13 +586,41 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 }
 
 // Main request handler
-async function handleExecutiveRequest(request) {
+async function handleExecutiveRequest(request: Request) {
   const startTime = Date.now();
   const requestId = `exec_${Math.random().toString(36).substr(2, 9)}`;
+  const url = new URL(request.url);
 
   try {
     if (request.method === "OPTIONS") {
       return new Response(null, { status: 200, headers: executiveCorsHeaders });
+    }
+
+    // ─── GET /health — diagnostic endpoint for auth + Imagen reachability ─────
+    if (request.method === "GET" && url.pathname.endsWith('/health')) {
+      const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
+      const supabaseAdmin = createClient(
+        Deno.env.get('SUPABASE_URL') ?? '',
+        Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      );
+      let authOk = false, authError: string | null = null;
+      try {
+        const { data, error } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+          body: { action: 'get_access_token', auth_type: 'service_account' }
+        });
+        authOk = !error && !!data?.access_token;
+        if (error) authError = error.message || JSON.stringify(error);
+      } catch (e: any) { authError = e.message; }
+
+      return new Response(JSON.stringify({
+        healthy: authOk,
+        project_id: projectId || '(not set)',
+        auth_status: authOk ? 'OK' : `FAILED: ${authError}`,
+        expected_imagen_url: projectId
+          ? `https://us-central1-aiplatform.googleapis.com/v1/projects/${projectId}/locations/us-central1/publishers/google/models/imagen-3.0-generate-002:predict`
+          : '(project_id missing)',
+        timestamp: new Date().toISOString()
+      }), { status: authOk ? 200 : 503, headers: { ...executiveCorsHeaders, 'Content-Type': 'application/json' } });
     }
 
     if (request.method === "GET") {
@@ -615,11 +631,9 @@ async function handleExecutiveRequest(request) {
         specializations: EXECUTIVE_CONFIG.specializations,
         googleCloudServices: EXECUTIVE_CONFIG.googleCloudServices,
         version: EXECUTIVE_CONFIG.version,
-        systemPrompt: getExecutiveSystemPrompt(),
         status: "operational",
         timestamp: new Date().toISOString()
       };
-
       return new Response(JSON.stringify(status), {
         headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
       });

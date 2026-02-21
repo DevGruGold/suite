@@ -60,7 +60,7 @@ export const FUNCTION_KNOWLEDGE: Record<string, FunctionKnowledge> = {
     // PYTHON / CODE EXECUTION
     // ---------------------------------------------------------------------------
     'python-executor': {
-        description: 'Execute Python code in a sandboxed Piston runtime. Supports pandas, numpy, polars, requests (via Cloud Run). NO network calls within Piston — use invoke_edge_function for HTTP.',
+        description: 'Execute Python code via Jupyter backend (issue #2176 — Piston replaced). Supports pandas, numpy, polars, scikit-learn, matplotlib, beautifulsoup4. Network access IS available (Jupyter has full network). For stateful multi-step sessions, use jupyter-executor directly.',
         required_params: ['code'],
         optional_params: ['language', 'version', 'stdin', 'args', 'purpose', 'source', 'agent_id', 'task_id'],
         example_payload: {
@@ -81,10 +81,83 @@ export const FUNCTION_KNOWLEDGE: Record<string, FunctionKnowledge> = {
             }
         ],
         notes: [
-            'Python sandbox does NOT have network access — do not use requests.get() etc.',
-            'Failed executions (exitCode != 0) automatically trigger autonomous-code-fixer via code-monitor-daemon',
-            'Default language is python@3.10.0',
-            'Output is returned in .output (stdout) and .error (stderr)'
+            'BACKEND CHANGED (issue #2176): now routes to jupyter-executor — Piston backend retired due to 404 errors',
+            'Network access IS now available — requests.get(), httpx, etc. work fine inside Jupyter',
+            'Failed executions automatically trigger autonomous-code-fixer via code-monitor-daemon',
+            'For stateful sessions (preserve variables between calls), use jupyter-executor directly with action:"create_session" + action:"run_in_session"',
+            'Output returned in .output (stdout) and .error (stderr), identical response shape to old Piston version'
+        ]
+    },
+
+    'jupyter-executor': {
+        description: 'Direct Jupyter notebook execution engine. Stateless ephemeral runs or persistent named sessions. Supports full data science stack: pandas, numpy, polars, scikit-learn, matplotlib, seaborn, plotly, requests, httpx, pillow, bs4. Full network access.',
+        required_params: [],
+        optional_params: ['action', 'code', 'session_id', 'purpose', 'source', 'agent_id', 'task_id'],
+        actions: [
+            {
+                name: 'execute',
+                description: 'Run code in a fresh ephemeral session (stateless). No session_id needed. Same API as python-executor.',
+                required: ['code'],
+                optional: ['purpose', 'source', 'agent_id', 'task_id'],
+                example_payload: { code: 'import pandas as pd\nprint(pd.__version__)' }
+            },
+            {
+                name: 'create_session',
+                description: 'Create or resume a named persistent session. Variables persist between run_in_session calls.',
+                required: ['session_id'],
+                example_payload: { action: 'create_session', session_id: 'analysis-xyz' }
+            },
+            {
+                name: 'run_in_session',
+                description: 'Run code inside a named persistent session. Variables from previous calls are available.',
+                required: ['session_id', 'code'],
+                optional: ['purpose', 'source'],
+                example_payload: { action: 'run_in_session', session_id: 'analysis-xyz', code: 'x = 42\nprint(x)' }
+            },
+            {
+                name: 'get_session_state',
+                description: 'Get metadata (kernel_id, status, last_used_at) for a named session.',
+                required: ['session_id'],
+                example_payload: { action: 'get_session_state', session_id: 'analysis-xyz' }
+            },
+            {
+                name: 'close_session',
+                description: 'Terminate and remove a named session. Frees up kernel resources.',
+                required: ['session_id'],
+                example_payload: { action: 'close_session', session_id: 'analysis-xyz' }
+            },
+            {
+                name: 'health',
+                description: 'Check Jupyter service health. Returns version, URL, and connectivity status.',
+                required: [],
+                example_payload: { action: 'health' }
+            }
+        ],
+        example_payload: { code: 'print(42)' },
+        unit_tests: [
+            {
+                description: 'Stateless execute',
+                payload: { code: 'print(42)' },
+                expected_outcome: '{ success: true, output: "42\\n", exitCode: 0, backend: "jupyter" }'
+            },
+            {
+                description: 'Stateful session — variable preserved',
+                payload: { action: 'run_in_session', session_id: 'test-sess', code: 'print(x + 1)' },
+                expected_outcome: '{ success: true, output: "101\\n" } (if x=100 was set in a prior run_in_session call)'
+            },
+            {
+                description: 'GET /health returns diagnostic info',
+                payload: { action: 'health' },
+                expected_outcome: '{ healthy: true, version: "...", url: "https://xmrt-jupyter-...run.app" }'
+            }
+        ],
+        notes: [
+            'Default action (no action field, just code) = "execute" — stateless ephemeral run',
+            'Stateful workflow: create_session → run_in_session (repeat) → close_session',
+            'Full network access: requests.get(), httpx.get(), urllib — all work fine',
+            'Rich outputs (matplotlib plots, DataFrames) returned as base64 and HTML in .outputs array',
+            'Requires JUPYTER_URL and JUPYTER_TOKEN env vars pointing to deployed xmrt-jupyter Cloud Run service',
+            'Sessions auto-persist kernel state in jupyter_sessions DB table; dead kernels are auto-recreated'
         ]
     },
 
@@ -495,7 +568,7 @@ export const FUNCTION_KNOWLEDGE: Record<string, FunctionKnowledge> = {
         ],
         notes: [
             'Empty body returns list of all supported function names',
-            'Supported functions: vsco-workspace, github-integration, agent-manager, workflow-template-manager, typefully-integration, autonomous-code-fixer, code-monitor-daemon, python-executor, knowledge-manager'
+            'Supported functions: vsco-workspace, github-integration, agent-manager, workflow-template-manager, typefully-integration, autonomous-code-fixer, code-monitor-daemon, python-executor, jupyter-executor, knowledge-manager'
         ]
     },
 

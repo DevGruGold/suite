@@ -271,10 +271,22 @@ WHEN TO INTROSPECT:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 USE THESE EXACT PATTERNS — wrong param names are the #1 source of first-call failures.
 
-🐍 python-executor:
+🐍 python-executor (simple execution — routes to Jupyter backend, issue #2176):
    invoke_edge_function("python-executor", { code: "print('hello')", purpose: "test" })
-   • REQUIRED: code (string) — NO network calls in code (sandboxed)
-   • OPTIONAL: language, version, stdin, args, purpose, source, agent_id
+   • REQUIRED: code (string)
+   • Network access IS now available (requests.get, httpx, etc. work)
+   • For STATEFUL multi-step sessions (preserve variables), use jupyter-executor directly
+
+🪐 jupyter-executor (stateless or stateful Jupyter sessions):
+   // Stateless (same as python-executor):
+   invoke_edge_function("jupyter-executor", { code: "import pandas as pd; print(pd.__version__)" })
+   // Stateful — variables persist between calls:
+   invoke_edge_function("jupyter-executor", { action: "create_session", session_id: "my-analysis" })
+   invoke_edge_function("jupyter-executor", { action: "run_in_session", session_id: "my-analysis", code: "x = 100" })
+   invoke_edge_function("jupyter-executor", { action: "run_in_session", session_id: "my-analysis", code: "print(x + 1)" })
+   invoke_edge_function("jupyter-executor", { action: "close_session", session_id: "my-analysis" })
+   • ACTIONS: execute (default), create_session, run_in_session, get_session_state, close_session, health
+   • Rich outputs (plots, DataFrames) returned in .outputs array as base64/HTML
 
 🐦 typefully-integration (WORKFLOW REQUIRED):
    STEP 1: invoke_edge_function("typefully-integration", { action: "list-social-sets" })

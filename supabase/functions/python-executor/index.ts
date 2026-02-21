@@ -54,50 +54,40 @@ Deno.serve(async (req) => {
       );
     }
 
-    console.log(`🐍 [PYTHON-EXECUTOR] Incoming request - Source: ${source}, Purpose: ${purpose || 'none'}`);
+    console.log(`🐍 [PYTHON-EXECUTOR] Incoming request — Source: ${source}, Purpose: ${purpose || 'none'}`);
     console.log(`📝 [CODE] Length: ${code.length} chars, First 100: ${code.substring(0, 100)}...`);
-    console.log(`⚙️ [CONFIG] Piston URL: ${PISTON_API_URL}, Language: ${language}@${version}`);
+    console.log(`⚙️ [CONFIG] Backend: jupyter-executor (Piston → Jupyter migration, issue #2176)`);
     const startTime = Date.now();
 
-    // Execute code using Piston API
-    const response = await fetch(`${PISTON_API_URL}/execute`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        language,
-        version,
-        files: [
-          {
-            name: 'main.py',
-            content: code
-          }
-        ],
-        stdin,
-        args,
-        compile_timeout: 10000,
-        run_timeout: 10000,
-        compile_memory_limit: -1,
-        run_memory_limit: -1
-      })
+    // Delegate to jupyter-executor (replaces Piston backend)
+    const { data: jupyterData, error: jupyterError } = await supabase.functions.invoke('jupyter-executor', {
+      body: { action: 'execute', code, purpose, source, agent_id, task_id }
     });
 
-    if (!response.ok) {
-      const error = await response.text();
-      console.error('Piston API error:', error);
+    if (jupyterError) {
+      console.error('❌ [PYTHON-EXECUTOR] jupyter-executor invocation error:', jupyterError);
       return new Response(
-        JSON.stringify({ error: 'Code execution failed', details: error }),
-        {
-          status: 500,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-        }
+        JSON.stringify({ error: 'Code execution failed', details: jupyterError.message }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    const result = await response.json();
     const executionTime = Date.now() - startTime;
-    const exitCode = result.run?.code || 0;
+    const exitCode = jupyterData?.exitCode ?? (jupyterData?.success === false ? 1 : 0);
+    const stdoutText = jupyterData?.output || '';
+    const stderrText = jupyterData?.error || '';
+
+    // Synthetic result shape (mirrors Piston's result.run structure for logging below)
+    const result = {
+      language: 'python',
+      version: '3.11',
+      run: {
+        stdout: stdoutText,
+        stderr: stderrText,
+        code: exitCode,
+        output: stdoutText,
+      }
+    };
 
     console.log(`⏱️ [TIMING] Execution completed in ${executionTime}ms`);
 
