@@ -1,5 +1,6 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { startUsageTrackingWithRequest } from '../_shared/edgeFunctionUsageLogger.ts';
+import { FUNCTION_KNOWLEDGE, getFunctionActions, getKnownFunctionNames, searchFunctionKnowledge } from '../_shared/edgeFunctionKnowledge.ts';
 
 const FUNCTION_NAME = 'get-function-actions';
 
@@ -219,15 +220,16 @@ const WORKFLOW_TEMPLATE_MANAGER_SCHEMA: ActionSchema[] = [
   { name: 'get_execution', category: 'execution', description: 'Get execution details', required_params: ['execution_id'], optional_params: [] },
 ];
 
-// Map of all function schemas
-const FUNCTION_SCHEMAS: Record<string, ActionSchema[]> = {
+// Legacy detailed schemas (category-based) for original 4 functions
+const LEGACY_SCHEMAS: Record<string, ActionSchema[]> = {
   'vsco-workspace': VSCO_ACTION_SCHEMA,
   'github-integration': GITHUB_ACTION_SCHEMA,
   'agent-manager': AGENT_MANAGER_ACTION_SCHEMA,
   'workflow-template-manager': WORKFLOW_TEMPLATE_MANAGER_SCHEMA,
 };
 
-const SUPPORTED_FUNCTIONS = Object.keys(FUNCTION_SCHEMAS);
+// All known function names: union of legacy + knowledge base
+const ALL_KNOWN_FUNCTIONS = [...new Set([...Object.keys(LEGACY_SCHEMAS), ...getKnownFunctionNames()])].sort();
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -236,66 +238,145 @@ Deno.serve(async (req) => {
 
   let body: any = {};
   try { body = await req.json(); } catch { body = {}; }
-  
+
   const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, body);
 
   try {
-    const { function_name, category } = body;
-    console.log(`🔍 [get-function-actions] Function: ${function_name}, Category: ${category || 'all'}`);
+    const { function_name, category, search } = body;
+    console.log(`🔍 [get-function-actions] Function: ${function_name || 'ALL'}, Category: ${category || 'all'}, Search: ${search || 'none'}`);
 
-    // If no function specified, list all supported functions
-    if (!function_name) {
-      await usageTracker.success({ result_summary: 'Listed all functions' });
+    // ─── SEARCH MODE ───────────────────────────────────────────────────────────
+    if (search && !function_name) {
+      const results = searchFunctionKnowledge(search);
+      await usageTracker.success({ result_summary: `Search "${search}": ${results.length} results` });
       return new Response(JSON.stringify({
         success: true,
-        supported_functions: SUPPORTED_FUNCTIONS.map(fn => ({
-          name: fn,
-          action_count: FUNCTION_SCHEMAS[fn].length,
-          categories: [...new Set(FUNCTION_SCHEMAS[fn].map(a => a.category))]
-        })),
-        usage: 'Provide function_name to get action details. Example: { "function_name": "vsco-workspace" }'
+        query: search,
+        results: results.map(({ name, knowledge }) => ({
+          function_name: name,
+          description: knowledge.description,
+          required_params: knowledge.required_params,
+          action_count: knowledge.actions?.length ?? 1,
+          example_payload: knowledge.example_payload
+        }))
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    const schema = FUNCTION_SCHEMAS[function_name];
-    if (!schema) {
+    // ─── LIST MODE (no function_name) ─────────────────────────────────────────
+    if (!function_name) {
+      await usageTracker.success({ result_summary: `Listed all ${ALL_KNOWN_FUNCTIONS.length} functions` });
+      return new Response(JSON.stringify({
+        success: true,
+        total_functions: ALL_KNOWN_FUNCTIONS.length,
+        supported_functions: ALL_KNOWN_FUNCTIONS.map(fn => {
+          const knowledge = FUNCTION_KNOWLEDGE[fn];
+          const legacy = LEGACY_SCHEMAS[fn];
+          return {
+            name: fn,
+            description: knowledge?.description ?? `Edge function: ${fn}`,
+            action_count: knowledge?.actions?.length ?? legacy?.length ?? 1,
+            required_params: knowledge?.required_params ?? [],
+            example_payload: knowledge?.example_payload ?? {}
+          };
+        }),
+        usage: 'Pass function_name to get detailed action schemas. Pass search to find functions by keyword.',
+        examples: [
+          '{ "function_name": "python-executor" }',
+          '{ "function_name": "typefully-integration" }',
+          '{ "search": "publish article" }',
+          '{ "function_name": "vsco-workspace", "category": "jobs" }'
+        ]
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // ─── FUNCTION DETAIL MODE ─────────────────────────────────────────────────
+    console.log(`🔍 [get-function-actions] Function: ${function_name}, Category: ${category || 'all'}`);
+
+    // ─── FUNCTION DETAIL: try FUNCTION_KNOWLEDGE first, fall back to LEGACY_SCHEMAS ──
+    const knowledge = FUNCTION_KNOWLEDGE[function_name];
+    const legacySchema = LEGACY_SCHEMAS[function_name];
+
+    if (!knowledge && !legacySchema) {
       await usageTracker.failure(`Unknown function: ${function_name}`, 400);
       return new Response(JSON.stringify({
         success: false,
-        error: `Unknown function: ${function_name}`,
-        supported_functions: SUPPORTED_FUNCTIONS
+        error: `Unknown function: ${function_name}. Use {} to list all ${ALL_KNOWN_FUNCTIONS.length} known functions.`,
+        known_function_count: ALL_KNOWN_FUNCTIONS.length,
+        tip: 'Call with { "search": "keyword" } to find functions by keyword'
       }), { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Filter by category if provided
-    const actions = category 
-      ? schema.filter(a => a.category === category)
-      : schema;
+    // Build response from FUNCTION_KNOWLEDGE + optional LEGACY_SCHEMAS enrichment
+    if (knowledge) {
+      // Filter legacy actions by category if requested
+      const kActions = knowledge.actions ?? [];
+      const filteredActions = category
+        ? kActions.filter(a => a.name.includes(category))
+        : kActions;
 
-    const categories = [...new Set(schema.map(a => a.category))];
+      // Merge legacy category info if available for this function
+      let legacyActions: any[] = [];
+      if (legacySchema) {
+        const filtered = category ? legacySchema.filter(a => a.category === category) : legacySchema;
+        legacyActions = filtered.map(a => ({
+          action: a.name,
+          category: a.category,
+          description: a.description,
+          required: a.required_params,
+          optional: a.optional_params,
+          example_payload: a.example
+            ? a.example
+            : { action: a.name, ...Object.fromEntries(a.required_params.map((p: string) => [p, `<${p}>`])) }
+        }));
+      }
 
-    await usageTracker.success({ result_summary: `${function_name}: ${actions.length} actions` });
+      const actionsToReturn = legacyActions.length > 0 ? legacyActions : filteredActions.map(a => ({
+        action: a.name,
+        description: a.description,
+        required: a.required,
+        optional: a.optional ?? [],
+        example_payload: a.example_payload ?? { action: a.name }
+      }));
+
+      await usageTracker.success({ result_summary: `${function_name}: ${actionsToReturn.length} actions` });
+      return new Response(JSON.stringify({
+        success: true,
+        function_name,
+        description: knowledge.description,
+        required_params: knowledge.required_params,
+        optional_params: knowledge.optional_params ?? [],
+        total_actions: knowledge.actions?.length ?? actionsToReturn.length,
+        filtered_actions: actionsToReturn.length,
+        actions: actionsToReturn,
+        example_payload: knowledge.example_payload,
+        unit_tests: knowledge.unit_tests ?? [],
+        notes: knowledge.notes ?? [],
+        usage_hint: `POST to ${function_name} with example_payload as the body`
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
+    // Legacy-only function (shouldn't happen but just in case)
+    const actions = category
+      ? legacySchema!.filter((a: any) => a.category === category)
+      : legacySchema!;
+    const categories = [...new Set(legacySchema!.map((a: any) => a.category))];
+
+    await usageTracker.success({ result_summary: `${function_name}: ${actions.length} actions (legacy)` });
     return new Response(JSON.stringify({
       success: true,
       function_name,
-      total_actions: schema.length,
+      total_actions: legacySchema!.length,
       filtered_actions: actions.length,
       categories,
-      actions: actions.map(a => ({
+      actions: actions.map((a: any) => ({
         action: a.name,
         category: a.category,
         description: a.description,
         required: a.required_params,
         optional: a.optional_params,
-        example_payload: {
-          action: a.name,
-          data: Object.fromEntries([
-            ...a.required_params.map(p => [p, `<${p}>`]),
-            ...a.optional_params.slice(0, 2).map(p => [p, `<optional:${p}>`])
-          ])
-        }
+        example_payload: { action: a.name, ...Object.fromEntries(a.required_params.map((p: string) => [p, `<${p}>`])) }
       })),
-      usage_hint: `Call vsco-workspace with: { "action": "<action_name>", "data": { <params> } }`
+      usage_hint: `Call ${function_name} with: { "action": "<action_name>", ... }`
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
   } catch (error) {
@@ -304,7 +385,7 @@ Deno.serve(async (req) => {
     return new Response(JSON.stringify({
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
-      supported_functions: SUPPORTED_FUNCTIONS
+      tip: 'Call with {} to list all known functions'
     }), { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 });

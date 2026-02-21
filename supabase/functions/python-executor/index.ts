@@ -2,8 +2,8 @@ import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 // Use custom Piston instance if available (with enhanced libraries like pandas, numpy, requests, etc.)
-// Falls back to public emkc.org Piston if CUSTOM_PISTON_URL is not set
-const PISTON_API_URL = Deno.env.get('CUSTOM_PISTON_URL') || 'https://emkc.org/api/v2/piston';
+// Falls back to public emkc.org Piston if PISTON_URL is not set
+const PISTON_API_URL = Deno.env.get('PISTON_URL') || 'https://emkc.org/api/v2/piston';
 
 // Initialize Supabase client for logging executions
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -25,19 +25,19 @@ Deno.serve(async (req) => {
       console.error('Failed to parse request body:', jsonError);
       return new Response(
         JSON.stringify({ error: 'Invalid JSON in request body' }),
-        { 
+        {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
     }
 
-    const { 
-      code, 
-      language = 'python', 
-      version = '3.10.0', 
-      stdin = '', 
-      args = [], 
+    const {
+      code,
+      language = 'python',
+      version = '3.10.0',
+      stdin = '',
+      args = [],
       purpose = '',
       source = 'eliza',
       agent_id = null,
@@ -47,7 +47,7 @@ Deno.serve(async (req) => {
     if (!code) {
       return new Response(
         JSON.stringify({ error: 'No code provided' }),
-        { 
+        {
           status: 400,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
@@ -88,7 +88,7 @@ Deno.serve(async (req) => {
       console.error('Piston API error:', error);
       return new Response(
         JSON.stringify({ error: 'Code execution failed', details: error }),
-        { 
+        {
           status: 500,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
@@ -98,15 +98,15 @@ Deno.serve(async (req) => {
     const result = await response.json();
     const executionTime = Date.now() - startTime;
     const exitCode = result.run?.code || 0;
-    
+
     console.log(`⏱️ [TIMING] Execution completed in ${executionTime}ms`);
-    
+
     // ⚠️ Detect network errors in Python code (Piston sandbox has no network access)
-    if (result.run?.stderr?.includes('urllib.request') || 
-        result.run?.stderr?.includes('URLError') ||
-        result.run?.stderr?.includes('socket.gaierror')) {
+    if (result.run?.stderr?.includes('urllib.request') ||
+      result.run?.stderr?.includes('URLError') ||
+      result.run?.stderr?.includes('socket.gaierror')) {
       console.warn('⚠️ Python code attempted network call - not supported in Piston sandbox');
-      
+
       return new Response(JSON.stringify({
         success: false,
         output: result.run?.stdout || '',
@@ -119,7 +119,7 @@ Deno.serve(async (req) => {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
     }
-    
+
     // Log to activity table for Code Execution Log visibility
     await supabase.from('eliza_activity_log').insert({
       activity_type: 'python_execution',
@@ -142,7 +142,7 @@ Deno.serve(async (req) => {
     console.log(`📤 [STDOUT] ${result.run?.stdout?.length || 0} chars: ${result.run?.stdout?.substring(0, 150) || '(empty)'}`);
     console.log(`❌ [STDERR] ${result.run?.stderr?.length || 0} chars: ${result.run?.stderr?.substring(0, 150) || '(empty)'}`);
     console.log(`❌ [STDERR] ${result.run?.stderr?.length || 0} chars: ${result.run?.stderr?.substring(0, 150) || '(empty)'}`);
-    
+
     if (exitCode !== 0) {
       console.error(`🚨 [FAILURE] Python execution failed with exit code ${exitCode}`);
       console.error(`🔍 [ERROR DETAILS] ${result.run?.stderr || 'No error details available'}`);
@@ -152,10 +152,10 @@ Deno.serve(async (req) => {
 
     // Log execution to database for visualization with enhanced metadata
     console.log(`💾 [DATABASE] Logging execution to eliza_python_executions...`);
-    
+
     // Determine if this was auto-fixed code (check source)
     const wasAutoFixed = source === 'autonomous-code-fixer';
-    
+
     const logResult = await supabase
       .from('eliza_python_executions')
       .insert({
@@ -214,9 +214,9 @@ Deno.serve(async (req) => {
     const activityTitle = wasAutoFixed && exitCode === 0
       ? '🔧 Code Auto-Fixed and Executed Successfully'
       : exitCode === 0
-      ? '✅ Code Executed Successfully (First Attempt)'
-      : '❌ Code Execution Failed (Awaiting Auto-Fix)';
-    
+        ? '✅ Code Executed Successfully (First Attempt)'
+        : '❌ Code Execution Failed (Awaiting Auto-Fix)';
+
     await supabase
       .from('eliza_activity_log')
       .insert({
@@ -239,7 +239,7 @@ Deno.serve(async (req) => {
     if (exitCode === 1 && result.run?.stderr) {
       console.log('🔧 [AUTO-FIX] Execution failed - triggering instant code monitor daemon...');
       console.log(`📋 [AUTO-FIX] Error preview: ${result.run.stderr.substring(0, 200)}...`);
-      
+
       // Fire-and-forget: Don't await to avoid blocking response
       supabase.functions.invoke('code-monitor-daemon', {
         body: { action: 'monitor', priority: 'immediate', source: 'python-executor' }
@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
         language: result.language,
         version: result.version
       }),
-      { 
+      {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }
     );
@@ -267,11 +267,11 @@ Deno.serve(async (req) => {
   } catch (error) {
     console.error('Error in python-executor:', error);
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: 'Internal server error',
         message: error instanceof Error ? error.message : 'Unknown error'
       }),
-      { 
+      {
         status: 500,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       }

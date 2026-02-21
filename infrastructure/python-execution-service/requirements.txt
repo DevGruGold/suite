@@ -1,0 +1,28 @@
+flask
+flask-cors
+gunicorn
+# Core data science stack
+pandas
+polars
+numpy
+scipy
+# Visualization support (headless - no display needed)
+matplotlib
+seaborn
+# Web scraping
+beautifulsoup4
+requests
+lxml
+html5lib
+# Spreadsheet support
+openpyxl
+xlrd
+# ML utilities
+scikit-learn
+# NLP basics
+nltk
+# Utilities
+python-dotenv
+tabulate
+pyarrow
+orjson

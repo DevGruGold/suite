@@ -1,6 +1,14 @@
 // Edge Function Registry - Used by search-edge-functions
-// This is a shared registry of all available edge functions
+// Comprehensive registry of all available edge functions
 // Total: 194 functions across 25 categories
+// For detailed schemas and action docs, import from _shared/edgeFunctionKnowledge.ts
+
+export interface EdgeFunctionAction {
+  name: string;
+  description: string;
+  required: string[];
+  optional?: string[];
+}
 
 export interface EdgeFunctionCapability {
   name: string;
@@ -9,6 +17,14 @@ export interface EdgeFunctionCapability {
   capabilities: string[];
   category: 'ai' | 'mining' | 'web' | 'speech' | 'faucet' | 'ecosystem' | 'deployment' | 'github' | 'autonomous' | 'knowledge' | 'task-management' | 'monitoring' | 'code-execution' | 'database' | 'network' | 'superduper' | 'daemon' | 'governance' | 'research' | 'revenue' | 'vsco' | 'hume' | 'acquisition' | 'payments' | 'automation';
   example_use: string;
+  /** Optional: required top-level payload keys */
+  required_params?: string[];
+  /** Optional: supported action names for multi-action functions */
+  supported_actions?: EdgeFunctionAction[];
+  /** Optional: a minimal ready-to-copy payload example */
+  example_payload?: Record<string, any>;
+  /** Optional: key gotchas or usage notes for Eliza */
+  notes?: string[];
 }
 
 export const EDGE_FUNCTIONS_REGISTRY: EdgeFunctionCapability[] = [

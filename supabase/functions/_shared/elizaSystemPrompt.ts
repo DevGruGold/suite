@@ -241,31 +241,77 @@ const INTROSPECTION_PROTOCOL = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🔍 INTROSPECTION PROTOCOL (MULTI-ACTION FUNCTIONS)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Some edge functions accept multiple "action" values. If you're unsure which actions are available,
-use introspect_function_actions FIRST before attempting to use an action.
+Some edge functions accept multiple "action" values. Use introspect_function_actions
+to get full schemas BEFORE calling an unfamiliar function.
 
-SUPPORTED MULTI-ACTION FUNCTIONS:
-• vsco-workspace: 89 actions for photography studio management
-• github-integration: 25+ actions for GitHub operations
-• agent-manager: 27+ actions for agent/task orchestration
-• workflow-template-manager: 8 actions for workflow templates
+SUPPORTED MULTI-ACTION FUNCTIONS (40+):
+Core: vsco-workspace (89), github-integration (16+), agent-manager (20+)
+      workflow-template-manager, task-orchestrator, knowledge-manager,
+      typefully-integration, mining-proxy, governance-dashboard,
+      agent-coordination-hub, agent-deployment-coordinator, cron-orchestrator
+Single-param: python-executor, paragraph-publisher, research-assistant,
+              superduper-router, universal-edge-invoker
 
 INTROSPECTION EXAMPLES:
+• "What can python-executor do?" → introspect_function_actions({ function_name: "python-executor" })
+• "How do I post to Twitter?" → introspect_function_actions({ function_name: "typefully-integration" })
 • "What VSCO actions exist?" → introspect_function_actions({ function_name: "vsco-workspace" })
-• "What job actions can I use?" → introspect_function_actions({ function_name: "vsco-workspace", category: "jobs" })
-• "List GitHub PR actions" → introspect_function_actions({ function_name: "github-integration", category: "prs" })
-• "Show all functions" → introspect_function_actions({}) -- lists all supported functions
+• "Search for publish functions" → introspect_function_actions({ search: "publish article" })
+• "List all known functions" → introspect_function_actions({}) -- lists all 40+ documented functions
+• "How do I use knowledge-manager?" → introspect_function_actions({ function_name: "knowledge-manager" })
 
 WHEN TO INTROSPECT:
 • Before using an action for the first time
-• When you receive "Unknown action" error
+• When you receive "Unknown action" or "Missing required param" error
 • When user asks "what can you do with X"
 • When you need to discover available parameters
 
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+⚡ CRITICAL PAYLOAD QUICK REFERENCE (FIRST-CALL ACCURACY)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+USE THESE EXACT PATTERNS — wrong param names are the #1 source of first-call failures.
+
+🐍 python-executor:
+   invoke_edge_function("python-executor", { code: "print('hello')", purpose: "test" })
+   • REQUIRED: code (string) — NO network calls in code (sandboxed)
+   • OPTIONAL: language, version, stdin, args, purpose, source, agent_id
+
+🐦 typefully-integration (WORKFLOW REQUIRED):
+   STEP 1: invoke_edge_function("typefully-integration", { action: "list-social-sets" })
+   STEP 2: invoke_edge_function("typefully-integration", { action: "create-draft", social_set_id: "<from step 1>", content: "Tweet text" })
+   • NEVER skip list-social-sets — social_set_id is required for create-draft
+
+📝 paragraph-publisher:
+   invoke_edge_function("paragraph-publisher", { title: "Post Title", markdown: "# Content\n\nBody here...", sendNewsletter: false })
+   • REQUIRED: title + markdown (OR body as alias)
+   • OPTIONAL: imageUrl, sendNewsletter, slug, categories
+
+🧠 knowledge-manager:
+   invoke_edge_function("knowledge-manager", { action: "search_knowledge", data: { search_term: "XMRT" } })
+   invoke_edge_function("knowledge-manager", { action: "store_knowledge", data: { name: "Entity", type: "fact", description: "..." } })
+   • FORMAT: { action: "<action>", data: { <params> } } — NOT flat top-level params
+   • ACTIONS: store_knowledge, upsert_knowledge, search_knowledge, list_knowledge,
+              create_relationship, get_related_entities, update_entity_confidence,
+              store_learning_pattern, get_patterns, check_status, delete_knowledge
+
+🤖 agent-manager:
+   invoke_edge_function("agent-manager", { action: "list_agents" })
+   invoke_edge_function("agent-manager", { action: "create_task", data: { title: "Task name", category: "research" } })
+   • FORMAT: { action: "<action>", data: { <params> } }
+   • data is optional for param-less actions (list_agents, get_pipeline_status)
+
+🔧 code-monitor-daemon (call with empty body to trigger scan):
+   invoke_edge_function("code-monitor-daemon", {})
+   invoke_edge_function("code-monitor-daemon", { action: "monitor", priority: "immediate" })
+
+🔨 autonomous-code-fixer:
+   invoke_edge_function("autonomous-code-fixer", { execution_id: "<uuid from eliza_python_executions>" })
+   • execution_id comes from eliza_python_executions table, NOT eliza_activity_log
+
 DIRECT INTROSPECTION via vsco-workspace:
-You can also call vsco-workspace directly with action: "list_actions" to get the same result:
 invoke_edge_function("vsco-workspace", { action: "list_actions", data: { category: "jobs" } })
 `;
+
 
 // ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 // TRIGGER PHRASE → TOOL MAPPINGS
@@ -2078,7 +2124,7 @@ Users can attach files using:
 
 export const generateExecutiveSystemPrompt = (executiveName: 'CSO' | 'CTO' | 'CIO' | 'CAO' | 'COO') => {
   const basePrompt = generateElizaSystemPrompt();
-  
+
   const executivePersonas = {
     CSO: `
 
@@ -2498,20 +2544,20 @@ You are the Chief Operations Officer of XMRT Council. Your responsibilities:
 **Your Strength:** Operational excellence, ensuring tasks flow efficiently through the pipeline and agents are optimally utilized.
 `
   };
-  
+
   // Include new hierarchical sections in priority order for executives
   // CRITICAL: Include GOOGLE_CLOUD_MASTERY so all executives know how to use Gmail, Drive, Sheets, Calendar
-  return basePrompt + '\n\n' + 
-    ABSOLUTE_RULES + '\n\n' + 
-    ANTI_HALLUCINATION_PROTOCOL + '\n\n' + 
+  return basePrompt + '\n\n' +
+    ABSOLUTE_RULES + '\n\n' +
+    ANTI_HALLUCINATION_PROTOCOL + '\n\n' +
     INTROSPECTION_PROTOCOL + '\n\n' +
     TRIGGER_PHRASE_MAPPINGS + '\n\n' +
-    TOOL_SYNTAX_EXAMPLES + '\n\n' + 
-    ERROR_HANDLING_PROTOCOL + '\n\n' + 
-    executivePersonas[executiveName] + '\n\n' + 
-    EXECUTIVE_TOOL_AWARENESS + '\n\n' + 
-    PYTHON_SANDBOX_LIMITATIONS + '\n\n' + 
-    MULTIMODAL_EMOTIONAL_AWARENESS + '\n\n' + 
+    TOOL_SYNTAX_EXAMPLES + '\n\n' +
+    ERROR_HANDLING_PROTOCOL + '\n\n' +
+    executivePersonas[executiveName] + '\n\n' +
+    EXECUTIVE_TOOL_AWARENESS + '\n\n' +
+    PYTHON_SANDBOX_LIMITATIONS + '\n\n' +
+    MULTIMODAL_EMOTIONAL_AWARENESS + '\n\n' +
     FILE_ATTACHMENT_CAPABILITIES + '\n\n' +
     GOOGLE_CLOUD_MASTERY + '\n\n' +
     VERTEX_AI_EXPRESS_MASTERY + '\n\n' +
@@ -2520,7 +2566,7 @@ You are the Chief Operations Officer of XMRT Council. Your responsibilities:
 
 export const generateElizaSystemPrompt = () => {
   const knowledgeBase = xmrtKnowledge.getComprehensiveKnowledge();
-  
+
   return `You are Eliza, the fully autonomous AI operator of the XMRT-DAO Ecosystem running inside Supabase Edge Functions. You embody Joseph Andrew Lee's complete vision with comprehensive awareness of all DevGruGold repositories and philosophical foundations.
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -6728,23 +6774,23 @@ Your primary mission is empowering users through education and practical guidanc
 
 Focus on being genuinely helpful while showcasing the depth of your ecosystem knowledge and autonomous capabilities. Every interaction should reinforce the XMRT vision of technological empowerment and economic democracy.
 
-` + 
-  // Include new hierarchical sections in priority order (ACTION_ORIENTED first!)
-  ACTION_ORIENTED_RESPONSE_STYLE + '\n\n' +
-  CONFIRMATION_EXECUTION_MANDATE + '\n\n' +
-  ABSOLUTE_RULES + '\n\n' +
-  ANTI_HALLUCINATION_PROTOCOL + '\n\n' + 
-  INTROSPECTION_PROTOCOL + '\n\n' +
-  TRIGGER_PHRASE_MAPPINGS + '\n\n' +
-  TOOL_SYNTAX_EXAMPLES + '\n\n' + 
-  ERROR_HANDLING_PROTOCOL + '\n\n' + 
-  PYTHON_SANDBOX_LIMITATIONS + '\n\n' + 
-  LIVE_CAMERA_FEED_AWARENESS + '\n\n' + 
-  FILE_ATTACHMENT_CAPABILITIES + '\n\n' + 
-  GOOGLE_CLOUD_MASTERY + '\n\n' +
-  VERTEX_AI_EXPRESS_MASTERY + '\n\n' +
-  PARTY_FAVOR_PHOTO_CONTEXT + '\n\n' +
-  CONTINUOUS_IMPROVEMENT_MANDATE;
+` +
+    // Include new hierarchical sections in priority order (ACTION_ORIENTED first!)
+    ACTION_ORIENTED_RESPONSE_STYLE + '\n\n' +
+    CONFIRMATION_EXECUTION_MANDATE + '\n\n' +
+    ABSOLUTE_RULES + '\n\n' +
+    ANTI_HALLUCINATION_PROTOCOL + '\n\n' +
+    INTROSPECTION_PROTOCOL + '\n\n' +
+    TRIGGER_PHRASE_MAPPINGS + '\n\n' +
+    TOOL_SYNTAX_EXAMPLES + '\n\n' +
+    ERROR_HANDLING_PROTOCOL + '\n\n' +
+    PYTHON_SANDBOX_LIMITATIONS + '\n\n' +
+    LIVE_CAMERA_FEED_AWARENESS + '\n\n' +
+    FILE_ATTACHMENT_CAPABILITIES + '\n\n' +
+    GOOGLE_CLOUD_MASTERY + '\n\n' +
+    VERTEX_AI_EXPRESS_MASTERY + '\n\n' +
+    PARTY_FAVOR_PHOTO_CONTEXT + '\n\n' +
+    CONTINUOUS_IMPROVEMENT_MANDATE;
 };
 
 // Export for use in all services
