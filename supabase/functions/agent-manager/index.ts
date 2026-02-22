@@ -1357,10 +1357,14 @@ serve(async (req) => {
           role: role,
           status: "IDLE",
           metadata: {
+            agent_type: 'openclaw',
             source: 'openclaw',
             provisioned_at: new Date().toISOString(),
             description: payload.description || null,
             priority: payload.priority || null,
+            // Bridge connection details - used by openclaw-poller
+            gateway_url: payload.gateway_url || 'http://localhost:18789',
+            session_key: payload.session_key || 'agent:main:main',
             ...(payload.metadata || {}),
           },
           current_workload: 0,

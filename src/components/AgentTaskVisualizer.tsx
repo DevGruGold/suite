@@ -442,9 +442,11 @@ function ProvisionAgentDialog({
   const [formData, setFormData] = useState({
     name: '',
     id: '',
-    role: 'other',
+    role: 'developer',
     description: '',
-    priority: 5
+    priority: 5,
+    gateway_url: 'http://localhost:18789',
+    session_key: 'agent:main:main',
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -467,7 +469,7 @@ function ProvisionAgentDialog({
       });
       onSuccess();
       onOpenChange(false);
-      setFormData({ name: '', id: '', role: 'other', description: '', priority: 5 });
+      setFormData({ name: '', id: '', role: 'developer', description: '', priority: 5, gateway_url: 'http://localhost:18789', session_key: 'agent:main:main' });
     } catch (err) {
       console.error('Provisioning failed:', err);
       toast({
@@ -482,11 +484,11 @@ function ProvisionAgentDialog({
 
   return (
     <Dialog open={isOpen} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[425px]">
+      <DialogContent className="sm:max-w-[500px]">
         <DialogHeader>
           <DialogTitle>Provision Existing OpenClaw Agent</DialogTitle>
           <DialogDescription>
-            Register an existing OpenClaw agent into the XMRT-DAO ecosystem.
+            Register a local OpenClaw agent to receive tasks from Suite AI and return results.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={handleSubmit} className="space-y-4">
@@ -497,17 +499,17 @@ function ProvisionAgentDialog({
               required
               value={formData.name}
               onChange={e => setFormData({ ...formData, name: e.target.value })}
-              placeholder="e.g. Mining Overseer"
+              placeholder="e.g. OpenClaw Main"
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="id">OpenClaw Agent ID *</Label>
+            <Label htmlFor="id">Agent ID *</Label>
             <Input
               id="id"
               required
               value={formData.id}
               onChange={e => setFormData({ ...formData, id: e.target.value })}
-              placeholder="Unique Agent ID"
+              placeholder="e.g. openclaw-main"
             />
           </div>
           <div className="grid grid-cols-2 gap-4">
@@ -521,19 +523,20 @@ function ProvisionAgentDialog({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="code">Code</SelectItem>
-                  <SelectItem value="infra">Infra</SelectItem>
-                  <SelectItem value="research">Research</SelectItem>
-                  <SelectItem value="governance">Governance</SelectItem>
-                  <SelectItem value="mining">Mining</SelectItem>
+                  <SelectItem value="developer">Developer</SelectItem>
+                  <SelectItem value="analyst">Analyst</SelectItem>
+                  <SelectItem value="manager">Manager</SelectItem>
+                  <SelectItem value="planner">Planner</SelectItem>
+                  <SelectItem value="integrator">Integrator</SelectItem>
+                  <SelectItem value="validator">Validator</SelectItem>
+                  <SelectItem value="miner">Miner</SelectItem>
                   <SelectItem value="device">Device</SelectItem>
-                  <SelectItem value="ops">Ops</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
+                  <SelectItem value="generic">Generic</SelectItem>
                 </SelectContent>
               </Select>
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="priority">Priority</Label>
+              <Label htmlFor="priority">Priority (1-10)</Label>
               <Input
                 id="priority"
                 type="number"
@@ -543,6 +546,25 @@ function ProvisionAgentDialog({
                 onChange={e => setFormData({ ...formData, priority: parseInt(e.target.value) })}
               />
             </div>
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="gateway_url">Gateway URL *</Label>
+            <Input
+              id="gateway_url"
+              required
+              value={formData.gateway_url}
+              onChange={e => setFormData({ ...formData, gateway_url: e.target.value })}
+              placeholder="http://localhost:18789"
+            />
+          </div>
+          <div className="grid gap-2">
+            <Label htmlFor="session_key">Session Key</Label>
+            <Input
+              id="session_key"
+              value={formData.session_key}
+              onChange={e => setFormData({ ...formData, session_key: e.target.value })}
+              placeholder="agent:main:main"
+            />
           </div>
           <div className="grid gap-2">
             <Label htmlFor="description">Description</Label>
