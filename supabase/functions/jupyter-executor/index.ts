@@ -1,155 +1,156 @@
 import { corsHeaders } from '../_shared/cors.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
-// ─── Configuration ───────────────────────────────────────────────────────────
-const JUPYTER_URL = Deno.env.get('JUPYTER_URL') || '';
-const JUPYTER_TOKEN = Deno.env.get('JUPYTER_TOKEN') || '';
+// ─── Configuration ────────────────────────────────────────────────────────────
+// PISTON_URL points to the Cloud Run python execution service (Flask app).
+// This service has full library access (pandas, polars, requests, httpx, bs4, etc.)
+// and supports stateful sessions with persistent working directories.
+// For sandboxed/quick code with no network access, use python-executor instead.
+const SERVICE_URL = Deno.env.get('PISTON_URL') || '';
 
 const supabase = createClient(
     Deno.env.get('SUPABASE_URL')!,
     Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
 );
 
-// ─── Jupyter REST API helpers ─────────────────────────────────────────────────
+// ─── Flask Service Helpers ────────────────────────────────────────────────────
 
-function jupyterHeaders() {
+function serviceHeaders() {
+    return { 'Content-Type': 'application/json' };
+}
+
+/** POST /execute — runs code, optionally in a named session */
+async function runCode(params: {
+    code: string;
+    sessionId?: string;
+    stdin?: string;
+    timeoutMs?: number;
+}): Promise<{ stdout: string; stderr: string; exitCode: number; sessionId?: string }> {
+    if (!SERVICE_URL) throw new Error('PISTON_URL is not configured. Set it to the Cloud Run python service URL.');
+
+    const res = await fetch(`${SERVICE_URL}/execute`, {
+        method: 'POST',
+        headers: serviceHeaders(),
+        body: JSON.stringify({
+            language: 'python',
+            version: '3.11',
+            files: [{ name: 'main.py', content: params.code }],
+            stdin: params.stdin || '',
+            session_id: params.sessionId || null,
+            run_timeout: params.timeoutMs || 30000,
+        }),
+        signal: AbortSignal.timeout(params.timeoutMs || 35000),
+    });
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Python service returned ${res.status}: ${text}`);
+    }
+
+    const data = await res.json();
     return {
-        'Authorization': `token ${JUPYTER_TOKEN}`,
-        'Content-Type': 'application/json',
+        stdout: data.run?.stdout || '',
+        stderr: data.run?.stderr || '',
+        exitCode: data.run?.code ?? 1,
+        sessionId: data.session_id || params.sessionId,
     };
 }
 
-/** Create a new kernel and return its id */
-async function createKernel(kernelName = 'python3'): Promise<string> {
-    const res = await fetch(`${JUPYTER_URL}/api/kernels`, {
+/** POST /session — create a new persistent session, returns { session_id } */
+async function createSession(): Promise<string> {
+    if (!SERVICE_URL) throw new Error('PISTON_URL is not configured.');
+    const res = await fetch(`${SERVICE_URL}/session`, {
         method: 'POST',
-        headers: jupyterHeaders(),
-        body: JSON.stringify({ name: kernelName }),
-    });
-    if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to create kernel: ${res.status} ${text}`);
-    }
-    const data = await res.json();
-    return data.id as string;
-}
-
-/** Start a session (notebook + kernel) and return { sessionId, kernelId, notebookPath } */
-async function createSession(notebookPath: string, kernelName = 'python3') {
-    const res = await fetch(`${JUPYTER_URL}/api/sessions`, {
-        method: 'POST',
-        headers: jupyterHeaders(),
-        body: JSON.stringify({
-            kernel: { name: kernelName },
-            name: notebookPath,
-            path: notebookPath,
-            type: 'notebook',
-        }),
+        headers: serviceHeaders(),
     });
     if (!res.ok) {
         const text = await res.text();
         throw new Error(`Failed to create session: ${res.status} ${text}`);
     }
     const data = await res.json();
-    return {
-        sessionId: data.id as string,
-        kernelId: data.kernel?.id as string,
-        notebookPath: data.path as string,
-    };
+    return data.session_id as string;
 }
 
-/** Delete a session (shuts down the kernel) */
-async function deleteSession(sessionId: string) {
-    const res = await fetch(`${JUPYTER_URL}/api/sessions/${sessionId}`, {
+/** DELETE /session/<id> — clean up a session */
+async function deleteSession(sessionId: string): Promise<boolean> {
+    if (!SERVICE_URL) return false;
+    const res = await fetch(`${SERVICE_URL}/session/${sessionId}`, {
         method: 'DELETE',
-        headers: jupyterHeaders(),
+        headers: serviceHeaders(),
     });
-    // 404 is fine — session may already be gone
     return res.ok || res.status === 404;
 }
 
-/** Get or create a named session from the sessions table */
-async function getOrCreateNamedSession(namedId: string): Promise<{ sessionId: string; kernelId: string }> {
+/** GET /sessions — list active sessions on the service */
+async function listSessions(): Promise<any[]> {
+    if (!SERVICE_URL) return [];
+    const res = await fetch(`${SERVICE_URL}/sessions`, { headers: serviceHeaders() });
+    if (!res.ok) return [];
+    const data = await res.json();
+    return data.sessions || [];
+}
+
+/** GET /health — check service availability and installed libraries */
+async function checkHealth(): Promise<Record<string, any>> {
+    if (!SERVICE_URL) {
+        return { healthy: false, error: 'PISTON_URL not configured. Set it to the Cloud Run python service URL.' };
+    }
+    try {
+        const res = await fetch(`${SERVICE_URL}/health`, {
+            headers: serviceHeaders(),
+            signal: AbortSignal.timeout(5000),
+        });
+        if (!res.ok) return { healthy: false, error: `Service returned ${res.status}` };
+        const data = await res.json();
+        return { healthy: data.status === 'ok', ...data, url: SERVICE_URL };
+    } catch (err: any) {
+        return { healthy: false, error: err.message };
+    }
+}
+
+// ─── Get or create a named DB-tracked session ────────────────────────────────
+
+async function getOrCreateNamedSession(namedId: string): Promise<string> {
     // Check DB for existing session
     const { data: existing } = await supabase
         .from('jupyter_sessions')
-        .select('jupyter_session_id, kernel_id, last_used_at')
+        .select('jupyter_session_id, last_used_at')
         .eq('session_name', namedId)
         .eq('status', 'active')
         .single();
 
     if (existing) {
-        // Verify kernel is still alive
-        const res = await fetch(`${JUPYTER_URL}/api/kernels/${existing.kernel_id}`, {
-            headers: jupyterHeaders(),
-        });
-        if (res.ok) {
-            // Refresh last_used_at
+        // Ping service to verify session still alive
+        const sessions = await listSessions();
+        const alive = sessions.some((s: any) => s.id === existing.jupyter_session_id);
+        if (alive) {
             await supabase.from('jupyter_sessions')
                 .update({ last_used_at: new Date().toISOString() })
                 .eq('session_name', namedId);
-            return { sessionId: existing.jupyter_session_id, kernelId: existing.kernel_id };
+            return existing.jupyter_session_id;
         }
-        // Kernel dead — clean up
+        // Dead — remove from DB
         await supabase.from('jupyter_sessions').delete().eq('session_name', namedId);
     }
 
-    // Create fresh session
-    const notebookPath = `sessions/${namedId}.ipynb`;
-    const { sessionId, kernelId } = await createSession(notebookPath);
+    // Create fresh session on service
+    const newSessionId = await createSession();
 
-    // Persist to DB
     await supabase.from('jupyter_sessions').insert({
         session_name: namedId,
-        jupyter_session_id: sessionId,
-        kernel_id: kernelId,
-        notebook_path: notebookPath,
+        jupyter_session_id: newSessionId,
+        kernel_id: newSessionId,                   // Flask service uses session_id as both
+        notebook_path: `sessions/${namedId}`,
         status: 'active',
         created_at: new Date().toISOString(),
         last_used_at: new Date().toISOString(),
     });
 
-    return { sessionId, kernelId };
+    return newSessionId;
 }
 
-/**
- * Execute code on a kernel via WebSocket-like execute_request over the REST API.
- * Uses the /api/kernels/{kernel_id}/channels endpoint via the kernel messaging API.
- * 
- * For Cloud Run (stateless HTTP), we use the simpler approach:
- * POST to notebook server's execute_request via the kernel REST shim.
- */
-async function executeOnKernel(
-    kernelId: string,
-    code: string,
-    timeoutMs = 30000
-): Promise<{ stdout: string; stderr: string; outputs: any[]; error: string | null; execution_count: number }> {
-    // Use Jupyter's execute_request via the kernels/execute endpoint (available in jupyter-mcp-tools)
-    // This is a synchronous HTTP wrapper around the async kernel protocol
-    const res = await fetch(`${JUPYTER_URL}/api/kernels/${kernelId}/execute`, {
-        method: 'POST',
-        headers: jupyterHeaders(),
-        body: JSON.stringify({ code }),
-        signal: AbortSignal.timeout(timeoutMs),
-    });
+// ─── Logging ──────────────────────────────────────────────────────────────────
 
-    if (!res.ok) {
-        // Fallback: try the standard kernel channels approach
-        const text = await res.text();
-        throw new Error(`Kernel execute failed: ${res.status} ${text}`);
-    }
-
-    const data = await res.json();
-    return {
-        stdout: data.stdout || '',
-        stderr: data.stderr || '',
-        outputs: data.outputs || [],
-        error: data.error || null,
-        execution_count: data.execution_count || 0,
-    };
-}
-
-/** Log execution to supabase tables (mirrors python-executor logging) */
 async function logExecution(params: {
     code: string;
     stdout: string;
@@ -166,8 +167,7 @@ async function logExecution(params: {
     const wasAutoFixed = params.source === 'autonomous-code-fixer';
     const success = params.exitCode === 0;
 
-    // eliza_python_executions
-    const { error: logErr } = await supabase.from('eliza_python_executions').insert({
+    await supabase.from('eliza_python_executions').insert({
         code: params.code,
         output: params.stdout || null,
         error_message: params.stderr || null,
@@ -185,10 +185,10 @@ async function logExecution(params: {
             session_id: params.sessionId,
             was_auto_fixed: wasAutoFixed,
         },
+    }).then(({ error }) => {
+        if (error) console.error('❌ [DB] eliza_python_executions failed:', error.message);
     });
-    if (logErr) console.error('❌ [DB] eliza_python_executions log failed:', logErr.message);
 
-    // eliza_function_usage
     await supabase.from('eliza_function_usage').insert({
         function_name: 'jupyter-executor',
         success,
@@ -204,15 +204,14 @@ async function logExecution(params: {
             backend: params.backend,
         }),
         invoked_at: new Date().toISOString(),
-        deployment_version: 'jupyter-executor-v1',
+        deployment_version: 'jupyter-executor-v2-flask',
     });
 
-    // eliza_activity_log
     const title = wasAutoFixed && success
-        ? '🔧 Code Auto-Fixed and Executed via Jupyter'
+        ? '🔧 Code Auto-Fixed and Executed (Cloud Run)'
         : success
-            ? '✅ Jupyter Code Executed Successfully'
-            : '❌ Jupyter Code Execution Failed';
+            ? '✅ Code Executed (Cloud Run — Full Stack)'
+            : '❌ Code Execution Failed (Cloud Run)';
 
     await supabase.from('eliza_activity_log').insert({
         activity_type: 'python_execution',
@@ -230,73 +229,53 @@ async function logExecution(params: {
         status: success ? 'completed' : 'failed',
     });
 
-    // Trigger auto-fix daemon on failure (same pattern as python-executor)
     if (!success && params.stderr) {
-        console.log('🔧 [AUTO-FIX] Triggering code-monitor-daemon...');
         supabase.functions.invoke('code-monitor-daemon', {
             body: { action: 'monitor', priority: 'immediate', source: 'jupyter-executor' },
-        }).then(() => {
-            console.log('✅ [AUTO-FIX] code-monitor-daemon triggered');
-        }).catch((err: Error) => {
-            console.error('❌ [AUTO-FIX] Failed to trigger:', err.message);
-        });
+        }).catch((err: Error) => console.error('❌ [AUTO-FIX] daemon trigger failed:', err.message));
     }
 }
 
-// ─── Handlers ────────────────────────────────────────────────────────────────
+// ─── Action Handlers ──────────────────────────────────────────────────────────
 
 async function handleExecute(body: Record<string, any>): Promise<Record<string, any>> {
     const { code, purpose = '', source = 'eliza', agent_id = null, task_id = null } = body;
-
     if (!code) return { success: false, error: 'No code provided' };
-    if (!JUPYTER_URL || !JUPYTER_TOKEN) {
-        return { success: false, error: 'Jupyter service not configured (missing JUPYTER_URL or JUPYTER_TOKEN)' };
-    }
+    if (!SERVICE_URL) return { success: false, error: 'PISTON_URL not configured. The Cloud Run python service URL is required.' };
 
     const startTime = Date.now();
     console.log(`🐍 [jupyter-executor] Stateless execute — ${code.length} chars`);
 
-    // Create ephemeral session
-    const { sessionId, kernelId } = await createSession(`tmp_${Date.now()}.ipynb`);
+    const result = await runCode({ code });
+    const executionTimeMs = Date.now() - startTime;
 
-    try {
-        const result = await executeOnKernel(kernelId, code);
-        const executionTimeMs = Date.now() - startTime;
-        const exitCode = result.error ? 1 : 0;
+    await logExecution({
+        code, stdout: result.stdout, stderr: result.stderr,
+        exitCode: result.exitCode, executionTimeMs, source, purpose,
+        agentId: agent_id, taskId: task_id, sessionId: null, backend: 'cloud-run-flask',
+    });
 
-        await logExecution({
-            code, stdout: result.stdout, stderr: result.stderr || result.error || '',
-            exitCode, executionTimeMs, source, purpose, agentId: agent_id,
-            taskId: task_id, sessionId: null, backend: 'jupyter',
-        });
-
-        return {
-            success: exitCode === 0,
-            output: result.stdout,
-            error: result.stderr || result.error || '',
-            exitCode,
-            outputs: result.outputs,
-            execution_count: result.execution_count,
-            language: 'python',
-            version: '3.11',
-            backend: 'jupyter',
-        };
-    } finally {
-        // Clean up ephemeral session (fire-and-forget)
-        deleteSession(sessionId).catch(() => { });
-    }
+    return {
+        success: result.exitCode === 0,
+        output: result.stdout,
+        error: result.stderr,
+        exitCode: result.exitCode,
+        language: 'python',
+        version: '3.11',
+        backend: 'cloud-run-flask',
+    };
 }
 
 async function handleCreateSession(body: Record<string, any>): Promise<Record<string, any>> {
     const { session_id } = body;
     if (!session_id) return { success: false, error: 'session_id is required' };
+    if (!SERVICE_URL) return { success: false, error: 'PISTON_URL not configured.' };
 
-    const { sessionId, kernelId } = await getOrCreateNamedSession(session_id);
+    const serviceSessionId = await getOrCreateNamedSession(session_id);
     return {
         success: true,
         session_id,
-        jupyter_session_id: sessionId,
-        kernel_id: kernelId,
+        service_session_id: serviceSessionId,
         message: `Session '${session_id}' ready`,
     };
 }
@@ -305,29 +284,26 @@ async function handleRunInSession(body: Record<string, any>): Promise<Record<str
     const { session_id, code, purpose = '', source = 'eliza', agent_id = null, task_id = null } = body;
     if (!session_id) return { success: false, error: 'session_id is required' };
     if (!code) return { success: false, error: 'code is required' };
+    if (!SERVICE_URL) return { success: false, error: 'PISTON_URL not configured.' };
 
     const startTime = Date.now();
-    const { kernelId } = await getOrCreateNamedSession(session_id);
-
-    const result = await executeOnKernel(kernelId, code);
+    const serviceSessionId = await getOrCreateNamedSession(session_id);
+    const result = await runCode({ code, sessionId: serviceSessionId });
     const executionTimeMs = Date.now() - startTime;
-    const exitCode = result.error ? 1 : 0;
 
     await logExecution({
-        code, stdout: result.stdout, stderr: result.stderr || result.error || '',
-        exitCode, executionTimeMs, source, purpose, agentId: agent_id,
-        taskId: task_id, sessionId: session_id, backend: 'jupyter-stateful',
+        code, stdout: result.stdout, stderr: result.stderr,
+        exitCode: result.exitCode, executionTimeMs, source, purpose,
+        agentId: agent_id, taskId: task_id, sessionId: session_id, backend: 'cloud-run-flask-stateful',
     });
 
     return {
-        success: exitCode === 0,
+        success: result.exitCode === 0,
         session_id,
         output: result.stdout,
-        error: result.stderr || result.error || '',
-        exitCode,
-        outputs: result.outputs,
-        execution_count: result.execution_count,
-        backend: 'jupyter-stateful',
+        error: result.stderr,
+        exitCode: result.exitCode,
+        backend: 'cloud-run-flask-stateful',
     };
 }
 
@@ -347,7 +323,7 @@ async function handleGetSessionState(body: Record<string, any>): Promise<Record<
         success: true,
         session_id,
         status: data.status,
-        kernel_id: data.kernel_id,
+        service_session_id: data.jupyter_session_id,
         notebook_path: data.notebook_path,
         created_at: data.created_at,
         last_used_at: data.last_used_at,
@@ -374,20 +350,6 @@ async function handleCloseSession(body: Record<string, any>): Promise<Record<str
     return { success: true, session_id, message: `Session '${session_id}' closed` };
 }
 
-async function handleHealthCheck(): Promise<Record<string, any>> {
-    if (!JUPYTER_URL || !JUPYTER_TOKEN) {
-        return { healthy: false, error: 'JUPYTER_URL or JUPYTER_TOKEN not configured' };
-    }
-    try {
-        const res = await fetch(`${JUPYTER_URL}/api`, { headers: jupyterHeaders() });
-        if (!res.ok) return { healthy: false, error: `Jupyter API returned ${res.status}` };
-        const data = await res.json();
-        return { healthy: true, version: data.version, url: JUPYTER_URL };
-    } catch (err: any) {
-        return { healthy: false, error: err.message };
-    }
-}
-
 // ─── Main Handler ─────────────────────────────────────────────────────────────
 
 Deno.serve(async (req) => {
@@ -395,8 +357,9 @@ Deno.serve(async (req) => {
         return new Response(null, { headers: corsHeaders });
     }
 
+    // Health check via GET
     if (req.method === 'GET') {
-        const health = await handleHealthCheck();
+        const health = await checkHealth();
         return new Response(JSON.stringify(health), {
             status: health.healthy ? 200 : 503,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -427,10 +390,10 @@ Deno.serve(async (req) => {
                 result = await handleCloseSession(body);
                 break;
             case 'health':
-                result = await handleHealthCheck();
+                result = await checkHealth();
                 break;
             default:
-                result = { success: false, error: `Unknown action: ${action}. Valid: execute, create_session, run_in_session, get_session_state, close_session, health` };
+                result = { success: false, error: `Unknown action: '${action}'. Valid: execute, create_session, run_in_session, get_session_state, close_session, health` };
         }
 
         return new Response(JSON.stringify(result), {
