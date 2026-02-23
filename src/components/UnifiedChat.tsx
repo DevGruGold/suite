@@ -282,6 +282,16 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     initializeTTS();
   }, []);
 
+  // Pre-build SpeechRecognition instance on mount so it's ready before the first
+  // mic click — critical for iOS Safari / Android Chrome which require .start()
+  // to be called synchronously within a user gesture (no async gaps allowed).
+  useEffect(() => {
+    if (simplifiedVoiceService.isSupported()) {
+      simplifiedVoiceService.prepareInstance();
+      console.log('🎤 SpeechRecognition pre-built and ready');
+    }
+  }, []);
+
   // Subscribe to Office Clerk (WebLLM) progress
   useEffect(() => {
     const unsubscribe = MLCLLMService.subscribeToProgress((progress) => {
