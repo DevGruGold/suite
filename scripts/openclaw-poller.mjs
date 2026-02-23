@@ -8,9 +8,10 @@
  * HOW IT WORKS:
  *   1. Polls Supabase every POLL_INTERVAL_MS for tasks assigned
  *      to any agent with metadata->>'agent_type' = 'openclaw'
- *      that have status PENDING or IN_PROGRESS.
- *   2. For each new task, runs:
+ *      that have status PENDING or stuck IN_PROGRESS.
+ *   2. For each new task, spawns:
  *        openclaw agent --agent main --message "..." --json
+ *      asynchronously (non-blocking) so multiple tasks can run in parallel.
  *   3. Writes the result back as a task status update + activity log.
  *
  * SETUP:
@@ -23,7 +24,7 @@
  * ─────────────────────────────────────────────────────────────
  */
 
-import { execSync } from 'child_process';
+import { spawn } from 'child_process';
 import { readFileSync, existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
@@ -51,67 +52,73 @@ const config = loadEnv();
 const SUPABASE_URL = process.env.SUPABASE_URL || config.SUPABASE_URL || 'https://vawouugtzwmejxqkeqqj.supabase.co';
 const SUPABASE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || config.SUPABASE_SERVICE_ROLE_KEY
     || process.env.VITE_SUPABASE_PUBLISHABLE_KEY || config.VITE_SUPABASE_PUBLISHABLE_KEY;
-const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || '30000');  // 30 seconds
-const MAX_TASKS = parseInt(process.env.MAX_TASKS_PER_POLL || '3');
+const POLL_INTERVAL = parseInt(process.env.POLL_INTERVAL_MS || '10000');  // 10 seconds (was 30)
+const MAX_TASKS = parseInt(process.env.MAX_TASKS_PER_POLL || '5');        // up to 5 parallel tasks
+const TASK_TIMEOUT_MS = parseInt(process.env.TASK_TIMEOUT_MS || '300000'); // 5 min per task
+const STUCK_THRESHOLD_MS = parseInt(process.env.STUCK_THRESHOLD_MS || '600000'); // 10 min = stuck
 
 if (!SUPABASE_URL || !SUPABASE_KEY) {
     console.error('❌ Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY. Check suite/.env');
     process.exit(1);
 }
 
-console.log('🦞 OpenClaw Poller starting');
+console.log('🦞 OpenClaw Poller starting (v2 — async, retry-enabled)');
 console.log(`   Supabase: ${SUPABASE_URL}`);
 console.log(`   Poll interval: ${POLL_INTERVAL}ms`);
+console.log(`   Max parallel tasks: ${MAX_TASKS}`);
 console.log('');
 
 // Track tasks currently being processed to prevent double-dispatch
 const processing = new Set();
 
 // ── Supabase helpers ─────────────────────────────────────────────
-async function supabaseGet(path, params = {}) {
+async function supabaseFetch(method, path, options = {}) {
+    const { params = {}, body } = options;
     const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
     for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+
+    const headers = {
+        'apikey': SUPABASE_KEY,
+        'Authorization': `Bearer ${SUPABASE_KEY}`,
+        'Content-Type': 'application/json',
+        ...(method !== 'GET' ? { 'Prefer': 'return=representation' } : {}),
+    };
+
     const res = await fetch(url, {
-        headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-        }
+        method,
+        headers,
+        ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
     });
-    if (!res.ok) throw new Error(`Supabase GET ${path} → ${res.status}: ${await res.text()}`);
+
+    if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Supabase ${method} ${path} → ${res.status}: ${text}`);
+    }
     return res.json();
+}
+
+async function withRetry(fn, attempts = 3, delayMs = 2000) {
+    for (let i = 0; i < attempts; i++) {
+        try {
+            return await fn();
+        } catch (err) {
+            if (i === attempts - 1) throw err;
+            console.error(`  ⚠️ Retry ${i + 1}/${attempts - 1}: ${err.message}`);
+            await new Promise(r => setTimeout(r, delayMs * (i + 1)));
+        }
+    }
+}
+
+async function supabaseGet(path, params = {}) {
+    return withRetry(() => supabaseFetch('GET', path, { params }));
 }
 
 async function supabasePatch(path, filter, body) {
-    const url = new URL(`${SUPABASE_URL}/rest/v1/${path}`);
-    for (const [k, v] of Object.entries(filter)) url.searchParams.set(k, v);
-    const res = await fetch(url, {
-        method: 'PATCH',
-        headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Supabase PATCH ${path} → ${res.status}: ${await res.text()}`);
-    return res.json();
+    return withRetry(() => supabaseFetch('PATCH', path, { params: filter, body }));
 }
 
 async function supabaseInsert(path, body) {
-    const res = await fetch(`${SUPABASE_URL}/rest/v1/${path}`, {
-        method: 'POST',
-        headers: {
-            'apikey': SUPABASE_KEY,
-            'Authorization': `Bearer ${SUPABASE_KEY}`,
-            'Content-Type': 'application/json',
-            'Prefer': 'return=representation',
-        },
-        body: JSON.stringify(body),
-    });
-    if (!res.ok) throw new Error(`Supabase INSERT ${path} → ${res.status}: ${await res.text()}`);
-    return res.json();
+    return withRetry(() => supabaseFetch('POST', path, { body }));
 }
 
 // ── OpenClaw dispatch ────────────────────────────────────────────
@@ -134,57 +141,64 @@ function buildTaskMessage(task) {
     return parts.join('\n');
 }
 
-function runOpenClaw(message, agentMeta) {
-    const sessionKey = agentMeta?.session_key || 'main';
-    // Extract just the agent name from session key like "agent:main:main" → "main"
-    const agentName = sessionKey.split(':')[1] || 'main';
+/**
+ * Async version of runOpenClaw — spawns process and resolves when done.
+ * Non-blocking: multiple tasks can dispatch in parallel.
+ */
+function runOpenClawAsync(message, agentMeta) {
+    return new Promise((resolve) => {
+        const sessionKey = agentMeta?.session_key || 'main';
+        const agentName = sessionKey.split(':')[1] || 'main';
 
-    const cmd = [
-        'openclaw agent',
-        `--agent ${agentName}`,
-        `--message ${JSON.stringify(message)}`,
-        '--json',
-    ].join(' ');
+        console.log(`  🏃 Spawning: openclaw agent --agent ${agentName} --message "..."`);
 
-    console.log(`  🏃 Running: openclaw agent --agent ${agentName} --message "..."`);
-
-    try {
-        const output = execSync(cmd, {
-            encoding: 'utf8',
-            timeout: 5 * 60 * 1000, // 5 minute timeout per task
+        const child = spawn('openclaw', ['agent', '--agent', agentName, '--message', message, '--json'], {
+            shell: true,
+            env: process.env,
             windowsHide: true,
         });
 
-        // Try to parse JSON response
-        try {
-            const parsed = JSON.parse(output);
-            // Extract the text reply from nested JSON structure
-            const reply = parsed?.data?.agent?.reply
-                || parsed?.reply
-                || parsed?.content
-                || parsed?.text
-                || output.trim();
-            return { success: true, reply: typeof reply === 'string' ? reply : JSON.stringify(reply), raw: parsed };
-        } catch {
-            // Output isn't JSON — use raw text (this is the text mode output)
-            return { success: true, reply: output.trim(), raw: null };
-        }
-    } catch (err) {
-        const stderr = err.stderr?.toString() || '';
-        const stdout = err.stdout?.toString() || '';
-        return {
-            success: false,
-            reply: null,
-            error: err.message,
-            stderr,
-            stdout,
-        };
-    }
+        let stdout = '';
+        let stderr = '';
+
+        child.stdout.on('data', d => { stdout += d.toString(); });
+        child.stderr.on('data', d => { stderr += d.toString(); });
+
+        const timer = setTimeout(() => {
+            child.kill();
+            resolve({ success: false, reply: null, error: 'Timeout after 5 minutes', stderr, stdout });
+        }, TASK_TIMEOUT_MS);
+
+        child.on('close', (code) => {
+            clearTimeout(timer);
+            if (code !== 0) {
+                resolve({ success: false, reply: null, error: `Process exited with code ${code}`, stderr, stdout });
+                return;
+            }
+            // Try to parse JSON response
+            try {
+                const parsed = JSON.parse(stdout);
+                const reply = parsed?.data?.agent?.reply
+                    || parsed?.reply
+                    || parsed?.content
+                    || parsed?.text
+                    || stdout.trim();
+                resolve({ success: true, reply: typeof reply === 'string' ? reply : JSON.stringify(reply), raw: parsed });
+            } catch {
+                // Output isn't JSON — use raw text
+                resolve({ success: true, reply: stdout.trim(), raw: null });
+            }
+        });
+
+        child.on('error', (err) => {
+            clearTimeout(timer);
+            resolve({ success: false, reply: null, error: err.message, stderr, stdout });
+        });
+    });
 }
 
 // ── Main poll loop ───────────────────────────────────────────────
 async function fetchOpenClawAgents() {
-    // Get all agents where metadata->>'agent_type' = 'openclaw'
     const agents = await supabaseGet('agents', {
         'select': 'id,name,metadata,status',
         'metadata->>agent_type': 'eq.openclaw',
@@ -195,15 +209,36 @@ async function fetchOpenClawAgents() {
 async function fetchPendingTasksForAgents(agentIds) {
     if (agentIds.length === 0) return [];
 
-    // Get pending tasks assigned to openclaw agents
-    const tasks = await supabaseGet('tasks', {
-        'select': '*',
-        'assignee_agent_id': `in.(${agentIds.join(',')})`,
-        'status': 'eq.PENDING',
-        'order': 'priority.desc,created_at.asc',
-        'limit': String(MAX_TASKS),
-    });
-    return tasks;
+    // Pick up PENDING tasks AND stuck IN_PROGRESS tasks (older than STUCK_THRESHOLD_MS)
+    const stuckCutoff = new Date(Date.now() - STUCK_THRESHOLD_MS).toISOString();
+
+    const [pending, stuck] = await Promise.all([
+        supabaseGet('tasks', {
+            'select': '*',
+            'assignee_agent_id': `in.(${agentIds.join(',')})`,
+            'status': 'eq.PENDING',
+            'order': 'priority.desc,created_at.asc',
+            'limit': String(MAX_TASKS),
+        }),
+        supabaseGet('tasks', {
+            'select': '*',
+            'assignee_agent_id': `in.(${agentIds.join(',')})`,
+            'status': 'eq.IN_PROGRESS',
+            'updated_at': `lt.${stuckCutoff}`,
+            'order': 'updated_at.asc',
+            'limit': '2',
+        }),
+    ]);
+
+    if (stuck.length > 0) {
+        console.log(`\n♻️  Found ${stuck.length} stuck IN_PROGRESS task(s) to retry`);
+    }
+
+    // Deduplicate by id
+    const all = [...pending, ...stuck];
+    const seen = new Set();
+    return all.filter(t => { if (seen.has(t.id)) return false; seen.add(t.id); return true; })
+        .slice(0, MAX_TASKS);
 }
 
 async function processTask(task, agentMeta) {
@@ -230,13 +265,12 @@ async function processTask(task, agentMeta) {
             metadata: { gateway_url: agentMeta?.gateway_url, session_key: agentMeta?.session_key },
         });
 
-        // 2. Build message and dispatch to OpenClaw
+        // 2. Build message and dispatch to OpenClaw (async — non-blocking)
         const message = buildTaskMessage(task);
-        const result = runOpenClaw(message, agentMeta);
+        const result = await runOpenClawAsync(message, agentMeta);
 
         if (!result.success) {
             console.error(`  ❌ OpenClaw error: ${result.error}`);
-            // Mark as BLOCKED with error info
             await supabasePatch('tasks', { id: `eq.${task.id}` }, {
                 status: 'BLOCKED',
                 blocking_reason: `OpenClaw dispatch failed: ${result.error?.slice(0, 200)}`,
@@ -299,7 +333,9 @@ async function processTask(task, agentMeta) {
     }
 }
 
+let pollCount = 0;
 async function poll() {
+    pollCount++;
     try {
         const agents = await fetchOpenClawAgents();
         if (agents.length === 0) {
@@ -316,13 +352,15 @@ async function poll() {
             return;
         }
 
-        console.log(`\n🔍 Found ${tasks.length} pending task(s) for ${agents.length} OpenClaw agent(s)`);
+        console.log(`\n🔍 Found ${tasks.length} task(s) for ${agents.length} OpenClaw agent(s) [poll #${pollCount}]`);
 
-        // Process tasks sequentially to avoid overloading OpenClaw
-        for (const task of tasks) {
-            const agentMeta = agentMetaMap[task.assignee_agent_id] || {};
-            await processTask(task, agentMeta);
-        }
+        // Dispatch all tasks in PARALLEL (non-blocking)
+        await Promise.all(
+            tasks.map(task => {
+                const agentMeta = agentMetaMap[task.assignee_agent_id] || {};
+                return processTask(task, agentMeta);
+            })
+        );
 
     } catch (err) {
         console.error(`\n❌ Poll error:`, err.message);
@@ -336,6 +374,10 @@ setInterval(poll, POLL_INTERVAL);
 
 // Graceful shutdown
 process.on('SIGINT', () => {
+    const inFlight = processing.size;
+    if (inFlight > 0) {
+        console.log(`\n⚠️  Stopping with ${inFlight} task(s) still in flight — they will be recovered on next poll.`);
+    }
     console.log('\n\n🛑 Poller stopped.');
     process.exit(0);
 });
