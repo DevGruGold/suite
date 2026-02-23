@@ -130,15 +130,30 @@ export class SimplifiedVoiceService {
 
       this.recognition!.start();
       return { success: true };
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to start listening:', error);
+      // InvalidStateError means the recognition object is stale — reset and surface a clear error
+      if (error?.name === 'InvalidStateError') {
+        this.recognition = null;
+        return { success: false, error: 'Voice recognition was in an invalid state. Please try again.' };
+      }
       return { success: false, error: 'Failed to start voice recognition' };
     }
   }
 
   static stopListening(): void {
-    if (this.recognition && this.isListening) {
-      this.recognition.stop();
+    if (this.recognition) {
+      try {
+        if (this.isListening) {
+          this.recognition.stop();
+        }
+      } catch (e) {
+        console.warn('Error stopping recognition:', e);
+      }
+      // Always null out the recognition instance so the next startListening
+      // call creates a fresh object via initialize(). This prevents
+      // InvalidStateError on subsequent mic activations (the core mic bug).
+      this.recognition = null;
     }
     this.isListening = false;
     this.onResultCallback = null;

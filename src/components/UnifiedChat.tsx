@@ -1927,6 +1927,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               variant={isRecording ? "destructive" : "ghost"}
               size="sm"
               onClick={toggleRecording}
+              disabled={isProcessing}
               className={`rounded-full min-h-[48px] min-w-[48px] ${isRecording ? 'animate-pulse' : 'hover:bg-muted/50'}`}
               title={isRecording ? "Stop Listening" : "Start Listening"}
             >
