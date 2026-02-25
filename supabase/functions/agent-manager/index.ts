@@ -466,19 +466,52 @@ serve(async (req) => {
           throw new ValidationError("assign_task requires assignee_agent_id OR auto_assign: true");
         }
 
+        // Validate agent exists; resolve by name if the passed ID doesn't match a row ID
+        const agentCheck = await supabase
+          .from("agents")
+          .select("id, name")
+          .eq("id", assignedAgentId)
+          .maybeSingle();
+
+        if (agentCheck.error) throw new AppError(agentCheck.error.message);
+        if (!agentCheck.data) {
+          // Try resolving by agent name (case-insensitive) as fallback
+          const agentByName = await supabase
+            .from("agents")
+            .select("id, name")
+            .ilike("name", assignedAgentId)
+            .maybeSingle();
+
+          if (agentByName.error) throw new AppError(agentByName.error.message);
+          if (agentByName.data) {
+            console.info(`[agent-manager] assign_task: resolved agent name "${assignedAgentId}" → id "${agentByName.data.id}"`);
+            assignedAgentId = agentByName.data.id;
+          } else {
+            throw new ValidationError(
+              `Agent with id or name "${assignedAgentId}" not found in agents table. ` +
+              `Call list_agents to find valid agent IDs or names.`
+            );
+          }
+        }
+
         // prevent duplicate pending tasks for same assignee + title
         const existing = await supabase
           .from("tasks")
           .select("*")
           .eq("title", taskData.title)
           .eq("assignee_agent_id", assignedAgentId)
-          .in("status", ["PENDING", "IN_PROGRESS"])
+          .in("status", ["PENDING", "IN_PROGRESS", "CLAIMED"])
           .maybeSingle();
 
         if (existing.error) throw new AppError(existing.error.message);
         if (existing.data) {
-          result = { ...existing.data, message: "Task already exists", wasExisting: true };
-          break;
+          // Return a clear signal that NO new task was created — this is not a success
+          return okResponse({
+            ...existing.data,
+            message: "Task already exists — no new task was created. The existing task is returned.",
+            wasExisting: true,
+            status_signal: "duplicate",
+          });
         }
 
         const insertTask = {
@@ -540,7 +573,9 @@ serve(async (req) => {
       // ------------------------
       case "list_tasks": {
         const { status, agent_id, limit = 50, offset = 0, order_by } = data ?? {};
-        if (status && !(VALID_TASK_STATUSES as readonly string[]).includes(String(status).toUpperCase())) {
+        // Normalize status to uppercase so callers can pass 'pending', 'PENDING', etc.
+        const normalizedStatus = status ? String(status).toUpperCase() : undefined;
+        if (normalizedStatus && !(VALID_TASK_STATUSES as readonly string[]).includes(normalizedStatus)) {
           throw new ValidationError(`status must be one of: ${VALID_TASK_STATUSES.join(", ")}`);
         }
         if (typeof limit !== "number" || limit < 1 || limit > 1000) throw new ValidationError("limit must be 1..1000");
@@ -548,7 +583,7 @@ serve(async (req) => {
 
         let query = supabase.from("tasks").select("*");
 
-        if (status) query = query.eq("status", status);
+        if (normalizedStatus) query = query.eq("status", normalizedStatus);
         if (agent_id) query = query.eq("assignee_agent_id", agent_id);
 
         if (order_by?.column) {
