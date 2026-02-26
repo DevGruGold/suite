@@ -521,9 +521,28 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
         }
       ];
 
-      const chatModel = EXECUTIVE_CONFIG.primaryModel; // e.g. gemini-2.5-flash
-      const chatUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${chatModel}:streamGenerateContent`;
-      console.log(`📡 [vertex-ai-chat] Chat request URL: ${chatUrl}`);
+      // Build contents array — filter out any messages with falsy content
+      const validMessages = messages.filter((m: any) => m && (m.content || m.text));
+      const contents = validMessages.map((msg: any) => ({
+        role: msg.role === 'assistant' || msg.role === 'model' ? 'model' : 'user',
+        parts: [{ text: String(msg.content || msg.text || '') }]
+      }));
+
+      // Gemini requires at least one content item
+      if (contents.length === 0) {
+        console.warn(`⚠️ [vertex-ai-chat] No messages provided — returning default response`);
+        return {
+          success: true,
+          result: {
+            choices: [{ message: { role: 'assistant', content: 'Hello! I\'m the ML Operations Specialist. How can I help you today?' } }],
+            provider: 'vertex',
+            executive: EXECUTIVE_CONFIG.personality
+          }
+        };
+      }
+
+      console.log(`� [vertex-ai-chat] Sending ${contents.length} message(s) to ${chatModel}`);
+
       const vertexResponse = await fetch(
         chatUrl,
         {
@@ -533,15 +552,12 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({
-            contents: messages.map(msg => ({
-              role: msg.role === 'assistant' ? 'model' : 'user',
-              parts: [{ text: msg.content }]
-            })),
+            contents,
             systemInstruction: { parts: [{ text: systemPrompt }] },
             tools: tools,
             generationConfig: {
               temperature: 0.7,
-              maxOutputTokens: 1000
+              maxOutputTokens: 2048
             }
           })
         }
@@ -842,7 +858,12 @@ async function handleExecutiveRequest(request: Request) {
       let toolCall: any = {
         type: "chat",
         parameters: {
-          messages: body.messages || [],
+          // Support both messages[] array and single prompt/message field
+          messages: body.messages || (
+            (body.prompt || body.message)
+              ? [{ role: 'user', content: body.prompt || body.message }]
+              : []
+          ),
           options: body.options || {}
         }
       };
