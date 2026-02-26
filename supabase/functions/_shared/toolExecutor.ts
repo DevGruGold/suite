@@ -425,10 +425,6 @@ export async function executeToolCall(
 
         // Auto-correct common VSCO function name hallucinations
         // AI sometimes hallucinates "vsco-manage-events" instead of using vsco_manage_events tool
-        if (targetFunction === 'knowledge-manager') {
-          console.log(`REDIRECT: Redirecting 'knowledge-manager' to 'knowledge-manager/store'`);
-          targetFunction = 'knowledge-manager/store';
-        }
 
         if (targetFunction && (targetFunction.startsWith('vsco-manage-') || targetFunction.startsWith('vsco_manage_'))) {
           const entityType = targetFunction.replace(/^vsco[-_]manage[-_]/, '');

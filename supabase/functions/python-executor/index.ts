@@ -27,6 +27,13 @@ Deno.serve(async (req) => {
       );
     }
 
+    const rawBody = requestBody;
+
+    // Unwrap nested formats:
+    // - Direct: { code, purpose, ... }       ← from execute_python tool / direct call
+    // - Nested:  { payload: { code, ... } }  ← from invoke_edge_function tool
+    const unwrapped = rawBody.payload || rawBody;
+
     const {
       code,
       language = 'python',
@@ -37,12 +44,18 @@ Deno.serve(async (req) => {
       source = 'eliza',
       agent_id = null,
       task_id = null
-    } = requestBody;
+    } = unwrapped;
 
     if (!code) {
+      // Return 200 with a learning_point so the AI can self-correct rather than
+      // retrying blindly against a 400 with no guidance.
       return new Response(
-        JSON.stringify({ error: 'No code provided' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          success: false,
+          error: 'No code provided',
+          learning_point: 'python-executor requires a "code" field. Correct payload: { code: "print(\'hello\')", purpose: "description" }. If calling via invoke_edge_function, use: invoke_edge_function({ function_name: "python-executor", payload: { code: "...", purpose: "..." } })'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
