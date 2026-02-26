@@ -177,17 +177,20 @@ const VertexAI = {
 
     const accessToken = authData.access_token;
 
-    // The operationName from predictLongRunning is the full resource path:
-    // "projects/{proj}/locations/{loc}/publishers/google/models/{model}/operations/{uuid}"
-    // The LRO status API uses the STANDARD operations collection — NOT the publisher/model path.
-    // Correct endpoint: GET https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{loc}/operations/{uuid}
-    const operationId = operationName.split('/').pop(); // extract just the UUID
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/operations/${operationId}`;
+    // Veo LROs are NOT accessible via the standard projects.locations.operations API.
+    // The correct endpoint is the model-scoped :fetchPredictOperation method:
+    // POST https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{loc}/publishers/google/models/{model}:fetchPredictOperation
+    // with body { "operationName": "<full-operation-name>" }
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchPredictOperation`;
     console.log(`📡 [vertex-ai-chat] Veo status poll URL: ${url}`);
 
     const response = await fetch(url, {
-      method: 'GET',
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ operationName })
     });
 
     if (!response.ok) {
