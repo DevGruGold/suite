@@ -176,15 +176,16 @@ const VertexAI = {
     }
 
     const accessToken = authData.access_token;
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchLongRunningOperation`;
+    // The operationName returned by predictLongRunning is the full resource path:
+    // "projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{id}"
+    // Poll it via a GET on the aiplatform.googleapis.com operations endpoint.
+    const url = `https://${location}-aiplatform.googleapis.com/v1/${operationName}`;
 
     const response = await fetch(url, {
-      method: 'POST',
+      method: 'GET',
       headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ operationName })
+        'Authorization': `Bearer ${accessToken}`
+      }
     });
 
     if (!response.ok) {
