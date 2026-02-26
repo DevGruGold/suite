@@ -3344,5 +3344,51 @@ Response includes ecosystem_summary with one-line stats for each component.`,
         required: ['task_payload']
       }
     }
+  },
+
+  // ====================================================================
+  // 🔗 OPENCLAW RELAY — Communicate with the local OpenClaw agent
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'send_to_openclaw',
+      description: '📡 SEND MESSAGE TO LOCAL OPENCLAW AGENT — Queue a task or message for the local OpenClaw agent running on the user\'s machine. OpenClaw polls for messages and will act on them. Use this when you need local execution, file system access, WhatsApp messaging, or any task that requires the user\'s local environment. Returns relay_tag and message_id; use check_openclaw_reply with the relay_tag to read OpenClaw\'s response.',
+      parameters: {
+        type: 'object',
+        properties: {
+          message: {
+            type: 'string',
+            description: 'The task or message to send to OpenClaw. Be specific and actionable — OpenClaw will read this and act on it.'
+          },
+          relay_tag: {
+            type: 'string',
+            description: 'Optional: custom identifier for this relay exchange (e.g., "task-web-search-001"). Auto-generated if omitted.'
+          },
+          metadata: {
+            type: 'object',
+            description: 'Optional: extra context for OpenClaw (e.g., { "task_id": "...", "urgency": "high" })'
+          }
+        },
+        required: ['message']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'check_openclaw_reply',
+      description: '📬 CHECK FOR OPENCLAW\'S REPLY — Look up OpenClaw\'s response to a previously sent message. Use the relay_tag returned by send_to_openclaw. Returns the reply text if OpenClaw has responded, or null if still pending.',
+      parameters: {
+        type: 'object',
+        properties: {
+          relay_tag: {
+            type: 'string',
+            description: 'The relay_tag returned when you called send_to_openclaw (e.g., "eliza-relay-a1b2c3d4")'
+          }
+        },
+        required: ['relay_tag']
+      }
+    }
   }
 ];

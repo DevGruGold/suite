@@ -61,6 +61,8 @@ interface UnifiedMessage {
   };
   // Generated images extracted from AI response (separate from attachments for performance)
   generatedImages?: string[];
+  // Generated video public URLs from Vertex AI Veo — rendered as playable <video> elements
+  generatedVideos?: string[];
   emotionalContext?: {
     voiceTone?: string;
     facialExpression?: string;
@@ -1306,6 +1308,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
       // 🖼️ Extract base64 images from response to prevent UI freeze
       let generatedImages: string[] = [];
+      let generatedVideos: string[] = [];
       if (isLargeResponse(cleanResponse)) {
         console.log('⚠️ Large response detected, extracting images to prevent freeze...');
         const extracted = extractImagesFromResponse(cleanResponse);
@@ -1317,6 +1320,23 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           // Truncate other large content
           cleanResponse = sanitizeLargeResponse(cleanResponse);
         }
+      }
+
+      // 📸 Extract Supabase Storage image URLs embedded in assistant text
+      const imageUrlRegex = /https:/ / [\w.-] +\.supabase\.co/storage/v1 / object / public / generated - media / images / [^\s"')]+/g;
+      const inlineImageUrls = cleanResponse.match(imageUrlRegex) || [];
+      if (inlineImageUrls.length > 0) {
+        generatedImages = [...generatedImages, ...inlineImageUrls];
+        // Strip the raw URLs from the text so they don't appear as clutter
+        cleanResponse = cleanResponse.replace(imageUrlRegex, '').trim();
+      }
+
+      // 🎬 Extract Supabase Storage video URLs embedded in assistant text
+      const videoUrlRegex = /https:/ / [\w.-] +\.supabase\.co/storage/v1 / object / public / generated - media / videos / [^\s"')]+/g;
+      const inlineVideoUrls = cleanResponse.match(videoUrlRegex) || [];
+      if (inlineVideoUrls.length > 0) {
+        generatedVideos = [...generatedVideos, ...inlineVideoUrls];
+        cleanResponse = cleanResponse.replace(videoUrlRegex, '').trim();
       }
 
       // If it's a workflow initiation, show a brief acknowledgment instead
@@ -1352,7 +1372,8 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         tool_calls: toolCalls.length > 0 ? toolCalls : undefined,
         providerUsed: providerUsed || undefined,
         executiveTitle: executiveTitle || undefined,
-        generatedImages: generatedImages.length > 0 ? generatedImages : undefined
+        generatedImages: generatedImages.length > 0 ? generatedImages : undefined,
+        generatedVideos: generatedVideos.length > 0 ? generatedVideos : undefined
       };
 
       setMessages(prev => [...prev, elizaMessage]);
@@ -1821,6 +1842,38 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                               alt={`Generated Image ${idx + 1}`}
                               className="max-w-full"
                             />
+                          ))}
+                        </div>
+                      )}
+
+                      {/* 🎬 Show AI-generated videos as playable players */}
+                      {message.generatedVideos && message.generatedVideos.length > 0 && (
+                        <div className="space-y-3 mb-2">
+                          {message.generatedVideos.map((url, idx) => (
+                            <div key={`vid-${idx}`} className="rounded-xl overflow-hidden border border-border/40 bg-black/20">
+                              <video
+                                controls
+                                preload="metadata"
+                                className="w-full max-h-64 rounded-xl"
+                                src={url}
+                                aria-label={`Generated Video ${idx + 1}`}
+                              >
+                                <p className="text-xs text-muted-foreground p-2">
+                                  Your browser doesn't support video playback.
+                                  <a href={url} download className="underline ml-1">Download video</a>
+                                </p>
+                              </video>
+                              <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30">
+                                <span className="text-xs text-muted-foreground">🎬 AI Generated Video</span>
+                                <a
+                                  href={url}
+                                  download
+                                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                                >
+                                  ⬇ Download
+                                </a>
+                              </div>
+                            </div>
                           ))}
                         </div>
                       )}

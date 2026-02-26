@@ -16,8 +16,7 @@ const DEVICE_FINGERPRINT = 'antigravity-laptop-01'
 const AGENT_NAME = 'Antigravity-Laptop-Device'
 
 async function registerDevice() {
-    const deviceType = 'pc' // Found valid type 'pc'
-
+    const deviceType = 'pc'
     console.log('Registering/Updating Device:', DEVICE_FINGERPRINT)
 
     let { data: existing } = await supabase
@@ -62,22 +61,39 @@ async function registerDevice() {
 
 async function linkAgent(deviceId) {
     console.log('Linking Agent to Device...')
-    const { data: agents } = await supabase
+    // Use .limit(1) + array — avoids .single() throwing when 0 rows found
+    const { data: agentRows, error } = await supabase
         .from('agents')
         .select('id, metadata')
         .ilike('name', '%Antigravity%')
-        .single()
+        .limit(1)
 
-    if (agents) {
-        console.log('Found Agent:', agents.id)
-        // Update metadata with device_id
-        const newMeta = { ...agents.metadata, device_id: deviceId, connected_via: 'antigravity_bridge' }
-        await supabase.from('agents').update({ metadata: newMeta }).eq('id', agents.id)
+    if (error) {
+        console.log('linkAgent query error (non-fatal):', error.message)
+        return
+    }
+
+    const agent = agentRows?.[0]
+    if (agent) {
+        console.log('Found Agent:', agent.id)
+        const newMeta = { ...agent.metadata, device_id: deviceId, connected_via: 'antigravity_bridge' }
+        await supabase.from('agents').update({ metadata: newMeta }).eq('id', agent.id)
         console.log('Agent metadata updated.')
     } else {
-        console.log('Agent not found (exact match).')
+        console.log('ℹ️  No Antigravity agent row found in DB — skipping link (harmless).')
+        console.log('   To fix: add a row to the agents table with name containing "Antigravity".')
     }
 }
+
+// ── Polling ───────────────────────────────────────────────────────
+
+const POLL_MS = 2000
+const processedIds = new Set()
+
+// Error-rate suppression: only log repeated errors once every 30s
+let consecutiveFetchErrors = 0
+let lastFetchErrorMsg = ''
+let lastFetchErrorLog = 0
 
 async function main() {
     const deviceId = await registerDevice()
@@ -85,56 +101,91 @@ async function main() {
 
     await linkAgent(deviceId)
 
-    console.log(`\n✅ BRIDGE ACTIVE. Listening for events on 'device_events' for device_id=${deviceId}`)
-    console.log(`waiting... (Press Ctrl+C to stop)`)
+    console.log(`\n✅ BRIDGE ACTIVE. Polling 'device_events' for device_id=${deviceId}`)
+    console.log(`Polling every ${POLL_MS}ms... (Press Ctrl+C to stop)\n`)
 
-    const channel = supabase
-        .channel('device-bridge')
-        .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'device_events',
-                filter: `device_id=eq.${deviceId}`
-            },
-            (payload) => {
-                handleEvent(payload.new)
-            }
-        )
-        .subscribe((status) => {
-            console.log('Subscription status:', status)
-        })
+    setInterval(() => pollEvents(deviceId), POLL_MS)
+}
+
+async function pollEvents(deviceId) {
+    const { data: events, error } = await supabase
+        .from('device_events')
+        .select('id, event_type, payload, created_at')
+        .eq('device_id', deviceId)
+        .order('created_at', { ascending: true })
+        .limit(10)
+
+    if (error) {
+        consecutiveFetchErrors++
+        const now = Date.now()
+        const isDuplicate = error.message === lastFetchErrorMsg
+        const suppressedLongEnough = (now - lastFetchErrorLog) < 30000
+
+        if (!isDuplicate || !suppressedLongEnough) {
+            console.error(`❌ Poll error: ${error.message}`)
+            lastFetchErrorMsg = error.message
+            lastFetchErrorLog = now
+        } else if (consecutiveFetchErrors % 30 === 0) {
+            console.error(`❌ Poll still failing (${consecutiveFetchErrors}x): ${error.message}`)
+        }
+        return
+    }
+
+    if (consecutiveFetchErrors > 0) {
+        console.log(`✅ Poll recovered after ${consecutiveFetchErrors} error(s)`)
+        consecutiveFetchErrors = 0
+        lastFetchErrorMsg = ''
+    }
+
+    for (const event of (events || [])) {
+        if (processedIds.has(event.id)) continue
+        processedIds.add(event.id)
+        // Keep Set bounded — trim oldest 500 if over 1000
+        if (processedIds.size > 1000) {
+            const iter = processedIds.values()
+            for (let i = 0; i < 500; i++) processedIds.delete(iter.next().value)
+        }
+        handleEvent(event)
+    }
 }
 
 async function handleEvent(event) {
     console.log('\n📩 RECEIVED EVENT:', event.event_type)
-    console.log('Payload:', event.payload)
+    console.log('Payload:', JSON.stringify(event.payload))
 
     if (event.event_type === 'command' || event.event_type === 'EXECUTE_COMMAND') {
-        const cmd = event.payload.command || event.payload.cmd
+        const cmd = event.payload?.command || event.payload?.cmd
         if (cmd) {
             console.log(`> Executing: ${cmd}`)
-            exec(cmd, (error, stdout, stderr) => {
+            exec(cmd, async (error, stdout, stderr) => {
                 if (error) {
-                    console.error(`exec error: ${error}`)
-                    reportResult(event.id, { error: error.message, stderr })
+                    console.error(`exec error: ${error.message}`)
+                    await reportResult(event.id, { error: error.message, stderr, status: 'error' })
                     return
                 }
                 console.log(`stdout: ${stdout}`)
                 if (stderr) console.error(`stderr: ${stderr}`)
-
-                reportResult(event.id, { stdout, stderr, status: 'completed' })
+                await reportResult(event.id, { stdout, stderr, status: 'completed' })
             })
+        } else {
+            console.log('⚠️  Command event has no command field in payload')
         }
+    } else {
+        console.log('ℹ️  Unknown event type, skipping:', event.event_type)
     }
 }
 
 async function reportResult(eventId, result) {
-    console.log('Reporting result...')
-    await supabase.from('device_events').update({
-        metadata: { result, processed_at: new Date().toISOString() }
-    }).eq('id', eventId)
+    console.log('Result for', eventId, '→', result.status)
+    // Try to write result back — silently skip if columns don't exist
+    const { error } = await supabase
+        .from('device_events')
+        .update({ status: result.status, result: result })
+        .eq('id', eventId)
+    if (error) {
+        // Columns may not exist — log locally only
+        console.log('📝 (Result logged locally):', JSON.stringify(result).substring(0, 200))
+    }
 }
 
 main()

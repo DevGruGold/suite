@@ -1,11 +1,10 @@
-import { useState, useEffect } from "react";
-import { NavLink, useLocation } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import { Home, Users, Coins, Scale, Building2, Shield, Bell } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
-import { InboxModal } from "@/components/InboxModal";
 import { Button } from "@/components/ui/button";
 
 const navItems = [
@@ -18,50 +17,47 @@ const navItems = [
 
 export const DesktopNav = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const { isAdmin, user } = useAuth();
   const { t } = useLanguage();
-  const [isInboxOpen, setIsInboxOpen] = useState(false);
   const [unreadCount, setUnreadCount] = useState(0);
 
   useEffect(() => {
     if (!user) return;
 
-    // Initial count
     const fetchCount = async () => {
       const { count } = await supabase
-        .from('inbox_messages')
-        .select('*', { count: 'exact', head: true })
-        .eq('user_id', user.id)
-        .eq('is_read', false);
+        .from("inbox_messages")
+        .select("*", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("is_read", false);
       setUnreadCount(count || 0);
     };
     fetchCount();
 
-    // Subscription
     const channel = supabase
-      .channel('inbox-counts')
+      .channel("inbox-nav-count")
       .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'inbox_messages', filter: `user_id=eq.${user.id}` },
+        "postgres_changes",
+        { event: "*", schema: "public", table: "inbox_messages", filter: `user_id=eq.${user.id}` },
         () => fetchCount()
       )
       .subscribe();
 
-    return () => {
-      supabase.removeChannel(channel);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [user]);
 
   const allNavItems = isAdmin
     ? [...navItems, { to: "/admin", label: "nav.admin", icon: Shield }]
     : navItems;
 
+  const isInboxActive = location.pathname === "/inbox";
+
   return (
     <nav className="hidden md:flex items-center gap-1">
       {allNavItems.map((item) => {
         const isActive = location.pathname === item.to;
         const Icon = item.icon;
-
         return (
           <NavLink
             key={item.to}
@@ -79,21 +75,26 @@ export const DesktopNav = () => {
         );
       })}
 
+      {/* Inbox bell — navigates to /inbox page */}
       <div className="ml-2 pl-2 border-l border-border/50">
         <Button
           variant="ghost"
           size="icon"
-          className="relative h-8 w-8"
-          onClick={() => setIsInboxOpen(true)}
+          className={cn(
+            "relative h-8 w-8 transition-colors",
+            isInboxActive ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-foreground"
+          )}
+          onClick={() => navigate("/inbox")}
+          title="Inbox"
         >
           <Bell className="w-4 h-4" />
           {unreadCount > 0 && (
-            <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-red-500 animate-pulse ring-2 ring-background" />
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-0.5 flex items-center justify-center rounded-full bg-red-500 text-white text-[9px] font-bold ring-2 ring-background">
+              {unreadCount > 99 ? "99+" : unreadCount}
+            </span>
           )}
         </Button>
       </div>
-
-      <InboxModal isOpen={isInboxOpen} onOpenChange={setIsInboxOpen} />
     </nav>
   );
 };

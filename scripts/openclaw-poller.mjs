@@ -121,6 +121,41 @@ async function supabaseInsert(path, body) {
     return withRetry(() => supabaseFetch('POST', path, { body }));
 }
 
+/**
+ * Send a notification to the user's inbox.
+ * Looks up the task's created_by_user_id to target the right user.
+ */
+async function sendInboxMessage(task, { title, content, type = 'task_complete', priority = 3, agentId, agentName, channel = 'openclaw' }) {
+    // We need the user's uuid — it's stored on the task as created_by_user_id
+    const userId = task.created_by_user_id;
+    if (!userId) {
+        console.warn(`  ⚠️  No created_by_user_id on task ${task.id} — skipping inbox notification`);
+        return;
+    }
+    try {
+        await supabaseInsert('inbox_messages', {
+            user_id: userId,
+            task_id: task.id,
+            title,
+            content,
+            type,
+            priority,
+            agent_id: agentId || task.assignee_agent_id || null,
+            agent_name: agentName || null,
+            channel,
+            is_read: false,
+            metadata: {
+                task_title: task.title,
+                task_category: task.category,
+                task_stage: task.stage,
+            },
+        });
+        console.log(`  📬 Inbox notification sent to user ${userId.slice(0, 8)}…`);
+    } catch (err) {
+        console.error(`  ⚠️  Failed to send inbox message:`, err.message);
+    }
+}
+
 // ── OpenClaw dispatch ────────────────────────────────────────────
 function buildTaskMessage(task) {
     const parts = [
@@ -145,15 +180,37 @@ function buildTaskMessage(task) {
  * Async version of runOpenClaw — spawns process and resolves when done.
  * Non-blocking: multiple tasks can dispatch in parallel.
  */
-function runOpenClawAsync(message, agentMeta) {
+// Full path avoids PATH resolution issues; shell:false ensures args are properly
+// passed as separate argv entries (shell:true concatenates them unsafely, causing
+// "too many arguments" when --message contains spaces).
+const OPENCLAW_CMD = process.env.OPENCLAW_CMD
+    || 'C:\\Users\\PureTrek\\AppData\\Roaming\\npm\\openclaw.cmd';
+
+function runOpenClawAsync(message, agentMeta, taskId) {
     return new Promise((resolve) => {
         const sessionKey = agentMeta?.session_key || 'main';
         const agentName = sessionKey.split(':')[1] || 'main';
 
-        console.log(`  🏃 Spawning: openclaw agent --agent ${agentName} --message "..."`);
+        // Use a task-scoped session ID so each task gets a FRESH, isolated context.
+        // This prevents two critical bugs:
+        //   1. Context accumulation (320K token overload → word salad)
+        //   2. WhatsApp delivery context bleeding into pipeline tasks
+        // Session ID is derived from task ID so retries share the same short session.
+        const taskSessionId = taskId
+            ? `poller-${taskId.slice(0, 8)}`
+            : `poller-${Date.now()}`;
 
-        const child = spawn('openclaw', ['agent', '--agent', agentName, '--message', message, '--json'], {
-            shell: true,
+        console.log(`  🏃 Spawning: openclaw agent --agent ${agentName} --session-id ${taskSessionId} --message "${message.slice(0, 60)}..."`);
+
+        const child = spawn(OPENCLAW_CMD, [
+            'agent',
+            '--agent', agentName,
+            '--session-id', taskSessionId,
+            '--message', message,
+            '--json',
+            // NOTE: NO --deliver flag → output stays local, never routes to WhatsApp
+        ], {
+            shell: false,   // ← IMPORTANT: false so args are passed as proper argv, not concatenated string
             env: process.env,
             windowsHide: true,
         });
@@ -267,7 +324,7 @@ async function processTask(task, agentMeta) {
 
         // 2. Build message and dispatch to OpenClaw (async — non-blocking)
         const message = buildTaskMessage(task);
-        const result = await runOpenClawAsync(message, agentMeta);
+        const result = await runOpenClawAsync(message, agentMeta, task.id);
 
         if (!result.success) {
             console.error(`  ❌ OpenClaw error: ${result.error}`);
@@ -284,6 +341,14 @@ async function processTask(task, agentMeta) {
                 task_id: task.id,
                 agent_id: task.assignee_agent_id,
                 metadata: { stderr: result.stderr?.slice(0, 500) },
+            });
+            // ── Inbox notification for failure ────────────────────
+            await sendInboxMessage(task, {
+                title: `⚠️ Task Blocked: ${task.title}`,
+                content: `OpenClaw could not complete this task.\n\nReason: ${result.error?.slice(0, 300) || 'Unknown error'}`,
+                type: 'task_failed',
+                priority: 4,
+                channel: 'openclaw',
             });
             return;
         }
@@ -324,6 +389,18 @@ async function processTask(task, agentMeta) {
             current_workload: 0,
         });
 
+        // 6. ── Inbox notification for completion ────────────────
+        const agentRow = agents?.find?.(a => a.id === task.assignee_agent_id);
+        await sendInboxMessage(task, {
+            title: `✅ Task Complete: ${task.title}`,
+            content: result.reply?.slice(0, 600) || 'Task completed successfully.',
+            type: 'task_complete',
+            priority: 3,
+            agentId: task.assignee_agent_id,
+            agentName: agentRow?.name || agentMeta?.session_key || 'OpenClaw Agent',
+            channel: 'openclaw',
+        });
+
         console.log(`  ✅ Task ${task.id} completed and written back to Suite AI`);
 
     } catch (err) {
@@ -334,10 +411,11 @@ async function processTask(task, agentMeta) {
 }
 
 let pollCount = 0;
+let agents = [];
 async function poll() {
     pollCount++;
     try {
-        const agents = await fetchOpenClawAgents();
+        agents = await fetchOpenClawAgents();
         if (agents.length === 0) {
             process.stdout.write('.');  // quiet dot — no openclaw agents provisioned yet
             return;

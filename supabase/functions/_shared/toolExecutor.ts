@@ -1990,13 +1990,98 @@ export async function executeToolCall(
           : { success: true, ...cronRegistryResult.data };
         break;
 
+      // ====================================================================
+      // 🖼️🎬 VERTEX AI MEDIA GENERATION (Image + Video via Veo)
+      // ====================================================================
+      case 'vertex_generate_image': {
+        console.log(`🖼️ [${executiveName}] Vertex Generate Image: ${parsedArgs.prompt?.slice(0, 60)}...`);
+        const imgResult = await supabase.functions.invoke('vertex-ai-chat', {
+          body: {
+            imageGeneration: true,
+            prompt: parsedArgs.prompt,
+            model: parsedArgs.model || 'imagen-3.0-generate-002',
+            aspectRatio: parsedArgs.aspect_ratio || '1:1'
+          }
+        });
+        if (imgResult.error) {
+          result = { success: false, error: imgResult.error.message };
+        } else {
+          const d = imgResult.data;
+          // Prefer publicUrl (uploaded to storage); fall back to base64
+          result = {
+            success: true,
+            publicUrl: d?.data?.publicUrl || d?.publicUrl || null,
+            imageDataBase64: d?.data?.data || null,
+            mimeType: d?.data?.mimeType || 'image/png',
+            model: parsedArgs.model || 'imagen-3.0-generate-002',
+            prompt: parsedArgs.prompt,
+            result: d
+          };
+        }
+        break;
+      }
+
+      case 'vertex_generate_video': {
+        console.log(`🎬 [${executiveName}] Vertex Generate Video: ${parsedArgs.prompt?.slice(0, 60)}...`);
+        const vidResult = await supabase.functions.invoke('vertex-ai-chat', {
+          body: {
+            videoGeneration: true,
+            prompt: parsedArgs.prompt,
+            model: parsedArgs.model || 'veo-2.0-generate-001',
+            durationSeconds: parsedArgs.duration_seconds || 5,
+            aspectRatio: parsedArgs.aspect_ratio || '16:9'
+          }
+        });
+        if (vidResult.error) {
+          result = { success: false, error: vidResult.error.message };
+        } else {
+          const d = vidResult.data?.data || vidResult.data;
+          result = {
+            success: true,
+            operation_name: d?.result?.operation_name || d?.operation_name || null,
+            status: d?.result?.status || d?.status || 'pending',
+            message: 'Video generation started. Use vertex_check_video_status with the operation_name to poll for completion.',
+            result: d
+          };
+        }
+        break;
+      }
+
+      case 'vertex_check_video_status': {
+        console.log(`📽️ [${executiveName}] Check Video Status: ${parsedArgs.operation_name}`);
+        const statusResult = await supabase.functions.invoke('vertex-ai-chat', {
+          body: {
+            checkVideoStatus: true,
+            operation_name: parsedArgs.operation_name,
+            model: parsedArgs.model || 'veo-2.0-generate-001'
+          }
+        });
+        if (statusResult.error) {
+          result = { success: false, error: statusResult.error.message };
+        } else {
+          const d = statusResult.data?.data?.result || statusResult.data?.data || statusResult.data;
+          const videoUrls: string[] = d?.videoUrls || [];
+          result = {
+            success: true,
+            status: d?.status || 'pending',
+            done: d?.status === 'done',
+            videoUrls,
+            videoUrl: videoUrls[0] || null,
+            operation_name: parsedArgs.operation_name,
+            result: d
+          };
+        }
+        break;
+      }
+
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = {
           success: false,
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, query_cron_registry, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, query_cron_registry, vertex_generate_image, vertex_generate_video, vertex_check_video_status, and more.`
         };
     }
+
 
     const executionTime = Date.now() - startTime;
 
@@ -2341,6 +2426,55 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
           error: res.data?.error,
           provider: 'vertex-ai-express'
         });
+
+    // ====================================================================
+    // 🔗 OPENCLAW RELAY — Send messages to local OpenClaw agent
+    // ====================================================================
+    case 'send_to_openclaw': {
+      console.log(`📡 [${executiveName}] Sending message to OpenClaw`);
+      const ocSendResult = await supabase.functions.invoke('openclaw-relay', {
+        body: {
+          action: 'send',
+          message: parsedArgs.message,
+          relay_tag: parsedArgs.relay_tag,
+          sender_name: `Eliza (SuiteAI via ${executiveName})`,
+          metadata: parsedArgs.metadata ?? {},
+        }
+      });
+      result = ocSendResult.error
+        ? { success: false, error: ocSendResult.error.message }
+        : {
+          success: true,
+          result: ocSendResult.data,
+          tip: `Use check_openclaw_reply with relay_tag="${ocSendResult.data?.relay_tag}" to read OpenClaw's response when it replies.`
+        };
+      break;
+    }
+
+    case 'check_openclaw_reply': {
+      console.log(`📬 [${executiveName}] Checking for OpenClaw reply: ${parsedArgs.relay_tag}`);
+      // Query inbox_messages for a reply from OpenClaw with is_reply=true and matching relay_tag
+      const { data: replyRows, error: replyErr } = await supabase
+        .from('inbox_messages')
+        .select('id, content, metadata, created_at')
+        .eq('channel', 'openclaw')
+        .filter('metadata->>relay_tag', 'eq', parsedArgs.relay_tag)
+        .filter('metadata->>is_reply', 'eq', 'true')
+        .order('created_at', { ascending: false })
+        .limit(1);
+
+      if (replyErr) {
+        result = { success: false, error: replyErr.message };
+      } else if (!replyRows || replyRows.length === 0) {
+        result = { success: true, found: false, message: 'OpenClaw has not replied yet. Try again in a moment.' };
+      } else {
+        const reply = replyRows[0];
+        // Mark as read
+        await supabase.from('inbox_messages').update({ is_read: true }).eq('id', reply.id);
+        result = { success: true, found: true, reply: reply.content, reply_id: reply.id, created_at: reply.created_at };
+      }
+      break;
+    }
 
     default:
       // Dynamic Fallback: Check if tool exists in the registry

@@ -235,8 +235,41 @@ const VertexAI = {
       return { raw: s }; // unknown shape — return full object for inspection
     });
 
-    console.log(`✅ [vertex-ai-chat] Veo done — ${videos.length} video(s). raw: ${JSON.stringify(data).slice(0, 800)}`);
-    return { success: true, status: 'done', operation_name: operationName, videos, rawResponse: data.response };
+    console.log(`✅ [vertex-ai-chat] Veo done — ${videos.length} video(s).`);
+
+    // Upload each video to Supabase Storage and return public URLs
+    const supabaseUpload = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+    const videoUrls: string[] = [];
+    for (const v of videos) {
+      if (v.format === 'base64' && v.data) {
+        try {
+          const bytes = Uint8Array.from(atob(v.data), c => c.charCodeAt(0));
+          const path = `videos/${Date.now()}_${Math.random().toString(36).slice(2)}.mp4`;
+          const { error: uploadErr } = await supabaseUpload.storage
+            .from('generated-media')
+            .upload(path, bytes, { contentType: 'video/mp4', upsert: false });
+          if (uploadErr) {
+            console.error('❌ Video storage upload failed:', uploadErr.message);
+            // Fall back: include base64 data URL as last resort
+            videoUrls.push(`data:video/mp4;base64,${v.data.slice(0, 100)}...`);
+          } else {
+            const { data: urlData } = supabaseUpload.storage.from('generated-media').getPublicUrl(path);
+            videoUrls.push(urlData.publicUrl);
+            console.log(`✅ Video uploaded: ${urlData.publicUrl}`);
+          }
+        } catch (e: any) {
+          console.error('Video upload error:', e.message);
+        }
+      } else if (v.gcsUri) {
+        // GCS URI — store as-is (requires signed URL generation for playback)
+        videoUrls.push(v.gcsUri);
+      }
+    }
+
+    return { success: true, status: 'done', operation_name: operationName, videoUrls, videoCount: videoUrls.length };
   },
 
   async generateImage(prompt: string, model = "imagen-3.0-generate-002", aspectRatio = "1:1") {
@@ -294,9 +327,28 @@ const VertexAI = {
 
     const base64Image = predictions[0].bytesBase64Encoded;
     const mimeType = predictions[0].mimeType || 'image/png';
+    const ext = mimeType === 'image/jpeg' ? 'jpg' : 'png';
     console.log(`✅ [vertex-ai-chat] Image generated — mimeType: ${mimeType}, size: ${base64Image?.length} chars`);
 
-    return { success: true, format: 'base64', mimeType, data: base64Image, model, prompt };
+    // Upload to Supabase Storage and return a public URL
+    try {
+      const bytes = Uint8Array.from(atob(base64Image), c => c.charCodeAt(0));
+      const path = `images/${Date.now()}_${Math.random().toString(36).slice(2)}.${ext}`;
+      const { error: uploadErr } = await supabaseAdmin.storage
+        .from('generated-media')
+        .upload(path, bytes, { contentType: mimeType, upsert: false });
+      if (uploadErr) {
+        console.error('❌ Image storage upload failed:', uploadErr.message);
+        // Fall back to base64 if storage fails
+        return { success: true, format: 'base64', mimeType, data: base64Image, model, prompt };
+      }
+      const { data: urlData } = supabaseAdmin.storage.from('generated-media').getPublicUrl(path);
+      console.log(`✅ Image uploaded: ${urlData.publicUrl}`);
+      return { success: true, publicUrl: urlData.publicUrl, mimeType, model, prompt };
+    } catch (e: any) {
+      console.error('Image upload error:', e.message);
+      return { success: true, format: 'base64', mimeType, data: base64Image, model, prompt };
+    }
   },
 
   async analyzeVideo(videoUrl) {

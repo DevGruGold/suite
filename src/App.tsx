@@ -18,6 +18,7 @@ import Earn from "./pages/Earn";
 import Profile from "./pages/Profile";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
+import InboxPage from "./pages/Inbox";
 
 const queryClient = new QueryClient();
 
@@ -28,21 +29,21 @@ const App = () => (
         <AudioProvider>
           <TooltipProvider>
             {/* Skip Navigation Link for Accessibility */}
-            <a 
-              href="#main-content" 
+            <a
+              href="#main-content"
               className="skip-link"
               aria-label="Skip to main content"
             >
               Skip to main content
             </a>
-            
+
             <BrowserRouter>
               <Routes>
                 {/* Public routes */}
                 <Route path="/" element={<Landing />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
-                
+
                 {/* Protected routes - require authentication */}
                 <Route element={<ProtectedLayout />}>
                   <Route path="/dashboard" element={<Dashboard />} />
@@ -53,13 +54,14 @@ const App = () => (
                   <Route path="/credentials" element={<Credentials />} />
                   <Route path="/profile" element={<Profile />} />
                   <Route path="/admin" element={<Admin />} />
+                  <Route path="/inbox" element={<InboxPage />} />
                   {/* Legacy redirects */}
                   <Route path="/treasury" element={<Earn />} />
                   <Route path="/contributors" element={<Earn />} />
                 </Route>
               </Routes>
             </BrowserRouter>
-            
+
             <Toaster />
             <Sonner />
           </TooltipProvider>
