@@ -541,7 +541,11 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
         };
       }
 
-      console.log(`� [vertex-ai-chat] Sending ${contents.length} message(s) to ${chatModel}`);
+      const chatProjectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID') ?? '';
+      const chatModel = EXECUTIVE_CONFIG.primaryModel;
+      const chatUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${chatProjectId}/locations/us-central1/publishers/google/models/${chatModel}:generateContent`;
+
+      console.log(`🚀 [vertex-ai-chat] Sending ${contents.length} message(s) to ${chatModel}`);
 
       const vertexResponse = await fetch(
         chatUrl,

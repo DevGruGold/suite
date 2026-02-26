@@ -15,7 +15,12 @@ function analyzeLearningFromError(toolName: string, error: string, params: any):
   if (error.includes('ModuleNotFoundError') || error.includes('ImportError')) {
     const match = error.match(/No module named '([^']+)'/);
     const moduleName = match ? match[1] : 'unknown';
-    return `❌ Module '${moduleName}' not available in sandbox. Available: math, json, datetime, random, re, collections, itertools. For external APIs, use invoke_edge_function.`;
+    const scientificModules = ['numpy', 'scipy', 'pandas', 'matplotlib', 'sklearn', 'tensorflow', 'torch', 'cv2', 'PIL'];
+    const isScientific = scientificModules.includes(moduleName.split('.')[0]);
+    if (isScientific) {
+      return `❌ Module '${moduleName}' is a scientific library NOT available in Piston sandbox. Use invoke_edge_function({ function_name: "jupyter-executor", payload: { code: "..." } }) for numpy, scipy, pandas, matplotlib, sklearn, etc. Piston only has: math, json, datetime, random, re, collections, itertools.`;
+    }
+    return `❌ Module '${moduleName}' not available in sandbox. Available: math, json, datetime, random, re, collections, itertools. For external APIs use invoke_edge_function. For scientific packages (numpy etc.) use jupyter-executor.`;
   }
 
   // Syntax errors
@@ -2476,7 +2481,43 @@ export async function getVscoToolHandler(name: string, parsedArgs: any, supabase
       break;
     }
 
+
+    case 'store_knowledge': {
+      console.log(`🧠 [${executiveName}] Storing knowledge: ${parsedArgs.name}`);
+      const { data: skData, error: skError } = await supabase.functions.invoke('knowledge-manager', {
+        body: {
+          action: 'store',
+          name: parsedArgs.name,
+          type: parsedArgs.type,
+          description: parsedArgs.description,
+          metadata: parsedArgs.metadata || {},
+          confidence_score: parsedArgs.confidence_score ?? 0.8
+        }
+      });
+      result = skError
+        ? { success: false, error: skError.message }
+        : { success: true, ...skData };
+      break;
+    }
+
+    case 'search_knowledge': {
+      console.log(`🔍 [${executiveName}] Searching knowledge: ${parsedArgs.query}`);
+      const { data: sqData, error: sqError } = await supabase.functions.invoke('knowledge-manager', {
+        body: {
+          action: 'search',
+          query: parsedArgs.query,
+          type: parsedArgs.type,
+          limit: parsedArgs.limit ?? 5
+        }
+      });
+      result = sqError
+        ? { success: false, error: sqError.message }
+        : { success: true, ...sqData };
+      break;
+    }
+
     default:
+
       // Dynamic Fallback: Check if tool exists in the registry
       const registryEntry = EDGE_FUNCTIONS_REGISTRY.find(f => f.name === name);
       if (registryEntry) {

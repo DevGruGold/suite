@@ -161,6 +161,44 @@ export const ELIZA_TOOLS = [
   },
 
   // ====================================================================
+  // 🧠 KNOWLEDGE MANAGEMENT TOOLS
+  // ====================================================================
+  {
+    type: 'function',
+    function: {
+      name: 'store_knowledge',
+      description: '🧠 Store a piece of knowledge, fact, or insight into the persistent knowledge base for future recall. Use this when you learn something important about the user, their business, preferences, or any factual information worth remembering.',
+      parameters: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'Short descriptive title for this knowledge item (e.g. "User prefers async communication")' },
+          type: { type: 'string', description: 'Category of knowledge: fact, preference, insight, entity, relationship, process, or other', enum: ['fact', 'preference', 'insight', 'entity', 'relationship', 'process', 'other'] },
+          description: { type: 'string', description: 'Full text content of the knowledge to store' },
+          metadata: { type: 'object', description: 'Optional key-value pairs for additional context (e.g. source, tags, related entity names)' },
+          confidence_score: { type: 'number', description: 'Confidence level from 0.0 to 1.0 (default 0.8)' }
+        },
+        required: ['name', 'type', 'description']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
+      name: 'search_knowledge',
+      description: '🔍 Search the persistent knowledge base for stored facts, preferences, or insights. Use this to recall previous information about the user or topics before answering questions.',
+      parameters: {
+        type: 'object',
+        properties: {
+          query: { type: 'string', description: 'Natural language search query (e.g. "user budget preferences" or "XMRT token details")' },
+          type: { type: 'string', description: 'Optional filter by knowledge type: fact, preference, insight, entity, relationship, process, other' },
+          limit: { type: 'number', description: 'Max results to return (default 5, max 20)' }
+        },
+        required: ['query']
+      }
+    }
+  },
+
+  // ====================================================================
   // 🎯 CONVERSATIONAL USER ACQUISITION TOOLS
   // ====================================================================
   {

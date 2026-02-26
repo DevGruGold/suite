@@ -20,32 +20,15 @@ export interface GatewayConfig {
 }
 
 // Production AI Gateway Configuration
+// Priority order: Gemini (free/Google) → DeepSeek → OpenAI → Vertex AI → Kimi
 const GATEWAY_CONFIG: GatewayConfig = {
   providers: [
     {
-      name: 'vertex',
-      endpoint: 'https://us-central1-aiplatform.googleapis.com/v1/projects/{project}/locations/us-central1/publishers/google/models/gemini-1.5-flash:streamGenerateContent',
-      model: 'gemini-1.5-flash',
+      name: 'gemini',
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
+      model: 'gemini-2.0-flash',
       priority: 1,
       rateLimit: 2000,
-      timeout: 30000,
-      available: true
-    },
-    {
-      name: 'openai',
-      endpoint: 'https://api.openai.com/v1/chat/completions',
-      model: 'gpt-4o-mini',
-      priority: 2,
-      rateLimit: 3000,
-      timeout: 30000,
-      available: true
-    },
-    {
-      name: 'gemini',
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent',
-      model: 'gemini-1.5-flash',
-      priority: 3,
-      rateLimit: 1500,
       timeout: 30000,
       available: true
     },
@@ -53,19 +36,37 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'deepseek',
       endpoint: 'https://api.deepseek.com/v1/chat/completions',
       model: 'deepseek-chat',
+      priority: 2,
+      rateLimit: 1500,
+      timeout: 30000,
+      available: true
+    },
+    {
+      name: 'openai',
+      endpoint: 'https://api.openai.com/v1/chat/completions',
+      model: 'gpt-4o-mini',
+      priority: 3,
+      rateLimit: 3000,
+      timeout: 30000,
+      available: true
+    },
+    {
+      name: 'vertex',
+      endpoint: 'https://us-central1-aiplatform.googleapis.com/v1/projects/{project}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent',
+      model: 'gemini-2.0-flash',
       priority: 4,
       rateLimit: 1000,
       timeout: 30000,
       available: true
     },
     {
-      name: 'lovable',
-      endpoint: 'https://api.lovable.dev/v1/chat/completions',
-      model: 'claude-3.5-sonnet',
+      name: 'kimi',
+      endpoint: 'https://api.moonshot.cn/v1/chat/completions',
+      model: 'moonshot-v1-8k',
       priority: 5,
       rateLimit: 500,
       timeout: 30000,
-      available: false  // Currently out of tokens
+      available: true
     }
   ],
   fallbackStrategy: 'sequential',
@@ -82,13 +83,13 @@ class CircuitBreaker {
   isProviderAvailable(providerName: string): boolean {
     const failures = this.failures.get(providerName) || 0;
     const lastFailure = this.lastFailureTime.get(providerName) || 0;
-    
+
     // Reset if enough time has passed
     if (Date.now() - lastFailure > this.resetTimeout) {
       this.failures.set(providerName, 0);
       return true;
     }
-    
+
     return failures < GATEWAY_CONFIG.circuitBreakerThreshold;
   }
 
@@ -108,7 +109,7 @@ const circuitBreaker = new CircuitBreaker();
 // Enhanced error handling for different failure types
 export class AIGatewayError extends Error {
   constructor(
-    message: string, 
+    message: string,
     public provider: string,
     public statusCode?: number,
     public errorType?: 'token_exhausted' | 'rate_limit' | 'timeout' | 'service_unavailable' | 'unknown'
@@ -121,7 +122,7 @@ export class AIGatewayError extends Error {
 // Detect error type from response
 function detectErrorType(response: Response, error?: any): 'token_exhausted' | 'rate_limit' | 'timeout' | 'service_unavailable' | 'unknown' {
   if (response.status === 402) return 'token_exhausted';
-  if (response.status === 429) return 'rate_limit';  
+  if (response.status === 429) return 'rate_limit';
   if (response.status === 503 || response.status === 502) return 'service_unavailable';
   if (response.status === 408 || error?.name === 'AbortError') return 'timeout';
   return 'unknown';
@@ -130,8 +131,8 @@ function detectErrorType(response: Response, error?: any): 'token_exhausted' | '
 // Get available providers based on circuit breaker and priority
 function getAvailableProviders(): AIProvider[] {
   return GATEWAY_CONFIG.providers
-    .filter(provider => 
-      provider.available && 
+    .filter(provider =>
+      provider.available &&
       circuitBreaker.isProviderAvailable(provider.name)
     )
     .sort((a, b) => a.priority - b.priority);
@@ -139,34 +140,53 @@ function getAvailableProviders(): AIProvider[] {
 
 // Execute chat completion with a specific provider
 async function executeWithProvider(
-  provider: AIProvider, 
-  messages: any[], 
+  provider: AIProvider,
+  messages: any[],
   options: any = {}
 ): Promise<any> {
   console.log(`[Gateway] Attempting ${provider.name} (priority: ${provider.priority})`);
-  
+
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), provider.timeout);
-    
+
     // Prepare request based on provider
     let requestBody: any;
     let endpoint = provider.endpoint;
-    
+
     if (provider.name === 'gemini' || provider.name === 'vertex') {
       // Gemini API format
       requestBody = {
-        contents: messages.map(msg => ({
-          role: msg.role === 'assistant' ? 'model' : 'user',
-          parts: [{ text: msg.content }]
-        })),
+        contents: messages
+          .filter((msg: any) => msg.role !== 'system')
+          .map((msg: any) => ({
+            role: msg.role === 'assistant' || msg.role === 'model' ? 'model' : 'user',
+            parts: [{ text: String(msg.content || '') }]
+          })),
+        systemInstruction: messages.find((m: any) => m.role === 'system')
+          ? { parts: [{ text: messages.find((m: any) => m.role === 'system').content }] }
+          : undefined,
         generationConfig: {
           temperature: options.temperature || 0.7,
           maxOutputTokens: options.max_tokens || 1000
         }
       };
+
+      // Convert OpenAI-style tools to Gemini function_declarations
+      if (options.tools && options.tools.length > 0) {
+        const functionDeclarations = options.tools
+          .filter((t: any) => t.type === 'function' && t.function)
+          .map((t: any) => ({
+            name: t.function.name,
+            description: t.function.description || '',
+            parameters: t.function.parameters || { type: 'object', properties: {} }
+          }));
+        if (functionDeclarations.length > 0) {
+          requestBody.tools = [{ function_declarations: functionDeclarations }];
+        }
+      }
     } else {
-      // OpenAI-compatible format
+      // OpenAI-compatible format (openai, deepseek, lovable)
       requestBody = {
         model: provider.model,
         messages: messages,
@@ -174,8 +194,14 @@ async function executeWithProvider(
         max_tokens: options.max_tokens || 1000,
         stream: false
       };
+
+      // Forward tool definitions if provided
+      if (options.tools && options.tools.length > 0) {
+        requestBody.tools = options.tools;
+        requestBody.tool_choice = options.tool_choice || 'auto';
+      }
     }
-    
+
     const response = await fetch(endpoint, {
       method: 'POST',
       headers: {
@@ -186,19 +212,19 @@ async function executeWithProvider(
       body: JSON.stringify(requestBody),
       signal: controller.signal
     });
-    
+
     clearTimeout(timeoutId);
-    
+
     if (!response.ok) {
       const errorType = detectErrorType(response);
       const errorText = await response.text();
-      
+
       // Handle specific error types
       if (errorType === 'token_exhausted') {
         console.log(`[Gateway] ${provider.name} token exhausted, marking unavailable`);
         provider.available = false;
       }
-      
+
       throw new AIGatewayError(
         `${provider.name} failed: ${response.status} ${errorText}`,
         provider.name,
@@ -206,42 +232,58 @@ async function executeWithProvider(
         errorType
       );
     }
-    
+
     const result = await response.json();
-    
+
     // Normalize response format
     let normalizedResponse;
     if (provider.name === 'gemini' || provider.name === 'vertex') {
+      const candidate = result.candidates?.[0];
+      const parts = candidate?.content?.parts || [];
+      const textParts = parts.filter((p: any) => p.text);
+      const funcCallParts = parts.filter((p: any) => p.functionCall);
+
+      const toolCalls = funcCallParts.map((p: any, i: number) => ({
+        id: `call_${i}_${Date.now()}`,
+        type: 'function',
+        function: {
+          name: p.functionCall.name,
+          arguments: JSON.stringify(p.functionCall.args || {})
+        }
+      }));
+
       normalizedResponse = {
         choices: [{
           message: {
             role: 'assistant',
-            content: result.candidates?.[0]?.content?.parts?.[0]?.text || 'No response'
+            content: textParts.map((p: any) => p.text).join('') || null,
+            tool_calls: toolCalls.length > 0 ? toolCalls : undefined
           }
         }],
         usage: result.usageMetadata || {},
         provider: provider.name
       };
     } else {
+      // OpenAI-compatible — pass through directly (tool_calls already in correct format)
       normalizedResponse = {
         ...result,
         provider: provider.name
       };
     }
-    
+
     circuitBreaker.recordSuccess(provider.name);
     console.log(`[Gateway] ✅ ${provider.name} succeeded`);
-    
+
     return normalizedResponse;
-    
+
   } catch (error) {
     circuitBreaker.recordFailure(provider.name);
     console.log(`[Gateway] ❌ ${provider.name} failed: ${error.message}`);
-    
+
     if (error instanceof AIGatewayError) {
       throw error;
     }
-    
+
     throw new AIGatewayError(
       `${provider.name} execution failed: ${error.message}`,
       provider.name,
@@ -251,32 +293,30 @@ async function executeWithProvider(
   }
 }
 
-// Get API key for provider (mock implementation - should use secure storage)
+// Get API key for provider
 async function getAPIKey(providerName: string): Promise<string> {
-  // In production, these should come from Supabase secrets or environment variables
-  const apiKeys = {
-    openai: Deno.env.get('OPENAI_API_KEY') || 'sk-placeholder',
-    gemini: Deno.env.get('GEMINI_API_KEY') || 'placeholder',
-    deepseek: Deno.env.get('DEEPSEEK_API_KEY') || 'placeholder',
-    lovable: Deno.env.get('LOVABLE_API_KEY') || 'placeholder',
-    vertex: Deno.env.get('GOOGLE_CLOUD_API_KEY') || 'placeholder'
+  const apiKeys: Record<string, string> = {
+    gemini: Deno.env.get('GEMINI_API_KEY') || '',
+    deepseek: Deno.env.get('DEEPSEEK_API_KEY') || '',
+    openai: Deno.env.get('OPENAI_API_KEY') || '',
+    vertex: Deno.env.get('GOOGLE_CLOUD_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '',
+    kimi: Deno.env.get('KIMI_API_KEY') || '',
   };
-  
-  return apiKeys[providerName] || 'placeholder';
+  return apiKeys[providerName] || '';
 }
 
 // Main gateway function with comprehensive fallback
 export async function executeAIRequest(
-  messages: any[], 
+  messages: any[],
   options: any = {}
 ): Promise<any> {
   const startTime = Date.now();
   const requestId = `req_${Math.random().toString(36).substr(2, 9)}`;
-  
+
   console.log(`[Gateway] [${requestId}] Starting AI request with ${messages.length} messages`);
-  
+
   const availableProviders = getAvailableProviders();
-  
+
   if (availableProviders.length === 0) {
     throw new AIGatewayError(
       'No available AI providers - all services are down or exhausted',
@@ -285,20 +325,20 @@ export async function executeAIRequest(
       'service_unavailable'
     );
   }
-  
+
   console.log(`[Gateway] [${requestId}] Available providers: ${availableProviders.map(p => p.name).join(', ')}`);
-  
+
   let lastError: AIGatewayError | null = null;
-  
+
   // Try each provider in order
   for (let i = 0; i < availableProviders.length; i++) {
     const provider = availableProviders[i];
-    
+
     try {
       const result = await executeWithProvider(provider, messages, options);
-      
+
       console.log(`[Gateway] [${requestId}] Success with ${provider.name} in ${Date.now() - startTime}ms`);
-      
+
       return {
         ...result,
         metadata: {
@@ -309,17 +349,17 @@ export async function executeAIRequest(
           timestamp: new Date().toISOString()
         }
       };
-      
+
     } catch (error) {
       lastError = error as AIGatewayError;
       console.log(`[Gateway] [${requestId}] Provider ${provider.name} failed: ${error.message}`);
-      
+
       // If this is a token exhaustion, mark provider as unavailable
       if (error.errorType === 'token_exhausted') {
         provider.available = false;
         console.log(`[Gateway] [${requestId}] Marked ${provider.name} as unavailable due to token exhaustion`);
       }
-      
+
       // Continue to next provider unless this is the last one
       if (i < availableProviders.length - 1) {
         console.log(`[Gateway] [${requestId}] Falling back to next provider...`);
@@ -327,10 +367,10 @@ export async function executeAIRequest(
       }
     }
   }
-  
+
   // All providers failed
   console.error(`[Gateway] [${requestId}] All providers failed after ${Date.now() - startTime}ms`);
-  
+
   throw new AIGatewayError(
     `All AI providers failed. Last error: ${lastError?.message || 'Unknown error'}`,
     'gateway',
@@ -342,7 +382,7 @@ export async function executeAIRequest(
 // Health check function
 export async function checkGatewayHealth(): Promise<any> {
   const availableProviders = getAvailableProviders();
-  
+
   return {
     status: availableProviders.length > 0 ? 'healthy' : 'degraded',
     availableProviders: availableProviders.length,

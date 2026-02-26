@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import { callAIWithFallback } from '../_shared/unifiedAIFallback.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +40,7 @@ serve(async (req) => {
       console.log(`🔍 Direct Mode: Extracting knowledge from message ${message_id}...`);
       const result = await processContent(supabase, content, message_id, session_id);
 
-      await usageTracker.success({ ...result, mode: 'direct' });
+      await usageTracker.success({ result_summary: 'direct_extraction', ...result });
       return new Response(JSON.stringify({ success: true, ...result }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });

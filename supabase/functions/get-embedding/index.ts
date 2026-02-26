@@ -27,7 +27,70 @@ async function fetchWithTimeout(url: string, options: RequestInit, timeoutMs: nu
 }
 
 /**
- * Generate embedding using OpenAI (primary)
+ * Generate embedding using Supabase built-in gte-small model (primary — no API key needed)
+ */
+async function generateSupabaseEmbedding(content: string): Promise<number[] | null> {
+  try {
+    console.log('🟢 Generating embedding via Supabase gte-small (primary)...');
+    // @ts-ignore — Supabase AI Session is available in Edge Function runtime
+    const session = new Supabase.ai.Session('gte-small');
+    const embedding = await session.run(content, { mean_pool: true, normalize: true });
+    if (!embedding || !Array.isArray(embedding)) return null;
+    console.log('✅ Supabase embedding generated successfully');
+    return embedding;
+  } catch (error: any) {
+    console.warn('⚠️ Supabase embedding error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Generate embedding using Gemini (secondary)
+ */
+async function generateGeminiEmbedding(content: string): Promise<number[] | null> {
+  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
+  if (!geminiApiKey) {
+    console.warn('⚠️ Gemini API key not configured for embeddings');
+    return null;
+  }
+
+  try {
+    console.log('💎 Generating embedding via Gemini (secondary)...');
+    const response = await fetchWithTimeout(
+      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiApiKey}`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: 'models/text-embedding-004',
+          content: { parts: [{ text: content }] },
+        }),
+      },
+      EMBEDDING_TIMEOUT_MS
+    );
+
+    if (response.status === 402 || response.status === 429) {
+      console.warn(`⚠️ Gemini embeddings ${response.status} - trying next`);
+      return null;
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn('⚠️ Gemini embedding API error:', errorText);
+      return null;
+    }
+
+    const data = await response.json();
+    console.log('✅ Gemini embedding generated successfully');
+    return data.embedding?.values || null;
+  } catch (error: any) {
+    console.warn('⚠️ Gemini embedding error:', error.message);
+    return null;
+  }
+}
+
+/**
+ * Generate embedding using OpenAI (tertiary fallback)
  */
 async function generateOpenAIEmbedding(content: string): Promise<number[] | null> {
   const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
@@ -37,7 +100,7 @@ async function generateOpenAIEmbedding(content: string): Promise<number[] | null
   }
 
   try {
-    console.log('🧠 Generating embedding via OpenAI...');
+    console.log('🧠 Generating embedding via OpenAI (tertiary)...');
     const response = await fetchWithTimeout(
       'https://api.openai.com/v1/embeddings',
       {
@@ -54,9 +117,8 @@ async function generateOpenAIEmbedding(content: string): Promise<number[] | null
       EMBEDDING_TIMEOUT_MS
     );
 
-    // Fast-fail for credit exhaustion
     if (response.status === 402 || response.status === 429) {
-      console.warn(`⚠️ OpenAI embeddings ${response.status} - trying fallback`);
+      console.warn(`⚠️ OpenAI embeddings ${response.status} - no more fallbacks`);
       return null;
     }
 
@@ -69,54 +131,8 @@ async function generateOpenAIEmbedding(content: string): Promise<number[] | null
     const data = await response.json();
     console.log('✅ OpenAI embedding generated successfully');
     return data.data[0].embedding;
-  } catch (error) {
+  } catch (error: any) {
     console.warn('⚠️ OpenAI embedding error:', error.message);
-    return null;
-  }
-}
-
-/**
- * Generate embedding using Gemini (fallback)
- */
-async function generateGeminiEmbedding(content: string): Promise<number[] | null> {
-  const geminiApiKey = Deno.env.get('GEMINI_API_KEY');
-  if (!geminiApiKey) {
-    console.warn('⚠️ Gemini API key not configured for embeddings');
-    return null;
-  }
-
-  try {
-    console.log('💎 Generating embedding via Gemini (fallback)...');
-    const response = await fetchWithTimeout(
-      `https://generativelanguage.googleapis.com/v1beta/models/text-embedding-004:embedContent?key=${geminiApiKey}`,
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          model: 'models/text-embedding-004',
-          content: { parts: [{ text: content }] },
-        }),
-      },
-      EMBEDDING_TIMEOUT_MS
-    );
-
-    // Fast-fail for credit exhaustion
-    if (response.status === 402 || response.status === 429) {
-      console.warn(`⚠️ Gemini embeddings ${response.status} - no more fallbacks`);
-      return null;
-    }
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.warn('⚠️ Gemini embedding API error:', errorText);
-      return null;
-    }
-
-    const data = await response.json();
-    console.log('✅ Gemini embedding generated successfully');
-    return data.embedding?.values || null;
-  } catch (error) {
-    console.warn('⚠️ Gemini embedding error:', error.message);
     return null;
   }
 }
@@ -130,7 +146,7 @@ serve(async (req) => {
 
   try {
     const { content } = await req.json();
-    
+
     if (!content || typeof content !== 'string' || content.trim().length === 0) {
       return new Response(
         JSON.stringify({ success: true, message: 'No content to embed' }),
@@ -141,13 +157,18 @@ serve(async (req) => {
     // Truncate very long content to prevent token limit issues
     const truncatedContent = content.slice(0, 8000);
 
-    // Try OpenAI first, then Gemini fallback
-    let embedding = await generateOpenAIEmbedding(truncatedContent);
-    let provider = 'openai';
-    
+    // Cascade: Supabase gte-small (no key) → Gemini → OpenAI
+    let embedding = await generateSupabaseEmbedding(truncatedContent);
+    let provider = 'supabase-gte-small';
+
     if (!embedding) {
       embedding = await generateGeminiEmbedding(truncatedContent);
       provider = 'gemini';
+    }
+
+    if (!embedding) {
+      embedding = await generateOpenAIEmbedding(truncatedContent);
+      provider = 'openai';
     }
 
     if (!embedding) {
