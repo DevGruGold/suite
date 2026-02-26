@@ -176,10 +176,11 @@ const VertexAI = {
     }
 
     const accessToken = authData.access_token;
-    // The operationName returned by predictLongRunning is the full resource path:
-    // "projects/{project}/locations/{location}/publishers/google/models/{model}/operations/{id}"
-    // Poll it via a GET on the aiplatform.googleapis.com operations endpoint.
-    const url = `https://${location}-aiplatform.googleapis.com/v1/${operationName}`;
+    // The operationName is the full resource path returned by predictLongRunning:
+    // "projects/{proj}/locations/{loc}/publishers/google/models/{model}/operations/{id}"
+    // Use the GLOBAL aiplatform.googleapis.com base (not the regional subdomain)
+    // because the regional endpoint does not serve these publisher-model operations.
+    const url = `https://aiplatform.googleapis.com/v1/${operationName}`;
 
     const response = await fetch(url, {
       method: 'GET',
