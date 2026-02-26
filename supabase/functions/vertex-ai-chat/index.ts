@@ -212,15 +212,29 @@ const VertexAI = {
     }
 
     // Extract video data from completed operation
-    const predictions = data.response?.predictions || [];
+    // Log the full raw response to diagnose structure
+    console.log(`📦 [vertex-ai-chat] Raw Veo done response keys: ${JSON.stringify(Object.keys(data))}`);
+    console.log(`📦 [vertex-ai-chat] response keys: ${JSON.stringify(Object.keys(data.response || {}))}`);
+
+    // Veo may return videos in predictions array OR response.videos OR response.generatedSamples
+    const predictions = data.response?.predictions
+      || data.response?.videos
+      || data.response?.generatedSamples
+      || data.predictions
+      || [];
+
     const videos = predictions.map((p: any) => {
       if (p.bytesBase64Encoded) {
         return { format: 'base64', data: p.bytesBase64Encoded, mimeType: p.mimeType || 'video/mp4' };
       }
-      return { gcsUri: p.gcsUri, mimeType: p.mimeType || 'video/mp4' };
+      if (p.video?.uri || p.gcsUri) {
+        return { gcsUri: p.video?.uri || p.gcsUri, mimeType: p.mimeType || 'video/mp4' };
+      }
+      // Return full prediction object if structure is unknown so caller can inspect
+      return { raw: p };
     });
 
-    console.log(`✅ [vertex-ai-chat] Veo video generation done — ${videos.length} video(s) returned`);
+    console.log(`✅ [vertex-ai-chat] Veo video generation done — ${videos.length} video(s), raw response: ${JSON.stringify(data).slice(0, 500)}`);
     return { success: true, status: 'done', operation_name: operationName, videos };
   },
 
