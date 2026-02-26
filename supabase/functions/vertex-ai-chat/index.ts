@@ -90,20 +90,132 @@ const GoogleCloudAPI = {
 
 // Vertex AI capabilities for video generation (COO-specific)
 const VertexAI = {
-  async generateVideo(prompt, model = "veo2") {
-    if (!EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
-      throw new Error("Video generation not available for this executive");
+  async generateVideo(prompt: string, model = "veo-2.0-generate-001", durationSeconds = 8, aspectRatio = "16:9") {
+    const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
+    const location = 'us-central1';
+    if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID env var not set');
+
+    console.log(`🎬 [vertex-ai-chat] Veo video request — model: ${model}, project: ${projectId}`);
+
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+      body: { action: 'get_access_token', auth_type: 'service_account' }
+    });
+
+    if (authError || !authData?.access_token) {
+      const msg = authError?.message || JSON.stringify(authError) || 'No token returned';
+      console.error('❌ [vertex-ai-chat] google-cloud-auth failed for video:', msg);
+      throw new Error(`google-cloud-auth failed: ${msg}`);
     }
+
+    const accessToken = authData.access_token;
+    console.log('🔑 [vertex-ai-chat] Access token obtained for video generation');
+
+    // Initiate LRO — Veo generation takes 2-3 min, so we return the operation name immediately
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
+    console.log(`📡 [vertex-ai-chat] Veo predictLongRunning URL: ${url}`);
+
+    const requestBody = {
+      instances: [{ prompt }],
+      parameters: { durationSeconds, aspectRatio, sampleCount: 1 }
+    };
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`❌ [vertex-ai-chat] Veo API ${response.status}: ${errText}`);
+      throw new Error(`Veo API ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+    const operationName = data.name; // e.g. "projects/.../locations/.../operations/..."
+    console.log(`✅ [vertex-ai-chat] Veo LRO initiated: ${operationName}`);
 
     return {
       success: true,
-      videoId: `video_${Date.now()}`,
-      model: model,
-      prompt: prompt,
-      status: "processing",
-      estimatedCompletion: "2-3 minutes",
-      downloadUrl: `https://storage.googleapis.com/vertex-videos/${Date.now()}.mp4`
+      operation_name: operationName,
+      model,
+      prompt,
+      status: 'pending',
+      message: 'Video generation initiated. Use check_video_status with the operation_name to poll for completion.'
     };
+  },
+
+  async checkVideoStatus(operationName: string, model = "veo-2.0-generate-001") {
+    const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
+    const location = 'us-central1';
+    if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID env var not set');
+    if (!operationName) throw new Error('operation_name is required');
+
+    console.log(`🔍 [vertex-ai-chat] Checking Veo status for: ${operationName}`);
+
+    const supabaseAdmin = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
+
+    const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+      body: { action: 'get_access_token', auth_type: 'service_account' }
+    });
+
+    if (authError || !authData?.access_token) {
+      const msg = authError?.message || JSON.stringify(authError) || 'No token returned';
+      throw new Error(`google-cloud-auth failed: ${msg}`);
+    }
+
+    const accessToken = authData.access_token;
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchLongRunningOperation`;
+
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ operationName })
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`❌ [vertex-ai-chat] Veo status API ${response.status}: ${errText}`);
+      throw new Error(`Veo status API ${response.status}: ${errText}`);
+    }
+
+    const data = await response.json();
+
+    if (!data.done) {
+      console.log(`⏳ [vertex-ai-chat] Veo operation still processing: ${operationName}`);
+      return { success: true, status: 'processing', operation_name: operationName };
+    }
+
+    if (data.error) {
+      console.error(`❌ [vertex-ai-chat] Veo operation failed:`, data.error);
+      throw new Error(`Video generation failed: ${JSON.stringify(data.error)}`);
+    }
+
+    // Extract video data from completed operation
+    const predictions = data.response?.predictions || [];
+    const videos = predictions.map((p: any) => {
+      if (p.bytesBase64Encoded) {
+        return { format: 'base64', data: p.bytesBase64Encoded, mimeType: p.mimeType || 'video/mp4' };
+      }
+      return { gcsUri: p.gcsUri, mimeType: p.mimeType || 'video/mp4' };
+    });
+
+    console.log(`✅ [vertex-ai-chat] Veo video generation done — ${videos.length} video(s) returned`);
+    return { success: true, status: 'done', operation_name: operationName, videos };
   },
 
   async generateImage(prompt: string, model = "imagen-3.0-generate-002", aspectRatio = "1:1") {
@@ -565,7 +677,15 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       if (opError) throw opError;
       return { success: true, result: opData };
     } else if (requestType === 'video_generation') {
-      const result = await VertexAI.generateVideo(toolCall.parameters.prompt, toolCall.parameters.model);
+      const result = await VertexAI.generateVideo(
+        toolCall.parameters.prompt,
+        toolCall.parameters.model,
+        toolCall.parameters.durationSeconds,
+        toolCall.parameters.aspectRatio
+      );
+      return { success: true, result };
+    } else if (requestType === 'check_video_status') {
+      const result = await VertexAI.checkVideoStatus(toolCall.parameters.operation_name, toolCall.parameters.model);
       return { success: true, result };
     } else if (requestType === 'image_generation') {
       const result = await VertexAI.generateImage(toolCall.parameters.prompt, toolCall.parameters.model, toolCall.parameters.aspectRatio);
@@ -656,7 +776,18 @@ async function handleExecutiveRequest(request: Request) {
         toolCall.parameters = { service: body.service, operation: body.operation, ...body.params };
       } else if (body.videoGeneration && EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
         toolCall.type = "video_generation";
-        toolCall.parameters = { prompt: body.prompt, model: body.model || "veo2" };
+        toolCall.parameters = {
+          prompt: body.prompt,
+          model: body.model || "veo-2.0-generate-001",
+          durationSeconds: body.durationSeconds || 8,
+          aspectRatio: body.aspectRatio || "16:9"
+        };
+      } else if (body.checkVideoStatus) {
+        toolCall.type = "check_video_status";
+        toolCall.parameters = {
+          operation_name: body.operation_name,
+          model: body.model || "veo-2.0-generate-001"
+        };
       } else if (body.imageGeneration && EXECUTIVE_CONFIG.specializations.includes("image_generation")) {
         toolCall.type = "image_generation";
         toolCall.parameters = { prompt: body.prompt, model: body.model || "imagen-3.0-generate-002", aspectRatio: body.aspectRatio || "1:1" };
