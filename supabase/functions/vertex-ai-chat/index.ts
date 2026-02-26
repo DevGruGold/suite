@@ -521,8 +521,11 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
         }
       ];
 
+      const chatModel = EXECUTIVE_CONFIG.primaryModel; // e.g. gemini-2.5-flash
+      const chatUrl = `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${chatModel}:streamGenerateContent`;
+      console.log(`📡 [vertex-ai-chat] Chat request URL: ${chatUrl}`);
       const vertexResponse = await fetch(
-        `https://us-central1-aiplatform.googleapis.com/v1/projects/${Deno.env.get('GOOGLE_CLOUD_PROJECT_ID')}/locations/us-central1/publishers/google/models/${EXECUTIVE_CONFIG.primaryModel}:streamGenerateContent`,
+        chatUrl,
         {
           method: 'POST',
           headers: {
@@ -546,6 +549,7 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
 
       if (!vertexResponse.ok) {
         const errorText = await vertexResponse.text();
+        console.error(`❌ [vertex-ai-chat] Vertex AI chat API ${vertexResponse.status}: ${errorText.slice(0, 800)}`);
         throw new Error(`Vertex AI API failed: ${vertexResponse.status} ${errorText}`);
       }
 
