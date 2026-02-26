@@ -873,26 +873,34 @@ async function handleExecutiveRequest(request: Request) {
       };
 
       // Check for specialized operations
+      // Supports both action-string protocol (from toolExecutor) and legacy boolean flags
+      const action = body.action;
+
       if (body.googleCloudOperation) {
         toolCall.type = "google_cloud";
         toolCall.parameters = { service: body.service, operation: body.operation, ...body.params };
-      } else if (body.videoGeneration && EXECUTIVE_CONFIG.specializations.includes("video_creation")) {
+      } else if (action === 'generate_video' || (body.videoGeneration && EXECUTIVE_CONFIG.specializations.includes("video_creation"))) {
         toolCall.type = "video_generation";
         toolCall.parameters = {
           prompt: body.prompt,
-          model: body.model || "veo-2.0-generate-001",
-          durationSeconds: body.durationSeconds || 8,
-          aspectRatio: body.aspectRatio || "16:9"
+          model: body.video_model || body.model || "veo-2.0-generate-001",
+          durationSeconds: body.duration_seconds || body.durationSeconds || 8,
+          aspectRatio: body.aspect_ratio || body.aspectRatio || "16:9"
         };
-      } else if (body.checkVideoStatus) {
+      } else if (action === 'check_video_status' || body.checkVideoStatus) {
         toolCall.type = "check_video_status";
         toolCall.parameters = {
           operation_name: body.operation_name,
           model: body.model || "veo-2.0-generate-001"
         };
-      } else if (body.imageGeneration && EXECUTIVE_CONFIG.specializations.includes("image_generation")) {
+      } else if (action === 'generate_image' || (body.imageGeneration && EXECUTIVE_CONFIG.specializations.includes("image_generation"))) {
         toolCall.type = "image_generation";
-        toolCall.parameters = { prompt: body.prompt, model: body.model || "imagen-3.0-generate-002", aspectRatio: body.aspectRatio || "1:1" };
+        toolCall.parameters = {
+          prompt: body.prompt,
+          model: body.image_model || body.model || "imagen-3.0-generate-002",
+          aspectRatio: body.aspect_ratio || body.aspectRatio || "1:1",
+          count: body.count || 1
+        };
       } else if (body.gifSearch && EXECUTIVE_CONFIG.specializations.includes("gif_generation")) {
         toolCall.type = "gif_search";
         toolCall.parameters = { query: body.query };
