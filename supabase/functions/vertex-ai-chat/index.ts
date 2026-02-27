@@ -90,6 +90,49 @@ const GoogleCloudAPI = {
 
 // Vertex AI capabilities for video generation (COO-specific)
 const VertexAI = {
+  // Upload video bytes (base64 or GCS) to Supabase Storage and return a public URL
+  async _uploadVideoToStorage(supabaseClient: any, video: any): Promise<string | null> {
+    if (video.format === 'base64' && video.data) {
+      try {
+        const bytes = Uint8Array.from(atob(video.data), (c: string) => c.charCodeAt(0));
+        const path = `videos/${Date.now()}_${Math.random().toString(36).slice(2)}.mp4`;
+        const { error: uploadErr } = await supabaseClient.storage
+          .from('generated-media')
+          .upload(path, bytes, { contentType: 'video/mp4', upsert: false });
+        if (uploadErr) {
+          console.error('❌ Video storage upload failed:', uploadErr.message);
+          return null;
+        }
+        const { data: urlData } = supabaseClient.storage.from('generated-media').getPublicUrl(path);
+        console.log(`✅ Video uploaded to storage: ${urlData.publicUrl}`);
+        return urlData.publicUrl;
+      } catch (e: any) {
+        console.error('Video upload error:', e.message);
+        return null;
+      }
+    } else if (video.gcsUri) {
+      // GCS URI — return as-is (signed URL generation would need additional setup)
+      return video.gcsUri;
+    }
+    return null;
+  },
+
+  // Extract videos array from a completed Vertex AI LRO response
+  _extractVideos(data: any): any[] {
+    const samples: any[] =
+      data.response?.generateVideoResponse?.generatedSamples
+      || data.response?.predictions
+      || data.response?.videos
+      || data.predictions
+      || [];
+    return samples.map((s: any) => {
+      const video = s.video || s;
+      if (video.bytesBase64Encoded) return { format: 'base64', data: video.bytesBase64Encoded, mimeType: video.mimeType || 'video/mp4' };
+      if (video.uri || video.gcsUri) return { gcsUri: video.uri || video.gcsUri, mimeType: video.mimeType || 'video/mp4' };
+      return { raw: s };
+    });
+  },
+
   async generateVideo(prompt: string, model = "veo-3.1-generate-001", durationSeconds = 8, aspectRatio = "16:9") {
     const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
     const location = 'us-central1';
@@ -102,55 +145,115 @@ const VertexAI = {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
-      body: { action: 'get_access_token', auth_type: 'service_account' }
-    });
-
-    if (authError || !authData?.access_token) {
-      const msg = authError?.message || JSON.stringify(authError) || 'No token returned';
-      console.error('❌ [vertex-ai-chat] google-cloud-auth failed for video:', msg);
-      throw new Error(`google-cloud-auth failed: ${msg}`);
-    }
-
-    const accessToken = authData.access_token;
-    console.log('🔑 [vertex-ai-chat] Access token obtained for video generation');
-
-    // Initiate LRO — Veo generation takes 2-3 min, so we return the operation name immediately
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
-    console.log(`📡 [vertex-ai-chat] Veo predictLongRunning URL: ${url}`);
-
-    const requestBody = {
-      instances: [{ prompt }],
-      parameters: { durationSeconds, aspectRatio, sampleCount: 1 }
+    const getToken = async () => {
+      const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+        body: { action: 'get_access_token', auth_type: 'service_account' }
+      });
+      if (authError || !authData?.access_token) throw new Error(`google-cloud-auth failed: ${authError?.message || 'No token'}`);
+      return authData.access_token;
     };
 
-    const response = await fetch(url, {
+    // Step 1 — Initiate the LRO
+    const accessToken = await getToken();
+    console.log('🔑 [vertex-ai-chat] Access token obtained for video generation');
+
+    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
+    const requestBody = { instances: [{ prompt }], parameters: { durationSeconds, aspectRatio, sampleCount: 1 } };
+
+    const initResp = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify(requestBody)
     });
 
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error(`❌ [vertex-ai-chat] Veo API ${response.status}: ${errText}`);
-      throw new Error(`Veo API ${response.status}: ${errText}`);
+    if (!initResp.ok) {
+      const errText = await initResp.text();
+      console.error(`❌ [vertex-ai-chat] Veo API ${initResp.status}: ${errText}`);
+      throw new Error(`Veo API ${initResp.status}: ${errText}`);
     }
 
-    const data = await response.json();
-    const operationName = data.name; // e.g. "projects/.../locations/.../operations/..."
+    const initData = await initResp.json();
+    const operationName = initData.name;
     console.log(`✅ [vertex-ai-chat] Veo LRO initiated: ${operationName}`);
 
+    // Step 2 — Poll internally up to 120 seconds (Veo typically finishes in 60-90s)
+    const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchPredictOperation`;
+    const pollIntervalMs = 15000; // 15s between polls
+    const maxPollMs = 120000;     // 2 minute budget
+    const pollStart = Date.now();
+
+    while (Date.now() - pollStart < maxPollMs) {
+      await new Promise(r => setTimeout(r, pollIntervalMs));
+      console.log(`⏳ [vertex-ai-chat] Polling Veo LRO (${Math.round((Date.now() - pollStart) / 1000)}s elapsed)...`);
+
+      let pollToken: string;
+      try { pollToken = await getToken(); } catch { continue; } // skip poll cycle if token refresh fails
+
+      const pollResp = await fetch(pollUrl, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${pollToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ operationName })
+      });
+
+      if (!pollResp.ok) {
+        const errBody = await pollResp.text();
+        console.warn(`⚠️ [vertex-ai-chat] Poll ${pollResp.status}: ${errBody.slice(0, 200)}`);
+        if (pollResp.status === 404) break; // LRO expired — exit poll loop
+        continue; // transient error — retry
+      }
+
+      const pollData = await pollResp.json();
+
+      if (pollData.error) {
+        throw new Error(`Video generation failed: ${JSON.stringify(pollData.error)}`);
+      }
+
+      if (pollData.done) {
+        console.log(`📦 [vertex-ai-chat] Veo done! Extracting and uploading videos...`);
+        const videos = VertexAI._extractVideos(pollData);
+        const videoUrls: string[] = [];
+        for (const v of videos) {
+          const publicUrl = await VertexAI._uploadVideoToStorage(supabaseAdmin, v);
+          if (publicUrl) videoUrls.push(publicUrl);
+        }
+        console.log(`✅ [vertex-ai-chat] Video generation complete — ${videoUrls.length} video(s) ready.`);
+        return {
+          success: true,
+          status: 'done',
+          operation_name: operationName,
+          videoUrls,
+          videoCount: videoUrls.length,
+          model,
+          prompt
+        };
+      }
+    }
+
+    // Step 3 — Timed out within Edge Function budget; return operation_name for later polling
+    console.warn(`⚠️ [vertex-ai-chat] Poll budget exceeded — returning operation_name for external polling.`);
     return {
       success: true,
       operation_name: operationName,
       model,
       prompt,
       status: 'pending',
-      message: 'Video generation initiated. Use check_video_status with the operation_name to poll for completion.'
+      message: 'Video generation is still running. Call vertex_check_video_status with the operation_name, or use list_recent_videos to find it once complete.'
     };
+  },
+
+  // List recent videos from Supabase Storage (reliable fallback when LRO has expired)
+  async listRecentVideos(supabaseAdmin: any, limit = 10): Promise<any> {
+    const { data, error } = await supabaseAdmin.storage
+      .from('generated-media')
+      .list('videos', { limit, sortBy: { column: 'created_at', order: 'desc' } });
+    if (error) throw new Error(`Storage list error: ${error.message}`);
+    const videos = (data || []).map((f: any) => ({
+      filename: f.name,
+      created_at: f.created_at,
+      size_bytes: f.metadata?.size,
+      publicUrl: `${Deno.env.get('SUPABASE_URL')}/storage/v1/object/public/generated-media/videos/${f.name}`
+    }));
+    return { success: true, videos, count: videos.length };
   },
 
   async checkVideoStatus(operationName: string, model = "veo-3.1-generate-001") {
@@ -250,40 +353,17 @@ const VertexAI = {
       return { raw: s }; // unknown shape — return full object for inspection
     });
 
-    console.log(`✅ [vertex-ai-chat] Veo done — ${videos.length} video(s).`);
-
-    // Upload each video to Supabase Storage and return public URLs
     const supabaseUpload = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
+    const videos = VertexAI._extractVideos(data);
+    console.log(`✅ [vertex-ai-chat] Veo done via checkVideoStatus — ${videos.length} video(s).`);
     const videoUrls: string[] = [];
     for (const v of videos) {
-      if (v.format === 'base64' && v.data) {
-        try {
-          const bytes = Uint8Array.from(atob(v.data), c => c.charCodeAt(0));
-          const path = `videos/${Date.now()}_${Math.random().toString(36).slice(2)}.mp4`;
-          const { error: uploadErr } = await supabaseUpload.storage
-            .from('generated-media')
-            .upload(path, bytes, { contentType: 'video/mp4', upsert: false });
-          if (uploadErr) {
-            console.error('❌ Video storage upload failed:', uploadErr.message);
-            // Fall back: include base64 data URL as last resort
-            videoUrls.push(`data:video/mp4;base64,${v.data.slice(0, 100)}...`);
-          } else {
-            const { data: urlData } = supabaseUpload.storage.from('generated-media').getPublicUrl(path);
-            videoUrls.push(urlData.publicUrl);
-            console.log(`✅ Video uploaded: ${urlData.publicUrl}`);
-          }
-        } catch (e: any) {
-          console.error('Video upload error:', e.message);
-        }
-      } else if (v.gcsUri) {
-        // GCS URI — store as-is (requires signed URL generation for playback)
-        videoUrls.push(v.gcsUri);
-      }
+      const publicUrl = await VertexAI._uploadVideoToStorage(supabaseUpload, v);
+      if (publicUrl) videoUrls.push(publicUrl);
     }
-
     return { success: true, status: 'done', operation_name: operationName, videoUrls, videoCount: videoUrls.length };
   },
 
@@ -798,6 +878,10 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       return { success: true, result };
     } else if (requestType === 'check_video_status') {
       const result = await VertexAI.checkVideoStatus(toolCall.parameters.operation_name, toolCall.parameters.model);
+      return { success: true, result };
+    } else if (requestType === 'list_recent_videos') {
+      const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+      const result = await VertexAI.listRecentVideos(supabaseAdmin, toolCall.parameters.limit || 10);
       return { success: true, result };
     } else if (requestType === 'image_generation') {
       const result = await VertexAI.generateImage(toolCall.parameters.prompt, toolCall.parameters.model, toolCall.parameters.aspectRatio);
