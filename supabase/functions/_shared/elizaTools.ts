@@ -3309,7 +3309,7 @@ Response includes ecosystem_summary with one-line stats for each component.`,
     type: 'function',
     function: {
       name: 'vertex_generate_video',
-      description: '🎬 Generate videos using Vertex AI Veo models. Returns an operation ID for async polling. Videos are 4-8 seconds. Models: veo-2.0-generate-001 (most capable, high quality), veo-3.1-fast-generate-001 (faster, lower quality). Use for creating promotional videos, animations, visual content.',
+      description: '🎬 Generate videos using Vertex AI Veo 3.1 (GA, professional quality). Returns an operation ID for async polling. Videos are 4-8 seconds. Models: veo-3.1-generate-001 (highest quality, 4K, native audio), veo-3.1-fast-generate-001 (faster, cost-optimised). Use for promotional videos, animations, and cinematic content.',
       parameters: {
         type: 'object',
         properties: {
@@ -3319,8 +3319,8 @@ Response includes ecosystem_summary with one-line stats for each component.`,
           },
           model: {
             type: 'string',
-            enum: ['veo-2.0-generate-001', 'veo-3.1-fast-generate-001'],
-            description: 'Video generation model. veo-2.0-generate-001 (most capable), veo-3.1-fast-generate-001 (faster)'
+            enum: ['veo-3.1-generate-001', 'veo-3.1-fast-generate-001', 'veo-3.0-generate-001'],
+            description: 'Video model: veo-3.1-generate-001 (default, 4K, best quality), veo-3.1-fast-generate-001 (faster), veo-3.0-generate-001 (fallback)'
           },
           aspect_ratio: {
             type: 'string',

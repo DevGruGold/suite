@@ -90,7 +90,7 @@ const GoogleCloudAPI = {
 
 // Vertex AI capabilities for video generation (COO-specific)
 const VertexAI = {
-  async generateVideo(prompt: string, model = "veo-2.0-generate-001", durationSeconds = 8, aspectRatio = "16:9") {
+  async generateVideo(prompt: string, model = "veo-3.1-generate-001", durationSeconds = 8, aspectRatio = "16:9") {
     const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
     const location = 'us-central1';
     if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID env var not set');
@@ -153,7 +153,7 @@ const VertexAI = {
     };
   },
 
-  async checkVideoStatus(operationName: string, model = "veo-2.0-generate-001") {
+  async checkVideoStatus(operationName: string, model = "veo-3.1-generate-001") {
     const projectId = Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
     const location = 'us-central1';
     if (!projectId) throw new Error('GOOGLE_CLOUD_PROJECT_ID env var not set');
@@ -883,7 +883,7 @@ async function handleExecutiveRequest(request: Request) {
         toolCall.type = "video_generation";
         toolCall.parameters = {
           prompt: body.prompt,
-          model: body.video_model || body.model || "veo-2.0-generate-001",
+          model: body.video_model || body.model || "veo-3.1-generate-001",
           durationSeconds: body.duration_seconds || body.durationSeconds || 8,
           aspectRatio: body.aspect_ratio || body.aspectRatio || "16:9"
         };
@@ -891,7 +891,7 @@ async function handleExecutiveRequest(request: Request) {
         toolCall.type = "check_video_status";
         toolCall.parameters = {
           operation_name: body.operation_name,
-          model: body.model || "veo-2.0-generate-001"
+          model: body.model || "veo-3.1-generate-001"
         };
       } else if (action === 'generate_image' || (body.imageGeneration && EXECUTIVE_CONFIG.specializations.includes("image_generation"))) {
         toolCall.type = "image_generation";

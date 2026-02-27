@@ -2028,7 +2028,7 @@ export async function executeToolCall(
           body: {
             videoGeneration: true,
             prompt: parsedArgs.prompt,
-            model: parsedArgs.model || 'veo-2.0-generate-001',
+            model: parsedArgs.model || 'veo-3.1-generate-001',
             durationSeconds: parsedArgs.duration_seconds || 5,
             aspectRatio: parsedArgs.aspect_ratio || '16:9'
           }
@@ -2054,7 +2054,7 @@ export async function executeToolCall(
           body: {
             checkVideoStatus: true,
             operation_name: parsedArgs.operation_name,
-            model: parsedArgs.model || 'veo-2.0-generate-001'
+            model: parsedArgs.model || 'veo-3.1-generate-001'
           }
         });
         if (statusResult.error) {
