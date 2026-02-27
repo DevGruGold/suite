@@ -145,25 +145,20 @@ const VertexAI = {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
-    const getToken = async () => {
-      const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
-        body: { action: 'get_access_token', auth_type: 'service_account' }
-      });
-      if (authError || !authData?.access_token) throw new Error(`google-cloud-auth failed: ${authError?.message || 'No token'}`);
-      return authData.access_token;
-    };
-
-    // Step 1 — Initiate the LRO
-    const accessToken = await getToken();
+    // Get service account token
+    const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
+      body: { action: 'get_access_token', auth_type: 'service_account' }
+    });
+    if (authError || !authData?.access_token) throw new Error(`google-cloud-auth failed: ${authError?.message || 'No token'}`);
+    const accessToken = authData.access_token;
     console.log('🔑 [vertex-ai-chat] Access token obtained for video generation');
 
+    // Initiate the LRO — return immediately (Veo 3.1 takes 3-6 minutes; polling must be external)
     const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:predictLongRunning`;
-    const requestBody = { instances: [{ prompt }], parameters: { durationSeconds, aspectRatio, sampleCount: 1 } };
-
     const initResp = await fetch(url, {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify(requestBody)
+      body: JSON.stringify({ instances: [{ prompt }], parameters: { durationSeconds, aspectRatio, sampleCount: 1 } })
     });
 
     if (!initResp.ok) {
@@ -176,68 +171,21 @@ const VertexAI = {
     const operationName = initData.name;
     console.log(`✅ [vertex-ai-chat] Veo LRO initiated: ${operationName}`);
 
-    // Step 2 — Poll internally up to 120 seconds (Veo typically finishes in 60-90s)
-    const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchPredictOperation`;
-    const pollIntervalMs = 15000; // 15s between polls
-    const maxPollMs = 120000;     // 2 minute budget
-    const pollStart = Date.now();
+    // Persist the job in video_jobs so status can be tracked across requests
+    const { error: insertErr } = await supabaseAdmin
+      .from('video_jobs')
+      .upsert({ operation_name: operationName, model, prompt, status: 'pending' }, { onConflict: 'operation_name' });
+    if (insertErr) console.warn(`⚠️ video_jobs insert failed: ${insertErr.message}`);
 
-    while (Date.now() - pollStart < maxPollMs) {
-      await new Promise(r => setTimeout(r, pollIntervalMs));
-      console.log(`⏳ [vertex-ai-chat] Polling Veo LRO (${Math.round((Date.now() - pollStart) / 1000)}s elapsed)...`);
-
-      let pollToken: string;
-      try { pollToken = await getToken(); } catch { continue; } // skip poll cycle if token refresh fails
-
-      const pollResp = await fetch(pollUrl, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${pollToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ operationName })
-      });
-
-      if (!pollResp.ok) {
-        const errBody = await pollResp.text();
-        console.warn(`⚠️ [vertex-ai-chat] Poll ${pollResp.status}: ${errBody.slice(0, 200)}`);
-        if (pollResp.status === 404) break; // LRO expired — exit poll loop
-        continue; // transient error — retry
-      }
-
-      const pollData = await pollResp.json();
-
-      if (pollData.error) {
-        throw new Error(`Video generation failed: ${JSON.stringify(pollData.error)}`);
-      }
-
-      if (pollData.done) {
-        console.log(`📦 [vertex-ai-chat] Veo done! Extracting and uploading videos...`);
-        const videos = VertexAI._extractVideos(pollData);
-        const videoUrls: string[] = [];
-        for (const v of videos) {
-          const publicUrl = await VertexAI._uploadVideoToStorage(supabaseAdmin, v);
-          if (publicUrl) videoUrls.push(publicUrl);
-        }
-        console.log(`✅ [vertex-ai-chat] Video generation complete — ${videoUrls.length} video(s) ready.`);
-        return {
-          success: true,
-          status: 'done',
-          operation_name: operationName,
-          videoUrls,
-          videoCount: videoUrls.length,
-          model,
-          prompt
-        };
-      }
-    }
-
-    // Step 3 — Timed out within Edge Function budget; return operation_name for later polling
-    console.warn(`⚠️ [vertex-ai-chat] Poll budget exceeded — returning operation_name for external polling.`);
     return {
       success: true,
+      status: 'pending',
       operation_name: operationName,
+      job_id: operationName,
       model,
       prompt,
-      status: 'pending',
-      message: 'Video generation is still running. Call vertex_check_video_status with the operation_name, or use list_recent_videos to find it once complete.'
+      message: `Video generation initiated with Veo — Veo 3.1 typically takes 3-6 minutes. Call vertex_check_video_status with this operation_name every 60 seconds until status is "done". You can also use list_recent_videos to find it once complete.`,
+      instructions: 'IMPORTANT: Wait ~60 seconds then call vertex_check_video_status with the operation_name. Repeat every 60s until done. Do NOT generate a new video — this one is already queued.'
     };
   },
 
@@ -269,79 +217,85 @@ const VertexAI = {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
 
+    // Check video_jobs cache first — if already done, return stored result immediately
+    const { data: existingJob } = await supabaseAdmin
+      .from('video_jobs')
+      .select('status, video_urls, error_message')
+      .eq('operation_name', operationName)
+      .single();
+
+    if (existingJob?.status === 'done' && existingJob.video_urls?.length > 0) {
+      console.log(`⚡ [vertex-ai-chat] Returning cached done result from video_jobs`);
+      return { success: true, status: 'done', operation_name: operationName, videoUrls: existingJob.video_urls, videoCount: existingJob.video_urls.length, cached: true };
+    }
+    if (existingJob?.status === 'failed') {
+      return { success: false, status: 'failed', operation_name: operationName, error: existingJob.error_message };
+    }
+
+    // Mark last_polled_at
+    await supabaseAdmin.from('video_jobs')
+      .update({ last_polled_at: new Date().toISOString() })
+      .eq('operation_name', operationName);
+
+    // Poll Vertex AI for current status
     const { data: authData, error: authError } = await supabaseAdmin.functions.invoke('google-cloud-auth', {
       body: { action: 'get_access_token', auth_type: 'service_account' }
     });
+    if (authError || !authData?.access_token) throw new Error(`google-cloud-auth failed: ${authError?.message || 'No token'}`);
 
-    if (authError || !authData?.access_token) {
-      const msg = authError?.message || JSON.stringify(authError) || 'No token returned';
-      throw new Error(`google-cloud-auth failed: ${msg}`);
-    }
+    const pollUrl = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchPredictOperation`;
+    console.log(`📡 [vertex-ai-chat] Veo status poll URL: ${pollUrl}`);
 
-    const accessToken = authData.access_token;
-
-    // Veo LROs are NOT accessible via the standard projects.locations.operations API.
-    // The correct endpoint is the model-scoped :fetchPredictOperation method:
-    // POST https://{loc}-aiplatform.googleapis.com/v1/projects/{proj}/locations/{loc}/publishers/google/models/{model}:fetchPredictOperation
-    // with body { "operationName": "<full-operation-name>" }
-    const url = `https://${location}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${location}/publishers/google/models/${model}:fetchPredictOperation`;
-    console.log(`📡 [vertex-ai-chat] Veo status poll URL: ${url}`);
-
-    const response = await fetch(url, {
+    const response = await fetch(pollUrl, {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Content-Type': 'application/json'
-      },
+      headers: { 'Authorization': `Bearer ${authData.access_token}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({ operationName })
     });
 
     if (!response.ok) {
       const errText = await response.text();
       console.error(`❌ [vertex-ai-chat] Veo status API ${response.status}: ${errText}`);
-
-      // 404 = LRO was already cleaned up by Vertex AI (common with Veo — operations expire quickly).
-      // Return a structured response instead of throwing so the AI can handle it gracefully.
       if (response.status === 404) {
-        console.warn(`⚠️ [vertex-ai-chat] LRO not found (404) — operation may have expired or already completed: ${operationName}`);
+        console.warn(`⚠️ [vertex-ai-chat] LRO 404 — likely expired. Use list_recent_videos to find the completed file.`);
         return {
-          success: true,
-          status: 'not_found',
-          operation_name: operationName,
-          message: 'The video generation operation record was not found on Vertex AI. This typically means the operation has already completed and the record was cleaned up. If you initiated this video recently, check the generated-media Supabase Storage bucket for the output file, or try generating a new video.',
-          hint: 'Vertex AI Veo LROs are ephemeral — poll within ~5 minutes of initiation or the record may be gone.'
+          success: true, status: 'not_found', operation_name: operationName,
+          message: 'LRO record expired on Vertex AI. Call list_recent_videos — if the video completed, it will be listed there (check by timestamp from when you initiated it).',
+          hint: 'Veo LROs are ephemeral (~5 min). The video may still be in Supabase Storage.'
         };
       }
-
       throw new Error(`Veo status API ${response.status}: ${errText}`);
     }
-
 
     const data = await response.json();
 
     if (!data.done) {
       console.log(`⏳ [vertex-ai-chat] Veo operation still processing: ${operationName}`);
-      return { success: true, status: 'processing', operation_name: operationName };
+      return {
+        success: true, status: 'processing', operation_name: operationName,
+        message: 'Video is still generating. Call vertex_check_video_status again in ~60 seconds.'
+      };
     }
 
     if (data.error) {
-      console.error(`❌ [vertex-ai-chat] Veo operation failed:`, data.error);
+      await supabaseAdmin.from('video_jobs').update({ status: 'failed', error_message: JSON.stringify(data.error) }).eq('operation_name', operationName);
       throw new Error(`Video generation failed: ${JSON.stringify(data.error)}`);
     }
 
-    // Extract and upload completed videos using shared helpers
-    const supabaseUpload = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    );
+    // Done — extract, upload, and record in video_jobs
     const videos = VertexAI._extractVideos(data);
-
-    console.log(`✅ [vertex-ai-chat] Veo done via checkVideoStatus — ${videos.length} video(s).`);
+    console.log(`✅ [vertex-ai-chat] Veo done — ${videos.length} video(s). Uploading...`);
     const videoUrls: string[] = [];
     for (const v of videos) {
-      const publicUrl = await VertexAI._uploadVideoToStorage(supabaseUpload, v);
+      const publicUrl = await VertexAI._uploadVideoToStorage(supabaseAdmin, v);
       if (publicUrl) videoUrls.push(publicUrl);
     }
+
+    // Persist result in video_jobs
+    await supabaseAdmin.from('video_jobs').update({
+      status: 'done', video_urls: videoUrls, completed_at: new Date().toISOString()
+    }).eq('operation_name', operationName);
+
+    console.log(`🎉 [vertex-ai-chat] Video ready — ${videoUrls.length} URL(s) stored in video_jobs.`);
     return { success: true, status: 'done', operation_name: operationName, videoUrls, videoCount: videoUrls.length };
   },
 
