@@ -23,14 +23,14 @@ async function getRefreshTokenFromDatabase(): Promise<string | null> {
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL');
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
-    
+
     if (!supabaseUrl || !supabaseKey) {
       console.error('Missing Supabase credentials for database lookup');
       return null;
     }
-    
+
     const supabase = createClient(supabaseUrl, supabaseKey);
-    
+
     // Get the most recent active Google Cloud connection
     const { data, error } = await supabase
       .from('oauth_connections')
@@ -40,17 +40,17 @@ async function getRefreshTokenFromDatabase(): Promise<string | null> {
       .order('connected_at', { ascending: false })
       .limit(1)
       .maybeSingle();
-    
+
     if (error) {
       console.error('Error fetching refresh token from database:', error);
       return null;
     }
-    
+
     if (data?.refresh_token) {
       console.log('✅ Found refresh token in oauth_connections table');
       return data.refresh_token;
     }
-    
+
     console.log('No active Google Cloud connection found in database');
     return null;
   } catch (err) {
@@ -67,10 +67,10 @@ async function getRefreshTokenFromDatabase(): Promise<string | null> {
 export async function getGoogleAccessToken(): Promise<string | null> {
   const clientId = Deno.env.get('GOOGLE_CLIENT_ID');
   const clientSecret = Deno.env.get('GOOGLE_CLIENT_SECRET');
-  
-  // First try environment variable (backward compatibility)
-  let refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN');
-  
+
+  // First try environment variables (check both naming conventions)
+  let refreshToken = Deno.env.get('GOOGLE_REFRESH_TOKEN') || Deno.env.get('GMAIL_REFRESH_TOKEN');
+
   // If not in env, fetch from oauth_connections table
   if (!refreshToken) {
     console.log('GOOGLE_REFRESH_TOKEN not in env, checking database...');
@@ -120,25 +120,25 @@ export async function isGoogleConfigured(): Promise<boolean> {
     Deno.env.get('GOOGLE_CLIENT_ID') &&
     Deno.env.get('GOOGLE_CLIENT_SECRET')
   );
-  
+
   if (!hasClientCredentials) {
     console.log('Missing GOOGLE_CLIENT_ID or GOOGLE_CLIENT_SECRET');
     return false;
   }
-  
-  // Check env first
-  if (Deno.env.get('GOOGLE_REFRESH_TOKEN')) {
+
+  // Check env first (both naming conventions)
+  if (Deno.env.get('GOOGLE_REFRESH_TOKEN') || Deno.env.get('GMAIL_REFRESH_TOKEN')) {
     console.log('Google configured via environment variables');
     return true;
   }
-  
+
   // Check database for refresh token
   const dbToken = await getRefreshTokenFromDatabase();
   if (dbToken) {
     console.log('Google configured via database oauth_connections');
     return true;
   }
-  
+
   console.log('No refresh token found in env or database');
   return false;
 }

@@ -1645,7 +1645,11 @@ async function executeRealToolCall(
       });
 
     } else if (name === 'google_gmail') {
-      result = await invokeEdgeFunction('google-gmail', parsedArgs);
+      // Route to google-cloud-auth which has the working OAuth implementation
+      result = await invokeEdgeFunction('google-cloud-auth', {
+        action: parsedArgs.action || 'send_email',
+        ...parsedArgs
+      });
 
     } else if (name === 'paperbanana_generate_diagram') {
       const { source_context, communicative_intent, diagram_type, caption } = parsedArgs;
