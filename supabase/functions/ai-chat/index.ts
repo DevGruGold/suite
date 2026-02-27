@@ -1075,7 +1075,64 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
 
       if (fileType === 'image') {
         analysis.analysis_type = 'image_vision';
-        analysis.note = 'Image will be analyzed using vision capabilities';
+
+        // Attempt real vision analysis via Gemini
+        const geminiKey = Deno.env.get('GEMINI_API_KEY');
+        if (geminiKey && content) {
+          try {
+            // content is base64 encoded by parseMultipartFormData
+            const visionResponse = await fetch(
+              'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+              {
+                method: 'POST',
+                headers: {
+                  'Content-Type': 'application/json',
+                  'x-goog-api-key': geminiKey
+                },
+                body: JSON.stringify({
+                  contents: [{
+                    parts: [
+                      {
+                        text: 'Please provide a comprehensive description of this image. Include: what is depicted, key visual elements, colors, text visible, mood/tone, and any notable details. Be specific and thorough.'
+                      },
+                      {
+                        inline_data: {
+                          mime_type: mime_type || 'image/png',
+                          data: content  // already base64 from parseMultipartFormData
+                        }
+                      }
+                    ]
+                  }],
+                  generationConfig: { temperature: 0.4, maxOutputTokens: 2048 }
+                })
+              }
+            );
+
+            if (visionResponse.ok) {
+              const visionData = await visionResponse.json();
+              const visionText = visionData.candidates?.[0]?.content?.parts?.[0]?.text || '';
+              if (visionText) {
+                analysis.vision_description = visionText;
+                analysis.content_preview = visionText.substring(0, 300);
+                analysis.vision_model = 'gemini-2.5-flash';
+                console.log(`✅ Vision analysis complete for ${filename}: ${visionText.length} chars`);
+              } else {
+                analysis.note = 'Vision model returned empty response';
+              }
+            } else {
+              const errText = await visionResponse.text();
+              console.warn(`⚠️ Gemini vision failed (${visionResponse.status}): ${errText.substring(0, 200)}`);
+              analysis.note = `Vision analysis failed: HTTP ${visionResponse.status}`;
+            }
+          } catch (visionError: any) {
+            console.warn(`⚠️ Vision analysis error for ${filename}:`, visionError.message);
+            analysis.note = `Vision analysis error: ${visionError.message}`;
+          }
+        } else if (!geminiKey) {
+          analysis.note = 'Vision analysis unavailable — GEMINI_API_KEY not set';
+        } else {
+          analysis.note = 'Image received but no content data to analyze (URL-only references not supported for vision)';
+        }
 
       } else if (['text', 'document', 'code', 'smart_contract'].includes(fileType)) {
         if (content) {
