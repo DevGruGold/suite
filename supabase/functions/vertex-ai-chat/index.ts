@@ -329,35 +329,13 @@ const VertexAI = {
       throw new Error(`Video generation failed: ${JSON.stringify(data.error)}`);
     }
 
-    // Extract video data from completed operation.
-    // Veo fetchPredictOperation wraps results in:
-    //   response.generateVideoResponse.generatedSamples[].video.uri  (GCS URI)
-    // Fallbacks handle other possible shapes.
-    console.log(`📦 [vertex-ai-chat] Veo done — response keys: ${JSON.stringify(Object.keys(data.response || {}))}`);
-
-    const samples: any[] =
-      data.response?.generateVideoResponse?.generatedSamples   // primary Veo 2 path
-      || data.response?.predictions                             // imagen-style fallback
-      || data.response?.videos                                  // alternate key
-      || data.predictions                                       // top-level fallback
-      || [];
-
-    const videos = samples.map((s: any) => {
-      const video = s.video || s;
-      if (video.bytesBase64Encoded) {
-        return { format: 'base64', data: video.bytesBase64Encoded, mimeType: video.mimeType || 'video/mp4' };
-      }
-      if (video.uri || video.gcsUri) {
-        return { gcsUri: video.uri || video.gcsUri, encoding: video.encoding, mimeType: video.mimeType || 'video/mp4' };
-      }
-      return { raw: s }; // unknown shape — return full object for inspection
-    });
-
+    // Extract and upload completed videos using shared helpers
     const supabaseUpload = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     );
     const videos = VertexAI._extractVideos(data);
+
     console.log(`✅ [vertex-ai-chat] Veo done via checkVideoStatus — ${videos.length} video(s).`);
     const videoUrls: string[] = [];
     for (const v of videos) {
