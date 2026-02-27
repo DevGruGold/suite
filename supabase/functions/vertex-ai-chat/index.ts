@@ -196,8 +196,23 @@ const VertexAI = {
     if (!response.ok) {
       const errText = await response.text();
       console.error(`❌ [vertex-ai-chat] Veo status API ${response.status}: ${errText}`);
+
+      // 404 = LRO was already cleaned up by Vertex AI (common with Veo — operations expire quickly).
+      // Return a structured response instead of throwing so the AI can handle it gracefully.
+      if (response.status === 404) {
+        console.warn(`⚠️ [vertex-ai-chat] LRO not found (404) — operation may have expired or already completed: ${operationName}`);
+        return {
+          success: true,
+          status: 'not_found',
+          operation_name: operationName,
+          message: 'The video generation operation record was not found on Vertex AI. This typically means the operation has already completed and the record was cleaned up. If you initiated this video recently, check the generated-media Supabase Storage bucket for the output file, or try generating a new video.',
+          hint: 'Vertex AI Veo LROs are ephemeral — poll within ~5 minutes of initiation or the record may be gone.'
+        };
+      }
+
       throw new Error(`Veo status API ${response.status}: ${errText}`);
     }
+
 
     const data = await response.json();
 

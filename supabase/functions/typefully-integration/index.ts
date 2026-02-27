@@ -18,7 +18,15 @@ serve(async (req) => {
       throw new Error('Typefully API Key is not set in Supabase Secrets.');
     }
 
-    const { action, social_set_id, ...payload } = await req.json();
+    const body = await req.json();
+    const { action } = body;
+    // Accept both camelCase (socialSetId) and snake_case (social_set_id) — AI tool sends camelCase
+    const social_set_id = body.social_set_id || body.socialSetId;
+    const payload = { ...body };
+    delete payload.action;
+    delete payload.social_set_id;
+    delete payload.socialSetId;
+
 
     if (!action) {
       return new Response(JSON.stringify({ error: 'Action is required (e.g., "list-social-sets", "create-draft", "get-me").' }), {
