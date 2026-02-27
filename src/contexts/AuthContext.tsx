@@ -184,12 +184,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, [user, isLoading, hasGoogleCloudConnection, roles]);
 
   const getRedirectUrl = () => {
-    // Always redirect to dashboard after auth
+    // Route OAuth back to /auth/callback which then navigates to /dashboard once session is ready
     if (window.location.hostname.includes('lovable') ||
       window.location.hostname.includes('lovableproject')) {
-      return 'https://suite-beta.vercel.app/dashboard';
+      return 'https://suite-beta.vercel.app/auth/callback';
     }
-    return `${window.location.origin}/dashboard`;
+    return `${window.location.origin}/auth/callback`;
   };
 
   // Store Google Cloud refresh token after login

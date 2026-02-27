@@ -19,6 +19,7 @@ import Profile from "./pages/Profile";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import InboxPage from "./pages/Inbox";
+import AuthCallback from "./pages/AuthCallback";
 
 const queryClient = new QueryClient();
 
@@ -43,6 +44,7 @@ const App = () => (
                 <Route path="/" element={<Landing />} />
                 <Route path="/privacy" element={<PrivacyPolicy />} />
                 <Route path="/terms" element={<TermsOfService />} />
+                <Route path="/auth/callback" element={<AuthCallback />} />
 
                 {/* Protected routes - require authentication */}
                 <Route element={<ProtectedLayout />}>
