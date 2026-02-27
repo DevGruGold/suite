@@ -1212,7 +1212,8 @@ async function executeRealToolCall(
   executiveName: string,
   sessionId: string,
   ipAddress: string,
-  timestamp: number = Date.now()
+  timestamp: number = Date.now(),
+  requestAttachments: any[] = []  // ← request-level attachments (files the user uploaded)
 ): Promise<any> {
   const startTime = performance.now();
   let success = false;
@@ -1226,9 +1227,15 @@ async function executeRealToolCall(
     const parsedToolArgs = parseToolArguments(args);
 
     if (name === 'analyze_attachment') {
-      const { attachments } = parsedArgs;
+      // The AI cannot serialize binary file data as tool-call arguments,
+      // so parsedArgs.attachments will be empty when the user actually uploaded files.
+      // Fall back to the request-level attachments that arrived in the HTTP body.
+      const attachments = (parsedArgs.attachments && parsedArgs.attachments.length > 0)
+        ? parsedArgs.attachments
+        : requestAttachments;
+
       if (!attachments || !Array.isArray(attachments) || attachments.length === 0) {
-        throw new Error('Missing or empty attachments array');
+        throw new Error('Missing or empty attachments array — no files were uploaded with this request');
       }
 
       result = await analyzeAttachmentTool(attachments, ipAddress, sessionId);
@@ -3011,7 +3018,8 @@ async function executeToolsWithIteration(
   callAIFunction: Function,
   tools: any[],
   maxIterations: number = 5,
-  memoryManager?: EnhancedConversationManager
+  memoryManager?: EnhancedConversationManager,
+  requestAttachments: any[] = []  // ← files uploaded by the user in this request
 ): Promise<{ content: string; toolsExecuted: number }> {
   let response = initialResponse;
   let totalToolsExecuted = 0;
@@ -3042,7 +3050,8 @@ async function executeToolsWithIteration(
         executiveName,
         sessionId,
         ipAddress,
-        Date.now()
+        Date.now(),
+        requestAttachments  // ← thread through for analyze_attachment fallback
       );
       toolResults.push({
         tool_call_id: toolCall.id,
@@ -3630,7 +3639,8 @@ async function handleToolChain(
   toolCalls: any[],
   executiveName: string,
   sessionId: string,
-  ipAddress: string
+  ipAddress: string,
+  requestAttachments: any[] = []  // ← pass-through so analyze_attachment can access uploaded files
 ): Promise<{
   results: any[];
   allSuccessful: boolean;
@@ -3648,7 +3658,8 @@ async function handleToolChain(
       executiveName,
       sessionId,
       ipAddress,
-      timestamp
+      timestamp,
+      requestAttachments  // ← thread through
     );
 
     const memoryResult = {
@@ -5172,7 +5183,8 @@ Deno.serve(async (req) => {
       callAIFunction,
       tools,
       MAX_TOOL_ITERATIONS,
-      conversationManager
+      conversationManager,
+      attachments  // ← pass request-level attachments for analyze_attachment fallback
     );
 
     let responseContent = finalContent;
