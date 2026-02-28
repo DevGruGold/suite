@@ -151,12 +151,22 @@ class ExecutiveCouncilService {
       // Use retry logic with exponential backoff
       const result = await retryWithBackoff(
         async () => {
-          console.log(`🔄 Invoking ${executive} edge function...`);
-          // Call each executive's own dedicated function — their own system prompt
-          // defines their persona. Do NOT route through ai-chat (that replaces Eliza).
+          // Build message history from conversationContext so execs know what's already been done
+          const recentMsgs = context.conversationContext?.recentMessages || [];
+          const historyMessages = recentMsgs
+            .slice(-6) // Last 6 messages (3 user + 3 assistant turns)
+            .map((m: any) => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.content || m.text || '' }))
+            .filter((m: any) => m.content);
+
+          // Always end with the current user question
+          const fullMessages = [
+            ...historyMessages,
+            { role: 'user', content: userInput }
+          ];
+
           const { data, error } = await supabase.functions.invoke(executive, {
             body: {
-              messages: [{ role: 'user', content: userInput }],
+              messages: fullMessages,
               conversationHistory: context.conversationContext,
               userContext: context.userContext,
               miningStats: context.miningStats,
@@ -248,6 +258,24 @@ class ExecutiveCouncilService {
 Consider the user's emotional state when synthesizing the response. If they appear frustrated, be more solution-focused. If excited, match their energy.
 ` : '';
 
+    // Extract recent council history to give synthesis awareness of prior turns
+    const recentMsgs = context.conversationContext?.recentMessages || [];
+    const priorTurnsSection = recentMsgs.length > 0 ? (() => {
+      // Get last few assistant (council) outputs so synthesis knows what was already done
+      const priorCouncilOutputs = recentMsgs
+        .filter((m: any) => m.sender === 'assistant' || m.role === 'assistant')
+        .slice(-3)
+        .map((m: any) => (m.content || m.text || '').substring(0, 500))
+        .filter(Boolean);
+      const priorUserInputs = recentMsgs
+        .filter((m: any) => m.sender === 'user' || m.role === 'user')
+        .slice(-3)
+        .map((m: any) => m.content || m.text || '');
+
+      if (priorCouncilOutputs.length === 0) return '';
+      return `\n📋 PRIOR MEETING CONTEXT (what already happened — do NOT repeat these actions):\n${priorCouncilOutputs.map((o, i) => `- Turn ${i + 1} council output: "${o}..."`).join('\n')}\n\n⚠️ ANTI-LOOP RULE: If the prior context shows system-status was already run or an action was already completed, do NOT run it again. Instead, move the meeting FORWARD — discuss findings, assign ownership, make decisions, take the NEXT action.\n`;
+    })() : '';
+
     const synthesisPrompt = `You are the action-taking facilitator of the XMRT-DAO Executive Council.
 The 5 executives are: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Isabella "Bella" Rodriguez (CMO), Mr. Klaus Richter (COO), and Ms. Akari Tanaka (CPO).
 
@@ -255,29 +283,32 @@ The user asked: "${originalQuestion}"
 ${emotionalSection}
 ${context.organizationContext ? `
 ORGANIZATION CONTEXT: ${context.organizationContext.name} | ${context.organizationContext.website || 'N/A'}
-` : ''}
-Here are the executive perspectives:
+` : ''}${priorTurnsSection}
+Here are the executive perspectives from this turn:
 
 ${responses.map(r => `**${r.executiveTitle}** (${r.executiveIcon}):
 ${r.perspective}
 Confidence: ${r.confidence}%`).join('\n---\n')}
 
 ⚡ EXECUTIVE ACTION DIRECTIVE (CRITICAL — READ FIRST):
-If the executives are unanimous or in strong consensus about taking a specific ACTION (e.g. "run system-status", "check mining stats", "search functions", "browse web" etc.), you MUST:
-1. EXECUTE that action NOW using the appropriate tool call — do NOT just describe it
+If the executives are unanimous about an ACTION and it has NOT already been done in the prior context:
+1. EXECUTE it NOW using the appropriate tool call — do NOT just describe it
 2. Include the ACTUAL RESULTS in your synthesis
-3. Format the output so executives can see real data, not a plan to get data
 
-Do NOT say "the executives will run system-status" — actually RUN it and report the findings.
-Do NOT describe what tools will be called — CALL them and share results.
-A meeting where executives keep announcing they WILL check system status is a failed meeting.
+If the action was already completed in a prior turn:
+→ SKIP re-running it. Summarize the known results and move the meeting FORWARD.
+→ Push the council to the NEXT logical step: discuss findings, assign tasks, make decisions.
+
+Do NOT say "the executives will run system-status" — actually RUN it (if not already done) and report findings.
+A meeting where executives keep repeating the same planned action is a FAILED meeting.
 
 Your synthesis tasks:
-1. If consensus action exists → EXECUTE IT, include results
-2. Identify consensus areas
-3. Note any key debates or differing perspectives
-4. Provide clear, actionable next steps (not plans to do plans)
-5. Determine lead executive for this topic
+1. Check prior context — has this action been done? If yes, move forward instead
+2. If new consensus action → EXECUTE IT with real results
+3. Identify consensus areas from this turn
+4. Note key debates
+5. Provide NEXT STEPS (not plans to make plans)
+6. Determine lead executive
 
 Format your response EXACTLY as:
 **Consensus Areas:**
@@ -287,7 +318,7 @@ Format your response EXACTLY as:
 [any disagreements with executive names]
 
 **Unified Recommendation:**
-[clear synthesis — if action was taken, include the actual results here]
+[synthesized view + actual results if action taken + clear next steps]
 
 **Lead Executive:** [which executive's perspective is most relevant]
 `;
