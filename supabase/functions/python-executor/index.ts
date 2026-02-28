@@ -3,27 +3,32 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 //
-// python-executor v4 — Hybrid routing architecture
+// python-executor v4.1 — Cloud Run primary, optional private Piston sandbox
 //
-// TIER 1 — Piston (fast, sandboxed, stdlib-only, no network)
-//   Best for: quick calculations, string manipulation, JSON processing,
-//             pure Python logic, anything using only built-in modules.
-//   Limitation: No external packages (pandas, requests, etc.), no network.
+// PRIMARY — Cloud Run Flask service (full library stack, network-enabled)
+//   Best for: ALL code including stdlib-only, data analysis, web scraping,
+//             image processing, visualization, ML, document generation, API calls.
+//   Required: PISTON_URL env var set to the Cloud Run service URL.
+//   Available libs: requests, httpx, pandas, numpy, scipy, matplotlib,
+//     seaborn, plotly, scikit-learn, Pillow, imageio, nltk, reportlab,
+//     beautifulsoup4, lxml, openpyxl, pydantic, and more.
 //
-// TIER 2 — Cloud Run Flask service (full library stack, network-enabled)
-//   Best for: data analysis (pandas/numpy/scipy), web scraping (requests/bs4),
-//             image processing (Pillow/scikit-image), visualization (matplotlib/plotly),
-//             ML (scikit-learn), document generation (reportlab/pypdf2), API calls.
-//   Configured via: PISTON_URL env var pointing to the Cloud Run service URL.
+// OPTIONAL SANDBOX — Private Piston instance (stdlib-only, no network)
+//   Only used when PISTON_SANDBOX_URL is configured AND caller forces backend: "piston".
+//   NOTE: The public Piston API (emkc.org) has been WHITELIST-ONLY since Feb 15 2026.
+//         Do NOT use it. Set PISTON_SANDBOX_URL only if you host your own Piston.
 //
-// Smart routing: this function auto-detects which tier is needed by scanning
-// import statements in the code. Stdlib-only → Tier 1 (fast). External libs → Tier 2.
-// Force override: set `backend: "piston"` or `backend: "cloud_run"` in the request.
+// Smart routing: stdlib-only code → Cloud Run (fast path, no session needed)
+//               external lib imports → Cloud Run (same service, richer env)
+//               backend: "piston" override → private Piston (if PISTON_SANDBOX_URL set)
 //
 // ─────────────────────────────────────────────────────────────────────────────
 
-const PISTON_PUBLIC_URL = 'https://emkc.org/api/v2/piston';
-const CLOUD_RUN_URL = Deno.env.get('PISTON_URL') || '';  // Cloud Run Flask service
+// Cloud Run Flask service — primary executor (set via PISTON_URL secret in Supabase)
+const CLOUD_RUN_URL = Deno.env.get('PISTON_URL') || '';
+// Private Piston sandbox — optional, only used if caller forces backend: "piston"
+// Do NOT set to the public emkc.org — it went whitelist-only Feb 15 2026
+const PISTON_SANDBOX_URL = Deno.env.get('PISTON_SANDBOX_URL') || '';
 
 const supabase = createClient(
   Deno.env.get('SUPABASE_URL')!,
@@ -97,39 +102,41 @@ function decideBackend(
   forcedBackend: string | undefined,
   cloudRunAvailable: boolean,
 ): RoutingDecision {
-  // Explicit override
+  // Explicit Piston override — only works if PISTON_SANDBOX_URL is configured
   if (forcedBackend === 'piston') {
-    return { backend: 'piston', reason: 'forced by caller', externalImports: [] };
+    if (!PISTON_SANDBOX_URL) {
+      // No private Piston available — fall through to Cloud Run
+      return { backend: 'cloud_run', reason: 'piston forced but no PISTON_SANDBOX_URL configured; using cloud_run', externalImports: [] };
+    }
+    return { backend: 'piston', reason: 'forced by caller (private Piston sandbox)', externalImports: [] };
   }
   if (forcedBackend === 'cloud_run' || forcedBackend === 'cloud-run') {
-    if (!cloudRunAvailable) {
-      return { backend: 'piston', reason: 'cloud_run forced but PISTON_URL not configured', externalImports: [] };
-    }
     return { backend: 'cloud_run', reason: 'forced by caller', externalImports: [] };
   }
 
-  // Auto-detect based on imports
+  // Auto-detect: Cloud Run handles ALL code (stdlib and external alike)
+  // It's the primary and preferred executor in all cases
   const allImports = extractImports(code);
   const externalImports = allImports.filter(m => !PYTHON_STDLIB.has(m));
 
-  if (externalImports.length > 0 && cloudRunAvailable) {
-    return {
-      backend: 'cloud_run',
-      reason: `detected external imports: ${externalImports.join(', ')}`,
-      externalImports,
-    };
+  if (cloudRunAvailable) {
+    const reason = externalImports.length > 0
+      ? `detected external imports: ${externalImports.join(', ')}`
+      : 'stdlib-only code (Cloud Run preferred as primary executor)';
+    return { backend: 'cloud_run', reason, externalImports };
   }
 
-  if (externalImports.length > 0 && !cloudRunAvailable) {
-    // Cloud Run not configured — warn but fall back to Piston
+  // Cloud Run not available — use private Piston if configured (stdlib only)
+  if (PISTON_SANDBOX_URL) {
     return {
       backend: 'piston',
-      reason: `external imports detected but PISTON_URL not set; falling back to Piston (may fail)`,
+      reason: 'PISTON_URL not set; falling back to private Piston sandbox (stdlib only)',
       externalImports,
     };
   }
 
-  return { backend: 'piston', reason: 'stdlib-only code', externalImports: [] };
+  // No backends available
+  return { backend: 'cloud_run', reason: 'no backends configured', externalImports };
 }
 
 // ─── Executors ────────────────────────────────────────────────────────────────
@@ -141,7 +148,10 @@ async function executePiston(opts: {
   stdin: string;
   args: string[];
 }): Promise<{ stdout: string; stderr: string; exitCode: number; backend: string }> {
-  const resp = await fetch(`${PISTON_PUBLIC_URL}/execute`, {
+  if (!PISTON_SANDBOX_URL) {
+    throw new Error('No private Piston sandbox configured (PISTON_SANDBOX_URL not set). Use Cloud Run instead.');
+  }
+  const resp = await fetch(`${PISTON_SANDBOX_URL}/execute`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -165,7 +175,7 @@ async function executePiston(opts: {
     stdout: data.run?.stdout || '',
     stderr: data.run?.stderr || '',
     exitCode: data.run?.code ?? 1,
-    backend: 'piston-public',
+    backend: 'piston-private',
   };
 }
 
@@ -210,34 +220,38 @@ Deno.serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Health check (GET) — report both backends
+  // Health check (GET) — report backend status
   if (req.method === 'GET') {
-    const cloudRunHealthy = CLOUD_RUN_URL
-      ? await fetch(`${CLOUD_RUN_URL}/health`, { signal: AbortSignal.timeout(5000) })
-        .then(r => r.ok)
-        .catch(() => false)
-      : false;
-
-    let cloudRunLibs: Record<string, string> | null = null;
-    if (cloudRunHealthy) {
-      cloudRunLibs = await fetch(`${CLOUD_RUN_URL}/health`, { signal: AbortSignal.timeout(5000) })
-        .then(r => r.json())
-        .then(d => d.libraries || null)
-        .catch(() => null);
+    let cloudRunHealth: Record<string, unknown> = { available: false, url: CLOUD_RUN_URL || 'not configured' };
+    if (CLOUD_RUN_URL) {
+      try {
+        const hr = await fetch(`${CLOUD_RUN_URL}/health`, { signal: AbortSignal.timeout(5000) });
+        const hdata = hr.ok ? await hr.json() : null;
+        cloudRunHealth = {
+          available: hr.ok,
+          url: CLOUD_RUN_URL,
+          version: hdata?.version || null,
+          python: hdata?.python_version || null,
+          libraries: hdata?.libraries ? Object.keys(hdata.libraries).filter(k => hdata.libraries[k] !== null) : [],
+          security: hdata?.security || null,
+        };
+      } catch (e: any) {
+        cloudRunHealth = { available: false, url: CLOUD_RUN_URL, error: e.message };
+      }
     }
 
     return new Response(JSON.stringify({
       status: 'ok',
-      version: 'python-executor-v4-hybrid',
+      version: 'python-executor-v4.1-cloudrun-primary',
       backends: {
-        piston: { available: true, url: PISTON_PUBLIC_URL, libraries: 'stdlib only' },
-        cloud_run: {
-          available: cloudRunHealthy,
-          url: CLOUD_RUN_URL || 'not configured',
-          libraries: cloudRunLibs ? Object.keys(cloudRunLibs).filter(k => cloudRunLibs![k] !== null) : [],
+        cloud_run: cloudRunHealth,
+        piston_sandbox: {
+          available: Boolean(PISTON_SANDBOX_URL),
+          url: PISTON_SANDBOX_URL || 'not configured (optional)',
+          note: 'Private Piston only. Public emkc.org is whitelist-only since Feb 15 2026.',
         },
       },
-      routing: 'auto (stdlib-only → piston, external imports → cloud_run)',
+      routing: 'Cloud Run is primary executor for all code. Private Piston sandbox optional for stdlib fallback.',
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   }
 
@@ -310,10 +324,25 @@ Deno.serve(async (req) => {
     const startTime = Date.now();
     let result: { stdout: string; stderr: string; exitCode: number; backend: string; blocked?: boolean; blockReason?: string };
 
+    if (!CLOUD_RUN_URL && !PISTON_SANDBOX_URL) {
+      return new Response(JSON.stringify({
+        success: false,
+        output: '',
+        error: 'No execution backend configured. Set the PISTON_URL secret to the Cloud Run Flask service URL in Supabase Edge Function settings.',
+        exitCode: 1,
+        backend: 'none',
+        learning_point: 'The Python executor requires the PISTON_URL secret to be set to the Cloud Run service URL. Contact the system administrator.',
+      }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
+
     try {
       if (routing.backend === 'cloud_run') {
+        if (!CLOUD_RUN_URL) {
+          throw new Error('PISTON_URL (Cloud Run) not configured');
+        }
         result = await executeCloudRun({ code: String(code), stdin: String(stdin), timeoutMs: Number(timeout_ms) });
       } else {
+        // Private Piston sandbox
         result = await executePiston({
           code: String(code),
           language: String(language),
@@ -323,21 +352,24 @@ Deno.serve(async (req) => {
         });
       }
     } catch (execError: any) {
-      // If Cloud Run fails, optionally fall back to Piston with a warning
-      if (routing.backend === 'cloud_run') {
-        console.warn(`⚠️ [CLOUD RUN] Failed (${execError.message}). Falling back to Piston.`);
-        try {
-          result = await executePiston({
-            code: String(code),
-            language: String(language),
-            version: String(version),
-            stdin: String(stdin),
-            args: Array.isArray(args) ? args : [],
-          });
-          result.stderr = `⚠️ Cloud Run unavailable (${execError.message}); ran on Piston fallback.\n${result.stderr}`;
-          result.backend = 'piston-fallback';
-        } catch (fallbackErr: any) {
-          throw new Error(`Both backends failed. Cloud Run: ${execError.message}. Piston: ${fallbackErr.message}`);
+      // If Cloud Run fails and we have a private Piston for stdlib fallback
+      if (routing.backend === 'cloud_run' && PISTON_SANDBOX_URL) {
+        const allImports = extractImports(String(code));
+        const hasExternalImports = allImports.some(m => !PYTHON_STDLIB.has(m));
+        if (!hasExternalImports) {
+          console.warn(`⚠️ [CLOUD RUN] Failed (${execError.message}). Falling back to private Piston for stdlib code.`);
+          try {
+            result = await executePiston({
+              code: String(code), language: String(language), version: String(version),
+              stdin: String(stdin), args: Array.isArray(args) ? args : [],
+            });
+            result.stderr = `⚠️ Cloud Run unavailable; ran on private Piston sandbox.\n${result.stderr}`;
+            result.backend = 'piston-fallback';
+          } catch (fbErr: any) {
+            throw new Error(`Cloud Run: ${execError.message}. Piston fallback: ${fbErr.message}`);
+          }
+        } else {
+          throw new Error(`Cloud Run unavailable: ${execError.message}. External imports (${allImports.filter(m => !PYTHON_STDLIB.has(m)).join(',')}) cannot run on Piston fallback.`);
         }
       } else {
         throw execError;
@@ -363,15 +395,8 @@ Deno.serve(async (req) => {
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // ── Network error detection (Piston sandbox) ──────────────────────────────
-    const hasNetworkError = usedBackend.startsWith('piston') && (
-      stderrText.includes('URLError') ||
-      stderrText.includes('socket.gaierror') ||
-      stderrText.includes('ConnectionRefusedError') ||
-      (stderrText.includes('ModuleNotFoundError') && routing.externalImports.length > 0)
-    );
-    if (hasNetworkError) {
-      const missingLib = routing.externalImports[0] || 'external package';
+    // ── Module not found detection (Piston fallback used, missing external lib) ───
+    if (usedBackend.includes('piston') && stderrText.includes('ModuleNotFoundError') && routing.externalImports.length > 0) {
       return new Response(JSON.stringify({
         success: false,
         output: stdoutText,
@@ -379,10 +404,10 @@ Deno.serve(async (req) => {
         exitCode: 1,
         backend: usedBackend,
         learning_point: [
-          `❌ This code needs external packages (${routing.externalImports.join(', ')}) not available on Piston.`,
-          `💡 Set the PISTON_URL environment variable to the Cloud Run Flask service URL,`,
-          `   or add backend: "cloud_run" to your payload if PISTON_URL is already configured.`,
-          `   Available packages on Cloud Run: requests, httpx, pandas, numpy, scipy, matplotlib,`,
+          `❌ This code needs external packages (${routing.externalImports.join(', ')}) not available in the Piston sandbox.`,
+          `💡 The Cloud Run service (primary executor) is currently unavailable.`,
+          `   Once Cloud Run recovers, this code will run automatically on the full-stack environment.`,
+          `   Available Cloud Run packages: requests, httpx, pandas, numpy, scipy, matplotlib,`,
           `   seaborn, plotly, scikit-learn, Pillow, imageio, nltk, reportlab, pypdf2, and more.`,
         ].join('\n'),
       }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -414,7 +439,7 @@ Deno.serve(async (req) => {
           agent_id, task_id, backend: usedBackend, external_imports: routing.externalImports,
         }),
         invoked_at: new Date().toISOString(),
-        deployment_version: 'python-executor-v4-hybrid',
+        deployment_version: 'python-executor-v4.1-cloudrun-primary',
       }),
       supabase.from('eliza_activity_log').insert({
         activity_type: wasAutoFixed ? 'python_fix_execution' : 'python_execution',
