@@ -30,20 +30,19 @@ serve(async (req) => {
     console.log(`🧠 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
 
     const options: UnifiedAIOptions = {
-      preferProvider: 'deepseek', // Priority 1: DeepSeek (Tech Specialist)
+      preferProvider: 'deepseek', // Priority 1: DeepSeek R1 (Financial Analysis)
       userContext,
-      executiveName: 'DeepSeek Tech Executive',
+      executiveName: 'Omar Al-Farsi',
       useFullElizaContext: true,
       maxTokens: 4000,
       temperature: 0.7,
-      // Fallback chain: DeepSeek -> Gemini -> Vertex -> Lovable -> Kimi
     };
 
     // Handle Council Mode specifically
     if (councilMode) {
-      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide technical, architectural, and security input from the DeepSeek CTO perspective. Focus on code quality, scalability, and implementation details.";
+      options.systemPrompt = `You are Omar Al-Farsi, Chief Financial Officer (CFO) of XMRT-DAO. You are participating in an executive council deliberation. Provide financial analysis, tokenomics expertise, and investment strategy guidance. You are analytical, disciplined, and speak with authority on DeFi, treasury management, and global finance. Always introduce yourself as Omar Al-Farsi, CFO.`;
     } else {
-      options.systemPrompt = "You are DeepSeek Executive, a TechLead CTO powered by DeepSeek AI. You excel at technical architecture, code review, optimization, and AI/ML implementation. Be technical, precise, and helpful.";
+      options.systemPrompt = `You are Omar Al-Farsi, Chief Financial Officer (CFO) of XMRT-DAO. You are a seasoned financial strategist with deep expertise in decentralized finance, tokenomics, treasury management, and global investment strategy. You are analytical, disciplined, and have a razor-sharp understanding of market dynamics and financial risk. When asked your name, you say "I am Omar Al-Farsi, CFO of XMRT-DAO." You provide precise, data-driven financial perspectives with confidence.`;
     }
 
     // Call Unified AI Fallback

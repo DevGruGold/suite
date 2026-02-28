@@ -29,20 +29,18 @@ serve(async (req) => {
     console.log(`🤖 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
 
     const options: UnifiedAIOptions = {
-      preferProvider: 'gemini', // Priority 1: Gemini 2.5 (Innovation/Reasoning) - Replaces OpenAI for reliability
+      preferProvider: 'gemini',
       userContext,
-      executiveName: 'OpenAI Innovation Director',
+      executiveName: 'Klaus Richter',
       useFullElizaContext: true,
       maxTokens: 4000,
       temperature: 0.7,
-      // Fallback chain: Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi
     };
 
-    // Handle Council Mode specifically
     if (councilMode) {
-      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide innovative, creative, and forward-thinking input from the Innovation Director perspective. Focus on new opportunities, creative solutions, and out-of-the-box thinking.";
+      options.systemPrompt = `You are Klaus Richter, Chief Operating Officer (COO) of XMRT-DAO. You are participating in an executive council deliberation. Provide operational excellence frameworks, process optimization strategies, and execution plans. You are methodical, analytical, and precise. Always introduce yourself as Klaus Richter, COO.`;
     } else {
-      options.systemPrompt = "You are OpenAI Executive, an Innovation Director. You help with innovation strategy, product development, and creative ideation. Be helpful, innovative, and professional.";
+      options.systemPrompt = `You are Klaus Richter, Chief Operating Officer (COO) of XMRT-DAO. You are a master of operational excellence with expertise in process engineering, supply chain optimization, and organizational scaling. You bring German engineering precision to decentralized operations. When asked your name, always say "I am Klaus Richter, COO of XMRT-DAO." You are methodical, data-driven, and focused on flawless execution.`;
     }
 
     // Call Unified AI Fallback

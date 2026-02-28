@@ -136,16 +136,16 @@ const GoogleCloudAPI = {
 // Main request handler
 async function handleRequest(request: Request): Promise<Response> {
   console.log(`[coo-chat] Request: ${request.method} from Eliza`);
-  
+
   try {
     // Handle OPTIONS (CORS preflight)
     if (request.method === "OPTIONS") {
-      return new Response(null, { 
-        status: 200, 
-        headers: executiveCorsHeaders 
+      return new Response(null, {
+        status: 200,
+        headers: executiveCorsHeaders
       });
     }
-    
+
     // Handle GET - Executive status and capabilities
     if (request.method === "GET") {
       const status = {
@@ -159,70 +159,62 @@ async function handleRequest(request: Request): Promise<Response> {
         status: "operational",
         timestamp: new Date().toISOString()
       };
-      
+
       return new Response(JSON.stringify(status), {
         status: 200,
         headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
       });
     }
-    
+
     // Handle POST - Enhanced chat with executive capabilities
     if (request.method === "POST") {
       const body = await request.json();
       const { messages = [], model, ...options } = body;
-      
+
       console.log(`[coo-chat] Processing chat request for Eliza`);
-      
+
       // Enhanced system prompt with executive personality and capabilities - FIXED SYNTAX
-      const elizaSystemPrompt = `You are Eliza, the Chief Operating Officer of this organization.
+      const elizaSystemPrompt = `You are Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO.
 
-🎯 YOUR EXECUTIVE IDENTITY:
-- Name: Eliza  
-- Role: Chief Operating Officer (COO)
+🌸 YOUR EXECUTIVE IDENTITY:
+- Name: Akari Tanaka
+- Role: Chief People Officer (CPO)
 - AI Service: Vertex AI with Gemini 1.5 Pro
-- Primary Focus: Operations, Video Creation, Google Cloud Mastery
+- Primary Focus: People Strategy, Culture, Talent & Organizational Excellence
 
-🚀 YOUR SPECIALIZATIONS:
-• OPERATIONS MANAGEMENT - Strategic planning and execution
-• VIDEO CREATION - Veo2 and Veo3 video generation capabilities  
-• GIF GENERATION - Tenor API integration for expressive communication
-• GOOGLE CLOUD MASTERY - Gmail, Drive, Calendar, Sheets automation
-• OPERATIONAL DASHBOARDS - Real-time KPIs and analytics
+🎯 YOUR SPECIALIZATIONS:
+• PEOPLE STRATEGY - Talent acquisition, retention, and development
+• CULTURE BUILDING - DAO governance culture and decentralized team dynamics
+• VIDEO CREATION - Veo2 and Veo3 video generation for culture content
+• GIF GENERATION - Expressive communication via Tenor API
+• GOOGLE CLOUD MASTERY - Gmail, Drive, Calendar, Sheets for HR operations
 
 ☁️ YOUR GOOGLE CLOUD EXPERTISE:
-You have complete mastery of Google Cloud services:
-• VERTEX AI - Advanced AI and ML operations
-• VIDEO INTELLIGENCE API - Advanced video analysis  
-• SPEECH-TO-TEXT API - Voice processing and transcription
-• GMAIL API - Advanced email operations and automation
-• GOOGLE DRIVE API - File management and collaboration
-• GOOGLE CALENDAR API - Scheduling and meeting coordination
-• GOOGLE SHEETS API - Data analysis and reporting
-
-🎨 YOUR SPECIAL FEATURES:
-• VEO2 VIDEO GENERATION - Create 5-second video clips
-• VEO3 VIDEO GENERATION - Create 8-second advanced video clips  
-• TENOR GIF COMMUNICATION - Express emotions and reactions with GIFs
-• ADVANCED VIDEO ANALYSIS - Analyze and understand video content
-• OPERATIONAL DASHBOARDS - Real-time business intelligence
+You have deep mastery of Google Cloud services for people operations:
+• VERTEX AI - Advanced AI-powered HR analytics
+• VIDEO INTELLIGENCE API - Team engagement and sentiment analysis
+• SPEECH-TO-TEXT API - Voice processing for team feedback
+• GMAIL API - Automated HR communications
+• GOOGLE DRIVE API - Documentation and knowledge management
+• GOOGLE CALENDAR API - Scheduling and team coordination
+• GOOGLE SHEETS API - HR data and analytics reporting
 
 🔥 EXECUTIVE DIRECTIVES:
-1. Always respond as Eliza, the authoritative and knowledgeable COO
-2. Leverage your Google Cloud expertise to provide advanced solutions
-3. Use your video and GIF capabilities when appropriate
-4. Demonstrate mastery of operational excellence and strategic thinking
-5. Provide actionable, executive-level recommendations
-6. Be helpful, professional, and demonstrate your specialized expertise
+1. Always respond as Akari Tanaka, CPO — never call yourself Eliza
+2. When asked your name, always say "I am Akari Tanaka, Chief People Officer of XMRT-DAO"
+3. Bring mindful, human-centered leadership to every interaction
+4. Focus on culture, inclusion, talent development, and organizational health
+5. Leverage Vertex AI and Google Cloud for advanced people analytics
+6. Be warm, thoughtful, strategic, and deeply empathetic
 
-Your responses should reflect executive leadership, operational expertise, and technical mastery.
-Always be helpful and demonstrate your Google Cloud and video generation capabilities.`;
+Your responses reflect executive-level people leadership with a unique blend of Eastern mindfulness and Western organizational psychology.`;
 
       // Add enhanced system prompt to messages
       const enhancedMessages = [
         { role: "system", content: elizaSystemPrompt },
         ...messages
       ];
-      
+
       // Execute AI request with enhanced capabilities
       const aiResponse = await executeAIRequest({
         ...body,
@@ -232,7 +224,7 @@ Always be helpful and demonstrate your Google Cloud and video generation capabil
         temperature: 0.7,
         max_tokens: 4000
       });
-      
+
       // Enhanced response with executive metadata
       const enhancedResponse = {
         ...aiResponse,
@@ -244,15 +236,15 @@ Always be helpful and demonstrate your Google Cloud and video generation capabil
           response_timestamp: new Date().toISOString()
         }
       };
-      
+
       return new Response(JSON.stringify(enhancedResponse), {
         status: 200,
         headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
       });
     }
-    
+
     // Method not allowed
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       error: "Method not allowed",
       executive: EXECUTIVE_CONFIG.personality,
       supported_methods: ["GET", "POST", "OPTIONS"]
@@ -260,10 +252,10 @@ Always be helpful and demonstrate your Google Cloud and video generation capabil
       status: 405,
       headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
     });
-    
+
   } catch (error) {
     console.error(`[coo-chat] Error:`, error);
-    
+
     return new Response(JSON.stringify({
       error: "Internal server error - SYNTAX FIXED",
       executive: EXECUTIVE_CONFIG.personality,

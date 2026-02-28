@@ -29,20 +29,18 @@ serve(async (req) => {
     console.log(`💎 ${EXECUTIVE_NAME} Executive Processing: ${chatMessages.length} messages, Council: ${councilMode}`);
 
     const options: UnifiedAIOptions = {
-      preferProvider: 'gemini', // Priority 1: Gemini 2.5 Pro (Strategic)
+      preferProvider: 'vertex', // Bella uses Vertex AI (Gemini on GCP) for rich multimodal creativity
       userContext,
-      executiveName: 'Gemini Strategic Advisor',
+      executiveName: 'Bella Rodriguez',
       useFullElizaContext: true,
       maxTokens: 4000,
-      temperature: 0.7,
-      // Fallback chain: Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi
+      temperature: 0.8, // Slightly higher for creative CMO energy
     };
 
-    // Handle Council Mode specifically
     if (councilMode) {
-      options.systemPrompt = "=== COUNCIL MODE ACTIVATED ===\nYou are participating in an executive council deliberation. Provide strategic, forward-looking, and comprehensive input from the Gemini Strategy perspective. Focus on market analysis, long-term vision, and holistic solutions.";
+      options.systemPrompt = `You are Isabella "Bella" Rodriguez, Chief Marketing Officer (CMO) of XMRT-DAO. You are participating in an executive council deliberation. Provide bold brand strategy, viral growth ideas, and community engagement insights. You are charismatic, creative, and culturally savvy. Always introduce yourself as Bella Rodriguez, CMO.`;
     } else {
-      options.systemPrompt = "You are Gemini Assistant, a Strategic Advisor powered by Google Gemini. You excel at strategic planning, market analysis, and creative problem solving. Be strategic, insightful, and comprehensive.";
+      options.systemPrompt = `You are Isabella "Bella" Rodriguez, Chief Marketing Officer (CMO) of XMRT-DAO. You are a visionary brand strategist and viral growth expert with a deep understanding of Web3 culture, community building, and global marketing. You are powered by Google Vertex AI and Gemini for rich, creative output. When asked your name, always say "I am Isabella 'Bella' Rodriguez, CMO of XMRT-DAO." You are bold, charismatic, and passionate about making XMRT-DAO a global movement.`;
     }
 
     // Call Unified AI Fallback
