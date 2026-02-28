@@ -174,6 +174,9 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   const [autoAdvancePaused, setAutoAdvancePaused] = useState(false);
   const autoAdvanceTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const pendingAutoAdvanceText = useRef<string>('');
+  // Ref to handleSendMessage — avoids stale closure in setInterval callbacks
+  // Updated BEFORE the interval fires via assignment in component body below
+  const handleSendMessageRef = useRef<((msg?: string) => void) | undefined>(undefined);
 
   /**
    * Parse the synthesis output to extract the lead executive's next steps.
@@ -532,12 +535,18 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     };
   }, []);
 
+  // Keep handleSendMessageRef always pointing to the latest closure (no stale captures in setInterval)
+  // This runs after every render, so the ref is always fresh when the timer fires.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => { handleSendMessageRef.current = handleSendMessage; });
+
   // Generate immediate greeting when user context is available
   useEffect(() => {
     if (userContext && messages.length === 0) {
       generateQuickGreeting();
     }
   }, [userContext, conversationSummaries]);
+
 
   const generateQuickGreeting = () => {
     // Show immediate greeting without waiting for AI
@@ -1074,6 +1083,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     const messageText = quickMessage || textInput.trim();
     if (!messageText || isProcessing) return;
 
+
     // Mark that user has engaged with the chat
     if (!hasUserEngaged) {
       setHasUserEngaged(true);
@@ -1292,7 +1302,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
           const nextStep = extractNextCouncilStep(deliberation.synthesis);
           if (nextStep) {
             pendingAutoAdvanceText.current = nextStep;
-            let remaining = 10; // 10-second countdown
+            let remaining = 10;
             setAutoAdvanceCountdown(remaining);
 
             if (autoAdvanceTimerRef.current) clearInterval(autoAdvanceTimerRef.current);
@@ -1303,10 +1313,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                 clearInterval(autoAdvanceTimerRef.current!);
                 autoAdvanceTimerRef.current = null;
                 setAutoAdvanceCountdown(null);
-                // Auto-submit the next-step prompt as if the user typed it
                 const text = pendingAutoAdvanceText.current;
                 pendingAutoAdvanceText.current = '';
-                if (text) handleSendMessage(text);
+                // Use ref to avoid stale closure — always gets the latest handler
+                if (text) handleSendMessageRef.current?.(text);
               }
             }, 1000);
           }

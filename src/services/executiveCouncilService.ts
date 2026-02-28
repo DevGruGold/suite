@@ -243,15 +243,37 @@ class ExecutiveCouncilService {
       const executionTime = Date.now() - startTime;
       console.log(`✅ ${config.title} responded in ${executionTime}ms`);
 
+      const rawPerspective = result._extractedContent ||
+        result.response || result.content ||
+        result.choices?.[0]?.message?.content ||
+        result.message || result.text || 'No response provided';
+
+      // 🔧 HARD BLOCK: strip hallucinated JSON tool-call text from non-lead execs.
+      // Even with prompt instructions, LLMs sometimes emit JSON blocks like
+      // {"function_name":"system-status",...}. Stripping them here ensures synthesis
+      // only receives the executive's actual opinion text, not tool-call noise.
+      const cleanPerspective = isLeadExecutive
+        ? rawPerspective  // Lead's real tool results pass through untouched
+        : rawPerspective
+          // Remove ```json or ```JSON fenced blocks
+          .replace(/```(?:json|JSON)[\s\S]*?```/g, '')
+          // Remove raw { "function_name": ... } blocks (single or multi-line)
+          .replace(/\{[\s\S]*?"function_name"[\s\S]*?\}/g, '')
+          // Remove lines that start with { and look like JSON objects
+          .replace(/^\s*\{[^{}]*"function_name"[^{}]*\}\s*$/gm, '')
+          // Remove "🔧 Executing..." lines that precede the JSON
+          .replace(/^.*?[Ee]xecut(?:ing|ed).*?(?:system-status|check|diagnostic).*$/gm, '')
+          // Remove "📋 Plan: I'll check..." intro lines
+          .replace(/^.*?(?:📋|🔧|📊).*?(?:system.?status|check|diagnos).*$/gm, '')
+          .replace(/\n{3,}/g, '\n\n') // Collapse excessive blank lines
+          .trim();
+
       return {
         executive,
         executiveTitle: config.title,
         executiveIcon: config.icon,
         executiveColor: config.color,
-        perspective: result._extractedContent ||
-          result.response || result.content ||
-          result.choices?.[0]?.message?.content ||
-          result.message || result.text || 'No response provided',
+        perspective: cleanPerspective || '[Perspective withheld — no content after tool-call stripping]',
         confidence: result.confidence || 85,
         reasoning: result.reasoning || [],
         executionTimeMs: executionTime
@@ -263,6 +285,7 @@ class ExecutiveCouncilService {
       throw new Error(`${config.title} unavailable: ${errorMsg}`);
     }
   }
+
 
   /**
    * Synthesize multiple executive perspectives into unified response
