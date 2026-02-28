@@ -119,16 +119,3 @@ export function MobileNav() {
   );
 }
 
-// Legacy component for backwards compatibility
-export function MobileNav() {
-  const [isOpen, setIsOpen] = useState(false);
-
-  return (
-    <>
-      <div className="md:hidden">
-        <MobileNavTrigger isOpen={isOpen} onToggle={() => setIsOpen(!isOpen)} />
-      </div>
-      <MobileNavOverlay isOpen={isOpen} onClose={() => setIsOpen(false)} />
-    </>
-  );
-}
