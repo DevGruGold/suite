@@ -72,11 +72,41 @@ class ExecutiveCouncilService {
   };
 
   /**
+   * Parse the lead executive function ID from the prior synthesis in conversation history
+   */
+  private parsePriorLeadExecutive(context: ElizaContext): string | null {
+    const recentMsgs = context.conversationContext?.recentMessages || [];
+    // Find the last assistant (synthesis) message
+    const lastSynthesis = [...recentMsgs]
+      .reverse()
+      .find((m: any) => m.sender === 'assistant' || m.role === 'assistant');
+    if (!lastSynthesis) return null;
+
+    const text: string = lastSynthesis.content || lastSynthesis.text || '';
+    // Extract "**Lead Executive:** <Name>" from synthesis output
+    const match = text.match(/\*\*Lead Executive:\*\*\s*([^\n]+)/i);
+    if (!match) return null;
+    const leadName = match[1].trim().toLowerCase();
+
+    // Map display name → function ID
+    if (leadName.includes('anya') || leadName.includes('sharma') || leadName.includes('cto')) return 'vercel-ai-chat';
+    if (leadName.includes('omar') || leadName.includes('al-farsi') || leadName.includes('cfo')) return 'deepseek-chat';
+    if (leadName.includes('bella') || leadName.includes('isabella') || leadName.includes('rodriguez') || leadName.includes('cmo')) return 'gemini-chat';
+    if (leadName.includes('klaus') || leadName.includes('richter') || leadName.includes('coo')) return 'openai-chat';
+    if (leadName.includes('akari') || leadName.includes('tanaka') || leadName.includes('cpo')) return 'coo-chat';
+    return null;
+  }
+
+  /**
    * Initiate full council deliberation - all executives analyze in parallel
    */
   async deliberate(userInput: string, context: ElizaContext): Promise<CouncilDeliberation> {
     const startTime = Date.now();
     console.log('🏛️ Executive Council: Starting deliberation...');
+
+    // Determine lead executive from prior synthesis (they get tool access this turn)
+    const priorLeadFunctionId = this.parsePriorLeadExecutive(context);
+    console.log(`👑 Prior lead executive: ${priorLeadFunctionId || 'none (first turn)'}`);
 
     // Get all executives (prioritize healthy ones)
     const healthyExecs = await this.getHealthyExecutives();
@@ -91,9 +121,9 @@ class ExecutiveCouncilService {
 
     console.log(`🎯 Consulting ${executives.length} executives in parallel:`, executives);
 
-    // Dispatch to all executives in parallel
+    // Dispatch to all executives in parallel — only lead gets tool access
     const executivePromises = executives.map(exec =>
-      this.getExecutivePerspective(exec, userInput, context)
+      this.getExecutivePerspective(exec, userInput, context, exec === priorLeadFunctionId)
     );
 
     const results = await Promise.allSettled(executivePromises);
@@ -129,23 +159,18 @@ class ExecutiveCouncilService {
 
   /**
    * Get perspective from a specific executive with retry logic
+   * isLeadExecutive: if true, this exec can call tools and drive action this turn
    */
   private async getExecutivePerspective(
     executive: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat',
     userInput: string,
-    context: ElizaContext
+    context: ElizaContext,
+    isLeadExecutive = false
   ): Promise<ExecutiveResponse> {
     const startTime = Date.now();
     const config = this.executiveConfig[executive];
 
-    console.log(`📡 Executive Council: Calling ${config.title} (${executive})...`);
-    console.log(`📦 Sending context:`, {
-      hasMessages: true,
-      hasMiningStats: !!context.miningStats,
-      hasUserContext: !!context.userContext,
-      hasConversationContext: !!context.conversationContext,
-      councilMode: true
-    });
+    console.log(`📡 Calling ${config.title} (${executive}) — ${isLeadExecutive ? '👑 LEAD (tools enabled)' : '🎤 perspective-only'}`);
 
     try {
       // Use retry logic with exponential backoff
@@ -172,7 +197,8 @@ class ExecutiveCouncilService {
               miningStats: context.miningStats,
               emotionalContext: context.emotionalContext,
               organizationContext: context.organizationContext,
-              councilMode: true
+              councilMode: true,
+              isLeadExecutive  // ← true only for the session lead
             }
           });
 
