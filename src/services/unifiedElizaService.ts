@@ -306,25 +306,21 @@ export class UnifiedElizaService {
     return fallbackResult;
   }
 
-  // ── Direct single-executive call (persona-locked + tool-enabled) ─────────
-  // Routes through ai-chat (the only function with full tool-calling capability)
-  // with the executive's persona injected via systemPrompt. This means each
-  // executive can ACTUALLY call edge functions instead of just describing them.
+  // ── Direct single-executive call (persona-locked) ──────────────────────
+  // Each executive has their own deployed Supabase edge function with its own
+  // built-in system prompt / persona. We call each function directly so their
+  // persona is determined by the function's own system prompt (not Eliza's).
+  // DO NOT route through ai-chat — that replaces Eliza's full system prompt.
   private static async callSingleExecutive(
     functionId: string,
     userInput: string,
     context: ElizaContext
   ): Promise<string | null> {
-    const personaPrompt = EXECUTIVE_PERSONA_PROMPTS[functionId];
     const payload = {
       message: userInput,
       messages: [
         { role: 'user', content: userInput },
       ],
-      // Persona injection — ai-chat reads bodySystemPrompt and uses it directly
-      systemPrompt: personaPrompt,
-      // Enable full tool-calling so executives autonomously execute edge functions
-      use_tools: true,
       organizationContext: context.organizationContext,
       timestamp: new Date().toISOString(),
       images: context.images || undefined,
@@ -332,16 +328,14 @@ export class UnifiedElizaService {
     };
 
     try {
-      console.log(`🎭 [${functionId}] Calling ai-chat with persona + tools...`);
-      // ai-chat is the only function with full tool-calling (125+ functions)
-      // We inject the exec persona so it responds as the right person and acts autonomously
-      const { data, error } = await supabase.functions.invoke('ai-chat', { body: payload });
-      if (error) { console.error(`❌ ai-chat (${functionId} persona) error:`, error); return null; }
+      console.log(`🎭 Calling ${functionId} (own persona)...`);
+      const { data, error } = await supabase.functions.invoke(functionId, { body: payload });
+      if (error) { console.error(`❌ ${functionId} error:`, error); return null; }
       const content = this.extractResponseContent(data);
-      if (content) { console.log(`✅ [${functionId}] response (${content.length} chars)`); }
+      if (content) { console.log(`✅ ${functionId} response (${content.length} chars)`); }
       return content;
     } catch (err: any) {
-      console.error(`💥 ai-chat (${functionId} persona) crashed:`, err?.message);
+      console.error(`💥 ${functionId} crashed:`, err?.message);
       return null;
     }
   }
