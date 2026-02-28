@@ -32,7 +32,8 @@ serve(async (req) => {
       preferProvider: 'gemini', // Priority 1: Gemini 2.5 (Strategy/Vision)
       userContext,
       executiveName: 'Dr. Anya Sharma',
-      useFullElizaContext: true,
+      // Non-lead execs must not receive ELIZA_TOOLS — only the lead gets tool access
+      useFullElizaContext: councilMode ? !!isLeadExecutive : true,
       maxTokens: 4000,
       temperature: 0.7,
     };

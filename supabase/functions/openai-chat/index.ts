@@ -32,7 +32,8 @@ serve(async (req) => {
       preferProvider: 'gemini',
       userContext,
       executiveName: 'Klaus Richter',
-      useFullElizaContext: true,
+      // Non-lead execs must not receive ELIZA_TOOLS — only the lead gets tool access
+      useFullElizaContext: councilMode ? !!isLeadExecutive : true,
       maxTokens: 4000,
       temperature: 0.7,
     };
