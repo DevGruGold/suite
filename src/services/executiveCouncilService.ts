@@ -179,10 +179,21 @@ class ExecutiveCouncilService {
             actualResponse: data?.response?.substring(0, 100) // Log first 100 chars
           });
 
-          // Validate we have a response
-          if (!data || (!data.response && !data.content)) {
-            throw new Error(`${executive} returned no response content`);
+          // Extract content from any possible response field format
+          const responseText =
+            data?.response ||
+            data?.content ||
+            data?.choices?.[0]?.message?.content ||
+            data?.message ||
+            data?.text ||
+            (typeof data === 'string' ? data : null);
+
+          if (!data || !responseText) {
+            throw new Error(`${executive} returned no response content (keys: ${Object.keys(data || {}).join(', ')})`);
           }
+
+          // Attach extracted text for easy access downstream
+          data._extractedContent = responseText;
 
           return data;
         },
@@ -201,7 +212,10 @@ class ExecutiveCouncilService {
         executiveTitle: config.title,
         executiveIcon: config.icon,
         executiveColor: config.color,
-        perspective: result.response || result.content || result.answer || 'No response provided',
+        perspective: result._extractedContent ||
+          result.response || result.content ||
+          result.choices?.[0]?.message?.content ||
+          result.message || result.text || 'No response provided',
         confidence: result.confidence || 85,
         reasoning: result.reasoning || [],
         executionTimeMs: executionTime

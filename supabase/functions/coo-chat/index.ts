@@ -226,10 +226,22 @@ Your responses reflect executive-level people leadership with a unique blend of 
       });
 
       // Enhanced response with executive metadata
+      // Always include explicit response + content fields for council compatibility
+      const responseContent =
+        aiResponse?.content ||
+        aiResponse?.response ||
+        aiResponse?.choices?.[0]?.message?.content ||
+        aiResponse?.message ||
+        aiResponse?.text ||
+        '';
+
       const enhancedResponse = {
         ...aiResponse,
+        response: responseContent,  // Council service reads this
+        content: responseContent,   // Fallback field
         executive_metadata: {
-          name: EXECUTIVE_CONFIG.personality,
+          name: 'Akari Tanaka',
+          title: 'Chief People Officer (CPO)',
           specializations: EXECUTIVE_CONFIG.specializations,
           google_cloud_services: EXECUTIVE_CONFIG.googleCloudServices,
           enhanced_capabilities: true,
