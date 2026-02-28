@@ -259,21 +259,28 @@ export class UnifiedElizaService {
     return fallbackResult;
   }
 
-  // ── Direct single-executive call (persona-locked) ────────────────────────
+  // ── Direct single-executive call (persona-locked) ──────────────────────
   private static async callSingleExecutive(
     functionId: string,
     userInput: string,
     context: ElizaContext
   ): Promise<string | null> {
     const personaPrompt = EXECUTIVE_PERSONA_PROMPTS[functionId];
+
+    // The ai-chat edge function reads `executive_name` from the request body
+    // (defaulting to the EXECUTIVE_NAME env var = "Eliza" if absent).
+    // Passing it here overrides that default so generateSystemPrompt() builds
+    // the correct persona. We also include `systemPrompt` as a belt-and-suspenders
+    // override for any edge function that reads it directly.
     const payload = {
       message: userInput,
-      // Prepend persona as a system message so the LLM receives character instructions
       messages: [
-        ...(personaPrompt ? [{ role: 'system', content: personaPrompt }] : []),
         { role: 'user', content: userInput },
       ],
-      systemPrompt: personaPrompt || undefined,
+      // Override the executive identity — this is what the edge function uses
+      // to build its system prompt (line ~4984 in ai-chat/index.ts)
+      executive_name: personaPrompt,
+      systemPrompt: personaPrompt,
       organizationContext: context.organizationContext,
       timestamp: new Date().toISOString(),
       images: context.images || undefined,
@@ -281,7 +288,7 @@ export class UnifiedElizaService {
     };
 
     try {
-      console.log(`🎭 Calling ${functionId} with persona injection...`);
+      console.log(`🎭 Calling ${functionId} with persona injection (executive_name override)...`);
       const { data, error } = await supabase.functions.invoke(functionId, { body: payload });
       if (error) { console.error(`❌ ${functionId} error:`, error); return null; }
       const content = this.extractResponseContent(data);
