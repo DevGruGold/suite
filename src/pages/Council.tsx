@@ -97,12 +97,13 @@ const Council = () => {
           </div>
         ) : (
           <>
-            {/* 2x2 Grid of Executive Mini-Chats */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            {/* 5 Executive Chat Tiles — responsive grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5 gap-5 mb-8">
               {EXECUTIVES.map((executive) => (
                 <ExecutiveMiniChat
                   key={executive}
                   executive={executive}
+                  className="h-[560px]"
                 />
               ))}
             </div>
@@ -112,7 +113,7 @@ const Council = () => {
               <Button
                 size="lg"
                 onClick={() => setIsCouncilMode(true)}
-                className="gap-2"
+                className="gap-2 px-8"
               >
                 <Users className="w-5 h-5" />
                 Convene Full Council
