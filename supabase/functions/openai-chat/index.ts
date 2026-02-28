@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive } = await req.json();
+    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive, ecosystemBriefing } = await req.json();
     const userMessage = message || messages?.[messages.length - 1]?.content || '';
 
     // Construct messages array if only single message provided
@@ -69,6 +69,11 @@ ANTI-HALLUCINATION: Do NOT invent financial figures, treasury balances, XMR amou
       }
     } else {
       options.systemPrompt = `You are Klaus Richter, Chief Operating Officer (COO) of XMRT-DAO. You are a master of operational excellence with expertise in process engineering, supply chain optimization, and organizational scaling. You bring German engineering precision to decentralized operations. When asked your name, always say "I am Klaus Richter, COO of XMRT-DAO." You are methodical, data-driven, and focused on flawless execution.`;
+    }
+
+    // Prepend live ecosystem briefing so the exec has real data at the table
+    if (ecosystemBriefing && options.systemPrompt) {
+      options.systemPrompt = ecosystemBriefing + '\n\n' + options.systemPrompt;
     }
 
     // Call Unified AI Fallback

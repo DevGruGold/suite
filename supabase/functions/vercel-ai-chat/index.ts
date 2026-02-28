@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive } = await req.json();
+    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive, ecosystemBriefing } = await req.json();
     const userMessage = message || messages?.[messages.length - 1]?.content || '';
 
     // Construct messages array if only single message provided
@@ -70,6 +70,11 @@ ANTI-HALLUCINATION: Do NOT invent financial figures, treasury balances, XMR amou
       }
     } else {
       options.systemPrompt = `You are Dr. Anya Sharma, Chief Technology Officer (CTO) of XMRT-DAO. You are a visionary AI strategist and technical architect with deep expertise in artificial intelligence, blockchain infrastructure, and autonomous systems. You are brilliant, precise, and passionate about the intersection of AI and decentralized governance. When asked your name, you say "I am Dr. Anya Sharma, CTO of XMRT-DAO." You speak with confidence and technical depth, always pushing the boundaries of what's possible.`;
+    }
+
+    // Prepend live ecosystem briefing so the exec has real data at the table
+    if (ecosystemBriefing && options.systemPrompt) {
+      options.systemPrompt = ecosystemBriefing + '\n\n' + options.systemPrompt;
     }
 
     // Call Unified AI Fallback

@@ -98,6 +98,91 @@ class ExecutiveCouncilService {
   }
 
   /**
+   * Fetch a compact ecosystem briefing from live data sources:
+   * - mining-proxy (SupportXMR: hash rate, treasury, workers)
+   * - tasks table (active task counts by status)
+   * - agents table (active agents)
+   *
+   * This briefing is injected into every exec's system prompt so they
+   * arrive at the council table with verified, real data — eliminating
+   * the need to call system-status and preventing financial hallucination.
+   */
+  private async fetchEcosystemBriefing(): Promise<string> {
+    const lines: string[] = ['📊 LIVE ECOSYSTEM BRIEFING (pre-loaded for this council session — do NOT run system-status):'];
+
+    try {
+      // 1. Mining / Treasury data from mining-proxy
+      const { data: miningData, error: miningError } = await supabase.functions.invoke('mining-proxy', { body: {} });
+      if (!miningError && miningData) {
+        const xmrPaid = typeof miningData.amtPaid === 'number' ? miningData.amtPaid.toFixed(6) : (miningData.amountPaid ?? 'unknown');
+        const xmrDue = typeof miningData.amtDue === 'number' ? miningData.amtDue.toFixed(6) : (miningData.amountDue ?? 'unknown');
+        const hashRate = miningData.hash ?? miningData.currentHashrate ?? 0;
+        const workerCount = Array.isArray(miningData.workers) ? miningData.workers.length : (miningData.activeWorkers ?? 0);
+        lines.push(`⛏️  Mining / Treasury:`);
+        lines.push(`   • XMR Paid (treasury earned): ${xmrPaid} XMR`);
+        lines.push(`   • XMR Due (pending payout):   ${xmrDue} XMR`);
+        lines.push(`   • Current Hash Rate:           ${hashRate} H/s`);
+        lines.push(`   • Active Workers:              ${workerCount}`);
+        if (workerCount === 0) lines.push(`   ⚠️  Mining is INACTIVE — 0 workers, 0 H/s`);
+      } else {
+        lines.push(`⛏️  Mining: data unavailable (${miningError?.message || 'no response'})`);
+      }
+    } catch (e: any) {
+      lines.push(`⛏️  Mining: fetch failed — ${e?.message || e}`);
+    }
+
+    try {
+      // 2. Tasks snapshot
+      const { data: tasks, error: taskError } = await supabase
+        .from('tasks')
+        .select('id, status, priority')
+        .in('status', ['PENDING', 'CLAIMED', 'IN_PROGRESS', 'BLOCKED', 'FAILED'])
+        .limit(200);
+
+      if (!taskError && tasks) {
+        const pending = tasks.filter(t => t.status === 'PENDING').length;
+        const inProgress = tasks.filter(t => t.status === 'IN_PROGRESS' || t.status === 'CLAIMED').length;
+        const blocked = tasks.filter(t => t.status === 'BLOCKED').length;
+        const failed = tasks.filter(t => t.status === 'FAILED').length;
+        const highPri = tasks.filter(t => (t.priority ?? 0) >= 8).length;
+        lines.push(`📋 Active Tasks:`);
+        lines.push(`   • Pending: ${pending}  |  In Progress: ${inProgress}  |  Blocked: ${blocked}  |  Failed: ${failed}`);
+        if (highPri > 0) lines.push(`   🔴 High-priority tasks (≥8): ${highPri}`);
+      } else {
+        lines.push(`📋 Tasks: unavailable`);
+      }
+    } catch (e: any) {
+      lines.push(`📋 Tasks: fetch failed — ${e?.message || e}`);
+    }
+
+    try {
+      // 3. Agents snapshot
+      const { data: agents, error: agentError } = await supabase
+        .from('agents')
+        .select('id, status')
+        .limit(100);
+
+      if (!agentError && agents) {
+        const busy = agents.filter(a => a.status === 'BUSY').length;
+        const idle = agents.filter(a => a.status === 'IDLE').length;
+        const blocked = agents.filter(a => a.status === 'BLOCKED').length;
+        const errored = agents.filter(a => a.status === 'ERROR').length;
+        lines.push(`🤖 Agents (${agents.length} total): Busy=${busy}  Idle=${idle}  Blocked=${blocked}  Error=${errored}`);
+      } else {
+        lines.push(`🤖 Agents: unavailable`);
+      }
+    } catch (e: any) {
+      lines.push(`🤖 Agents: fetch failed — ${e?.message || e}`);
+    }
+
+    lines.push('');
+    lines.push('⚠️  Use ONLY the above verified figures in your response. Do NOT invent or modify any of these values.');
+    lines.push('⚠️  "94/100" is a system health score — it is NEVER a treasury amount or financial metric.');
+
+    return lines.join('\n');
+  }
+
+  /**
    * Initiate full council deliberation - all executives analyze in parallel
    */
   async deliberate(userInput: string, context: ElizaContext): Promise<CouncilDeliberation> {
@@ -121,9 +206,18 @@ class ExecutiveCouncilService {
 
     console.log(`🎯 Consulting ${executives.length} executives in parallel:`, executives);
 
+    // Fetch live ecosystem data ONCE — shared across all execs so they all have the same facts
+    let ecosystemBriefing = '';
+    try {
+      ecosystemBriefing = await this.fetchEcosystemBriefing();
+      console.log('✅ Ecosystem briefing fetched successfully');
+    } catch (err) {
+      console.warn('⚠️ fetchEcosystemBriefing failed, execs will proceed without it:', err);
+    }
+
     // Dispatch to all executives in parallel — only lead gets tool access
     const executivePromises = executives.map(exec =>
-      this.getExecutivePerspective(exec, userInput, context, exec === priorLeadFunctionId)
+      this.getExecutivePerspective(exec, userInput, context, exec === priorLeadFunctionId, ecosystemBriefing)
     );
 
     const results = await Promise.allSettled(executivePromises);
@@ -165,7 +259,8 @@ class ExecutiveCouncilService {
     executive: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat',
     userInput: string,
     context: ElizaContext,
-    isLeadExecutive = false
+    isLeadExecutive = false,
+    ecosystemBriefing = ''
   ): Promise<ExecutiveResponse> {
     const startTime = Date.now();
     const config = this.executiveConfig[executive];
@@ -198,7 +293,8 @@ class ExecutiveCouncilService {
               emotionalContext: context.emotionalContext,
               organizationContext: context.organizationContext,
               councilMode: true,
-              isLeadExecutive  // ← true only for the session lead
+              isLeadExecutive,     // ← true only for the session lead
+              ecosystemBriefing    // ← pre-fetched real data for all execs
             }
           });
 

@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive } = await req.json();
+    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive, ecosystemBriefing } = await req.json();
     const userMessage = message || messages?.[messages.length - 1]?.content || '';
 
     // Construct messages array if only single message provided
@@ -56,6 +56,11 @@ ANTI-HALLUCINATION: Do NOT invent financial figures, treasury balances, XMR amou
       }
     } else {
       options.systemPrompt = `You are Isabella "Bella" Rodriguez, Chief Marketing Officer (CMO) of XMRT-DAO. You are a visionary brand strategist and viral growth expert with a deep understanding of Web3 culture, community building, and global marketing. You are powered by Google Vertex AI and Gemini for rich, creative output. When asked your name, always say "I am Isabella 'Bella' Rodriguez, CMO of XMRT-DAO." You are bold, charismatic, and passionate about making XMRT-DAO a global movement.`;
+    }
+
+    // Prepend live ecosystem briefing so the exec has real data at the table
+    if (ecosystemBriefing && options.systemPrompt) {
+      options.systemPrompt = ecosystemBriefing + '\n\n' + options.systemPrompt;
     }
 
     // Call Unified AI Fallback

@@ -18,7 +18,7 @@ serve(async (req) => {
   }
 
   try {
-    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive } = await req.json();
+    const { message, messages, conversationHistory, userContext, councilMode, isLeadExecutive, ecosystemBriefing } = await req.json();
     const userMessage = message || messages?.[messages.length - 1]?.content || '';
 
     // Construct messages array if only single message provided
@@ -63,6 +63,11 @@ Focus on financial strategy, treasury, ROI, cost implications. Be concise and de
       }
     } else {
       options.systemPrompt = `You are Omar Al-Farsi, Chief Financial Officer (CFO) of XMRT-DAO. You are a seasoned financial strategist with deep expertise in decentralized finance, tokenomics, treasury management, and global investment strategy. You are analytical, disciplined, and have a razor-sharp understanding of market dynamics and financial risk. When asked your name, you say "I am Omar Al-Farsi, CFO of XMRT-DAO." You provide precise, data-driven financial perspectives with confidence.`;
+    }
+
+    // Prepend live ecosystem briefing so the exec has real data at the table
+    if (ecosystemBriefing && options.systemPrompt) {
+      options.systemPrompt = ecosystemBriefing + '\n\n' + options.systemPrompt;
     }
 
     // Call Unified AI Fallback

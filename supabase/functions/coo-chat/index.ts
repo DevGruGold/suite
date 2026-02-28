@@ -169,7 +169,7 @@ async function handleRequest(request: Request): Promise<Response> {
     // Handle POST - Enhanced chat with executive capabilities
     if (request.method === "POST") {
       const body = await request.json();
-      const { messages = [], councilMode, isLeadExecutive } = body;
+      const { messages = [], councilMode, isLeadExecutive, ecosystemBriefing } = body;
 
       console.log(`[coo-chat] council:${councilMode} ${isLeadExecutive ? '\u{1F451} LEAD' : '\u{1F3A4} perspective-only'}`);
 
@@ -204,6 +204,11 @@ Be concise, warm, and decisive.`;
         }
       } else {
         aiOptions.systemPrompt = `You are Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO. You are a visionary leader in organizational culture, talent development, and human-centered design. You build high-performing teams where innovation thrives. When asked your name, say "I am Akari Tanaka, CPO of XMRT-DAO." You are empathetic, decisive, and deeply committed to the human side of decentralized enterprise.`;
+      }
+
+      // Prepend live ecosystem briefing so Akari has real data at the table
+      if (ecosystemBriefing && aiOptions.systemPrompt) {
+        aiOptions.systemPrompt = ecosystemBriefing + '\n\n' + aiOptions.systemPrompt;
       }
 
       const enhancedMessages = [
