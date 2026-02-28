@@ -388,10 +388,14 @@ export class UnifiedElizaService {
       }
 
       // ── Standard waterfall routing ─────────────────────────────────────────
-      const healthyExecutives = await this.getHealthyExecutives();
-      console.log('💚 Got healthy executives:', healthyExecutives.length);
+      // IMPORTANT: ai-chat (Eliza) is ALWAYS first. Executive persona functions
+      // (vercel-ai-chat, deepseek-chat, etc.) are emergency fallbacks only.
+      // They answer as their specific persona and should NEVER be Eliza's voice.
+      const executiveFallbacks = await this.getHealthyExecutives();
+      const elizaFirstRouting = ['ai-chat', ...executiveFallbacks.filter(e => e !== 'ai-chat')];
+      console.log('💚 Routing order (Eliza first):', elizaFirstRouting);
 
-      const result = await this.routeToExecutive(safeInput, safeContext, healthyExecutives, language);
+      const result = await this.routeToExecutive(safeInput, safeContext, elizaFirstRouting, language);
       console.log('✨ Response generated successfully, type:', typeof result);
       return result;
 
