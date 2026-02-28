@@ -4988,7 +4988,8 @@ Deno.serve(async (req) => {
       maxTokens = 10000,
       images = [],
       attachments = [],
-      user_id
+      user_id,
+      systemPrompt: bodySystemPrompt  // ← persona override from council page
     } = body;
 
     if (!userQuery && (!messages || messages.length === 0)) {
@@ -5150,13 +5151,17 @@ Deno.serve(async (req) => {
     const toolMemoryContext = await conversationManager.generateMemoryContext();
     memoryContext += toolMemoryContext;
 
-    const systemPrompt = generateSystemPrompt(
-      executive_name,
-      memoryContext,
-      historicalSummaries,
-      recentContext,
-      ipAddress
-    );
+    // If the caller supplied a full persona system prompt (e.g. from /council page),
+    // use it directly. Otherwise fall back to the standard Eliza-based prompt.
+    const systemPrompt = (bodySystemPrompt && typeof bodySystemPrompt === 'string' && bodySystemPrompt.trim())
+      ? bodySystemPrompt.trim()
+      : generateSystemPrompt(
+        executive_name,
+        memoryContext,
+        historicalSummaries,
+        recentContext,
+        ipAddress
+      );
 
     const allMessages = [
       ...savedMessages,
