@@ -30,38 +30,43 @@ export interface CouncilDeliberation {
 class ExecutiveCouncilService {
   private executiveConfig = {
     'vercel-ai-chat': {
-      title: 'Chief Strategy Officer (CSO)',
-      icon: '🎯',
+      title: 'Dr. Anya Sharma (CTO)',
+      name: 'Dr. Anya Sharma',
+      icon: '🧠',
       color: 'blue',
-      specialty: 'Strategy & Tools',
-      model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
+      specialty: 'AI Strategy & Technical Architecture',
+      model: 'Google Gemini 2.5 Flash'
     },
     'deepseek-chat': {
-      title: 'Chief Technology Officer (CTO)',
-      icon: '💻',
-      color: 'purple',
-      specialty: 'Code & Architecture',
-      model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
+      title: 'Mr. Omar Al-Farsi (CFO)',
+      name: 'Mr. Omar Al-Farsi',
+      icon: '💰',
+      color: 'amber',
+      specialty: 'Global Finance & Strategic Investment',
+      model: 'DeepSeek R1'
     },
     'gemini-chat': {
-      title: 'Chief Information Officer (CIO)',
-      icon: '👁️',
-      color: 'green',
-      specialty: 'Vision & Multimodal',
-      model: 'Lovable AI Gateway (Gemini 2.5 Pro)'
+      title: 'Ms. Isabella Rodriguez (CMO)',
+      name: 'Ms. Isabella Rodriguez',
+      icon: '🎨',
+      color: 'pink',
+      specialty: 'Brand Strategy & Viral Growth',
+      model: 'Google Gemini 2.5 Pro'
     },
     'openai-chat': {
-      title: 'Chief Analytics Officer (CAO)',
-      icon: '📊',
-      color: 'orange',
-      specialty: 'Complex Reasoning',
-      model: 'Lovable AI Gateway (Gemini 2.5 Flash)'
+      title: 'Mr. Klaus Richter (COO)',
+      name: 'Mr. Klaus Richter',
+      icon: '⚙️',
+      color: 'slate',
+      specialty: 'Operational Excellence & Process Engineering',
+      model: 'OpenAI GPT-4o'
     },
     'coo-chat': {
-      title: 'Chief Operations Officer (COO)',
-      icon: '⚙️',
-      color: 'red',
-      specialty: 'Operations & Agent Orchestration',
+      title: 'Ms. Akari Tanaka (CPO)',
+      name: 'Ms. Akari Tanaka',
+      icon: '🌸',
+      color: 'teal',
+      specialty: 'Culture, Talent & Organizational Development',
       model: 'STAE-Integrated AI'
     }
   };
@@ -227,7 +232,7 @@ class ExecutiveCouncilService {
 Consider the user's emotional state when synthesizing the response. If they appear frustrated, be more solution-focused. If excited, match their energy.
 ` : '';
 
-    const synthesisPrompt = `You are facilitating an AI Executive Council meeting for XMRT DAO. 
+    const synthesisPrompt = `You are facilitating the XMRT-DAO Executive Council meeting. The 5 executives are: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Isabella "Bella" Rodriguez (CMO), Mr. Klaus Richter (COO), and Ms. Akari Tanaka (CPO). 
 
 	The user asked: "${originalQuestion}"
 	${emotionalSection}
@@ -331,33 +336,39 @@ Format your response EXACTLY as:
   private selectLeadExecutive(responses: ExecutiveResponse[], question: string): string {
     const q = question.toLowerCase();
 
-    // Operations/tasks/agents → COO
-    if (/task|pipeline|agent|workload|operations|progress|checklist|stae/i.test(q)) {
-      const coo = responses.find(r => r.executive === 'coo-chat');
-      if (coo) return coo.executiveTitle;
+    // Technical / code / AI / infrastructure → Dr. Anya Sharma (CTO)
+    if (/code|debug|technical|architect|bug|syntax|deploy|api|function|edge.?function|ml|ai.model|infra|security.vuln/i.test(q)) {
+      const exec = responses.find(r => r.executive === 'vercel-ai-chat');
+      if (exec) return exec.executiveTitle;
     }
 
-    // Code/technical → CTO
-    if (/code|debug|technical|architecture|bug|syntax/i.test(q)) {
-      const cto = responses.find(r => r.executive === 'deepseek-chat');
-      if (cto) return cto.executiveTitle;
+    // Finance / budget / treasury / tokenomics → Mr. Omar Al-Farsi (CFO)
+    if (/financ|budget|treasury|invest|revenue|cost|token|economic|fiscal|payment|earn/i.test(q)) {
+      const exec = responses.find(r => r.executive === 'deepseek-chat');
+      if (exec) return exec.executiveTitle;
     }
 
-    // Vision/image → CIO
-    if (/image|visual|photo|picture|diagram/i.test(q)) {
-      const cio = responses.find(r => r.executive === 'gemini-chat');
-      if (cio) return cio.executiveTitle;
+    // Marketing / brand / content / community → Ms. Isabella Rodriguez (CMO)
+    if (/market|brand|content|social|media|campaign|viral|audience|growth.hack|announcement/i.test(q)) {
+      const exec = responses.find(r => r.executive === 'gemini-chat');
+      if (exec) return exec.executiveTitle;
     }
 
-    // Complex reasoning → CAO
-    if (/analyze|forecast|predict|strategic|complex/i.test(q)) {
-      const cao = responses.find(r => r.executive === 'openai-chat');
-      if (cao) return cao.executiveTitle;
+    // Operations / tasks / agents / analytics → Mr. Klaus Richter (COO)
+    if (/operat|task|pipeline|agent.work|stae|process|analytic|report|metric|orchestrat|workflow/i.test(q)) {
+      const exec = responses.find(r => r.executive === 'openai-chat');
+      if (exec) return exec.executiveTitle;
     }
 
-    // Default to CSO or highest confidence
-    const cso = responses.find(r => r.executive === 'vercel-ai-chat');
-    if (cso) return cso.executiveTitle;
+    // People / culture / HR / onboarding / knowledge → Ms. Akari Tanaka (CPO)
+    if (/people|culture|hr|onboard|train|knowledge|governance|inclusion|talent|mentor/i.test(q)) {
+      const exec = responses.find(r => r.executive === 'coo-chat');
+      if (exec) return exec.executiveTitle;
+    }
+
+    // Default to Dr. Anya Sharma (CTO) as technical org leader
+    const anya = responses.find(r => r.executive === 'vercel-ai-chat');
+    if (anya) return anya.executiveTitle;
 
     // Fallback to highest confidence
     const sorted = [...responses].sort((a, b) => b.confidence - a.confidence);
