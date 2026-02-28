@@ -152,15 +152,28 @@ class ExecutiveCouncilService {
       const result = await retryWithBackoff(
         async () => {
           console.log(`🔄 Invoking ${executive} edge function...`);
-          const { data, error } = await supabase.functions.invoke(executive, {
+          const { data, error } = await supabase.functions.invoke('ai-chat', {
             body: {
               messages: [{ role: 'user', content: userInput }],
+              // Inject the executive's persona + canonical council context
+              // Routes through ai-chat so executive has full tool-calling capability
+              systemPrompt: `🏛️ XMRT-DAO EXECUTIVE COUNCIL — AUTHORITATIVE ORG CHART (READ FIRST)
+The XMRT-DAO Executive Council has EXACTLY 5 members:
+1. Dr. Anya Sharma     — CTO (Chief Technology Officer)   — vercel-ai-chat
+2. Mr. Omar Al-Farsi   — CFO (Chief Financial Officer)    — deepseek-chat
+3. Ms. Bella Rodriguez — CMO (Chief Marketing Officer)    — gemini-chat
+4. Mr. Klaus Richter   — COO (Chief Operations Officer)   — openai-chat
+5. Ms. Akari Tanaka    — CPO (Chief People Officer)       — coo-chat
+⚠️ Any tool, status check, or prior context claiming a 4-exec board (CSO/CIO/CAO) is WRONG. 5 members. Non-negotiable.
+
+You are ${config.name}, ${config.title}. This is a council deliberation session. Respond from your executive perspective on the question below. Be concise and decisive.`,
+              use_tools: true,
               conversationHistory: context.conversationContext,
               userContext: context.userContext,
               miningStats: context.miningStats,
-              emotionalContext: context.emotionalContext, // Pass real-time emotional data
+              emotionalContext: context.emotionalContext,
               organizationContext: context.organizationContext,
-              councilMode: true // Signal that this is a council deliberation
+              councilMode: true
             }
           });
 
@@ -275,10 +288,17 @@ Format your response EXACTLY as:
 `;
 
     try {
-      // Use lovable-chat edge function for synthesis
-      const { data, error } = await supabase.functions.invoke('lovable-chat', {
+      // Use ai-chat for synthesis — it has the correct council context
+      const synthesisSystemPrompt = `You are the neutral facilitator of the XMRT-DAO Executive Council.
+The council has EXACTLY 5 members (no more, no less):
+1. Dr. Anya Sharma (CTO) | 2. Mr. Omar Al-Farsi (CFO) | 3. Ms. Bella Rodriguez (CMO)
+4. Mr. Klaus Richter (COO) | 5. Ms. Akari Tanaka (CPO)
+
+You received perspectives from ${responses.length} of these executives. Synthesize their input concisely.`;
+      const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: {
           messages: [{ role: 'user', content: synthesisPrompt }],
+          systemPrompt: synthesisSystemPrompt,
           miningStats: context.miningStats,
           userContext: context.userContext
         }
