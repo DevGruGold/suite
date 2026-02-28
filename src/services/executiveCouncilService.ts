@@ -425,36 +425,30 @@ Format your response EXACTLY as:
    * Transitioned to Production Health Checks
    */
   private async getHealthyExecutives(): Promise<string[]> {
-    console.log('📡 Production Mode: Fetching healthy executives for council...');
+    const ALL_FIVE = ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+    console.log('📡 Fetching council executive status...');
 
     try {
-      // Fetch agent status from Supabase
       const { data: agents, error } = await supabase
         .from('agents')
         .select('id, status')
-        .in('id', ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat']);
+        .in('id', ALL_FIVE);
 
       if (error) {
-        console.error('❌ Error fetching agent status for council:', error);
-        // Fallback to default list if database check fails
-        return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+        console.warn('⚠️ DB status check failed — defaulting to all 5 executives:', error);
+        return ALL_FIVE;
       }
 
-      // Filter for agents that are not in ERROR or OFFLINE status
-      const healthyExecutives = agents
-        ?.filter(agent => agent.status !== 'ERROR' && agent.status !== 'OFFLINE')
-        .map(agent => agent.id) || [];
+      // Log status for visibility but ALWAYS include all 5 council members.
+      // We never filter out any of the 5 based on DB status — the DB may be stale.
+      // Each individual call will handle its own failure via retryWithBackoff.
+      agents?.forEach(a => console.log(`  ${a.id}: ${a.status}`));
 
-      if (healthyExecutives.length === 0) {
-        console.warn('⚠️ No healthy executives found in database for council, using defaults');
-        return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
-      }
-
-      console.log(`✅ Found ${healthyExecutives.length} healthy council members:`, healthyExecutives);
-      return healthyExecutives;
+      console.log('✅ Returning all 5 council members regardless of DB status');
+      return ALL_FIVE;
     } catch (err) {
-      console.error('💥 Critical error in getHealthyExecutives for council:', err);
-      return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+      console.error('💥 getHealthyExecutives error — defaulting to all 5:', err);
+      return ALL_FIVE;
     }
   }
 
