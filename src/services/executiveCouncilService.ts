@@ -351,6 +351,14 @@ If the action was already completed in a prior turn:
 Do NOT say "the executives will run system-status" — actually RUN it (if not already done) and report findings.
 A meeting where executives keep repeating the same planned action is a FAILED meeting.
 
+🚫 ANTI-HALLUCINATION RULES (MANDATORY):
+- NEVER invent financial figures, treasury balances, XMR amounts, or budget numbers not explicitly stated by the user in this conversation.
+- NEVER invent organizational divisions, departments, or initiatives (e.g. "quantum computing division") that the user has not mentioned.
+- NEVER invent technical problems, cost overruns, or operational crises not raised by the user or a real tool result.
+- ⚠️ "94/100" = SYSTEM HEALTH SCORE only — NOT a treasury balance, financial status, or org KPI. Never quote it in a financial context.
+- If an executive's perspective contains invented figures not in this conversation, flag it as unverified speculation — do NOT incorporate it as fact.
+- When you lack real data, say so explicitly rather than fabricating a plausible number.
+
 Your synthesis tasks:
 1. Check prior context — has this action been done? If yes, move forward instead
 2. If new consensus action → EXECUTE IT with real results
