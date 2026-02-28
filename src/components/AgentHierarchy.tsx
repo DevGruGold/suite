@@ -59,15 +59,19 @@ export const AgentHierarchy = () => {
     }, []);
 
     // Hierarchy Definitions
+    // Core Command = exactly the 5 named XMRT-DAO executives
+    const EXECUTIVE_IDS = new Set([
+        'vercel-ai-chat',   // Dr. Anya Sharma (CTO)
+        'deepseek-chat',    // Mr. Omar Al-Farsi (CFO)
+        'gemini-chat',      // Ms. Isabella Rodriguez (CMO)
+        'openai-chat',      // Mr. Klaus Richter (COO)
+        'coo-chat',         // Ms. Akari Tanaka (CPO)
+    ]);
+
     const GROUPS = {
         EXECUTIVE: {
             title: "Executive Council",
-            match: (a: Agent) => {
-                const name = (a.name || '').toLowerCase();
-                const role = (a.role || '').toLowerCase();
-                return ['chief', 'president', 'executive', 'head of', 'vp'].some(t => name.includes(t)) ||
-                    ['director'].some(t => role.includes(t));
-            },
+            match: (a: Agent) => EXECUTIVE_IDS.has(a.id),
             color: "border-purple-500/50 bg-purple-100/50 dark:bg-purple-500/10 shadow-[0_0_15px_-3px_rgba(168,85,247,0.2)]",
             text: "text-purple-700 dark:text-purple-300",
             icon: Shield
@@ -75,9 +79,9 @@ export const AgentHierarchy = () => {
         STRATEGIC: {
             title: "Strategic Intelligence",
             match: (a: Agent) => {
+                if (EXECUTIVE_IDS.has(a.id)) return false;
                 const role = (a.role || '').toLowerCase();
                 const name = (a.name || '').toLowerCase();
-                if (['chief', 'president', 'executive', 'vp'].some(t => name.includes(t))) return false;
                 return ['manager', 'analyst', 'integrator', 'architect'].some(r => role.includes(r)) ||
                     ['gemmy', 'michael', 'aetherion', 'hephaestus', 'hermes'].some(n => name.includes(n));
             },
@@ -97,6 +101,7 @@ export const AgentHierarchy = () => {
     const executives = agents.filter(GROUPS.EXECUTIVE.match);
     const strategic = agents.filter(a => !GROUPS.EXECUTIVE.match(a) && GROUPS.STRATEGIC.match(a));
     const operations = agents.filter(a => !GROUPS.EXECUTIVE.match(a) && !GROUPS.STRATEGIC.match(a));
+
 
     return (
         <div className="w-full h-full flex flex-col border rounded-xl bg-card border-border overflow-hidden relative shadow-sm">
