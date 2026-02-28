@@ -116,14 +116,34 @@ class ExecutiveCouncilService {
       if (!miningError && miningData) {
         const xmrPaid = typeof miningData.amtPaid === 'number' ? miningData.amtPaid.toFixed(6) : (miningData.amountPaid ?? 'unknown');
         const xmrDue = typeof miningData.amtDue === 'number' ? miningData.amtDue.toFixed(6) : (miningData.amountDue ?? 'unknown');
-        const hashRate = miningData.hash ?? miningData.currentHashrate ?? 0;
-        const workerCount = Array.isArray(miningData.workers) ? miningData.workers.length : (miningData.activeWorkers ?? 0);
+        // SupportXMR returns hash rate as 'hash' field; 'currentHashrate' is an alias some clients use
+        const hashRate = Number(
+          miningData.hash ?? miningData.currentHashrate ?? miningData.totalHashrate ?? miningData.hashRate ?? 0
+        );
+        const validShares = Number(miningData.validShares ?? 0);
+        const totalHashes = Number(miningData.totalHashes ?? 0);
+        // Workers may not be returned as array when pool doesn't have per-worker registration
+        const workerCount = Array.isArray(miningData.workers) ? miningData.workers.length :
+          (miningData.activeWorkers ?? miningData.numWorkers ?? 'unknown');
+
         lines.push(`⛏️  Mining / Treasury:`);
-        lines.push(`   • XMR Paid (treasury earned): ${xmrPaid} XMR`);
-        lines.push(`   • XMR Due (pending payout):   ${xmrDue} XMR`);
-        lines.push(`   • Current Hash Rate:           ${hashRate} H/s`);
-        lines.push(`   • Active Workers:              ${workerCount}`);
-        if (workerCount === 0) lines.push(`   ⚠️  Mining is INACTIVE — 0 workers, 0 H/s`);
+        lines.push(`   • XMR Paid (treasury earned):   ${xmrPaid} XMR`);
+        lines.push(`   • XMR Due (pending payout):     ${xmrDue} XMR`);
+        lines.push(`   • Current Hash Rate:             ${hashRate} H/s`);
+        lines.push(`   • Valid Shares:                  ${validShares.toLocaleString()}`);
+        lines.push(`   • Total Hashes:                  ${totalHashes.toLocaleString()}`);
+        lines.push(`   • Active Workers (pool-reported): ${workerCount}`);
+
+        // Only flag inactive if hash rate is 0 — workerCount alone is unreliable
+        // (SupportXMR often omits per-worker arrays even when hashing is active)
+        if (hashRate === 0 && validShares === 0) {
+          lines.push(`   ⚠️  Mining status: INACTIVE (hash rate is 0 and no valid shares)`);
+        } else if (hashRate > 0) {
+          lines.push(`   ✅ Mining status: ACTIVE (${hashRate} H/s confirmed)`);
+        } else {
+          // hashRate=0 but validShares>0: was recently active, might be between share submissions
+          lines.push(`   🟡 Mining status: Recently active (${validShares.toLocaleString()} valid shares recorded; hash rate momentarily 0)`);
+        }
       } else {
         lines.push(`⛏️  Mining: data unavailable (${miningError?.message || 'no response'})`);
       }
