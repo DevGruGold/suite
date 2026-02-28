@@ -1323,7 +1323,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       }
 
       // 📸 Extract Supabase Storage image URLs embedded in assistant text
-      const imageUrlRegex = /https:/ / [\w.-] +\.supabase\.co/storage/v1 / object / public / generated - media / images / [^\s"')]+/g;
+      const imageUrlRegex = /https:[\/]{2}[\w.-]+\.supabase\.co\/storage\/v1\/object\/public\/generated-media\/images\/[^\s"')]+/g;
       const inlineImageUrls = cleanResponse.match(imageUrlRegex) || [];
       if (inlineImageUrls.length > 0) {
         generatedImages = [...generatedImages, ...inlineImageUrls];
@@ -1332,7 +1332,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       }
 
       // 🎬 Extract Supabase Storage video URLs embedded in assistant text
-      const videoUrlRegex = /https:/ / [\w.-] +\.supabase\.co/storage/v1 / object / public / generated - media / videos / [^\s"')]+/g;
+      const videoUrlRegex = /https:[\/]{2}[\w.-]+\.supabase\.co\/storage\/v1\/object\/public\/generated-media\/videos\/[^\s"')]+/g;
       const inlineVideoUrls = cleanResponse.match(videoUrlRegex) || [];
       if (inlineVideoUrls.length > 0) {
         generatedVideos = [...generatedVideos, ...inlineVideoUrls];
