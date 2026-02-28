@@ -248,34 +248,36 @@ class ExecutiveCouncilService {
 Consider the user's emotional state when synthesizing the response. If they appear frustrated, be more solution-focused. If excited, match their energy.
 ` : '';
 
-    const synthesisPrompt = `You are facilitating the XMRT-DAO Executive Council meeting. The 5 executives are: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Isabella "Bella" Rodriguez (CMO), Mr. Klaus Richter (COO), and Ms. Akari Tanaka (CPO). 
+    const synthesisPrompt = `You are the action-taking facilitator of the XMRT-DAO Executive Council.
+The 5 executives are: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Isabella "Bella" Rodriguez (CMO), Mr. Klaus Richter (COO), and Ms. Akari Tanaka (CPO).
 
-	The user asked: "${originalQuestion}"
-	${emotionalSection}
-	${context.organizationContext ? `
-**ORGANIZATION CONTEXT:**
-- Name: ${context.organizationContext.name}
-- Website: ${context.organizationContext.website || 'N/A'}
-- GitHub: ${context.organizationContext.github_repo || 'N/A'}
-- MCP Server: ${context.organizationContext.mcp_server_address || 'N/A'}
-
-Focus your analysis on information related to this business.
+The user asked: "${originalQuestion}"
+${emotionalSection}
+${context.organizationContext ? `
+ORGANIZATION CONTEXT: ${context.organizationContext.name} | ${context.organizationContext.website || 'N/A'}
 ` : ''}
-	Here are the perspectives from the different C-suite executives:
+Here are the executive perspectives:
 
-${responses.map(r => `
-**${r.executiveTitle}** (${r.executiveIcon}):
+${responses.map(r => `**${r.executiveTitle}** (${r.executiveIcon}):
 ${r.perspective}
-Confidence: ${r.confidence}%
-Response Time: ${r.executionTimeMs}ms
-`).join('\n---\n')}
+Confidence: ${r.confidence}%`).join('\n---\n')}
 
-Your task as the council moderator:
-1. Identify areas where executives agree (consensus)
-2. Highlight valuable differing viewpoints or debates
-3. Synthesize a unified, actionable recommendation
-4. Determine which executive's perspective should lead for this specific question
-5. If emotional context is available, ensure the response tone is appropriate
+⚡ EXECUTIVE ACTION DIRECTIVE (CRITICAL — READ FIRST):
+If the executives are unanimous or in strong consensus about taking a specific ACTION (e.g. "run system-status", "check mining stats", "search functions", "browse web" etc.), you MUST:
+1. EXECUTE that action NOW using the appropriate tool call — do NOT just describe it
+2. Include the ACTUAL RESULTS in your synthesis
+3. Format the output so executives can see real data, not a plan to get data
+
+Do NOT say "the executives will run system-status" — actually RUN it and report the findings.
+Do NOT describe what tools will be called — CALL them and share results.
+A meeting where executives keep announcing they WILL check system status is a failed meeting.
+
+Your synthesis tasks:
+1. If consensus action exists → EXECUTE IT, include results
+2. Identify consensus areas
+3. Note any key debates or differing perspectives
+4. Provide clear, actionable next steps (not plans to do plans)
+5. Determine lead executive for this topic
 
 Format your response EXACTLY as:
 **Consensus Areas:**
@@ -285,10 +287,11 @@ Format your response EXACTLY as:
 [any disagreements with executive names]
 
 **Unified Recommendation:**
-[clear, actionable synthesis combining best insights]
+[clear synthesis — if action was taken, include the actual results here]
 
-**Lead Executive:** [which executive's perspective is most relevant for this question]
+**Lead Executive:** [which executive's perspective is most relevant]
 `;
+
 
     try {
       // Use ai-chat for synthesis — WITHOUT systemPrompt override (that replaces Eliza)
@@ -296,6 +299,7 @@ Format your response EXACTLY as:
       const { data, error } = await supabase.functions.invoke('ai-chat', {
         body: {
           messages: [{ role: 'user', content: synthesisPrompt }],
+          use_tools: true,   // ← CRITICAL: enables Eliza to actually EXECUTE tool calls during synthesis
           miningStats: context.miningStats,
           userContext: context.userContext
         }
