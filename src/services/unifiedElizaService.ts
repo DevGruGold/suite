@@ -260,26 +260,22 @@ export class UnifiedElizaService {
   }
 
   // ── Direct single-executive call (persona-locked) ──────────────────────
+  // NOTE: The logical executive IDs (vercel-ai-chat, deepseek-chat, etc.) are
+  // agent DB records but NOT deployed Supabase edge functions.  The only actual
+  // chat function is 'ai-chat'.  We call that directly and pass `systemPrompt`
+  // so the edge function uses the correct persona (patched to read bodySystemPrompt).
   private static async callSingleExecutive(
     functionId: string,
     userInput: string,
     context: ElizaContext
   ): Promise<string | null> {
     const personaPrompt = EXECUTIVE_PERSONA_PROMPTS[functionId];
-
-    // The ai-chat edge function reads `executive_name` from the request body
-    // (defaulting to the EXECUTIVE_NAME env var = "Eliza" if absent).
-    // Passing it here overrides that default so generateSystemPrompt() builds
-    // the correct persona. We also include `systemPrompt` as a belt-and-suspenders
-    // override for any edge function that reads it directly.
     const payload = {
       message: userInput,
       messages: [
         { role: 'user', content: userInput },
       ],
-      // Override the executive identity — this is what the edge function uses
-      // to build its system prompt (line ~4984 in ai-chat/index.ts)
-      executive_name: personaPrompt,
+      // Passed as bodySystemPrompt in ai-chat — overrides the Eliza default
       systemPrompt: personaPrompt,
       organizationContext: context.organizationContext,
       timestamp: new Date().toISOString(),
@@ -288,14 +284,15 @@ export class UnifiedElizaService {
     };
 
     try {
-      console.log(`🎭 Calling ${functionId} with persona injection (executive_name override)...`);
-      const { data, error } = await supabase.functions.invoke(functionId, { body: payload });
-      if (error) { console.error(`❌ ${functionId} error:`, error); return null; }
+      console.log(`🎭 Calling ai-chat with ${functionId} persona injection...`);
+      // All 5 logical executive IDs route through the single 'ai-chat' function
+      const { data, error } = await supabase.functions.invoke('ai-chat', { body: payload });
+      if (error) { console.error(`❌ ai-chat (${functionId}) error:`, error); return null; }
       const content = this.extractResponseContent(data);
       if (content) { console.log(`✅ ${functionId} persona response:`, content.substring(0, 80) + '...'); }
       return content;
     } catch (err: any) {
-      console.error(`💥 ${functionId} crashed:`, err?.message);
+      console.error(`💥 ai-chat (${functionId}) crashed:`, err?.message);
       return null;
     }
   }
