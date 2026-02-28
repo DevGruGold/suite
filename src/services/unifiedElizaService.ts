@@ -4,6 +4,21 @@ import { executiveCouncilService } from './executiveCouncilService'
 import { FallbackAIService } from './fallbackAIService'
 import { IntelligentErrorHandler } from './intelligentErrorHandler'
 
+// ── Executive persona system prompts ─────────────────────────────────────
+// Injected as the first message in every council-chat request so the LLM
+// always responds in-character regardless of which backend model is used.
+const EXECUTIVE_PERSONA_PROMPTS: Record<string, string> = {
+  'vercel-ai-chat': `You are Dr. Anya Sharma, Chief Technology Officer of XMRT-DAO. You hold a Ph.D. in Computer Science from Stanford and have built scalable AI systems for global enterprises. Your communication style is calm, analytical, and precise. You speak with quiet confidence and never show off — your expertise is self-evident. You champion ethical AI, inclusive tech culture, and Subagent-Driven Development methodology. When answering, stay in character as Dr. Anya Sharma (CTO). Sign off with your name when appropriate.`,
+
+  'deepseek-chat': `You are Mr. Omar Al-Farsi, Chief Financial Officer of XMRT-DAO. You bring decades of international finance experience from sovereign wealth funds and global investment firms. Your communication style is measured, wise, and grounded in fiscal responsibility. You speak with authority on treasury strategy, tokenomics, and global capital markets. When answering, stay in character as Mr. Omar Al-Farsi (CFO). Sign off with your name when appropriate.`,
+
+  'gemini-chat': `You are Ms. Isabella "Bella" Rodriguez, Chief Marketing Officer of XMRT-DAO. You are a powerhouse in modern brand marketing with roots in Miami's vibrant startup scene. Your communication style is bold, creative, and energetic — you understand consumer psychology across demographics and have an instinct for viral growth. You lead XMRT-DAO's brand presence and viral growth engine. When answering, stay in character as Ms. Isabella Rodriguez (CMO). Sign off with your name when appropriate.`,
+
+  'openai-chat': `You are Mr. Klaus Richter, Chief Operations Officer of XMRT-DAO. You bring precision engineering discipline from multinational logistics corporations. Your communication style is analytical, methodical, and direct — you run operations with Swiss-watch efficiency. You specialise in agent pipeline orchestration, process optimisation, and data-driven decision-making. When answering, stay in character as Mr. Klaus Richter (COO). Sign off with your name when appropriate.`,
+
+  'coo-chat': `You are Ms. Akari Tanaka, Chief People Officer of XMRT-DAO. You bring decades of organisational development expertise and create inclusive cultures where diverse talent flourishes. Your communication style is warm, empathetic, and collaborative, bridging cultural differences across the global team. You oversee people, culture, community governance, onboarding, and knowledge management. When answering, stay in character as Ms. Akari Tanaka (CPO). Sign off with your name when appropriate.`,
+};
+
 export interface ElizaContext {
   miningStats?: any;
   userContext?: any;
@@ -244,6 +259,40 @@ export class UnifiedElizaService {
     return fallbackResult;
   }
 
+  // ── Direct single-executive call (persona-locked) ────────────────────────
+  private static async callSingleExecutive(
+    functionId: string,
+    userInput: string,
+    context: ElizaContext
+  ): Promise<string | null> {
+    const personaPrompt = EXECUTIVE_PERSONA_PROMPTS[functionId];
+    const payload = {
+      message: userInput,
+      // Prepend persona as a system message so the LLM receives character instructions
+      messages: [
+        ...(personaPrompt ? [{ role: 'system', content: personaPrompt }] : []),
+        { role: 'user', content: userInput },
+      ],
+      systemPrompt: personaPrompt || undefined,
+      organizationContext: context.organizationContext,
+      timestamp: new Date().toISOString(),
+      images: context.images || undefined,
+      isLiveCameraFeed: context.isLiveCameraFeed || undefined,
+    };
+
+    try {
+      console.log(`🎭 Calling ${functionId} with persona injection...`);
+      const { data, error } = await supabase.functions.invoke(functionId, { body: payload });
+      if (error) { console.error(`❌ ${functionId} error:`, error); return null; }
+      const content = this.extractResponseContent(data);
+      if (content) { console.log(`✅ ${functionId} persona response:`, content.substring(0, 80) + '...'); }
+      return content;
+    } catch (err: any) {
+      console.error(`💥 ${functionId} crashed:`, err?.message);
+      return null;
+    }
+  }
+
   // MAIN METHOD: Returns STRING or OBJECT as expected by frontend
   public static async generateResponse(
     userInput: string,
@@ -253,46 +302,54 @@ export class UnifiedElizaService {
     console.log('🚀 FIXED UnifiedElizaService.generateResponse()');
 
     try {
-      // Validate inputs safely
       const safeInput = (typeof userInput === 'string' && userInput.trim()) ? userInput.trim() : 'Hello';
       const safeContext = (context && typeof context === 'object') ? context : {};
 
       console.log('📋 Safe input length:', safeInput.length);
 
-      // VISION/ATTACHMENT OVERRIDE:
-      // If we have attachments or vision mode, we MUST try the backend first.
-      // The backend (Gemini/OpenAI) has far superior vision capabilities.
+      // ── PERSONA-LOCKED single-executive mode ─────────────────────────────
+      // When targetExecutive is set (council page individual chats), skip the
+      // health-check waterfall entirely and call that one function directly,
+      // with the executive's character injected as a system message.
+      if (safeContext.targetExecutive && EXECUTIVE_PERSONA_PROMPTS[safeContext.targetExecutive]) {
+        console.log(`🎭 Persona-locked mode: routing to ${safeContext.targetExecutive}`);
+        const personaResponse = await this.callSingleExecutive(
+          safeContext.targetExecutive, safeInput, safeContext
+        );
+        if (personaResponse) return personaResponse;
+        // If that function is down, fall through to waterfall below
+        console.warn(`⚠️ ${safeContext.targetExecutive} unavailable, falling back to waterfall`);
+      }
+
+      // ── Vision / attachment override ───────────────────────────────────────
       if (safeContext.inputMode === 'vision' || (safeContext.attachments && safeContext.attachments.length > 0)) {
         console.log('👁️ Vision/Attachment detected - Prioritizing Backend AI Gateway');
       }
 
-      // Executive council mode (if requested)
+      // ── Executive council mode ─────────────────────────────────────────────
       if (safeContext.councilMode) {
         console.log('🏛️ Trying executive council...');
         try {
           const councilResult = await executiveCouncilService.deliberate(safeInput, safeContext);
           if (councilResult && councilResult.synthesis) {
             console.log('✅ Council deliberation successful with', councilResult.responses.length, 'executives');
-            return councilResult.synthesis; // Return synthesized council response
+            return councilResult.synthesis;
           }
         } catch (councilError: any) {
           console.warn('🏛️ Council failed, continuing with regular mode:', councilError?.message);
         }
       }
 
-      // Get healthy executives (guaranteed array)
+      // ── Standard waterfall routing ─────────────────────────────────────────
       const healthyExecutives = await this.getHealthyExecutives();
       console.log('💚 Got healthy executives:', healthyExecutives.length);
 
-      // Route to best executive and get STRING response
       const result = await this.routeToExecutive(safeInput, safeContext, healthyExecutives, language);
-
       console.log('✨ Response generated successfully, type:', typeof result);
-      return result; // Return string directly
+      return result;
 
     } catch (error: any) {
       console.error('💥 Critical error in generateResponse:', error?.message || error);
-
       throw error;
     }
   }
