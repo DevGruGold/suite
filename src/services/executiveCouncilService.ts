@@ -287,11 +287,22 @@ Format your response EXACTLY as:
         }
       });
 
-      if (error || !data?.success) {
+      if (error) {
         throw new Error(error?.message || 'Failed to synthesize council responses');
       }
 
-      const synthesis = data.response || 'Unable to synthesize executive perspectives at this time.';
+      // ai-chat returns content in various fields — extract whichever is present
+      const synthesis =
+        data?.response ||
+        data?.content ||
+        data?.choices?.[0]?.message?.content ||
+        data?.message ||
+        data?.text ||
+        null;
+
+      if (!synthesis) {
+        throw new Error('ai-chat synthesis returned no content');
+      }
 
       return {
         responses,
