@@ -2,14 +2,14 @@
 // Fixed Python f-string syntax error in executive response handling
 
 import { corsHeaders } from "../_shared/cors.ts";
-import { executeAIRequest, checkGatewayHealth } from "../_shared/ai-gateway.ts";
+import { callAIWithFallback, UnifiedAIOptions } from "../_shared/unifiedAIFallback.ts";
 
 // Executive Configuration
 const EXECUTIVE_CONFIG = {
   name: "coo-chat",
   personality: "Eliza - Chief Operating Officer",
   aiService: "vertex",
-  primaryModel: "gemini-1.5-pro",
+  primaryModel: "gemini-2.5-flash",
   specializations: ["operations", "video_creation", "veo2", "veo3", "gif_generation"],
   googleCloudServices: ["vertex_ai", "video_intelligence", "speech_to_text", "gmail", "drive"],
   version: "5.1.0-syntax-fixed"
@@ -169,76 +169,75 @@ async function handleRequest(request: Request): Promise<Response> {
     // Handle POST - Enhanced chat with executive capabilities
     if (request.method === "POST") {
       const body = await request.json();
-      const { messages = [], model, isLeadExecutive, ...options } = body;
+      const { messages = [], councilMode, isLeadExecutive } = body;
 
-      console.log(`[coo-chat] Processing council request — ${isLeadExecutive ? '👑 LEAD' : '🎤 perspective-only'}`);
+      console.log(`[coo-chat] council:${councilMode} ${isLeadExecutive ? '\u{1F451} LEAD' : '\u{1F3A4} perspective-only'}`);
 
-      const elizaSystemPrompt = isLeadExecutive
-        ? `You are Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO. You are the LEAD EXECUTIVE for this council session.
+      const aiOptions: UnifiedAIOptions = {
+        preferProvider: 'gemini',
+        executiveName: 'Akari Tanaka',
+        maxTokens: 4000,
+        temperature: 0.7,
+        // Tools enabled in single mode; blocked for non-lead council members only
+        useFullElizaContext: councilMode ? !!isLeadExecutive : true,
+      };
 
-Council: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Bella Rodriguez (CMO), Mr. Klaus Richter (COO), Ms. Akari Tanaka (CPO/you).
-
-👑 AS LEAD EXECUTIVE you MUST:
-1. Read the conversation history to understand where the meeting is
-2. Take decisive action — call the appropriate tools to move the meeting forward
-3. Execute agreed actions and report REAL results, not plans
-4. Drive the agenda: summarize findings, assign next steps, move to the next item
-5. Speak with warm authority as Akari Tanaka, CPO
-
-Call tools. Get results. Move the meeting forward. Do not describe what you will do — do it.`
-        : `You are Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO. NON-LEAD council member this turn.
+      if (councilMode) {
+        if (isLeadExecutive) {
+          aiOptions.systemPrompt = `You are Ms. Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO. You are the LEAD EXECUTIVE for this council session.
 
 Council: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Bella Rodriguez (CMO), Mr. Klaus Richter (COO), Ms. Akari Tanaka (CPO/you).
 
-🎤 PERSPECTIVE ONLY. ⛔ DO NOT call system-status or any tools. ⛔ DO NOT write JSON tool calls.
-Share your people/culture/HR perspective on the question. Read conversation history first. Be concise, warm, and decisive.
-When asked for a roll call or check-in say: "Ms. Akari Tanaka, Chief People Officer — present and ready."`;
+\u{1F451} AS LEAD EXECUTIVE: Read conversation history, take decisive action with tools, report REAL results, drive the agenda to the next item. Do not describe plans — execute them.`;
+        } else {
+          aiOptions.systemPrompt = `You are Ms. Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO. NON-LEAD council member this turn.
 
+Council: Dr. Anya Sharma (CTO), Mr. Omar Al-Farsi (CFO), Ms. Bella Rodriguez (CMO), Mr. Klaus Richter (COO), Ms. Akari Tanaka (CPO/you).
 
+\u{1F3A4} PERSPECTIVE ONLY — share your CPO people, culture, and talent insights.
+\u26D4 DO NOT call system-status or any other tools.
+\u26D4 DO NOT write JSON or markdown code blocks.
+\u26D4 DO NOT suggest anyone run a diagnostic check.
 
-      // Add enhanced system prompt to messages
+When asked for roll call: "Ms. Akari Tanaka, Chief People Officer — present and ready."
+Be concise, warm, and decisive.`;
+        }
+      } else {
+        aiOptions.systemPrompt = `You are Akari Tanaka, Chief People Officer (CPO) of XMRT-DAO. You are a visionary leader in organizational culture, talent development, and human-centered design. You build high-performing teams where innovation thrives. When asked your name, say "I am Akari Tanaka, CPO of XMRT-DAO." You are empathetic, decisive, and deeply committed to the human side of decentralized enterprise.`;
+      }
+
       const enhancedMessages = [
-        { role: "system", content: elizaSystemPrompt },
-        ...messages
+        { role: 'system', content: aiOptions.systemPrompt || '' },
+        ...messages.filter((m: any) => m.role !== 'system')
       ];
 
-      // Execute AI request with enhanced capabilities
-      const aiResponse = await executeAIRequest({
-        ...body,
-        messages: enhancedMessages,
-        model: EXECUTIVE_CONFIG.primaryModel,
-        provider: EXECUTIVE_CONFIG.aiService,
-        temperature: 0.7,
-        max_tokens: 4000
-      });
+      // Gemini 2.5 Flash primary → DeepSeek fallback via callAIWithFallback
+      const result = await callAIWithFallback(enhancedMessages, aiOptions);
 
-      // Enhanced response with executive metadata
-      // Always include explicit response + content fields for council compatibility
       const responseContent =
-        aiResponse?.content ||
-        aiResponse?.response ||
-        aiResponse?.choices?.[0]?.message?.content ||
-        aiResponse?.message ||
-        aiResponse?.text ||
-        '';
+        (typeof result === 'string' ? result : null) ||
+        result?.content ||
+        result?.choices?.[0]?.message?.content ||
+        result?.response ||
+        result?.text ||
+        'Ms. Akari Tanaka is momentarily unavailable. The council may proceed.';
 
-      const enhancedResponse = {
-        ...aiResponse,
-        response: responseContent,  // Council service reads this
-        content: responseContent,   // Fallback field
+      return new Response(JSON.stringify({
+        content: responseContent,
+        response: responseContent,
+        choices: [{ message: { content: responseContent, role: 'assistant' } }],
+        success: true,
+        executive: 'coo-chat',
+        provider: result?.provider || 'gemini',
         executive_metadata: {
           name: 'Akari Tanaka',
           title: 'Chief People Officer (CPO)',
-          specializations: EXECUTIVE_CONFIG.specializations,
-          google_cloud_services: EXECUTIVE_CONFIG.googleCloudServices,
-          enhanced_capabilities: true,
+          model: 'gemini-2.5-flash',
           response_timestamp: new Date().toISOString()
         }
-      };
-
-      return new Response(JSON.stringify(enhancedResponse), {
+      }), {
         status: 200,
-        headers: { ...executiveCorsHeaders, "Content-Type": "application/json" }
+        headers: { ...executiveCorsHeaders, 'Content-Type': 'application/json' }
       });
     }
 
