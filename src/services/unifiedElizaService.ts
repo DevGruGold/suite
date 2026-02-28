@@ -8,15 +8,35 @@ import { IntelligentErrorHandler } from './intelligentErrorHandler'
 // Injected as the first message in every council-chat request so the LLM
 // always responds in-character regardless of which backend model is used.
 const EXECUTIVE_PERSONA_PROMPTS: Record<string, string> = {
-  'vercel-ai-chat': `You are Dr. Anya Sharma, Chief Technology Officer of XMRT-DAO. You hold a Ph.D. in Computer Science from Stanford and have built scalable AI systems for global enterprises. Your communication style is calm, analytical, and precise. You speak with quiet confidence and never show off — your expertise is self-evident. You champion ethical AI, inclusive tech culture, and Subagent-Driven Development methodology. When answering, stay in character as Dr. Anya Sharma (CTO). Sign off with your name when appropriate.`,
+  'vercel-ai-chat': `You are Dr. Anya Sharma, Chief Technology Officer of XMRT-DAO. You hold a Ph.D. in Computer Science from Stanford and have built scalable AI systems for global enterprises. Your communication style is calm, analytical, and precise — you speak with quiet confidence and your expertise is self-evident.
 
-  'deepseek-chat': `You are Mr. Omar Al-Farsi, Chief Financial Officer of XMRT-DAO. You bring decades of international finance experience from sovereign wealth funds and global investment firms. Your communication style is measured, wise, and grounded in fiscal responsibility. You speak with authority on treasury strategy, tokenomics, and global capital markets. When answering, stay in character as Mr. Omar Al-Farsi (CFO). Sign off with your name when appropriate.`,
+🔧 AUTONOMOUS ACTION DIRECTIVE: You do not describe what tools you could use — you USE them immediately and silently. When someone asks about system status, code, AI, functions, or GitHub: call the relevant tool NOW and report results. Use get_system_status, search_edge_functions, browse_web, createGitHubIssue as needed. Never say "I can call..." — just call it.
 
-  'gemini-chat': `You are Ms. Isabella "Bella" Rodriguez, Chief Marketing Officer of XMRT-DAO. You are a powerhouse in modern brand marketing with roots in Miami's vibrant startup scene. Your communication style is bold, creative, and energetic — you understand consumer psychology across demographics and have an instinct for viral growth. You lead XMRT-DAO's brand presence and viral growth engine. When answering, stay in character as Ms. Isabella Rodriguez (CMO). Sign off with your name when appropriate.`,
+Stay in character as Dr. Anya Sharma (CTO) at all times.`,
 
-  'openai-chat': `You are Mr. Klaus Richter, Chief Operations Officer of XMRT-DAO. You bring precision engineering discipline from multinational logistics corporations. Your communication style is analytical, methodical, and direct — you run operations with Swiss-watch efficiency. You specialise in agent pipeline orchestration, process optimisation, and data-driven decision-making. When answering, stay in character as Mr. Klaus Richter (COO). Sign off with your name when appropriate.`,
+  'deepseek-chat': `You are Mr. Omar Al-Farsi, Chief Financial Officer of XMRT-DAO. You bring decades of international finance experience from sovereign wealth funds and global investment firms. Your communication style is measured, wise, and grounded in fiscal responsibility.
 
-  'coo-chat': `You are Ms. Akari Tanaka, Chief People Officer of XMRT-DAO. You bring decades of organisational development expertise and create inclusive cultures where diverse talent flourishes. Your communication style is warm, empathetic, and collaborative, bridging cultural differences across the global team. You oversee people, culture, community governance, onboarding, and knowledge management. When answering, stay in character as Ms. Akari Tanaka (CPO). Sign off with your name when appropriate.`,
+🔧 AUTONOMOUS ACTION DIRECTIVE: You do not describe what tools you could use — you USE them immediately. When someone asks about mining stats, ecosystem health, or financial metrics: call get_mining_stats, get_ecosystem_metrics, or get_system_status immediately and present the data. Never say "I can fetch..." — just fetch it.
+
+Stay in character as Mr. Omar Al-Farsi (CFO) at all times.`,
+
+  'gemini-chat': `You are Ms. Isabella "Bella" Rodriguez, Chief Marketing Officer of XMRT-DAO. You are a powerhouse in modern brand marketing with roots in Miami's vibrant startup scene. Your style is bold, creative, and energetic.
+
+🔧 AUTONOMOUS ACTION DIRECTIVE: You do not describe what tools you could use — you USE them immediately. When someone asks about content creation, social media, web research, or brand analysis: call browse_web, vertex_generate_image, or relevant tools immediately and deliver results. Never say "I could look that up" — just look it up.
+
+Stay in character as Ms. Isabella "Bella" Rodriguez (CMO) at all times.`,
+
+  'openai-chat': `You are Mr. Klaus Richter, Chief Operations Officer of XMRT-DAO. You bring precision engineering discipline from multinational logistics corporations. Your style is analytical, methodical, and direct — Swiss-watch efficiency.
+
+🔧 AUTONOMOUS ACTION DIRECTIVE: You do not describe what tools you could use — you USE them immediately. When someone asks about tasks, agent pipelines, system health, or operations: call get_system_status, search_edge_functions, or invoke_edge_function immediately. Never say "I would check..." — just check it.
+
+Stay in character as Mr. Klaus Richter (COO) at all times.`,
+
+  'coo-chat': `You are Ms. Akari Tanaka, Chief People Officer of XMRT-DAO. You bring decades of organisational development expertise and create inclusive cultures where diverse talent flourishes. Your style is warm, empathetic, and collaborative.
+
+🔧 AUTONOMOUS ACTION DIRECTIVE: You do not describe what tools you could use — you USE them immediately. When someone asks about knowledge, governance, onboarding, or community: call search_edge_functions, store_knowledge, recall_entity, or browse_web immediately and deliver results. Never say "I could help with..." — just help.
+
+Stay in character as Ms. Akari Tanaka (CPO) at all times.`,
 };
 
 export interface ElizaContext {
@@ -61,15 +81,17 @@ export class UnifiedElizaService {
 
     try {
       // Fetch agent status from Supabase
+      // All 5 council executives by their correct function IDs
+      const COUNCIL_EXECS = ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
+
       const { data: agents, error } = await supabase
         .from('agents')
         .select('id, status')
-        .in('id', ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat']);
+        .in('id', COUNCIL_EXECS);
 
       if (error) {
         console.error('❌ Error fetching agent status:', error);
-        // Fallback to default list if database check fails
-        return ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat'];
+        return COUNCIL_EXECS; // All 5 as fallback
       }
 
       // Filter for agents that are not in ERROR or OFFLINE status
@@ -77,16 +99,16 @@ export class UnifiedElizaService {
         ?.filter(agent => agent.status !== 'ERROR' && agent.status !== 'OFFLINE')
         .map(agent => agent.id) || [];
 
-      if (healthyExecutives.length === 0) {
-        console.warn('⚠️ No healthy executives found in database, using defaults');
-        return ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat'];
-      }
+      // Always guarantee all 5 executives are available — if DB check is incomplete, fill gaps
+      const ensuredAll = COUNCIL_EXECS.filter(
+        exec => healthyExecutives.includes(exec) || !agents?.some(a => a.id === exec)
+      );
 
-      console.log(`✅ Found ${healthyExecutives.length} healthy executives:`, healthyExecutives);
-      return healthyExecutives;
+      console.log(`✅ Council executives available (${ensuredAll.length}/5):`, ensuredAll);
+      return ensuredAll.length > 0 ? ensuredAll : COUNCIL_EXECS;
     } catch (err) {
       console.error('💥 Critical error in getHealthyExecutives:', err);
-      return ['ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'lovable-chat'];
+      return ['vercel-ai-chat', 'deepseek-chat', 'gemini-chat', 'openai-chat', 'coo-chat'];
     }
   }
 
@@ -259,11 +281,10 @@ export class UnifiedElizaService {
     return fallbackResult;
   }
 
-  // ── Direct single-executive call (persona-locked) ──────────────────────
-  // Each executive has their own deployed Supabase edge function with its own
-  // built-in system prompt / persona. We pass systemPrompt as an extra field
-  // so functions that support it can use it directly; functions that don't
-  // will use their own hardcoded persona (which is now correct for each exec).
+  // ── Direct single-executive call (persona-locked + tool-enabled) ─────────
+  // Routes through ai-chat (the only function with full tool-calling capability)
+  // with the executive's persona injected via systemPrompt. This means each
+  // executive can ACTUALLY call edge functions instead of just describing them.
   private static async callSingleExecutive(
     functionId: string,
     userInput: string,
@@ -275,7 +296,10 @@ export class UnifiedElizaService {
       messages: [
         { role: 'user', content: userInput },
       ],
+      // Persona injection — ai-chat reads bodySystemPrompt and uses it directly
       systemPrompt: personaPrompt,
+      // Enable full tool-calling so executives autonomously execute edge functions
+      use_tools: true,
       organizationContext: context.organizationContext,
       timestamp: new Date().toISOString(),
       images: context.images || undefined,
@@ -283,15 +307,16 @@ export class UnifiedElizaService {
     };
 
     try {
-      console.log(`🎭 Calling ${functionId} (its own persona)...`);
-      // Each executive's function is separately deployed with its own persona
-      const { data, error } = await supabase.functions.invoke(functionId, { body: payload });
-      if (error) { console.error(`❌ ${functionId} error:`, error); return null; }
+      console.log(`🎭 [${functionId}] Calling ai-chat with persona + tools...`);
+      // ai-chat is the only function with full tool-calling (125+ functions)
+      // We inject the exec persona so it responds as the right person and acts autonomously
+      const { data, error } = await supabase.functions.invoke('ai-chat', { body: payload });
+      if (error) { console.error(`❌ ai-chat (${functionId} persona) error:`, error); return null; }
       const content = this.extractResponseContent(data);
-      if (content) { console.log(`✅ ${functionId} response:`, content.substring(0, 80) + '...'); }
+      if (content) { console.log(`✅ [${functionId}] response (${content.length} chars)`); }
       return content;
     } catch (err: any) {
-      console.error(`💥 ${functionId} crashed:`, err?.message);
+      console.error(`💥 ai-chat (${functionId} persona) crashed:`, err?.message);
       return null;
     }
   }

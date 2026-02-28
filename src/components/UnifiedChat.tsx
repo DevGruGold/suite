@@ -77,7 +77,7 @@ interface UnifiedMessage {
     execution_time_ms?: number;
   }>;
   reasoning?: ReasoningStep[];
-  executive?: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'lovable-chat';
+  executive?: 'vercel-ai-chat' | 'deepseek-chat' | 'gemini-chat' | 'openai-chat' | 'coo-chat' | 'lovable-chat';
   executiveTitle?: string;
   providerUsed?: string; // AI provider that generated the response (e.g., 'Gemini', 'DeepSeek', 'Lovable AI')
   isCouncilDeliberation?: boolean;
