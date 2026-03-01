@@ -1133,6 +1133,143 @@ serve(async (req) => {
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
       }
 
+      // ============= DOCS ACTIONS =============
+      case 'create_doc': {
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        if (!body.title) {
+          return new Response(JSON.stringify({ success: false, error: 'Missing title' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        const docResp = await fetch('https://docs.googleapis.com/v1/documents', {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ title: body.title })
+        });
+        const doc = await docResp.json();
+        if (!docResp.ok) {
+          return new Response(JSON.stringify({ success: false, error: doc.error?.message || 'Docs API error', details: doc }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({
+          success: true,
+          docId: doc.documentId,
+          docUrl: `https://docs.google.com/document/d/${doc.documentId}/edit`,
+          title: doc.title
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      case 'append_doc_content': {
+        // Insert structured content into a Google Doc via batchUpdate.
+        // body.doc_id: string, body.requests: array of Docs API request objects
+        // OR body.text: plain text to append at end of doc
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        if (!body.doc_id) {
+          return new Response(JSON.stringify({ success: false, error: 'Missing doc_id' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        let requests = body.requests;
+
+        // Simple text shortcut: if caller passes body.text instead of requests[]
+        if (!requests && body.text) {
+          requests = [{ insertText: { location: { index: 1 }, text: body.text + '\n' } }];
+        }
+
+        if (!requests || !Array.isArray(requests) || requests.length === 0) {
+          return new Response(JSON.stringify({ success: false, error: 'Missing requests array or text' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        const batchResp = await fetch(`https://docs.googleapis.com/v1/documents/${body.doc_id}:batchUpdate`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ requests })
+        });
+        const batchData = await batchResp.json();
+        if (!batchResp.ok) {
+          return new Response(JSON.stringify({ success: false, error: batchData.error?.message || 'batchUpdate error', details: batchData }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        return new Response(JSON.stringify({ success: true, docId: body.doc_id, replies: batchData.replies }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
+      case 'export_doc_pdf': {
+        // Export a Google Doc as PDF, upload the bytes as a new Drive file, return public URL.
+        // body.doc_id: string, body.file_name: string, body.folder_id?: string
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
+          return new Response(JSON.stringify({ success: false, error: 'Not authenticated' }),
+            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+        if (!body.doc_id || !body.file_name) {
+          return new Response(JSON.stringify({ success: false, error: 'Missing doc_id or file_name' }),
+            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        // Export PDF bytes from Drive
+        const exportResp = await fetch(
+          `https://www.googleapis.com/drive/v3/files/${body.doc_id}/export?mimeType=application%2Fpdf`,
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        if (!exportResp.ok) {
+          const errText = await exportResp.text();
+          return new Response(JSON.stringify({ success: false, error: `Export failed: ${exportResp.status}`, details: errText }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        const pdfBytes = await exportResp.arrayBuffer();
+
+        // Upload PDF as a new Drive file
+        const boundary = 'pdf_upload_boundary';
+        const metadataJson = JSON.stringify({
+          name: body.file_name,
+          mimeType: 'application/pdf',
+          ...(body.folder_id ? { parents: [body.folder_id] } : {})
+        });
+
+        // Build multipart body manually (ArrayBuffer content)
+        const encoder = new TextEncoder();
+        const preamble = encoder.encode(
+          `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${metadataJson}\r\n--${boundary}\r\nContent-Type: application/pdf\r\n\r\n`
+        );
+        const postamble = encoder.encode(`\r\n--${boundary}--`);
+        const combined = new Uint8Array(preamble.byteLength + pdfBytes.byteLength + postamble.byteLength);
+        combined.set(preamble, 0);
+        combined.set(new Uint8Array(pdfBytes), preamble.byteLength);
+        combined.set(postamble, preamble.byteLength + pdfBytes.byteLength);
+
+        const uploadResp = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,webContentLink', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': `multipart/related; boundary=${boundary}`
+          },
+          body: combined
+        });
+        const uploadData = await uploadResp.json();
+        if (!uploadResp.ok) {
+          return new Response(JSON.stringify({ success: false, error: uploadData.error?.message || 'PDF upload error', details: uploadData }),
+            { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+        }
+
+        return new Response(JSON.stringify({
+          success: true,
+          pdfFileId: uploadData.id,
+          pdfUrl: uploadData.webViewLink || `https://drive.google.com/file/d/${uploadData.id}/view`,
+          downloadUrl: uploadData.webContentLink,
+          fileName: uploadData.name
+        }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+
       default:
         return new Response(JSON.stringify({
           success: false,
@@ -1144,6 +1281,8 @@ serve(async (req) => {
             'send_email', 'list_emails', 'get_email', 'create_draft',
             // Drive
             'list_files', 'upload_file', 'get_file', 'download_file', 'create_folder', 'share_file',
+            // Docs
+            'create_doc', 'append_doc_content', 'export_doc_pdf',
             // Sheets
             'create_spreadsheet', 'read_sheet', 'write_sheet', 'append_sheet', 'get_spreadsheet_info',
             // Calendar

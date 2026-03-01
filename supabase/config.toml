@@ -262,6 +262,9 @@ verify_jwt = false
 [functions.google-cloud-auth]
 verify_jwt = false
 
+[functions.google-drive-deliverables]
+verify_jwt = false
+
 [functions.google-drive]
 verify_jwt = false
 
