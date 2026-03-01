@@ -129,10 +129,11 @@ function buildMimeMessage(
   } = {}
 ): string {
   const { isHtml = false, images = [], video } = options;
-  const useRich = isHtml || images.length > 0 || !!video;
+  const needsMultipart = images.length > 0;
+  const needsHtml = isHtml || !!video || needsMultipart;
 
-  // ── Fast path: plain text only ───────────────────────────────────────────
-  if (!useRich) {
+  // ── Path 1: plain text only ───────────────────────────────────────────────
+  if (!needsHtml) {
     const msg = [
       `To: ${to}`,
       `Subject: ${subject}`,
@@ -145,16 +146,33 @@ function buildMimeMessage(
     return toBase64Url(msg);
   }
 
-  // ── Rich path ────────────────────────────────────────────────────────────
-
   // 1. Optionally append video thumbnail block to HTML body
   let htmlBody = body;
   if (video) {
     htmlBody += buildVideoBlock(video);
   }
 
+  // ── Path 2: HTML only (no inline images) ─────────────────────────────────
+  // Send as a direct text/html single-part message so Gmail renders it
+  // consistently in both sent messages AND drafts.  Wrapping in multipart/mixed
+  // with a single body part caused Gmail's draft viewer to display raw MIME text.
+  if (!needsMultipart) {
+    const htmlEncoded = wrapBase64(btoa(unescape(encodeURIComponent(htmlBody))));
+    const msg = [
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      'MIME-Version: 1.0',
+      'Content-Type: text/html; charset=utf-8',
+      'Content-Transfer-Encoding: base64',
+      '',
+      htmlEncoded
+    ].join('\r\n');
+    return toBase64Url(msg);
+  }
+
+  // ── Path 3: HTML + inline images ─────────────────────────────────────────
+  // multipart/related wraps the HTML body and its CID-referenced images.
   const boundaryRelated = makeBoundary();
-  const boundaryMixed = makeBoundary();
 
   const lines: string[] = [];
 
@@ -162,17 +180,10 @@ function buildMimeMessage(
   lines.push(`To: ${to}`);
   lines.push(`Subject: ${subject}`);
   lines.push('MIME-Version: 1.0');
-  lines.push(`Content-Type: multipart/mixed; boundary="${boundaryMixed}"`);
+  lines.push(`Content-Type: multipart/related; boundary="${boundaryRelated}"`);
   lines.push('');
 
-  // ── multipart/mixed opener ───────────────────────────────────────────────
-  lines.push(`--${boundaryMixed}`);
-
   if (images.length > 0) {
-    // Wrap HTML + images in multipart/related
-    lines.push(`Content-Type: multipart/related; boundary="${boundaryRelated}"`);
-    lines.push('');
-
     // HTML part
     lines.push(`--${boundaryRelated}`);
     lines.push('Content-Type: text/html; charset=utf-8');
@@ -193,16 +204,7 @@ function buildMimeMessage(
     }
 
     lines.push(`--${boundaryRelated}--`);
-  } else {
-    // HTML only — no inline images
-    lines.push('Content-Type: text/html; charset=utf-8');
-    lines.push('Content-Transfer-Encoding: base64');
-    lines.push('');
-    lines.push(wrapBase64(btoa(unescape(encodeURIComponent(htmlBody)))));
   }
-
-  // Close outer boundary
-  lines.push(`--${boundaryMixed}--`);
 
   const rawMessage = lines.join('\r\n');
   return toBase64Url(rawMessage);
