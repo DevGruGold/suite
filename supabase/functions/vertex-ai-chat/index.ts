@@ -809,18 +809,64 @@ async function invokeExecutiveFunction(toolCall, attempt = 1) {
       );
       return { success: true, result };
     } else if (requestType === 'check_video_status') {
-      const result = await VertexAI.checkVideoStatus(toolCall.parameters.operation_name, toolCall.parameters.model);
-      return { success: true, result };
+      const vidResult = await VertexAI.checkVideoStatus(toolCall.parameters.operation_name, toolCall.parameters.model);
+
+      // If done, build a text response that always includes each video URL so the
+      // frontend regex can extract them and render the video player widget.
+      if (vidResult.status === 'done' && Array.isArray(vidResult.videoUrls) && vidResult.videoUrls.length > 0) {
+        const urlLines = vidResult.videoUrls.join('\n');
+        return {
+          success: true,
+          result: {
+            choices: [{
+              message: {
+                role: 'assistant',
+                content: `✅ Your video is ready!\n\nHere ${vidResult.videoUrls.length === 1 ? 'is your video' : 'are your videos'}:\n${urlLines}\n\nYou can watch it directly in the chat, open it in a new tab, or download it using the controls below the player.`,
+              }
+            }],
+            provider: 'vertex',
+            executive: EXECUTIVE_CONFIG.personality,
+            videoUrls: vidResult.videoUrls,
+          }
+        };
+      }
+
+      // Still processing, not found, or failed — return descriptive text only.
+      return { success: true, result: vidResult };
+
+    } else if (requestType === 'image_generation') {
+      const imgResult = await VertexAI.generateImage(toolCall.parameters.prompt, toolCall.parameters.model, toolCall.parameters.aspectRatio);
+
+      // Build the text response ourselves so the publicUrl is ALWAYS in the content string.
+      // The frontend (UnifiedChat lines 1402-1417) extracts Supabase storage URLs from the
+      // AI text via regex — if the URL is absent the image is silently dropped.
+      let mediaContent: string;
+      if (imgResult.publicUrl) {
+        mediaContent = `✅ Image generated successfully!\n\nHere is your image:\n${imgResult.publicUrl}\n\nYou can click the image to expand it to fullscreen, open it in a new tab, or download it using the buttons on the card.`;
+      } else if (imgResult.format === 'base64' && imgResult.data) {
+        // Supabase storage upload failed — fall back to inline base64 so image still appears
+        mediaContent = `✅ Image generated (storage upload failed, showing inline):\ndata:${imgResult.mimeType || 'image/png'};base64,${imgResult.data}`;
+      } else {
+        mediaContent = `⚠️ Image generation returned an unexpected response. Please try again.`;
+      }
+
+      return {
+        success: true,
+        result: {
+          choices: [{ message: { role: 'assistant', content: mediaContent } }],
+          provider: 'vertex',
+          executive: EXECUTIVE_CONFIG.personality,
+          imageUrl: imgResult.publicUrl,
+          mimeType: imgResult.mimeType,
+        }
+      };
     } else if (requestType === 'list_recent_videos') {
       const supabaseAdmin = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
       const result = await VertexAI.listRecentVideos(supabaseAdmin, toolCall.parameters.limit || 10);
       return { success: true, result };
-    } else if (requestType === 'image_generation') {
-      const result = await VertexAI.generateImage(toolCall.parameters.prompt, toolCall.parameters.model, toolCall.parameters.aspectRatio);
-      return { success: true, result };
     }
 
-    // Fallback for other types
+    // Fallback for unsupported request types
     return { success: false, error: `Unsupported request type: ${requestType}` };
 
   } catch (error) {

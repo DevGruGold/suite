@@ -43,6 +43,10 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
     document.body.removeChild(link);
   }, [imageData]);
 
+  const handleOpenNewTab = useCallback(() => {
+    window.open(imageData, '_blank', 'noopener,noreferrer');
+  }, [imageData]);
+
   if (hasError) {
     return (
       <Card className={`p-4 bg-muted/50 ${className}`}>
@@ -64,21 +68,21 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
           <img
             src={imageData}
             alt={alt}
-            className={`w-full max-h-96 object-contain transition-opacity duration-300 ${
-              isLoaded ? 'opacity-100' : 'opacity-0 h-0'
-            }`}
+            className={`w-full max-h-96 object-contain transition-opacity duration-300 ${isLoaded ? 'opacity-100' : 'opacity-0 h-0'
+              }`}
             onLoad={handleLoad}
             onError={handleError}
             loading="lazy"
             decoding="async"
           />
-          
+
           {isLoaded && (
             <div className="absolute bottom-2 right-2 flex gap-1">
               <Button
                 size="icon"
                 variant="secondary"
                 className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+                title="Expand to fullscreen"
                 onClick={() => setIsExpanded(true)}
               >
                 <ZoomIn className="h-4 w-4" />
@@ -87,6 +91,16 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
                 size="icon"
                 variant="secondary"
                 className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+                title="Open in new tab"
+                onClick={handleOpenNewTab}
+              >
+                <ExternalLink className="h-4 w-4" />
+              </Button>
+              <Button
+                size="icon"
+                variant="secondary"
+                className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+                title="Download image"
                 onClick={handleDownload}
               >
                 <Download className="h-4 w-4" />
@@ -106,9 +120,9 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
         </div>
       </Card>
 
-      {/* Fullscreen modal */}
+      {/* Fullscreen modal — click backdrop to close */}
       {isExpanded && (
-        <div 
+        <div
           className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4"
           onClick={() => setIsExpanded(false)}
         >
@@ -116,6 +130,18 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
             <Button
               size="icon"
               variant="secondary"
+              title="Open in new tab"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleOpenNewTab();
+              }}
+            >
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+            <Button
+              size="icon"
+              variant="secondary"
+              title="Download image"
               onClick={(e) => {
                 e.stopPropagation();
                 handleDownload();
@@ -126,6 +152,7 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
             <Button
               size="icon"
               variant="secondary"
+              title="Close"
               onClick={() => setIsExpanded(false)}
             >
               <X className="h-4 w-4" />
@@ -134,8 +161,8 @@ export const ImageResponsePreview: React.FC<ImageResponsePreviewProps> = ({
           <img
             src={imageData}
             alt={alt}
-            className="max-w-full max-h-full object-contain"
-            onClick={(e) => e.stopPropagation()}
+            className="max-w-full max-h-full object-contain cursor-zoom-out"
+            onClick={(e) => { e.stopPropagation(); setIsExpanded(false); }}
           />
         </div>
       )}
@@ -154,13 +181,13 @@ export function extractImagesFromResponse(content: string): {
 } {
   const base64ImagePattern = /data:image\/[a-zA-Z]+;base64,[A-Za-z0-9+/=]+/g;
   const images = content.match(base64ImagePattern) || [];
-  
+
   // Remove base64 data from text content to prevent UI freeze
   let textContent = content;
   for (const img of images) {
     textContent = textContent.replace(img, '[Generated Image]');
   }
-  
+
   return {
     hasImages: images.length > 0,
     images,
@@ -182,14 +209,14 @@ export function isLargeResponse(content: string): boolean {
  */
 export function sanitizeLargeResponse(content: string): string {
   if (!isLargeResponse(content)) return content;
-  
+
   // Check for base64 images
   const { hasImages, textContent, images } = extractImagesFromResponse(content);
-  
+
   if (hasImages) {
     return `${textContent}\n\n📸 ${images.length} image(s) generated - see preview above`;
   }
-  
+
   // For other large content, truncate with notice
   return content.substring(0, 10000) + '\n\n[Response truncated for performance - content too large]';
 }

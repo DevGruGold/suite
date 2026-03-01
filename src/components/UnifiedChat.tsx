@@ -1926,32 +1926,53 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                       {/* 🎬 Show AI-generated videos as playable players */}
                       {message.generatedVideos && message.generatedVideos.length > 0 && (
                         <div className="space-y-3 mb-2">
-                          {message.generatedVideos.map((url, idx) => (
-                            <div key={`vid-${idx}`} className="rounded-xl overflow-hidden border border-border/40 bg-black/20">
-                              <video
-                                controls
-                                preload="metadata"
-                                className="w-full max-h-64 rounded-xl"
-                                src={url}
-                                aria-label={`Generated Video ${idx + 1}`}
-                              >
-                                <p className="text-xs text-muted-foreground p-2">
-                                  Your browser doesn't support video playback.
-                                  <a href={url} download className="underline ml-1">Download video</a>
-                                </p>
-                              </video>
-                              <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30">
-                                <span className="text-xs text-muted-foreground">🎬 AI Generated Video</span>
-                                <a
-                                  href={url}
-                                  download
-                                  className="text-xs text-primary hover:underline flex items-center gap-1"
+                          {message.generatedVideos.map((url, idx) => {
+                            const videoRef = React.createRef<HTMLVideoElement>();
+                            return (
+                              <div key={`vid-${idx}`} className="rounded-xl overflow-hidden border border-border/40 bg-black/20">
+                                <video
+                                  ref={videoRef}
+                                  controls
+                                  preload="metadata"
+                                  className="w-full max-h-64 rounded-xl cursor-pointer"
+                                  src={url}
+                                  aria-label={`Generated Video ${idx + 1}`}
+                                  onDoubleClick={() => {
+                                    const el = videoRef.current;
+                                    if (el) {
+                                      if (el.requestFullscreen) el.requestFullscreen();
+                                    }
+                                  }}
+                                  title="Double-click to enter fullscreen"
                                 >
-                                  ⬇ Download
-                                </a>
+                                  <p className="text-xs text-muted-foreground p-2">
+                                    Your browser doesn't support video playback.
+                                    <a href={url} download className="underline ml-1">Download video</a>
+                                  </p>
+                                </video>
+                                <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30">
+                                  <span className="text-xs text-muted-foreground">🎬 AI Generated Video</span>
+                                  <div className="flex items-center gap-3">
+                                    <a
+                                      href={url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                                    >
+                                      ↗ Open in new tab
+                                    </a>
+                                    <a
+                                      href={url}
+                                      download
+                                      className="text-xs text-primary hover:underline flex items-center gap-1"
+                                    >
+                                      ⬇ Download
+                                    </a>
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       )}
 
