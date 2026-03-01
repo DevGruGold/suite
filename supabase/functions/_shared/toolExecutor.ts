@@ -2075,11 +2075,66 @@ export async function executeToolCall(
         break;
       }
 
+      // ====================================================================
+      // 🔗 OPENCLAW RELAY TOOLS — Bidirectional communication with local OpenClaw
+      // ====================================================================
+      case 'send_to_openclaw': {
+        console.log(`📡 [${executiveName}] Sending message to local OpenClaw agent`);
+        const relayTag = parsedArgs.relay_tag || `eliza-relay-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const relayResult = await supabase.functions.invoke('openclaw-relay', {
+          body: {
+            action: 'send',
+            message: parsedArgs.message,
+            relay_tag: relayTag,
+            metadata: {
+              sent_by: executiveName,
+              ...(parsedArgs.metadata || {})
+            }
+          }
+        });
+        result = relayResult.error
+          ? { success: false, error: `openclaw-relay error: ${relayResult.error.message}` }
+          : {
+            success: true,
+            relay_tag: relayTag,
+            message_id: relayResult.data?.message_id,
+            status: 'queued',
+            message: 'Message queued for OpenClaw. Call check_openclaw_reply with the relay_tag to retrieve the response.',
+            result: relayResult.data
+          };
+        break;
+      }
+
+      case 'check_openclaw_reply': {
+        console.log(`📬 [${executiveName}] Checking OpenClaw reply for relay_tag: ${parsedArgs.relay_tag}`);
+        if (!parsedArgs.relay_tag) {
+          result = { success: false, error: 'check_openclaw_reply requires relay_tag. Use the relay_tag returned by send_to_openclaw.' };
+          break;
+        }
+        const replyResult = await supabase.functions.invoke('openclaw-relay', {
+          body: {
+            action: 'check_reply',
+            relay_tag: parsedArgs.relay_tag
+          }
+        });
+        result = replyResult.error
+          ? { success: false, error: `openclaw-relay check error: ${replyResult.error.message}` }
+          : {
+            success: true,
+            has_reply: !!replyResult.data?.reply,
+            reply: replyResult.data?.reply || null,
+            relay_tag: parsedArgs.relay_tag,
+            status: replyResult.data?.reply ? 'replied' : 'pending',
+            result: replyResult.data
+          };
+        break;
+      }
+
       default:
         console.warn(`⚠️ [${executiveName}] Unknown tool: ${name}`);
         result = {
           success: false,
-          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, query_cron_registry, vertex_generate_image, vertex_generate_video, vertex_check_video_status, and more.`
+          error: `Unknown tool: ${name}. Available tools include: invoke_edge_function, execute_python, createGitHubIssue, list_agents, assign_task, check_system_status, get_tool_usage_analytics, store_knowledge, search_knowledge, deploy_approved_function, create_task_from_template, smart_assign_task, get_automation_metrics, update_task_checklist, resolve_blocked_task, get_stae_recommendations, advance_task_stage, sync_github_contributions, sync_function_logs, get_function_usage_analytics, query_cron_registry, vertex_generate_image, vertex_generate_video, vertex_check_video_status, send_to_openclaw, check_openclaw_reply, and more.`
         };
     }
 

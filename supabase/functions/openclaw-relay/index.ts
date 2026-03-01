@@ -170,22 +170,65 @@ serve(async (req) => {
             return jsonOk({ reply_id: data.id });
         }
 
+        // ── ACTION: check_reply ───────────────────────────────────────────────────
+        // Eliza polls for OpenClaw's reply to a specific relay_tag.
+        // Called by toolExecutor's check_openclaw_reply handler.
+        if (action === "check_reply") {
+            const { relay_tag } = body;
+            if (!relay_tag) {
+                return jsonError("'relay_tag' is required for check_reply", 400);
+            }
+
+            console.log(`🔍 Eliza checking for OpenClaw reply for relay_tag: ${relay_tag}`);
+
+            const { data: replies, error: replyErr } = await supabase
+                .from("inbox_messages")
+                .select("id, content, metadata, created_at")
+                .eq("channel", "openclaw")
+                .filter("metadata->>relay_tag", "eq", relay_tag)
+                .filter("metadata->>is_reply", "eq", "true")
+                .order("created_at", { ascending: false })
+                .limit(1);
+
+            if (replyErr) {
+                console.error("check_reply fetch error:", replyErr);
+                return jsonError(replyErr.message, 500);
+            }
+
+            if (!replies || replies.length === 0) {
+                console.log(`  ⏳ No reply yet for relay_tag: ${relay_tag}`);
+                return jsonOk({ relay_tag, reply: null, has_reply: false, status: "pending" });
+            }
+
+            const replyRow = replies[0];
+            console.log(`  ✅ Found OpenClaw reply [${relay_tag}]: ${String(replyRow.content).slice(0, 80)}`);
+            return jsonOk({
+                relay_tag,
+                reply: replyRow.content,
+                reply_id: replyRow.id,
+                has_reply: true,
+                status: "replied",
+                replied_at: replyRow.created_at,
+            });
+        }
+
         // ── ACTION: status ─────────────────────────────────────────────────────────
         if (action === "status") {
             return jsonOk({
                 status: "ok",
                 function: "openclaw-relay",
-                version: "2.0.0",
+                version: "2.1.0",
                 description: "Relay messages between Eliza (SuiteAI) and local OpenClaw agent",
-                actions: ["send", "poll", "reply", "status"],
+                actions: ["send", "poll", "reply", "check_reply", "status"],
                 channels: {
-                    eliza_to_openclaw: `inbox_messages.channel = '${OPENCLAW_INBOUND_CHANNEL}'`,
-                    openclaw_to_eliza: "POST { action: 'reply', relay_tag, reply }",
+                    eliza_to_openclaw: `inbox_messages.channel = '${OPENCLAW_INBOUND_CHANNEL}' with metadata.target='openclaw'`,
+                    openclaw_to_eliza: "POST { action: 'reply', relay_tag, reply } — stores reply in inbox_messages with metadata.is_reply=true",
+                    eliza_check_reply: "POST { action: 'check_reply', relay_tag } — Eliza polls for OpenClaw's response",
                 },
             });
         }
 
-        return jsonError("Unknown action. Use: send | poll | reply | status", 400);
+        return jsonError("Unknown action. Use: send | poll | reply | check_reply | status", 400);
 
     } catch (err: any) {
         console.error("❌ openclaw-relay unhandled error:", err);
