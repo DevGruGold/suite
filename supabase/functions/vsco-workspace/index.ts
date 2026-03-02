@@ -1381,7 +1381,7 @@ Deno.serve(async (req) => {
       case 'sync_all':
       case 'sync_jobs':
       case 'sync_contacts': {
-        const PAGES_PER_CALL = Number(data.pages_per_call) || 15;
+        const PAGES_PER_CALL = Number(data.pages_per_call) || 8; // 8 pages × avg 3s = ~24s, safe within 60s limit
         const syncResults: any = { jobs: 0, contacts: 0, events: 0, errors: [], pages_synced_this_call: 0 };
 
         // ── Sync jobs ──────────────────────────────────────────────────────
