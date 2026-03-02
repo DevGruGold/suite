@@ -1,5 +1,8 @@
 // Unified AI Gateway with Comprehensive Fallback System
-// Handles token exhaustion and service failures automatically
+// Priority: Vertex AI (gemini-2.5-pro/flash, GCP credits) → Gemini API key → DeepSeek → OpenAI → Kimi
+// Last updated: 2026-03-02 — Vertex AI SA auth wired as priority 1
+
+import { getVertexAuth, getVertexEndpoint } from './vertexAuthHelper.ts';
 
 export interface AIProvider {
   name: string;
@@ -20,15 +23,34 @@ export interface GatewayConfig {
 }
 
 // Production AI Gateway Configuration
-// Priority order: Gemini (free/Google) → DeepSeek → OpenAI → Vertex AI → Kimi
+// Priority order: Vertex gemini-2.5-pro → Vertex gemini-2.5-flash → Gemini API → DeepSeek → OpenAI → Kimi
 const GATEWAY_CONFIG: GatewayConfig = {
   providers: [
     {
-      name: 'gemini',
-      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-      model: 'gemini-2.0-flash',
+      name: 'vertex-pro',
+      // Endpoint is dynamically set per-request via vertexAuthHelper
+      endpoint: getVertexEndpoint('gemini-2.5-pro'),
+      model: 'gemini-2.5-pro',
       priority: 1,
-      rateLimit: 2000,
+      rateLimit: 10000, // High — backed by $1000 GCP credits
+      timeout: 60000,
+      available: true
+    },
+    {
+      name: 'vertex-flash',
+      endpoint: getVertexEndpoint('gemini-2.5-flash'),
+      model: 'gemini-2.5-flash',
+      priority: 2,
+      rateLimit: 10000,
+      timeout: 30000,
+      available: true
+    },
+    {
+      name: 'gemini',
+      endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent',
+      model: 'gemini-2.5-flash',
+      priority: 3,
+      rateLimit: 2000, // Free tier — 15 RPM limit
       timeout: 30000,
       available: true
     },
@@ -36,7 +58,7 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'deepseek',
       endpoint: 'https://api.deepseek.com/v1/chat/completions',
       model: 'deepseek-chat',
-      priority: 2,
+      priority: 4,
       rateLimit: 1500,
       timeout: 30000,
       available: true
@@ -45,17 +67,8 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'openai',
       endpoint: 'https://api.openai.com/v1/chat/completions',
       model: 'gpt-4o-mini',
-      priority: 3,
+      priority: 5,
       rateLimit: 3000,
-      timeout: 30000,
-      available: true
-    },
-    {
-      name: 'vertex',
-      endpoint: 'https://us-central1-aiplatform.googleapis.com/v1/projects/{project}/locations/us-central1/publishers/google/models/gemini-2.0-flash:generateContent',
-      model: 'gemini-2.0-flash',
-      priority: 4,
-      rateLimit: 1000,
       timeout: 30000,
       available: true
     },
@@ -63,7 +76,7 @@ const GATEWAY_CONFIG: GatewayConfig = {
       name: 'kimi',
       endpoint: 'https://api.moonshot.cn/v1/chat/completions',
       model: 'moonshot-v1-8k',
-      priority: 5,
+      priority: 6,
       rateLimit: 500,
       timeout: 30000,
       available: true
@@ -144,18 +157,21 @@ async function executeWithProvider(
   messages: any[],
   options: any = {}
 ): Promise<any> {
-  console.log(`[Gateway] Attempting ${provider.name} (priority: ${provider.priority})`);
+  console.log(`[Gateway] Attempting ${provider.name} model=${provider.model} (priority: ${provider.priority})`);
 
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), provider.timeout);
 
-    // Prepare request based on provider
+    const isGemini = provider.name === 'gemini' || provider.name === 'vertex-pro' || provider.name === 'vertex-flash';
+
+    // Prepare request body
     let requestBody: any;
+    let headers: Record<string, string> = { 'Content-Type': 'application/json' };
     let endpoint = provider.endpoint;
 
-    if (provider.name === 'gemini' || provider.name === 'vertex') {
-      // Gemini API format
+    if (isGemini) {
+      // Gemini / Vertex AI format
       requestBody = {
         contents: messages
           .filter((msg: any) => msg.role !== 'system')
@@ -168,7 +184,7 @@ async function executeWithProvider(
           : undefined,
         generationConfig: {
           temperature: options.temperature || 0.7,
-          maxOutputTokens: options.max_tokens || 1000
+          maxOutputTokens: options.max_tokens || 2048
         }
       };
 
@@ -185,30 +201,57 @@ async function executeWithProvider(
           requestBody.tools = [{ function_declarations: functionDeclarations }];
         }
       }
+
+      // Set auth headers for Vertex vs free Gemini
+      if (provider.name === 'vertex-pro' || provider.name === 'vertex-flash') {
+        const vertexAuth = await getVertexAuth(provider.model);
+        if (vertexAuth) {
+          headers = vertexAuth.headers;
+          endpoint = vertexAuth.endpoint;
+          console.log(`[Gateway]   🔐 Vertex auth: ${vertexAuth.authType} → ${endpoint.split('/models/')[1]?.split(':')[0]}`);
+        } else {
+          throw new AIGatewayError(
+            `Vertex AI credentials unavailable for ${provider.name}`,
+            provider.name,
+            401,
+            'service_unavailable'
+          );
+        }
+      } else {
+        // Free Gemini endpoint — API key in URL
+        const geminiKey = Deno.env.get('GEMINI_API_KEY') || '';
+        if (!geminiKey) {
+          throw new AIGatewayError('GEMINI_API_KEY not set', provider.name, 401, 'service_unavailable');
+        }
+        endpoint = `${provider.endpoint}?key=${geminiKey}`;
+      }
+
     } else {
-      // OpenAI-compatible format (openai, deepseek, lovable)
+      // OpenAI-compatible format (openai, deepseek, kimi)
       requestBody = {
         model: provider.model,
         messages: messages,
         temperature: options.temperature || 0.7,
-        max_tokens: options.max_tokens || 1000,
+        max_tokens: options.max_tokens || 2048,
         stream: false
       };
 
-      // Forward tool definitions if provided
       if (options.tools && options.tools.length > 0) {
         requestBody.tools = options.tools;
         requestBody.tool_choice = options.tool_choice || 'auto';
       }
+
+      const apiKey = await getAPIKey(provider.name);
+      if (!apiKey) {
+        throw new AIGatewayError(`No API key for ${provider.name}`, provider.name, 401, 'service_unavailable');
+      }
+      headers['Authorization'] = `Bearer ${apiKey}`;
+      headers['User-Agent'] = 'DevGruGold-Suite/2.0';
     }
 
     const response = await fetch(endpoint, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${await getAPIKey(provider.name)}`,
-        'User-Agent': 'DevGruGold-Suite/1.0'
-      },
+      headers,
       body: JSON.stringify(requestBody),
       signal: controller.signal
     });
@@ -219,14 +262,13 @@ async function executeWithProvider(
       const errorType = detectErrorType(response);
       const errorText = await response.text();
 
-      // Handle specific error types
       if (errorType === 'token_exhausted') {
         console.log(`[Gateway] ${provider.name} token exhausted, marking unavailable`);
         provider.available = false;
       }
 
       throw new AIGatewayError(
-        `${provider.name} failed: ${response.status} ${errorText}`,
+        `${provider.name} failed: ${response.status} ${errorText.slice(0, 300)}`,
         provider.name,
         response.status,
         errorType
@@ -235,9 +277,9 @@ async function executeWithProvider(
 
     const result = await response.json();
 
-    // Normalize response format
+    // Normalize response to OpenAI format
     let normalizedResponse;
-    if (provider.name === 'gemini' || provider.name === 'vertex') {
+    if (isGemini) {
       const candidate = result.candidates?.[0];
       const parts = candidate?.content?.parts || [];
       const textParts = parts.filter((p: any) => p.text);
@@ -264,25 +306,18 @@ async function executeWithProvider(
         provider: provider.name
       };
     } else {
-      // OpenAI-compatible — pass through directly (tool_calls already in correct format)
-      normalizedResponse = {
-        ...result,
-        provider: provider.name
-      };
+      normalizedResponse = { ...result, provider: provider.name };
     }
 
     circuitBreaker.recordSuccess(provider.name);
     console.log(`[Gateway] ✅ ${provider.name} succeeded`);
-
     return normalizedResponse;
 
-  } catch (error) {
+  } catch (error: any) {
     circuitBreaker.recordFailure(provider.name);
     console.log(`[Gateway] ❌ ${provider.name} failed: ${error.message}`);
 
-    if (error instanceof AIGatewayError) {
-      throw error;
-    }
+    if (error instanceof AIGatewayError) throw error;
 
     throw new AIGatewayError(
       `${provider.name} execution failed: ${error.message}`,
@@ -293,13 +328,12 @@ async function executeWithProvider(
   }
 }
 
-// Get API key for provider
+// Get API key for non-Vertex providers
 async function getAPIKey(providerName: string): Promise<string> {
   const apiKeys: Record<string, string> = {
     gemini: Deno.env.get('GEMINI_API_KEY') || '',
     deepseek: Deno.env.get('DEEPSEEK_API_KEY') || '',
     openai: Deno.env.get('OPENAI_API_KEY') || '',
-    vertex: Deno.env.get('GOOGLE_CLOUD_API_KEY') || Deno.env.get('GEMINI_API_KEY') || '',
     kimi: Deno.env.get('KIMI_API_KEY') || '',
   };
   return apiKeys[providerName] || '';
@@ -326,23 +360,23 @@ export async function executeAIRequest(
     );
   }
 
-  console.log(`[Gateway] [${requestId}] Available providers: ${availableProviders.map(p => p.name).join(', ')}`);
+  console.log(`[Gateway] [${requestId}] Provider cascade: ${availableProviders.map(p => p.name).join(' → ')}`);
 
   let lastError: AIGatewayError | null = null;
 
-  // Try each provider in order
   for (let i = 0; i < availableProviders.length; i++) {
     const provider = availableProviders[i];
 
     try {
       const result = await executeWithProvider(provider, messages, options);
 
-      console.log(`[Gateway] [${requestId}] Success with ${provider.name} in ${Date.now() - startTime}ms`);
+      console.log(`[Gateway] [${requestId}] ✅ ${provider.name} responded in ${Date.now() - startTime}ms`);
 
       return {
         ...result,
         metadata: {
           provider: provider.name,
+          model: provider.model,
           executionTime: Date.now() - startTime,
           requestId,
           fallbackAttempt: i + 1,
@@ -350,25 +384,21 @@ export async function executeAIRequest(
         }
       };
 
-    } catch (error) {
+    } catch (error: any) {
       lastError = error as AIGatewayError;
       console.log(`[Gateway] [${requestId}] Provider ${provider.name} failed: ${error.message}`);
 
-      // If this is a token exhaustion, mark provider as unavailable
       if (error.errorType === 'token_exhausted') {
         provider.available = false;
-        console.log(`[Gateway] [${requestId}] Marked ${provider.name} as unavailable due to token exhaustion`);
       }
 
-      // Continue to next provider unless this is the last one
       if (i < availableProviders.length - 1) {
-        console.log(`[Gateway] [${requestId}] Falling back to next provider...`);
+        console.log(`[Gateway] [${requestId}] ⬇️ Falling back to ${availableProviders[i + 1].name}...`);
         continue;
       }
     }
   }
 
-  // All providers failed
   console.error(`[Gateway] [${requestId}] All providers failed after ${Date.now() - startTime}ms`);
 
   throw new AIGatewayError(
@@ -389,10 +419,12 @@ export async function checkGatewayHealth(): Promise<any> {
     totalProviders: GATEWAY_CONFIG.providers.length,
     providers: GATEWAY_CONFIG.providers.map(p => ({
       name: p.name,
+      model: p.model,
       available: p.available,
       circuitBreakerOpen: !circuitBreaker.isProviderAvailable(p.name),
       priority: p.priority
     })),
+    cascade: GATEWAY_CONFIG.providers.filter(p => p.available).map(p => p.name).join(' → '),
     timestamp: new Date().toISOString()
   };
 }
