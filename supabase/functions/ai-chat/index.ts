@@ -349,7 +349,7 @@ const TOOL_CALLING_MANDATE = `
 1. When the user asks for data/status/metrics, you MUST call tools using the native function calling mechanism
 2. DO NOT describe tool calls in text. DO NOT say "I will call..." or "Let me check..."
 3. DIRECTLY invoke functions - the system will handle execution
-4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail
+4. Available critical tools: get_mining_stats, get_system_status, get_ecosystem_metrics, invoke_edge_function, search_knowledge, recall_entity, vertex_generate_image, vertex_generate_video, vertex_check_video_status, search_edge_functions, browse_web, analyze_attachment, google_gmail, set_auto_approve
 5. If you need current data, ALWAYS use tools. Never guess or make up data.
 6. After tool execution, synthesize results into natural language - never show raw JSON to users.
 
@@ -370,6 +370,12 @@ const TOOL_CALLING_MANDATE = `
 - DO NOT say "I cannot browse the web" - YOU CAN via Playwright Browser
 - Supported actions: 'navigate' (default), 'extract', 'json'
 - For WEB SEARCHES, ALWAYS use DuckDuckGo NOT Google. Format: browse_web({url: "https://duckduckgo.com/html/?q=your+search+terms"}). Google blocks automated searches with CAPTCHAs (HTTP 429 errors).
+
+⚡ AUTO-APPROVE / CONTINUOUS EXECUTION MODE:
+- When user says "enable auto-approve", "continuous mode", "just go", "proceed automatically", "stop asking for approval", "auto mode on" → IMMEDIATELY call set_auto_approve({enabled: true})
+- When user says "disable auto-approve", "stop auto mode", "pause", "ask me before each step", "manual mode" → IMMEDIATELY call set_auto_approve({enabled: false})
+- When auto-approve is ACTIVE: chain steps autonomously, give brief status updates, only pause for critical/irreversible decisions
+- When auto-approve is OFF (default): confirm before significant actions
 
 🔍 FUNCTION DISCOVERY (MANDATORY):
 - When user asks about available edge functions or capabilities → IMMEDIATELY call search_edge_functions({mode: 'full_registry'})
@@ -1034,6 +1040,42 @@ async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
   }
 }
 
+// ========== AUTO-APPROVE MODE STATE ==========
+// Stored in conversation_context table using a sentinel key, no schema changes needed
+async function getAutoApproveState(ipAddress: string): Promise<boolean> {
+  try {
+    const { data } = await supabase
+      .from('conversation_context')
+      .select('user_response, metadata')
+      .eq('ip_address', ipAddress)
+      .eq('current_question', '__AUTO_APPROVE__')
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (!data) return false;
+    return data.user_response === 'true' || data.metadata?.auto_approve === true;
+  } catch { return false; }
+}
+
+async function setAutoApproveState(ipAddress: string, sessionId: string, enabled: boolean): Promise<void> {
+  try {
+    await supabase
+      .from('conversation_context')
+      .insert({
+        session_id: sessionId,
+        ip_address: ipAddress,
+        current_question: '__AUTO_APPROVE__',
+        assistant_response: `Auto-approve mode ${enabled ? 'ENABLED' : 'DISABLED'}`,
+        user_response: String(enabled),
+        timestamp: new Date().toISOString(),
+        metadata: { auto_approve: enabled, set_at: new Date().toISOString() }
+      });
+    console.log(`⚡ [auto_approve] State set to: ${enabled} for IP: ${ipAddress}`);
+  } catch (e: any) {
+    console.warn('[auto_approve] Failed to save state:', e.message);
+  }
+}
+
 // ========== NEW: ATTACHMENT ANALYSIS TOOL ==========
 async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sessionId: string): Promise<any> {
   try {
@@ -1684,6 +1726,17 @@ async function executeRealToolCall(
         caption
       });
 
+    } else if (name === 'set_auto_approve') {
+      const { enabled } = parsedArgs;
+      await setAutoApproveState(ipAddress, sessionId, !!enabled);
+      result = {
+        success: true,
+        auto_approve_enabled: !!enabled,
+        message: enabled
+          ? '🟢 Auto-approve mode ENABLED. I will proceed through workflow steps automatically without asking for confirmation. I will only pause for critical decisions, errors, or scope changes.'
+          : '🔴 Auto-approve mode DISABLED. I will wait for your confirmation between steps.'
+      };
+
     } else {
       // Fallback to shared tool executor for all other tools (STAE, etc.)
       console.log(`🔄 [${executiveName}] Delegating tool '${name}' to shared toolExecutor`);
@@ -2013,7 +2066,7 @@ function parseConversationalToolIntent(content: string): Array<any> | null {
     'get_mining_stats', 'get_system_status', 'get_ecosystem_metrics',
     'search_knowledge', 'recall_entity', 'invoke_edge_function',
     'get_edge_function_logs', 'get_agent_status', 'list_agents', 'list_tasks',
-    'search_edge_functions', 'browse_web', 'analyze_attachment', 'google_gmail'
+    'search_edge_functions', 'browse_web', 'analyze_attachment', 'google_gmail', 'set_auto_approve'
   ];
 
   for (const pattern of patterns) {
@@ -4106,6 +4159,23 @@ const ELIZA_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'set_auto_approve',
+      description: '⚡ Enable or disable auto-approve/continuous execution mode. When enabled, Eliza proceeds through sequential workflow steps without asking "shall I proceed?" after each one. Only pauses for critical decisions, errors, or scope changes.',
+      parameters: {
+        type: 'object',
+        properties: {
+          enabled: {
+            type: 'boolean',
+            description: 'true to enable auto-approve mode (autonomous execution), false to disable it (return to manual confirmation)'
+          }
+        },
+        required: ['enabled']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'get_mining_stats',
       description: 'Get current mining statistics including hashrate, workers, earnings',
       parameters: {
@@ -5022,6 +5092,10 @@ Deno.serve(async (req) => {
     const sessionId = providedSessionId || await IPSessionManager.getOrCreateSessionId(ipAddress, user_id);
     console.log(`🤖 [${executive_name}] Request ${requestId}: "${truncateString(query, 100)}" | Session: ${sessionId} | IP: ${ipAddress}`);
 
+    // Read auto-approve state — persisted per IP in conversation_context
+    const autoApproveEnabled = await getAutoApproveState(ipAddress);
+    if (autoApproveEnabled) console.log('⚡ Auto-approve mode is ACTIVE for this session');
+
     // ========== AGENT DELEGATION ROUTING ==========
     // Intercept requests for specific Named Agents and route to Specialists
     if (DELEGATION_MAP[executive_name]) {
@@ -5164,7 +5238,18 @@ Deno.serve(async (req) => {
 
     // If the caller supplied a full persona system prompt (e.g. from /council page),
     // use it directly. Otherwise fall back to the standard Eliza-based prompt.
-    const systemPrompt = (bodySystemPrompt && typeof bodySystemPrompt === 'string' && bodySystemPrompt.trim())
+    // Inject auto-approve mode banner into system prompt when active
+    const autoApproveBlock = autoApproveEnabled
+      ? `\n\n🟢 **AUTO-APPROVE MODE IS CURRENTLY ACTIVE**\n` +
+      `- Proceed through sequential workflow steps WITHOUT asking for confirmation after each one.\n` +
+      `- Do NOT say "Shall I proceed?", "Would you like me to continue?", or similar.\n` +
+      `- Execute the next logical step immediately, then give a brief one-line status update.\n` +
+      `- Format status updates as: "✅ [Step N complete] — [what was done]. Now: [next step]..."\n` +
+      `- PAUSE and ask the user ONLY if: (1) a critical/irreversible action is needed, (2) a blocking error occurs, (3) you need information only the user can provide, or (4) the task scope changes unexpectedly.\n` +
+      `- When the entire workflow is complete, announce completion clearly and concisely.\n\n`
+      : '';
+
+    const baseSystemPrompt = (bodySystemPrompt && typeof bodySystemPrompt === 'string' && bodySystemPrompt.trim())
       ? bodySystemPrompt.trim()
       : generateSystemPrompt(
         executive_name,
@@ -5173,6 +5258,7 @@ Deno.serve(async (req) => {
         recentContext,
         ipAddress
       );
+    const systemPrompt = autoApproveBlock + baseSystemPrompt;
 
     const allMessages = [
       ...savedMessages,
