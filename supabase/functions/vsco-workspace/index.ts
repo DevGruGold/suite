@@ -507,22 +507,126 @@ Deno.serve(async (req) => {
       // ====================================================================
       case 'upsert_job': {
         let existingJobId: string | null = data.job_id || null;
+        let searchLog: string[] = [];
 
-        // Step 1: Resolve job ID by name search if not explicitly provided
+        // Normalize event_date to YYYY-MM-DD if provided
+        const normalizeDate = (d: string) => {
+          if (!d) return d;
+          // Already YYYY-MM-DD
+          if (/^\d{4}-\d{2}-\d{2}$/.test(d)) return d;
+          try { return new Date(d).toISOString().split('T')[0]; } catch { return d; }
+        };
+        if (data.event_date) data.event_date = normalizeDate(data.event_date);
+
+        // ══════════════════════════════════════════════════
+        // TIER 1: Local vsco_jobs DB — fastest, most reliable
+        // ══════════════════════════════════════════════════
         if (!existingJobId && data.search_name) {
-          const searchResp = await vscoRequest(supabase, '/job', {
-            params: { search: data.search_name, pageSize: '50' }
-          }, executive);
-          const candidates = searchResp.data?.items || searchResp.data?.jobs || searchResp.data || [];
-          const match = Array.isArray(candidates) ? candidates.find((j: any) =>
-            (j.name || '').toLowerCase().includes(data.search_name.toLowerCase()) ||
-            (j.clientName || '').toLowerCase().includes(data.search_name.toLowerCase())
-          ) : null;
-          if (match) {
-            existingJobId = match.id;
-            console.log(`🔍 [upsert_job] Resolved "${data.search_name}" → job ${existingJobId}`);
+          const sq = data.search_name.toLowerCase();
+          const { data: localJobs } = await supabase
+            .from('vsco_jobs')
+            .select('vsco_id, name, raw_data')
+            .limit(200);
+
+          const localMatch = (localJobs || []).find((j: any) => {
+            const jobName = (j.name || '').toLowerCase();
+            const rawData = j.raw_data || {};
+            const clientName = (rawData.clientName || rawData.client_name || '').toLowerCase();
+            const contacts = Array.isArray(rawData.contacts) ? rawData.contacts : [];
+            const contactMatch = contacts.some((c: any) =>
+              (c.name || c.firstName + ' ' + c.lastName || '').toLowerCase().includes(sq)
+            );
+            return jobName.includes(sq) || clientName.includes(sq) || contactMatch;
+          });
+
+          if (localMatch) {
+            existingJobId = localMatch.vsco_id;
+            searchLog.push(`T1:local_db_match:${existingJobId}`);
+            console.log(`🔍 [upsert_job] TIER 1 match: "${data.search_name}" → ${existingJobId}`);
+          } else {
+            searchLog.push('T1:no_local_match');
           }
         }
+
+        // ══════════════════════════════════════════════════════════
+        // TIER 2: Contact lookup → find jobs linked to that contact
+        // ══════════════════════════════════════════════════════════
+        if (!existingJobId && data.search_name) {
+          const sq = data.search_name.toLowerCase();
+          const partsQ = sq.split(/\s+/).filter(Boolean);
+
+          // Search contacts by name parts
+          const contactResp = await vscoRequest(supabase, '/address-book', {
+            params: { search: data.search_name, pageSize: '50' }
+          }, executive);
+          const contacts = contactResp.data?.items || contactResp.data?.contacts || contactResp.data || [];
+          const matchedContact = Array.isArray(contacts) ? contacts.find((c: any) => {
+            const full = `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase();
+            return partsQ.every(p => full.includes(p));
+          }) : null;
+
+          if (matchedContact?.id) {
+            // Get jobs linked to this contact
+            const jobsResp = await vscoRequest(supabase, '/job', {
+              params: { contactId: matchedContact.id, pageSize: '50' }
+            }, executive);
+            const linked = jobsResp.data?.items || jobsResp.data?.jobs || [];
+            if (Array.isArray(linked) && linked.length > 0) {
+              // Pick most recent (last created) non-closed job
+              const open = linked.find((j: any) => !j.closed) || linked[0];
+              existingJobId = open.id;
+              searchLog.push(`T2:contact_link:${matchedContact.id}→${existingJobId}`);
+              console.log(`🔍 [upsert_job] TIER 2 match via contact ${matchedContact.id} → job ${existingJobId}`);
+            } else {
+              searchLog.push(`T2:contact_found:${matchedContact.id}:no_linked_jobs`);
+            }
+          } else {
+            searchLog.push('T2:no_contact_match');
+          }
+        }
+
+        // ═══════════════════════════════════════════════════════════════
+        // TIER 3: Full paginated API scan — exhaustive client-side match
+        // ═══════════════════════════════════════════════════════════════
+        if (!existingJobId && data.search_name) {
+          const sq = data.search_name.toLowerCase();
+          let found: any = null;
+          let page = 1;
+          let hasMore = true;
+
+          while (hasMore && !found) {
+            const scanResp = await vscoRequest(supabase, '/job', {
+              params: { pageSize: '100', page: String(page) }
+            }, executive);
+            const batch = scanResp.data?.items || scanResp.data?.jobs || scanResp.data || [];
+            if (!Array.isArray(batch) || batch.length === 0) { hasMore = false; break; }
+
+            found = batch.find((j: any) => {
+              const name = (j.name || j.clientName || '').toLowerCase();
+              const email = (j.clientEmail || j.email || '').toLowerCase();
+              const phone = (j.clientPhone || j.phone || '').toLowerCase();
+              const contacts = Array.isArray(j.contacts) ? j.contacts : [];
+              const contactMatch = contacts.some((c: any) =>
+                `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase().includes(sq)
+              );
+              return name.includes(sq) || email.includes(sq) || phone.includes(sq) || contactMatch;
+            });
+
+            hasMore = batch.length === 100;
+            page++;
+          }
+
+          if (found) {
+            existingJobId = found.id;
+            searchLog.push(`T3:full_scan_match:page${page - 1}:${existingJobId}`);
+            console.log(`🔍 [upsert_job] TIER 3 full-scan match: "${data.search_name}" → ${existingJobId}`);
+          } else {
+            searchLog.push(`T3:no_match_after_${page - 1}_pages`);
+            console.log(`⚠️ [upsert_job] All 3 tiers exhausted — will CREATE new job`);
+          }
+        }
+
+        console.log(`🔍 [upsert_job] Search log: ${searchLog.join(' | ')}`);
 
         if (existingJobId) {
           // ── UPDATE existing job ──
@@ -536,12 +640,14 @@ Deno.serve(async (req) => {
           if (data.notes) updatePayload.notes = data.notes;
           if (data.lead_rating) updatePayload.leadRating = data.lead_rating;
 
+          console.log(`✏️ [upsert_job] Updating job ${existingJobId} with:`, JSON.stringify(updatePayload));
+
           const resp = await vscoRequest(supabase, `/job/${existingJobId}`, {
             method: 'PUT', body: updatePayload
           }, executive);
 
           if (resp.error) {
-            result = { success: false, error: resp.error, operation: 'update', job_id: existingJobId };
+            result = { success: false, error: resp.error, operation: 'update', job_id: existingJobId, search_log: searchLog };
           } else {
             const job = resp.data;
             await supabase.from('vsco_jobs').upsert({
@@ -550,10 +656,14 @@ Deno.serve(async (req) => {
               lead_source: job.leadSource, raw_data: job,
               synced_at: new Date().toISOString(),
             }, { onConflict: 'vsco_id' });
-            result = { success: true, job, operation: 'updated', job_id: existingJobId };
+            result = { success: true, job, operation: 'updated', job_id: existingJobId, search_log: searchLog };
           }
         } else {
-          // ── CREATE new job ──
+          // ── CREATE new job (all tiers failed to find existing) ──
+          if (!data.name) {
+            result = { success: false, error: 'Cannot create: name is required when no existing job found', search_log: searchLog };
+            break;
+          }
           const createPayload: any = { name: data.name, stage: data.stage || 'lead' };
           if (data.event_date) createPayload.eventDate = data.event_date;
           if (data.booking_date) createPayload.bookingDate = data.booking_date;
@@ -567,7 +677,7 @@ Deno.serve(async (req) => {
           }, executive);
 
           if (resp.error) {
-            result = { success: false, error: resp.error, operation: 'create' };
+            result = { success: false, error: resp.error, operation: 'create', search_log: searchLog };
           } else {
             const job = resp.data;
             await supabase.from('vsco_jobs').upsert({
@@ -576,7 +686,7 @@ Deno.serve(async (req) => {
               lead_source: job.leadSource, raw_data: job,
               synced_at: new Date().toISOString(),
             }, { onConflict: 'vsco_id' });
-            result = { success: true, job, operation: 'created' };
+            result = { success: true, job, operation: 'created', search_log: searchLog };
           }
         }
         break;
