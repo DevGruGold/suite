@@ -554,14 +554,32 @@ Deno.serve(async (req) => {
             const contacts = cResp.data?.items || [];
             console.log(`🔍 [find_job] T2 address-book page ${abPage}/${abTotalPages}: ${contacts.length} contacts`);
 
+            // Debug: log actual field names of first contact so we know the real API shape
+            if (abPage === 1 && contacts.length > 0) {
+              const sample = contacts[0];
+              console.log(`🔍 [find_job] T2 contact[0] keys: ${Object.keys(sample).join(', ')}`);
+              console.log(`🔍 [find_job] T2 contact[0]: firstName=${sample.firstName}, lastName=${sample.lastName}, name=${sample.name}, email=${sample.email}`);
+            }
+
+            // Split into individual tokens so 'Christine Brooks' matches firstName+lastName separately
+            const searchTokens = sq.split(/\s+/).filter(Boolean);
+
             for (const c of (Array.isArray(contacts) ? contacts : [])) {
-              const firstName = (c.firstName || '').toLowerCase();
-              const lastName = (c.lastName || '').toLowerCase();
+              const firstName = (c.firstName || c.first_name || '').toLowerCase();
+              const lastName = (c.lastName || c.last_name || '').toLowerCase();
               const full = `${firstName} ${lastName}`.trim();
               const email = (c.email || '').toLowerCase();
-              if (full.includes(sq) || firstName.includes(sq) || lastName.includes(sq) || email.includes(sq)) {
+              const nameAlt = (c.name || '').toLowerCase(); // some APIs use 'name' instead
+
+              // Match if ALL tokens appear somewhere across the contact's identifiers
+              const allTokensMatch = searchTokens.length > 0 && searchTokens.every((token: string) =>
+                firstName.includes(token) || lastName.includes(token) ||
+                full.includes(token) || email.includes(token) || nameAlt.includes(token)
+              );
+
+              if (allTokensMatch) {
                 matchedContact = c;
-                console.log(`🔍 [find_job] T2 contact match: ${c.firstName} ${c.lastName} (${c.id}) on page ${abPage}`);
+                console.log(`🔍 [find_job] T2 contact match: firstName=${c.firstName}, lastName=${c.lastName} id=${c.id} page=${abPage}`);
                 break;
               }
             }
@@ -1345,7 +1363,7 @@ Deno.serve(async (req) => {
             console.log(`🔄 [sync_jobs] Page ${page}: ${jobsArray.length} jobs (raw response keys: ${Object.keys(jobsResponse.data || {}).join(', ')})`);
             for (const job of jobsArray) {
               const pc = job.primaryContact || {};
-              await supabase.from('vsco_jobs').upsert({
+              const { error: upsertErr } = await supabase.from('vsco_jobs').upsert({
                 vsco_id: job.id,
                 name: job.name,
                 stage: job.stage,
@@ -1368,7 +1386,17 @@ Deno.serve(async (req) => {
                 raw_data: job,
                 synced_at: new Date().toISOString(),
               }, { onConflict: 'vsco_id' });
-              syncResults.jobs++;
+              if (upsertErr) {
+                // Log first upsert error clearly — most likely a missing column
+                if (syncResults.jobs === 0) {
+                  console.error(`❌ [sync_jobs] UPSERT FAILED on first job (${job.id}): ${upsertErr.message}`);
+                  console.error(`❌ [sync_jobs] This likely means vsco_jobs is missing columns (client_first_name etc.)`);
+                  console.error(`❌ [sync_jobs] Run migration: ALTER TABLE vsco_jobs ADD COLUMN IF NOT EXISTS client_first_name TEXT, ADD COLUMN IF NOT EXISTS client_last_name TEXT, ADD COLUMN IF NOT EXISTS client_email TEXT, ADD COLUMN IF NOT EXISTS client_phone TEXT;`);
+                }
+                syncResults.errors.push(`Upsert ${job.id}: ${upsertErr.message}`);
+              } else {
+                syncResults.jobs++;
+              }
             }
 
             hasMore = jobsArray.length === 100;
