@@ -78,13 +78,13 @@ async function vscoRequest(
     }
 
     const data = await response.json();
-    
+
     // 🔍 DIAGNOSTIC: Log raw response structure for debugging
     console.log(`🔍 [VSCO API] Raw Response Type: ${typeof data}`);
     console.log(`🔍 [VSCO API] Raw Response IsArray: ${Array.isArray(data)}`);
     console.log(`🔍 [VSCO API] Raw Response Keys: ${data ? Object.keys(data).join(', ') : 'null'}`);
     console.log(`🔍 [VSCO API] Raw Response Preview: ${data ? JSON.stringify(data).slice(0, 800) : 'null/undefined'}`);
-    
+
     return { data, status: response.status };
   } catch (error) {
     const responseTime = Date.now() - startTime;
@@ -141,10 +141,12 @@ Deno.serve(async (req) => {
           { name: 'update_brand', category: 'studio', required: ['brand_id'], optional: ['name'] },
           { name: 'delete_brand', category: 'studio', required: ['brand_id'], optional: [] },
           // Jobs
-          { name: 'list_jobs', category: 'jobs', required: [], optional: ['stage', 'closed', 'brand_id', 'page', 'per_page'] },
+          { name: 'list_jobs', category: 'jobs', required: [], optional: ['stage', 'closed', 'brand_id', 'page', 'per_page', 'search', 'name', 'event_date_start', 'event_date_end'] },
           { name: 'get_job', category: 'jobs', required: ['job_id'], optional: [] },
-          { name: 'create_job', category: 'jobs', required: ['name'], optional: ['stage', 'job_type_id', 'lead_rating', 'event_date'] },
-          { name: 'update_job', category: 'jobs', required: ['job_id'], optional: ['name', 'stage', 'lead_rating'] },
+          { name: 'create_job', category: 'jobs', required: ['name'], optional: ['stage', 'job_type_id', 'lead_rating', 'event_date', 'booking_date', 'lead_source'] },
+          { name: 'update_job', category: 'jobs', required: ['job_id'], optional: ['name', 'stage', 'lead_rating', 'event_date', 'booking_date', 'lead_source', 'brand_id', 'notes', 'custom_fields'] },
+          { name: 'search_leads', category: 'jobs', required: [], optional: ['query', 'search', 'stage'] },
+          { name: 'upsert_job', category: 'jobs', required: ['name'], optional: ['job_id', 'search_name', 'event_date', 'booking_date', 'stage', 'lead_source', 'brand_id', 'notes'] },
           { name: 'close_job', category: 'jobs', required: ['job_id'], optional: ['reason'] },
           { name: 'delete_job', category: 'jobs', required: ['job_id'], optional: [] },
           { name: 'get_job_worksheet', category: 'jobs', required: ['job_id'], optional: [] },
@@ -253,14 +255,14 @@ Deno.serve(async (req) => {
           { name: 'debug_api', category: 'utilities', required: [], optional: [] },
           { name: 'list_actions', category: 'utilities', required: [], optional: ['category'] },
         ];
-        
+
         const filterCategory = data.category;
-        const filteredActions = filterCategory 
+        const filteredActions = filterCategory
           ? allActions.filter(a => a.category === filterCategory)
           : allActions;
-        
+
         const categories = [...new Set(allActions.map(a => a.category))];
-        
+
         result = {
           success: true,
           total_actions: allActions.length,
@@ -322,17 +324,45 @@ Deno.serve(async (req) => {
         if (data.brand_id) params.brandId = data.brand_id;
         if (data.page) params.page = String(data.page);
         if (data.per_page) params.pageSize = String(data.per_page); // Táve uses pageSize
+        if (data.search || data.name) params.search = data.search || data.name;
+        if (data.event_date_start) params.eventDateStart = data.event_date_start;
+        if (data.event_date_end) params.eventDateEnd = data.event_date_end;
 
         const response = await vscoRequest(supabase, '/job', { params }, executive);
-        
+
         // VSCO API returns: { meta, type, items } - items is the data array
-        const jobs = response.data?.items || response.data?.jobs || response.data || [];
+        let jobs = response.data?.items || response.data?.jobs || response.data || [];
+        jobs = Array.isArray(jobs) ? jobs : [];
         const pagination = response.data?.meta;
-        console.log(`🔍 [list_jobs] Found ${Array.isArray(jobs) ? jobs.length : 0} jobs, pagination: ${JSON.stringify(pagination)}`);
-        
-        result = response.error 
-          ? { success: false, error: response.error } 
-          : { success: true, jobs: Array.isArray(jobs) ? jobs : [], pagination };
+
+        // Client-side date filter fallback (in case API doesn't honour eventDateStart/End params)
+        if (data.event_date_start || data.event_date_end) {
+          const start = data.event_date_start ? new Date(data.event_date_start) : null;
+          const end = data.event_date_end ? new Date(data.event_date_end) : null;
+          jobs = jobs.filter((j: any) => {
+            const d = j.eventDate ? new Date(j.eventDate) : null;
+            if (!d) return false;
+            if (start && d < start) return false;
+            if (end && d > end) return false;
+            return true;
+          });
+          console.log(`🔍 [list_jobs] After date filter (${data.event_date_start}→${data.event_date_end}): ${jobs.length} jobs`);
+        }
+
+        // Client-side text search fallback
+        if (data.search || data.name) {
+          const q = (data.search || data.name).toLowerCase();
+          jobs = jobs.filter((j: any) =>
+            (j.name || '').toLowerCase().includes(q) ||
+            (j.clientName || '').toLowerCase().includes(q)
+          );
+          console.log(`🔍 [list_jobs] After search filter ("${q}"): ${jobs.length} jobs`);
+        }
+
+        console.log(`🔍 [list_jobs] Returning ${jobs.length} jobs, pagination: ${JSON.stringify(pagination)}`);
+        result = response.error
+          ? { success: false, error: response.error }
+          : { success: true, jobs, pagination };
         break;
       }
 
@@ -400,7 +430,14 @@ Deno.serve(async (req) => {
         if (data.lead_rating) updatePayload.leadRating = data.lead_rating;
         if (data.lead_confidence) updatePayload.leadConfidence = data.lead_confidence;
         if (data.job_type) updatePayload.jobType = data.job_type;
-        if (data.job_type_id) updatePayload.jobTypeId = data.job_type_id; // Use ID for automation trigger
+        if (data.job_type_id) updatePayload.jobTypeId = data.job_type_id;
+        // ✅ FIX: previously missing — these caused update_job to silently send empty PUT body
+        if (data.event_date) updatePayload.eventDate = data.event_date;
+        if (data.booking_date) updatePayload.bookingDate = data.booking_date;
+        if (data.lead_source) updatePayload.leadSource = data.lead_source;
+        if (data.brand_id) updatePayload.brandId = data.brand_id;
+        if (data.notes) updatePayload.notes = data.notes;
+        if (data.custom_fields) updatePayload.customFields = data.custom_fields;
 
         // Táve API requires PUT for updates (not PATCH)
         const response = await vscoRequest(supabase, `/job/${data.job_id}`, {
@@ -419,10 +456,128 @@ Deno.serve(async (req) => {
             lead_status: job.leadStatus,
             lead_rating: job.leadRating,
             lead_confidence: job.leadConfidence,
+            lead_source: job.leadSource,
+            event_date: job.eventDate,
+            booking_date: job.bookingDate,
+            brand_id: job.brandId,
             raw_data: job,
             synced_at: new Date().toISOString(),
           }, { onConflict: 'vsco_id' });
           result = { success: true, job };
+        }
+        break;
+      }
+
+      // ====================================================================
+      // SEARCH LEADS — search jobs/leads by name, email, or phone
+      // ====================================================================
+      case 'search_leads': {
+        const params: Record<string, string> = { pageSize: '200' };
+        // Restrict to lead stage by default (can override with data.stage)
+        params.stage = data.stage || 'lead';
+        if (data.page) params.page = String(data.page);
+
+        const response = await vscoRequest(supabase, '/job', { params }, executive);
+        let leads = response.data?.items || response.data?.jobs || response.data || [];
+        leads = Array.isArray(leads) ? leads : [];
+
+        // Client-side multi-field search
+        const q = (data.query || data.search || '').toLowerCase().trim();
+        if (q) {
+          leads = leads.filter((j: any) => {
+            const name = (j.name || j.clientName || '').toLowerCase();
+            const email = (j.clientEmail || j.email || '').toLowerCase();
+            const phone = (j.clientPhone || j.phone || '').toLowerCase();
+            const firstName = (j.clientFirstName || '').toLowerCase();
+            const lastName = (j.clientLastName || '').toLowerCase();
+            return name.includes(q) || email.includes(q) || phone.includes(q) ||
+              firstName.includes(q) || lastName.includes(q);
+          });
+        }
+
+        console.log(`🔍 [search_leads] Query "${q}" → ${leads.length} results (stage: ${params.stage})`);
+        result = response.error
+          ? { success: false, error: response.error }
+          : { success: true, leads, count: leads.length };
+        break;
+      }
+
+      // ====================================================================
+      // UPSERT JOB — find by external ID or name, update if found, else create
+      // ====================================================================
+      case 'upsert_job': {
+        let existingJobId: string | null = data.job_id || null;
+
+        // Step 1: Resolve job ID by name search if not explicitly provided
+        if (!existingJobId && data.search_name) {
+          const searchResp = await vscoRequest(supabase, '/job', {
+            params: { search: data.search_name, pageSize: '50' }
+          }, executive);
+          const candidates = searchResp.data?.items || searchResp.data?.jobs || searchResp.data || [];
+          const match = Array.isArray(candidates) ? candidates.find((j: any) =>
+            (j.name || '').toLowerCase().includes(data.search_name.toLowerCase()) ||
+            (j.clientName || '').toLowerCase().includes(data.search_name.toLowerCase())
+          ) : null;
+          if (match) {
+            existingJobId = match.id;
+            console.log(`🔍 [upsert_job] Resolved "${data.search_name}" → job ${existingJobId}`);
+          }
+        }
+
+        if (existingJobId) {
+          // ── UPDATE existing job ──
+          const updatePayload: any = {};
+          if (data.name) updatePayload.name = data.name;
+          if (data.stage) updatePayload.stage = data.stage;
+          if (data.event_date) updatePayload.eventDate = data.event_date;
+          if (data.booking_date) updatePayload.bookingDate = data.booking_date;
+          if (data.lead_source) updatePayload.leadSource = data.lead_source;
+          if (data.brand_id) updatePayload.brandId = data.brand_id;
+          if (data.notes) updatePayload.notes = data.notes;
+          if (data.lead_rating) updatePayload.leadRating = data.lead_rating;
+
+          const resp = await vscoRequest(supabase, `/job/${existingJobId}`, {
+            method: 'PUT', body: updatePayload
+          }, executive);
+
+          if (resp.error) {
+            result = { success: false, error: resp.error, operation: 'update', job_id: existingJobId };
+          } else {
+            const job = resp.data;
+            await supabase.from('vsco_jobs').upsert({
+              vsco_id: job.id, name: job.name, stage: job.stage,
+              event_date: job.eventDate, booking_date: job.bookingDate,
+              lead_source: job.leadSource, raw_data: job,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: 'vsco_id' });
+            result = { success: true, job, operation: 'updated', job_id: existingJobId };
+          }
+        } else {
+          // ── CREATE new job ──
+          const createPayload: any = { name: data.name, stage: data.stage || 'lead' };
+          if (data.event_date) createPayload.eventDate = data.event_date;
+          if (data.booking_date) createPayload.bookingDate = data.booking_date;
+          if (data.lead_source) createPayload.leadSource = data.lead_source;
+          if (data.brand_id) createPayload.brandId = data.brand_id;
+          if (data.notes) createPayload.notes = data.notes;
+          if (data.lead_rating) createPayload.leadRating = data.lead_rating;
+
+          const resp = await vscoRequest(supabase, '/job', {
+            method: 'POST', body: createPayload
+          }, executive);
+
+          if (resp.error) {
+            result = { success: false, error: resp.error, operation: 'create' };
+          } else {
+            const job = resp.data;
+            await supabase.from('vsco_jobs').upsert({
+              vsco_id: job.id, name: job.name, stage: job.stage,
+              event_date: job.eventDate, booking_date: job.bookingDate,
+              lead_source: job.leadSource, raw_data: job,
+              synced_at: new Date().toISOString(),
+            }, { onConflict: 'vsco_id' });
+            result = { success: true, job, operation: 'created' };
+          }
         }
         break;
       }
@@ -461,14 +616,14 @@ Deno.serve(async (req) => {
         if (data.per_page) params.pageSize = String(data.per_page);
 
         const response = await vscoRequest(supabase, '/address-book', { params }, executive);
-        
+
         // VSCO API returns: { meta, type, items } - items is the data array
         const contacts = response.data?.items || response.data?.contacts || response.data || [];
         const pagination = response.data?.meta;
         console.log(`🔍 [list_contacts] Found ${Array.isArray(contacts) ? contacts.length : 0} contacts, pagination: ${JSON.stringify(pagination)}`);
-        
-        result = response.error 
-          ? { success: false, error: response.error } 
+
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, contacts: Array.isArray(contacts) ? contacts : [], pagination };
         break;
       }
@@ -565,21 +720,22 @@ Deno.serve(async (req) => {
       case 'list_events': {
         const params: Record<string, string> = {};
         if (data.job_id) params.jobId = data.job_id;
-        if (data.start_date) params.startDate = data.start_date;
-        if (data.end_date) params.endDate = data.end_date;
+        // ✅ FIX: Táve v2 API uses 'start'/'end' not 'startDate'/'endDate'
+        if (data.start_date) params.start = data.start_date;
+        if (data.end_date) params.end = data.end_date;
         if (data.page) params.page = String(data.page);
-        
+
         // Try to request sorted by startDate descending (newest first)
         // Common API patterns: -startDate, sort=-startDate, order=desc
         if (data.sort) params.sort = data.sort;
         else params.sort = '-startDate';
 
         const response = await vscoRequest(supabase, '/event', { params }, executive);
-        
+
         // VSCO API returns: { meta, type, items } - items is the data array
         let events = response.data?.items || response.data?.events || response.data || [];
         const pagination = response.data?.meta;
-        
+
         // Client-side fallback sort: newest first (descending by startDate)
         // In case the API doesn't support the sort parameter
         if (Array.isArray(events) && events.length > 1) {
@@ -590,11 +746,11 @@ Deno.serve(async (req) => {
             return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
           });
         }
-        
+
         console.log(`🔍 [list_events] Found ${Array.isArray(events) ? events.length : 0} events (sorted ${data.sort_order || 'desc'}), pagination: ${JSON.stringify(pagination)}`);
-        
-        result = response.error 
-          ? { success: false, error: response.error } 
+
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, events: Array.isArray(events) ? events : [], pagination };
         break;
       }
@@ -699,8 +855,8 @@ Deno.serve(async (req) => {
         }
         const response = await vscoRequest(supabase, `/job/${data.job_id}/order`, {}, executive);
         const orders = response.data?.orders || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, orders: Array.isArray(orders) ? orders : [] };
         break;
       }
@@ -759,8 +915,8 @@ Deno.serve(async (req) => {
       case 'list_webhooks': {
         const response = await vscoRequest(supabase, '/rest-hook', {}, executive);
         const webhooks = response.data?.webhooks || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, webhooks: Array.isArray(webhooks) ? webhooks : [] };
         break;
       }
@@ -873,15 +1029,15 @@ Deno.serve(async (req) => {
           let page = 1;
           let hasMore = true;
           while (hasMore) {
-            const jobsResponse = await vscoRequest(supabase, '/job', { 
-              params: { page: String(page), pageSize: '100' } 
+            const jobsResponse = await vscoRequest(supabase, '/job', {
+              params: { page: String(page), pageSize: '100' }
             }, executive);
-            
+
             if (jobsResponse.error) {
               syncResults.errors.push(`Jobs sync error: ${jobsResponse.error}`);
               break;
             }
-            
+
             const jobs = jobsResponse.data?.jobs || jobsResponse.data || [];
             const jobsArray = Array.isArray(jobs) ? jobs : [];
             for (const job of jobsArray) {
@@ -907,7 +1063,7 @@ Deno.serve(async (req) => {
               }, { onConflict: 'vsco_id' });
               syncResults.jobs++;
             }
-            
+
             hasMore = jobsArray.length === 100;
             page++;
           }
@@ -921,15 +1077,15 @@ Deno.serve(async (req) => {
             let page = 1;
             let hasMore = true;
             while (hasMore) {
-              const contactsResponse = await vscoRequest(supabase, '/address-book', { 
-                params: { page: String(page), pageSize: '100' } 
+              const contactsResponse = await vscoRequest(supabase, '/address-book', {
+                params: { page: String(page), pageSize: '100' }
               }, executive);
-              
+
               if (contactsResponse.error) {
                 syncResults.errors.push(`Contacts sync error: ${contactsResponse.error}`);
                 break;
               }
-              
+
               const contacts = contactsResponse.data?.contacts || contactsResponse.data || [];
               const contactsArray = Array.isArray(contacts) ? contacts : [];
               for (const contact of contactsArray) {
@@ -949,7 +1105,7 @@ Deno.serve(async (req) => {
                 }, { onConflict: 'vsco_id' });
                 syncResults.contacts++;
               }
-              
+
               hasMore = contactsArray.length === 100;
               page++;
             }
@@ -965,7 +1121,7 @@ Deno.serve(async (req) => {
       case 'get_api_health': {
         // Check API health by making a simple request
         const response = await vscoRequest(supabase, '/studio', {}, executive);
-        
+
         // Get recent API logs
         const { data: recentLogs } = await supabase
           .from('vsco_api_logs')
@@ -976,7 +1132,7 @@ Deno.serve(async (req) => {
 
         const totalCalls = recentLogs?.length || 0;
         const successCalls = recentLogs?.filter(l => l.success).length || 0;
-        const avgResponseTime = totalCalls > 0 
+        const avgResponseTime = totalCalls > 0
           ? Math.round(recentLogs!.reduce((acc, l) => acc + (l.response_time_ms || 0), 0) / totalCalls)
           : 0;
 
@@ -1000,7 +1156,7 @@ Deno.serve(async (req) => {
         const params: Record<string, string> = {};
         if (data.page) params.page = String(data.page);
         if (data.per_page) params.pageSize = String(data.per_page);
-        
+
         const response = await vscoRequest(supabase, '/product', { params }, executive);
         if (response.error) {
           result = { success: false, error: response.error };
@@ -1080,7 +1236,7 @@ Deno.serve(async (req) => {
         const response = await vscoRequest(supabase, `/product/${data.product_id}`, {
           method: 'DELETE',
         }, executive);
-        
+
         if (response.error) {
           result = { success: false, error: response.error };
         } else {
@@ -1223,8 +1379,8 @@ Deno.serve(async (req) => {
 
         const response = await vscoRequest(supabase, '/file', { params }, executive);
         const files = response.data?.files || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, files: Array.isArray(files) ? files : [] };
         break;
       }
@@ -1236,8 +1392,8 @@ Deno.serve(async (req) => {
 
         const response = await vscoRequest(supabase, '/gallery', { params }, executive);
         const galleries = response.data?.galleries || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, galleries: Array.isArray(galleries) ? galleries : [] };
         break;
       }
@@ -1248,8 +1404,8 @@ Deno.serve(async (req) => {
       case 'list_custom_fields': {
         const response = await vscoRequest(supabase, '/custom-field', {}, executive);
         const customFields = response.data?.items || response.data?.customFields || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, custom_fields: Array.isArray(customFields) ? customFields : [] };
         break;
       }
@@ -1304,8 +1460,8 @@ Deno.serve(async (req) => {
       case 'list_discounts': {
         const response = await vscoRequest(supabase, '/discount', {}, executive);
         const discounts = response.data?.items || response.data?.discounts || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, discounts: Array.isArray(discounts) ? discounts : [] };
         break;
       }
@@ -1446,8 +1602,8 @@ Deno.serve(async (req) => {
         }
         const response = await vscoRequest(supabase, `/job/${data.job_id}/contact`, {}, executive);
         const contacts = response.data?.items || response.data?.contacts || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, job_contacts: Array.isArray(contacts) ? contacts : [] };
         break;
       }
@@ -1558,8 +1714,8 @@ Deno.serve(async (req) => {
       case 'list_payment_methods': {
         const response = await vscoRequest(supabase, '/payment-method', {}, executive);
         const methods = response.data?.items || response.data?.paymentMethods || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, payment_methods: Array.isArray(methods) ? methods : [] };
         break;
       }
@@ -1577,8 +1733,8 @@ Deno.serve(async (req) => {
       case 'list_profit_centers': {
         const response = await vscoRequest(supabase, '/profit-center', {}, executive);
         const centers = response.data?.items || response.data?.profitCenters || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, profit_centers: Array.isArray(centers) ? centers : [] };
         break;
       }
@@ -1637,8 +1793,8 @@ Deno.serve(async (req) => {
       case 'list_tax_groups': {
         const response = await vscoRequest(supabase, '/tax-group', {}, executive);
         const groups = response.data?.items || response.data?.taxGroups || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, tax_groups: Array.isArray(groups) ? groups : [] };
         break;
       }
@@ -1658,8 +1814,8 @@ Deno.serve(async (req) => {
       case 'list_tax_rates': {
         const response = await vscoRequest(supabase, '/tax-rate', {}, executive);
         const rates = response.data?.items || response.data?.taxRates || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, tax_rates: Array.isArray(rates) ? rates : [] };
         break;
       }
@@ -1753,8 +1909,8 @@ Deno.serve(async (req) => {
       case 'list_discount_types': {
         const response = await vscoRequest(supabase, '/discount-type', {}, executive);
         const types = response.data?.items || response.data?.discountTypes || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, discount_types: Array.isArray(types) ? types : [] };
         break;
       }
@@ -1785,8 +1941,8 @@ Deno.serve(async (req) => {
       case 'list_event_types': {
         const response = await vscoRequest(supabase, '/event-type', {}, executive);
         const types = response.data?.items || response.data?.eventTypes || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, event_types: Array.isArray(types) ? types : [] };
         break;
       }
@@ -1837,8 +1993,8 @@ Deno.serve(async (req) => {
       case 'list_file_types': {
         const response = await vscoRequest(supabase, '/file-type', {}, executive);
         const types = response.data?.items || response.data?.fileTypes || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, file_types: Array.isArray(types) ? types : [] };
         break;
       }
@@ -1846,8 +2002,8 @@ Deno.serve(async (req) => {
       case 'list_job_closed_reasons': {
         const response = await vscoRequest(supabase, '/job-closed-reason', {}, executive);
         const reasons = response.data?.items || response.data?.jobClosedReasons || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, job_closed_reasons: Array.isArray(reasons) ? reasons : [] };
         break;
       }
@@ -1867,8 +2023,8 @@ Deno.serve(async (req) => {
       case 'list_job_roles': {
         const response = await vscoRequest(supabase, '/job-role', {}, executive);
         const roles = response.data?.items || response.data?.jobRoles || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, job_roles: Array.isArray(roles) ? roles : [] };
         break;
       }
@@ -1887,8 +2043,8 @@ Deno.serve(async (req) => {
       case 'list_job_types': {
         const response = await vscoRequest(supabase, '/job-type', {}, executive);
         const types = response.data?.items || response.data?.jobTypes || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, job_types: Array.isArray(types) ? types : [] };
         break;
       }
@@ -1908,8 +2064,8 @@ Deno.serve(async (req) => {
       case 'list_lead_sources': {
         const response = await vscoRequest(supabase, '/lead-source', {}, executive);
         const sources = response.data?.items || response.data?.leadSources || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, lead_sources: Array.isArray(sources) ? sources : [] };
         break;
       }
@@ -1929,8 +2085,8 @@ Deno.serve(async (req) => {
       case 'list_lead_statuses': {
         const response = await vscoRequest(supabase, '/lead-status', {}, executive);
         const statuses = response.data?.items || response.data?.leadStatuses || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, lead_statuses: Array.isArray(statuses) ? statuses : [] };
         break;
       }
@@ -1950,8 +2106,8 @@ Deno.serve(async (req) => {
       case 'list_product_types': {
         const response = await vscoRequest(supabase, '/product-type', {}, executive);
         const types = response.data?.items || response.data?.productTypes || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, product_types: Array.isArray(types) ? types : [] };
         break;
       }
@@ -1974,8 +2130,8 @@ Deno.serve(async (req) => {
       case 'list_users': {
         const response = await vscoRequest(supabase, '/user', {}, executive);
         const users = response.data?.items || response.data?.users || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, users: Array.isArray(users) ? users : [] };
         break;
       }
@@ -2143,8 +2299,8 @@ Deno.serve(async (req) => {
       case 'list_timezones': {
         const response = await vscoRequest(supabase, '/timezone', {}, executive);
         const timezones = response.data?.items || response.data?.timezones || response.data || [];
-        result = response.error 
-          ? { success: false, error: response.error } 
+        result = response.error
+          ? { success: false, error: response.error }
           : { success: true, timezones: Array.isArray(timezones) ? timezones : [] };
         break;
       }
@@ -2245,7 +2401,7 @@ Deno.serve(async (req) => {
       // ====================================================================
       case 'debug_api': {
         console.log('🔍 [debug_api] Starting comprehensive API diagnostics...');
-        
+
         const endpoints = [
           { name: 'studio', path: '/studio' },
           { name: 'brand', path: '/brand' },
@@ -2261,13 +2417,13 @@ Deno.serve(async (req) => {
           { name: 'lead-source', path: '/lead-source' },
           { name: 'event-type', path: '/event-type' },
         ];
-        
+
         const diagnostics: Record<string, any> = {};
-        
+
         for (const ep of endpoints) {
           console.log(`🔍 [debug_api] Testing endpoint: ${ep.path}`);
           const response = await vscoRequest(supabase, ep.path, {}, executive);
-          
+
           diagnostics[ep.name] = {
             endpoint: ep.path,
             status: response.status,
@@ -2288,14 +2444,14 @@ Deno.serve(async (req) => {
             rawPreview: response.data ? JSON.stringify(response.data).slice(0, 400) : 'null/undefined',
           };
         }
-        
+
         const keyTest = await fetch(`${BASE_URL}/studio`, {
           headers: {
             'X-Api-Key': VSCO_API_KEY || '',
             'Accept': 'application/json',
           },
         });
-        
+
         result = {
           success: true,
           api_key_configured: !!VSCO_API_KEY,
