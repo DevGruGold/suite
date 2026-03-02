@@ -793,13 +793,61 @@ Deno.serve(async (req) => {
           }
         }
 
+        // Sort results by event_date ascending (null dates last)
+        findResults.sort((a: any, b: any) => {
+          if (!a.event_date && !b.event_date) return 0;
+          if (!a.event_date) return 1;
+          if (!b.event_date) return -1;
+          return a.event_date.localeCompare(b.event_date);
+        });
+
+        const dateList = [...new Set(findResults.map((r: any) => r.event_date).filter(Boolean))].join(', ');
         result = {
           success: true,
           matches: findResults,
           count: findResults.length,
           hint: findResults.length > 0
-            ? `Use update_job with job_id: "${findResults[0].vsco_id}" to update the first match`
-            : `No matches found after ${Math.round((Date.now() - searchStartMs) / 1000)}s of searching.`
+            ? `Found ${findResults.length} jobs. Event dates: [${dateList}]. Use update_job with the vsco_id matching the correct date.`
+            : `No matches found after ${Math.round((Date.now() - searchStartMs) / 1000)}s of searching. Try sync_jobs then search again.`
+        };
+        break;
+      }
+
+      // ====================================================================
+      // GET JOB — fetch complete raw structure of a single job by vsco_id
+      // Use this to inspect all field names on a VSCO job object
+      // ====================================================================
+      case 'get_job': {
+        const jobId = data.vsco_id || data.job_id || data.id;
+        if (!jobId) {
+          result = { success: false, error: 'vsco_id is required' };
+          break;
+        }
+        const resp = await vscoRequest(supabase, `/job/${jobId}`, {}, executive);
+        if (resp.error) {
+          result = { success: false, error: resp.error };
+          break;
+        }
+        const job = resp.data;
+        const flatFields = job ? Object.keys(job) : [];
+        const linkFields = job?.links ? Object.keys(job.links) : [];
+        console.log(`🔍 [get_job] ${jobId} flatFields=[${flatFields.join(', ')}]`);
+        console.log(`🔍 [get_job] ${jobId} linkFields=[${linkFields.join(', ')}]`);
+        result = {
+          success: true,
+          vsco_id: jobId,
+          flat_fields: flatFields,
+          link_fields: linkFields,
+          // Key fields surfaced for easy reading
+          name: job?.name,
+          stage: job?.stage,
+          event_date: job?.eventDate,
+          primaryContactId: job?.primaryContactId,
+          contactId: job?.contactId,
+          clientId: job?.clientId,
+          links: job?.links,
+          // Full raw data for complete inspection
+          raw: job,
         };
         break;
       }
