@@ -419,10 +419,18 @@ Deno.serve(async (req) => {
       }
 
       case 'update_job': {
-        if (!data.job_id) {
-          result = { success: false, error: 'job_id required' };
+        // Accept both job_id and id (Eliza sometimes passes the field as 'id' from job objects)
+        const jobIdToUpdate = data.job_id || data.id;
+        if (!jobIdToUpdate) {
+          result = { success: false, error: 'job_id required (pass job_id or id)' };
           break;
         }
+
+        // Normalize event_date to YYYY-MM-DD
+        if (data.event_date && !/^\d{4}-\d{2}-\d{2}$/.test(data.event_date)) {
+          try { data.event_date = new Date(data.event_date).toISOString().split('T')[0]; } catch { }
+        }
+
         const updatePayload: any = {};
         if (data.name) updatePayload.name = data.name;
         if (data.stage) updatePayload.stage = data.stage;
@@ -431,7 +439,6 @@ Deno.serve(async (req) => {
         if (data.lead_confidence) updatePayload.leadConfidence = data.lead_confidence;
         if (data.job_type) updatePayload.jobType = data.job_type;
         if (data.job_type_id) updatePayload.jobTypeId = data.job_type_id;
-        // ✅ FIX: previously missing — these caused update_job to silently send empty PUT body
         if (data.event_date) updatePayload.eventDate = data.event_date;
         if (data.booking_date) updatePayload.bookingDate = data.booking_date;
         if (data.lead_source) updatePayload.leadSource = data.lead_source;
@@ -439,14 +446,24 @@ Deno.serve(async (req) => {
         if (data.notes) updatePayload.notes = data.notes;
         if (data.custom_fields) updatePayload.customFields = data.custom_fields;
 
-        // Táve API requires PUT for updates (not PATCH)
-        const response = await vscoRequest(supabase, `/job/${data.job_id}`, {
+        console.log(`✏️ [update_job] PUT /job/${jobIdToUpdate}`, JSON.stringify(updatePayload));
+
+        // Try PUT first (Táve standard), fall back to PATCH if PUT rejects
+        let response = await vscoRequest(supabase, `/job/${jobIdToUpdate}`, {
           method: 'PUT',
           body: updatePayload,
         }, executive);
 
         if (response.error) {
-          result = { success: false, error: response.error };
+          console.warn(`⚠️ [update_job] PUT failed (${response.status}): ${response.error} — retrying with PATCH`);
+          response = await vscoRequest(supabase, `/job/${jobIdToUpdate}`, {
+            method: 'PATCH',
+            body: updatePayload,
+          }, executive);
+        }
+
+        if (response.error) {
+          result = { success: false, error: response.error, job_id_used: jobIdToUpdate };
         } else {
           const job = response.data;
           await supabase.from('vsco_jobs').upsert({
@@ -463,8 +480,112 @@ Deno.serve(async (req) => {
             raw_data: job,
             synced_at: new Date().toISOString(),
           }, { onConflict: 'vsco_id' });
-          result = { success: true, job };
+          result = { success: true, job, job_id_used: jobIdToUpdate };
         }
+        break;
+      }
+
+      // ====================================================================
+      // FIND JOB — search for a job and return its internal VSCO ID
+      // Use this BEFORE update_job when you don't know the exact job_id
+      // ====================================================================
+      case 'find_job': {
+        const sq = (data.search || data.name || data.search_name || '').toLowerCase().trim();
+        if (!sq) {
+          result = { success: false, error: 'search, name, or search_name is required' };
+          break;
+        }
+
+        const findResults: any[] = [];
+
+        // Search 1: local vsco_jobs DB
+        const { data: localJobs } = await supabase
+          .from('vsco_jobs')
+          .select('vsco_id, name, raw_data, event_date, stage')
+          .limit(300);
+
+        (localJobs || []).forEach((j: any) => {
+          const jobName = (j.name || '').toLowerCase();
+          const rawData = j.raw_data || {};
+          const clientName = (rawData.clientName || rawData.client_name || '').toLowerCase();
+          const contacts = Array.isArray(rawData.contacts) ? rawData.contacts : [];
+          const contactNames = contacts.map((c: any) =>
+            `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase().trim()
+          ).join(' ');
+          if (jobName.includes(sq) || clientName.includes(sq) || contactNames.includes(sq)) {
+            findResults.push({
+              source: 'local_db',
+              vsco_id: j.vsco_id,
+              name: j.name,
+              stage: j.stage,
+              event_date: j.event_date,
+              client_name: rawData.clientName || clientName
+            });
+          }
+        });
+
+        // Search 2: contact API then linked jobs
+        if (findResults.length === 0) {
+          const cResp = await vscoRequest(supabase, '/address-book', {
+            params: { search: data.search || data.search_name || data.name, pageSize: '50' }
+          }, executive);
+          const contacts = cResp.data?.items || cResp.data?.contacts || cResp.data || [];
+          for (const c of (Array.isArray(contacts) ? contacts : [])) {
+            const full = `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase();
+            if (full.includes(sq)) {
+              const jResp = await vscoRequest(supabase, '/job', {
+                params: { contactId: c.id, pageSize: '50' }
+              }, executive);
+              const linked = jResp.data?.items || jResp.data?.jobs || [];
+              (Array.isArray(linked) ? linked : []).forEach((j: any) => {
+                findResults.push({
+                  source: 'contact_api',
+                  vsco_id: j.id,
+                  name: j.name,
+                  stage: j.stage,
+                  event_date: j.eventDate,
+                  client_name: `${c.firstName || ''} ${c.lastName || ''}`.trim()
+                });
+              });
+              break;
+            }
+          }
+        }
+
+        // Search 3: paginated full scan (up to 3 pages to avoid timeout)
+        if (findResults.length === 0) {
+          for (let pg = 1; pg <= 3; pg++) {
+            const sResp = await vscoRequest(supabase, '/job', {
+              params: { pageSize: '100', page: String(pg) }
+            }, executive);
+            const batch = sResp.data?.items || sResp.data?.jobs || sResp.data || [];
+            if (!Array.isArray(batch) || batch.length === 0) break;
+            batch.forEach((j: any) => {
+              const name = (j.name || j.clientName || '').toLowerCase();
+              const email = (j.clientEmail || j.email || '').toLowerCase();
+              if (name.includes(sq) || email.includes(sq)) {
+                findResults.push({
+                  source: `api_scan_p${pg}`,
+                  vsco_id: j.id,
+                  name: j.name,
+                  stage: j.stage,
+                  event_date: j.eventDate,
+                  client_name: j.clientName || ''
+                });
+              }
+            });
+            if (batch.length < 100) break;
+          }
+        }
+
+        result = {
+          success: true,
+          matches: findResults,
+          count: findResults.length,
+          hint: findResults.length > 0
+            ? `Use update_job with job_id: "${findResults[0].vsco_id}" to update the first match`
+            : 'No matches found. Try sync_jobs first then search again.'
+        };
         break;
       }
 
