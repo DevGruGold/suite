@@ -613,15 +613,15 @@ Deno.serve(async (req) => {
         const q = (data.query || data.search || '').toLowerCase().trim();
         if (q) {
           leads = leads.filter((j: any) => {
-            const name = (j.name || j.clientName || '').toLowerCase();
-            const email = (j.clientEmail || j.email || '').toLowerCase();
-            const phone = (j.clientPhone || j.phone || '').toLowerCase();
-            const firstName = (j.primaryContact?.firstName || j.clientFirstName || '').toLowerCase();
-            const lastName = (j.primaryContact?.lastName || j.clientLastName || '').toLowerCase();
-            const email = (j.primaryContact?.email || j.clientEmail || j.email || '').toLowerCase();
-            const phone = (j.primaryContact?.phone || j.clientPhone || j.phone || '').toLowerCase();
+            const name = (j.name || '').toLowerCase();
+            const pc = j.primaryContact || {};
+            const firstName = (pc.firstName || '').toLowerCase();
+            const lastName = (pc.lastName || '').toLowerCase();
+            const email = (pc.email || j.email || '').toLowerCase();
+            const phone = (pc.phone || j.phone || '').toLowerCase();
             return name.includes(q) || email.includes(q) || phone.includes(q) ||
-              firstName.includes(q) || lastName.includes(q);
+              firstName.includes(q) || lastName.includes(q) ||
+              `${firstName} ${lastName}`.includes(q);
           });
         }
 
