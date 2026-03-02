@@ -54,12 +54,22 @@ async function getServiceAccountAccessToken(): Promise<string | null> {
     const serviceKeyJson = Deno.env.get('GOOGLE_CLOUD_SERVICE_KEY');
     if (serviceKeyJson) {
       try {
-        const parsed = JSON.parse(serviceKeyJson);
+        // Secret may be raw JSON or base64-encoded JSON — try both
+        let parsed: any;
+        try {
+          parsed = JSON.parse(serviceKeyJson);
+        } catch {
+          try {
+            parsed = JSON.parse(atob(serviceKeyJson));
+          } catch {
+            parsed = JSON.parse(serviceKeyJson.trim().replace(/^\uFEFF/, ''));
+          }
+        }
         saEmail = saEmail || parsed.client_email;
         rawKey = rawKey || parsed.private_key;
         console.log('🔑 SA credentials sourced from GOOGLE_CLOUD_SERVICE_KEY JSON');
-      } catch (e) {
-        console.warn('⚠️ Failed to parse GOOGLE_CLOUD_SERVICE_KEY JSON:', e?.message);
+      } catch (e: any) {
+        console.warn('⚠️ Failed to parse GOOGLE_CLOUD_SERVICE_KEY:', e?.message);
       }
     }
   }

@@ -39,13 +39,27 @@ async function getServiceAccountToken(): Promise<string | null> {
     }
 
     try {
-        const sa = JSON.parse(saJsonStr);
+        // The secret may be stored as raw JSON or as base64-encoded JSON.
+        // Try raw JSON first; fall back to base64 decoding.
+        let sa: any;
+        try {
+            sa = JSON.parse(saJsonStr);
+        } catch {
+            try {
+                sa = JSON.parse(atob(saJsonStr));
+            } catch {
+                // Try stripping any leading/trailing whitespace or BOM
+                const trimmed = saJsonStr.trim().replace(/^\uFEFF/, '');
+                sa = JSON.parse(trimmed);
+            }
+        }
         const { client_email, private_key, token_uri } = sa;
 
         if (!client_email || !private_key) {
             console.warn('⚠️ Service account JSON missing client_email or private_key');
             return null;
         }
+
 
         const tokenUrl = token_uri || 'https://oauth2.googleapis.com/token';
         const now = Math.floor(Date.now() / 1000);
