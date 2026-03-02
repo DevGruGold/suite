@@ -563,7 +563,7 @@ Deno.serve(async (req) => {
         if (findResults.length === 0) {
           for (let pg = 1; pg <= 3; pg++) {
             const sResp = await vscoRequest(supabase, '/job', {
-              params: { pageSize: '100', page: String(pg) }
+              params: { pageSize: '100', page: String(pg), includeClosed: 'true' }
             }, executive);
             const batch = sResp.data?.items || sResp.data?.jobs || sResp.data || [];
             if (!Array.isArray(batch) || batch.length === 0) break;
@@ -616,8 +616,10 @@ Deno.serve(async (req) => {
             const name = (j.name || j.clientName || '').toLowerCase();
             const email = (j.clientEmail || j.email || '').toLowerCase();
             const phone = (j.clientPhone || j.phone || '').toLowerCase();
-            const firstName = (j.clientFirstName || '').toLowerCase();
-            const lastName = (j.clientLastName || '').toLowerCase();
+            const firstName = (j.primaryContact?.firstName || j.clientFirstName || '').toLowerCase();
+            const lastName = (j.primaryContact?.lastName || j.clientLastName || '').toLowerCase();
+            const email = (j.primaryContact?.email || j.clientEmail || j.email || '').toLowerCase();
+            const phone = (j.primaryContact?.phone || j.clientPhone || j.phone || '').toLowerCase();
             return name.includes(q) || email.includes(q) || phone.includes(q) ||
               firstName.includes(q) || lastName.includes(q);
           });
@@ -730,14 +732,16 @@ Deno.serve(async (req) => {
             if (!Array.isArray(batch) || batch.length === 0) { hasMore = false; break; }
 
             found = batch.find((j: any) => {
-              const name = (j.name || j.clientName || '').toLowerCase();
-              const email = (j.clientEmail || j.email || '').toLowerCase();
-              const phone = (j.clientPhone || j.phone || '').toLowerCase();
-              const contacts = Array.isArray(j.contacts) ? j.contacts : [];
-              const contactMatch = contacts.some((c: any) =>
-                `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase().includes(sq)
-              );
-              return name.includes(sq) || email.includes(sq) || phone.includes(sq) || contactMatch;
+              const name = (j.name || '').toLowerCase();
+              // API docs confirm client info is in primaryContact, not clientName
+              const pc = j.primaryContact || {};
+              const firstName = (pc.firstName || '').toLowerCase();
+              const lastName = (pc.lastName || '').toLowerCase();
+              const email = (pc.email || '').toLowerCase();
+              const phone = (pc.phone || '').toLowerCase();
+              return name.includes(sq) || email.includes(sq) || phone.includes(sq) ||
+                firstName.includes(sq) || lastName.includes(sq) ||
+                `${firstName} ${lastName}`.includes(sq);
             });
 
             hasMore = batch.length === 100;
@@ -1268,7 +1272,8 @@ Deno.serve(async (req) => {
           let hasMore = true;
           while (hasMore) {
             const jobsResponse = await vscoRequest(supabase, '/job', {
-              params: { page: String(page), pageSize: '100' }
+              // includeClosed=true is REQUIRED — without it API only returns 'lead' stage jobs
+              params: { page: String(page), pageSize: '100', includeClosed: 'true' }
             }, executive);
 
             if (jobsResponse.error) {
@@ -1276,13 +1281,21 @@ Deno.serve(async (req) => {
               break;
             }
 
-            const jobs = jobsResponse.data?.jobs || jobsResponse.data || [];
+            // API docs: response is {items:[], meta:{}, type:"job"} — NOT {jobs:[]}
+            const jobs = jobsResponse.data?.items || jobsResponse.data || [];
             const jobsArray = Array.isArray(jobs) ? jobs : [];
+            console.log(`🔄 [sync_jobs] Page ${page}: ${jobsArray.length} jobs (raw response keys: ${Object.keys(jobsResponse.data || {}).join(', ')})`);
             for (const job of jobsArray) {
+              const pc = job.primaryContact || {};
               await supabase.from('vsco_jobs').upsert({
                 vsco_id: job.id,
                 name: job.name,
                 stage: job.stage,
+                // Store primaryContact info at top level for easy searching  
+                client_first_name: pc.firstName,
+                client_last_name: pc.lastName,
+                client_email: pc.email,
+                client_phone: pc.phone,
                 lead_status: job.leadStatus,
                 lead_rating: job.leadRating,
                 lead_confidence: job.leadConfidence,
@@ -1291,10 +1304,8 @@ Deno.serve(async (req) => {
                 brand_id: job.brandId,
                 event_date: job.eventDate,
                 booking_date: job.bookingDate,
-                total_revenue: job.totalRevenue,
-                total_cost: job.totalCost,
-                account_balance: job.accountBalance,
-                closed: job.closed,
+                total_revenue: job.total,
+                closed: job.closed ?? false,
                 closed_reason: job.closedReason,
                 raw_data: job,
                 synced_at: new Date().toISOString(),
@@ -1324,7 +1335,8 @@ Deno.serve(async (req) => {
                 break;
               }
 
-              const contacts = contactsResponse.data?.contacts || contactsResponse.data || [];
+              // API docs: contacts also return {items:[], meta:{}} — NOT {contacts:[]}
+              const contacts = contactsResponse.data?.items || contactsResponse.data?.contacts || contactsResponse.data || [];
               const contactsArray = Array.isArray(contacts) ? contacts : [];
               for (const contact of contactsArray) {
                 await supabase.from('vsco_contacts').upsert({
