@@ -508,32 +508,110 @@ Deno.serve(async (req) => {
         const searchStartMs = Date.now();
         const MAX_SCAN_MS = 25_000;
 
-        // ── Tier 0: VSCO server-side job search (fastest — no page scanning) ──
-        // VSCO API may support ?search= on /job endpoint. Try it first.
+        // ── Tier 0: VSCO server-side job search + contact resolution ──
+        // Step A: server-side search narrows the 7424-job space immediately.
+        // Step B: for each unique primaryContactId, look up the contact to
+        //         confirm name match (jobs don't embed firstName/lastName).
         try {
           const s0Resp = await vscoRequest(supabase, '/job', {
             params: { search: rawSearch, pageSize: '50', includeClosed: 'true' }
           }, executive);
           const s0Jobs = s0Resp.data?.items || [];
+
           if (Array.isArray(s0Jobs) && s0Jobs.length > 0) {
-            console.log(`🔍 [find_job] T0 server-side search: ${s0Jobs.length} results for "${rawSearch}"`);
+            console.log(`🔍 [find_job] T0 server-side search: ${s0Jobs.length} candidate jobs for "${rawSearch}"`);
+
+            // Log field names from first job so we know the contact ref field name
+            if (s0Jobs[0]) {
+              const j0 = s0Jobs[0];
+              const contactRefField =
+                j0.primaryContactId ? 'primaryContactId' :
+                  (typeof j0.primaryContact === 'string' && j0.primaryContact) ? 'primaryContact(string)' :
+                    j0.contactId ? 'contactId' : 'unknown';
+              console.log(`🔍 [find_job] T0 job[0] name="${j0.name}" stage="${j0.stage}" eventDate="${j0.eventDate}" contactRefField=${contactRefField} contactId="${j0.primaryContactId || j0.primaryContact || j0.contactId}"`);
+            }
+
+            // Collect unique contact IDs referenced by these jobs
+            const contactIdMap = new Map<string, any>(); // contactId → resolved contact
+            for (const j of s0Jobs) {
+              const cid = j.primaryContactId
+                || (typeof j.primaryContact === 'string' ? j.primaryContact : null)
+                || j.contactId;
+              if (cid && !contactIdMap.has(cid)) contactIdMap.set(cid, null);
+            }
+
+            // Resolve each unique contact ID via /address-book/{id}
+            const searchTokensT0 = sq.split(/\s+/).filter(Boolean);
+            const resolvedContacts: Record<string, any> = {};
+            for (const [cid] of contactIdMap) {
+              try {
+                const cResp = await vscoRequest(supabase, `/address-book/${cid}`, {}, executive);
+                const contact = cResp.data;
+                if (contact) {
+                  const cFirst = (contact.firstName || '').toLowerCase();
+                  const cLast = (contact.lastName || '').toLowerCase();
+                  const cName = (contact.name || '').toLowerCase();
+                  const cEmail = (contact.email || '').toLowerCase();
+                  const isMatch = searchTokensT0.every((tk: string) =>
+                    cFirst.includes(tk) || cLast.includes(tk) ||
+                    cName.includes(tk) || cEmail.includes(tk)
+                  );
+                  resolvedContacts[cid] = {
+                    id: cid,
+                    firstName: contact.firstName,
+                    lastName: contact.lastName,
+                    name: contact.name,
+                    email: contact.email,
+                    isMatch,
+                  };
+                  console.log(`🔍 [find_job] T0 contact ${cid}: "${contact.firstName} ${contact.lastName}" match=${isMatch}`);
+                }
+              } catch {
+                // contact lookup failed, keep going
+              }
+            }
+
+            // Push jobs whose resolved contact matches search
+            const matchedContactIds = new Set(
+              Object.values(resolvedContacts)
+                .filter((c: any) => c.isMatch)
+                .map((c: any) => c.id)
+            );
+
+            // If no contacts resolved to a match, fall back to including ALL T0 results
+            // (VSCO server already filtered them — likely correct)
+            const useAllT0 = matchedContactIds.size === 0;
+            if (useAllT0) {
+              console.log(`🔍 [find_job] T0 contact resolution found no name match — including all ${s0Jobs.length} server results`);
+            }
+
             s0Jobs.forEach((j: any) => {
-              const pc = j.primaryContact || {};
-              findResults.push({
-                source: 'vsco_search',
-                vsco_id: j.id,
-                name: j.name,
-                stage: j.stage,
-                event_date: j.eventDate,
-                client_name: `${pc.firstName || ''} ${pc.lastName || ''}`.trim(),
-              });
+              const cid = j.primaryContactId
+                || (typeof j.primaryContact === 'string' ? j.primaryContact : null)
+                || j.contactId;
+              const contact = cid ? resolvedContacts[cid] : null;
+              if (useAllT0 || matchedContactIds.has(cid)) {
+                findResults.push({
+                  source: 'vsco_search',
+                  vsco_id: j.id,
+                  name: j.name || `Job ${j.id}`,
+                  stage: j.stage,
+                  event_date: j.eventDate,
+                  client_name: contact
+                    ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim()
+                    : cid || '',
+                  contact_id: cid || null,
+                });
+              }
             });
+            console.log(`🔍 [find_job] T0 final: ${findResults.length} confirmed matches`);
           } else {
             console.log(`🔍 [find_job] T0 server search: 0 results (API may not support ?search= on /job)`);
           }
         } catch (t0e) {
           console.log(`🔍 [find_job] T0 server search failed: ${t0e}`);
         }
+
 
         // ── Tier 1: local vsco_jobs DB ──
         // IMPORTANT: only SELECT columns guaranteed to exist. 'client_*' columns may not
