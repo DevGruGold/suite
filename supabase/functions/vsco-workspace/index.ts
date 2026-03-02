@@ -1335,78 +1335,183 @@ Deno.serve(async (req) => {
       }
 
       // ====================================================================
-      // SYNC ALL - Full data synchronization
+      // SYNC STATUS - Check how much has been synced
+      // ====================================================================
+      case 'sync_status': {
+        const { data: states } = await supabase
+          .from('vsco_sync_state')
+          .select('*')
+          .order('entity');
+
+        const { count: localJobCount } = await supabase
+          .from('vsco_jobs')
+          .select('*', { count: 'exact', head: true });
+
+        const jobState = (states || []).find((s: any) => s.entity === 'jobs') || {};
+        result = {
+          success: true,
+          sync_status: {
+            jobs: {
+              local_rows: localJobCount || 0,
+              pages_synced: jobState.last_synced_page || 0,
+              total_pages: jobState.total_pages || '?',
+              items_synced: jobState.items_synced || 0,
+              total_items: jobState.total_items || '?',
+              is_complete: jobState.is_complete || false,
+              last_synced_at: jobState.last_synced_at,
+              percent_complete: jobState.total_pages
+                ? Math.round(((jobState.last_synced_page || 0) / jobState.total_pages) * 100)
+                : null,
+            },
+            all_states: states || [],
+          },
+          hint: jobState.is_complete
+            ? 'Full sync complete. Future sync_jobs calls will only check for new/modified jobs.'
+            : `Call sync_jobs again to continue. Will sync pages ${(jobState.last_synced_page || 0) + 1}–${(jobState.last_synced_page || 0) + 15}.`,
+        };
+        break;
+      }
+
+      // ====================================================================
+      // SYNC JOBS / SYNC ALL — Resumable chunked sync
+      // Each call syncs up to PAGES_PER_CALL pages, then saves state.
+      // Call sync_jobs repeatedly until is_complete=true.
+      // After full sync, subsequent calls only fetch page 1 (delta mode).
       // ====================================================================
       case 'sync_all':
       case 'sync_jobs':
       case 'sync_contacts': {
-        const syncResults: any = { jobs: 0, contacts: 0, events: 0, errors: [] };
+        const PAGES_PER_CALL = Number(data.pages_per_call) || 15;
+        const syncResults: any = { jobs: 0, contacts: 0, events: 0, errors: [], pages_synced_this_call: 0 };
 
-        // Sync jobs (using /job singular)
-        try {
-          let page = 1;
-          let hasMore = true;
-          while (hasMore) {
-            const jobsResponse = await vscoRequest(supabase, '/job', {
-              // includeClosed=true is REQUIRED — without it API only returns 'lead' stage jobs
-              params: { page: String(page), pageSize: '100', includeClosed: 'true' }
-            }, executive);
+        // ── Sync jobs ──────────────────────────────────────────────────────
+        if (action === 'sync_all' || action === 'sync_jobs') {
+          try {
+            // Read resume state from DB
+            const { data: stateRow } = await supabase
+              .from('vsco_sync_state')
+              .select('*')
+              .eq('entity', 'jobs')
+              .single();
 
-            if (jobsResponse.error) {
-              syncResults.errors.push(`Jobs sync error: ${jobsResponse.error}`);
-              break;
+            const alreadyComplete = stateRow?.is_complete === true;
+            let startPage: number;
+            let knownTotalPages: number = stateRow?.total_pages || 999;
+
+            if (alreadyComplete) {
+              // Delta mode: only sync page 1 to capture the most recently modified jobs
+              startPage = 1;
+              console.log(`🔄 [sync_jobs] DELTA MODE — full sync previously completed. Checking page 1 for new/modified jobs.`);
+            } else {
+              startPage = (stateRow?.last_synced_page || 0) + 1;
+              console.log(`🔄 [sync_jobs] RESUMING from page ${startPage} (${stateRow?.items_synced || 0} jobs synced so far, ${knownTotalPages} total pages)`);
             }
 
-            // API docs: response is {items:[], meta:{}, type:"job"} — NOT {jobs:[]}
-            const jobs = jobsResponse.data?.items || jobsResponse.data || [];
-            const jobsArray = Array.isArray(jobs) ? jobs : [];
-            console.log(`🔄 [sync_jobs] Page ${page}: ${jobsArray.length} jobs (raw response keys: ${Object.keys(jobsResponse.data || {}).join(', ')})`);
-            for (const job of jobsArray) {
-              const pc = job.primaryContact || {};
-              const { error: upsertErr } = await supabase.from('vsco_jobs').upsert({
-                vsco_id: job.id,
-                name: job.name,
-                stage: job.stage,
-                // Store primaryContact info at top level for easy searching  
-                client_first_name: pc.firstName,
-                client_last_name: pc.lastName,
-                client_email: pc.email,
-                client_phone: pc.phone,
-                lead_status: job.leadStatus,
-                lead_rating: job.leadRating,
-                lead_confidence: job.leadConfidence,
-                lead_source: job.leadSource,
-                job_type: job.jobType,
-                brand_id: job.brandId,
-                event_date: job.eventDate,
-                booking_date: job.bookingDate,
-                total_revenue: job.total,
-                closed: job.closed ?? false,
-                closed_reason: job.closedReason,
-                raw_data: job,
-                synced_at: new Date().toISOString(),
-              }, { onConflict: 'vsco_id' });
-              if (upsertErr) {
-                // Log first upsert error clearly — most likely a missing column
-                if (syncResults.jobs === 0) {
-                  console.error(`❌ [sync_jobs] UPSERT FAILED on first job (${job.id}): ${upsertErr.message}`);
-                  console.error(`❌ [sync_jobs] This likely means vsco_jobs is missing columns (client_first_name etc.)`);
-                  console.error(`❌ [sync_jobs] Run migration: ALTER TABLE vsco_jobs ADD COLUMN IF NOT EXISTS client_first_name TEXT, ADD COLUMN IF NOT EXISTS client_last_name TEXT, ADD COLUMN IF NOT EXISTS client_email TEXT, ADD COLUMN IF NOT EXISTS client_phone TEXT;`);
-                }
-                syncResults.errors.push(`Upsert ${job.id}: ${upsertErr.message}`);
-              } else {
-                syncResults.jobs++;
+            const endPage = alreadyComplete ? 1 : startPage + PAGES_PER_CALL - 1;
+            let lastPageSynced = startPage - 1;
+            let chunkJobCount = 0;
+            let firstPageMeta: any = null;
+
+            for (let page = startPage; page <= endPage; page++) {
+              const jobsResponse = await vscoRequest(supabase, '/job', {
+                params: { page: String(page), pageSize: '100', includeClosed: 'true' }
+              }, executive);
+
+              if (jobsResponse.error) {
+                syncResults.errors.push(`Jobs page ${page} error: ${jobsResponse.error}`);
+                break;
               }
+
+              const meta = jobsResponse.data?.meta;
+              const jobsArray = Array.isArray(jobsResponse.data?.items) ? jobsResponse.data.items : [];
+
+              if (page === startPage && meta) {
+                firstPageMeta = meta;
+                knownTotalPages = meta.totalPages || knownTotalPages;
+                console.log(`🔄 [sync_jobs] API reports ${meta.totalItems} total jobs across ${meta.totalPages} pages`);
+              }
+
+              console.log(`🔄 [sync_jobs] Page ${page}/${knownTotalPages}: ${jobsArray.length} jobs`);
+
+              if (jobsArray.length === 0) break;
+
+              for (const job of jobsArray) {
+                const pc = job.primaryContact || {};
+                const { error: upsertErr } = await supabase.from('vsco_jobs').upsert({
+                  vsco_id: job.id,
+                  name: job.name,
+                  stage: job.stage,
+                  client_first_name: pc.firstName,
+                  client_last_name: pc.lastName,
+                  client_email: pc.email,
+                  client_phone: pc.phone,
+                  lead_status: job.leadStatus,
+                  lead_rating: job.leadRating,
+                  lead_confidence: job.leadConfidence,
+                  lead_source: job.leadSource,
+                  job_type: job.jobType,
+                  brand_id: job.brandId,
+                  event_date: job.eventDate,
+                  booking_date: job.bookingDate,
+                  total_revenue: job.total,
+                  closed: job.closed ?? false,
+                  closed_reason: job.closedReason,
+                  raw_data: job,
+                  synced_at: new Date().toISOString(),
+                }, { onConflict: 'vsco_id' });
+
+                if (upsertErr) {
+                  if (syncResults.jobs === 0 && chunkJobCount === 0) {
+                    console.error(`❌ [sync_jobs] UPSERT FAILED: ${upsertErr.message}`);
+                  }
+                  syncResults.errors.push(`Upsert ${job.id}: ${upsertErr.message}`);
+                } else {
+                  syncResults.jobs++;
+                  chunkJobCount++;
+                }
+              }
+
+              lastPageSynced = page;
+              syncResults.pages_synced_this_call++;
+              if (jobsArray.length < 100) break; // last partial page
             }
 
-            hasMore = jobsArray.length === 100;
-            page++;
+            // Save progress back to DB
+            if (!alreadyComplete) {
+              const newTotalSynced = (stateRow?.items_synced || 0) + chunkJobCount;
+              const isNowComplete = lastPageSynced >= knownTotalPages;
+
+              await supabase.from('vsco_sync_state').upsert({
+                entity: 'jobs',
+                last_synced_page: lastPageSynced,
+                total_pages: knownTotalPages,
+                total_items: firstPageMeta?.totalItems || stateRow?.total_items || 0,
+                items_synced: newTotalSynced,
+                is_complete: isNowComplete,
+                last_synced_at: new Date().toISOString(),
+                last_error: syncResults.errors.length > 0 ? syncResults.errors[syncResults.errors.length - 1] : null,
+              }, { onConflict: 'entity' });
+
+              if (isNowComplete) {
+                console.log(`✅ [sync_jobs] FULL SYNC COMPLETE — ${newTotalSynced} jobs across ${knownTotalPages} pages`);
+                syncResults.full_sync_complete = true;
+              } else {
+                const pagesRemaining = knownTotalPages - lastPageSynced;
+                const callsRemaining = Math.ceil(pagesRemaining / PAGES_PER_CALL);
+                syncResults.progress = `Pages ${lastPageSynced}/${knownTotalPages} synced (${Math.round(lastPageSynced / knownTotalPages * 100)}%). Call sync_jobs ${callsRemaining} more time(s) to complete.`;
+                console.log(`🔄 [sync_jobs] Progress saved: page ${lastPageSynced}/${knownTotalPages}. ${callsRemaining} calls remaining.`);
+              }
+            } else {
+              syncResults.delta_mode = true;
+              syncResults.progress = `Delta sync: checked page 1 for new/modified jobs. ${chunkJobCount} records updated.`;
+            }
+
+          } catch (e) {
+            syncResults.errors.push(`Jobs sync exception: ${e}`);
           }
-        } catch (e) {
-          syncResults.errors.push(`Jobs sync exception: ${e}`);
         }
 
-        // Sync contacts (using /address-book)
+        // ── Sync contacts ──────────────────────────────────────────────────
         if (action === 'sync_all' || action === 'sync_contacts') {
           try {
             let page = 1;
@@ -1421,9 +1526,8 @@ Deno.serve(async (req) => {
                 break;
               }
 
-              // API docs: contacts also return {items:[], meta:{}} — NOT {contacts:[]}
-              const contacts = contactsResponse.data?.items || contactsResponse.data?.contacts || contactsResponse.data || [];
-              const contactsArray = Array.isArray(contacts) ? contacts : [];
+              // API docs: contacts return {items:[], meta:{}} — NOT {contacts:[]}
+              const contactsArray = Array.isArray(contactsResponse.data?.items) ? contactsResponse.data.items : [];
               for (const contact of contactsArray) {
                 await supabase.from('vsco_contacts').upsert({
                   vsco_id: contact.id,
@@ -1453,6 +1557,7 @@ Deno.serve(async (req) => {
         result = { success: true, sync_results: syncResults };
         break;
       }
+
 
       case 'get_api_health': {
         // Check API health by making a simple request
