@@ -369,6 +369,7 @@ const TOOL_CALLING_MANDATE = `
 - Always use the full URL including https:// prefix
 - DO NOT say "I cannot browse the web" - YOU CAN via Playwright Browser
 - Supported actions: 'navigate' (default), 'extract', 'json'
+- For WEB SEARCHES, ALWAYS use DuckDuckGo NOT Google. Format: browse_web({url: "https://duckduckgo.com/html/?q=your+search+terms"}). Google blocks automated searches with CAPTCHAs (HTTP 429 errors).
 
 🔍 FUNCTION DISCOVERY (MANDATORY):
 - When user asks about available edge functions or capabilities → IMMEDIATELY call search_edge_functions({mode: 'full_registry'})
@@ -1304,6 +1305,15 @@ async function executeRealToolCall(
       let normalizedUrl = url;
       if (!url.startsWith('http://') && !url.startsWith('https://')) {
         normalizedUrl = `https://${url}`;
+      }
+
+      // Rewrite Google search URLs to DuckDuckGo to avoid CAPTCHA blocks (HTTP 429)
+      const googleSearchPattern = /^https?:\/\/(www\.)?google\.[a-z.]+\/search\?/i;
+      if (googleSearchPattern.test(normalizedUrl)) {
+        const parsed = new URL(normalizedUrl);
+        const query = parsed.searchParams.get('q') || '';
+        normalizedUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+        console.log(`[browse_web] Rewrote Google search URL to DuckDuckGo: ${normalizedUrl}`);
       }
 
       result = await invokeEdgeFunction('playwright-browse', {
@@ -3840,6 +3850,7 @@ HARD RULES FOR FUNCTION DISCOVERY:
 - NEVER say "I cannot browse the web" or "I don't have web access" - YOU HAVE FULL WEB BROWSING CAPABILITIES
 - Always use the full URL including https:// or http:// prefix
 - If the user provides an incomplete URL (like "google.com"), convert it to "https://google.com"
+- 🚫 NEVER use google.com/search for searches — Google blocks automated queries with CAPTCHAs. ALWAYS use DuckDuckGo: browse_web({url: "https://duckduckgo.com/html/?q=search+terms"})
 
 📎 ATTACHMENT ANALYSIS CRITICAL RULE:
 - When user provides ANY attachment (files, images, documents, code), IMMEDIATELY call analyze_attachment({attachments: [...]})
@@ -4051,7 +4062,7 @@ const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'browse_web',
-      description: '🌐 Browse and fetch content from any URL using the Playwright browser. Use this for viewing websites, checking webpages, or extracting web content.',
+      description: '🌐 Browse and fetch content from any URL using the Playwright browser. Use this for viewing websites, checking webpages, or extracting web content. For web searches, ALWAYS use DuckDuckGo (https://duckduckgo.com/html/?q=query) — NEVER google.com/search (triggers CAPTCHAs/HTTP 429).',
       parameters: {
         type: 'object',
         properties: {
