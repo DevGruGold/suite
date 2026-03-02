@@ -123,7 +123,14 @@ Deno.serve(async (req) => {
   );
 
   try {
-    const { action, data = {}, executive } = await req.json();
+    const body = await req.json();
+    const { action, data: rawData = {}, executive } = body;
+    // Merge any top-level keys (other than action/executive/data) into data.
+    // This handles AI agents that send flat payloads like {action:'find_job', search:'...'} 
+    // instead of the expected nested {action:'find_job', data:{search:'...'}}.
+    const RESERVED = new Set(['action', 'executive', 'data']);
+    const data: any = { ...rawData };
+    Object.keys(body).forEach(k => { if (!RESERVED.has(k) && !(k in data)) data[k] = body[k]; });
     console.log(`📸 [VSCO Workspace] Action: ${action}`, JSON.stringify(data));
 
     let result: any;
