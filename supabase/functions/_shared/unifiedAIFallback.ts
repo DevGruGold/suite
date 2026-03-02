@@ -1,14 +1,14 @@
 /**
- * Unified AI Fallback Service - GEMINI PRIORITY VERSION
- * Provides resilient AI calls with Gemini → Vertex AI → Lovable → DeepSeek → Kimi cascade
- * 
- * ENHANCED: Now includes full Eliza intelligence (system prompt, tools, memory)
- * to ensure ALL fallback providers are equally intelligent as lovable-chat.
- * 
+ * Unified AI Fallback Service - GOOGLE CLOUD OAUTH2 PRIMARY VERSION
+ * Provider cascade:
+ *   1. Vertex AI via Service Account JWT (OAuth2) — primary, most reliable
+ *   2. Vertex AI via Gemini API key — fallback
+ *   3. Lovable (OpenRouter/Anthropic)
+ *   4. DeepSeek V3
+ *   5. Kimi K2
+ *
  * TIMEOUT GUARDS: Per-provider timeouts prevent cascade hangs
  * FAST-FAIL: 402/429 errors skip immediately to next provider
- * 
- * PRIORITY: Gemini is now the primary provider (first in cascade)
  */
 
 import { generateElizaSystemPrompt } from './elizaSystemPrompt.ts';
@@ -16,13 +16,225 @@ import { ELIZA_TOOLS } from './elizaTools.ts';
 
 // Per-provider timeout configuration (ms)
 const PROVIDER_TIMEOUTS = {
-  gemini: 8000,     // Gemini now has fastest timeout as primary
-  vertexai: 8000,   // Vertex AI Express Mode
+  vertexOAuth: 12000, // Vertex AI via Service Account JWT (primary)
+  gemini: 8000,       // Gemini API key fallback
+  vertexai: 8000,     // Vertex AI Express Mode
   lovable: 8000,
-  deepseek: 10000,  // Slightly longer for reasoning
+  deepseek: 10000,    // Slightly longer for reasoning
   kimi: 8000,
   embedding: 10000,
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// SERVICE ACCOUNT JWT HELPER
+// Signs a JWT with the stored private key and exchanges it for a GCP access token
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Base64url encode a Uint8Array (JWT-safe, no padding)
+ */
+function base64url(data: Uint8Array): string {
+  const b64 = btoa(String.fromCharCode(...data));
+  return b64.replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
+}
+
+/**
+ * Build and sign a Google service account JWT, then exchange it for
+ * a short-lived OAuth2 access token with the Vertex AI scope.
+ * Returns null if SA credentials are not configured.
+ */
+async function getServiceAccountAccessToken(): Promise<string | null> {
+  const saEmail = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+  // Private key may be stored with literal \n or real newlines
+  const rawKey = Deno.env.get('GOOGLE_PRIVATE_KEY');
+
+  if (!saEmail || !rawKey) {
+    return null;
+  }
+
+  try {
+    // Normalize the PEM key (handle \n escapes stored as literal backslash-n)
+    const pemKey = rawKey.replace(/\\n/g, '\n');
+
+    // Strip PEM headers/footers and decode to bytes
+    const pemBody = pemKey
+      .replace(/-----BEGIN PRIVATE KEY-----/, '')
+      .replace(/-----END PRIVATE KEY-----/, '')
+      .replace(/\s+/g, '');
+    const keyBytes = Uint8Array.from(atob(pemBody), c => c.charCodeAt(0));
+
+    // Import as PKCS8 RSA key for RS256 signing
+    const cryptoKey = await crypto.subtle.importKey(
+      'pkcs8',
+      keyBytes,
+      { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-256' },
+      false,
+      ['sign']
+    );
+
+    const now = Math.floor(Date.now() / 1000);
+    const header = { alg: 'RS256', typ: 'JWT' };
+    const payload = {
+      iss: saEmail,
+      sub: saEmail,
+      aud: 'https://oauth2.googleapis.com/token',
+      scope: 'https://www.googleapis.com/auth/cloud-platform',
+      iat: now,
+      exp: now + 3600,
+    };
+
+    const enc = new TextEncoder();
+    const headerB64  = base64url(enc.encode(JSON.stringify(header)));
+    const payloadB64 = base64url(enc.encode(JSON.stringify(payload)));
+    const signingInput = `${headerB64}.${payloadB64}`;
+
+    const signature = await crypto.subtle.sign(
+      'RSASSA-PKCS1-v1_5',
+      cryptoKey,
+      enc.encode(signingInput)
+    );
+    const jwtToken = `${signingInput}.${base64url(new Uint8Array(signature))}`;
+
+    // Exchange JWT for access token
+    const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({
+        grant_type: 'urn:ietf:params:oauth:grant-type:jwt-bearer',
+        assertion: jwtToken,
+      }),
+    });
+
+    if (!tokenRes.ok) {
+      const errText = await tokenRes.text();
+      console.warn('⚠️ SA token exchange failed:', errText);
+      return null;
+    }
+
+    const tokenData = await tokenRes.json();
+    console.log('✅ Service Account access token obtained');
+    return tokenData.access_token || null;
+  } catch (err) {
+    console.warn('⚠️ SA JWT signing error:', err?.message || err);
+    return null;
+  }
+}
+
+/**
+ * Call Vertex AI Gemini using a Service Account OAuth2 access token.
+ * Uses the aiplatform.googleapis.com endpoint (no API key needed).
+ */
+async function callVertexWithServiceAccount(
+  messages: AIMessage[],
+  options: UnifiedAIOptions = {}
+): Promise<ProviderResult> {
+  const projectId = Deno.env.get('GCP_PROJECT_ID') || Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
+  const region    = Deno.env.get('GCP_REGION') || 'us-central1';
+  const model     = options.model || 'gemini-2.5-flash';
+
+  if (!projectId) {
+    return { success: false, provider: 'vertex-sa', error: 'GCP_PROJECT_ID not configured' };
+  }
+
+  const accessToken = await getServiceAccountAccessToken();
+  if (!accessToken) {
+    return { success: false, provider: 'vertex-sa', error: 'Service account credentials not available' };
+  }
+
+  try {
+    console.log('🏔️ PRIMARY: Vertex AI via Service Account OAuth2...');
+
+    const effectiveSystemPrompt = getEffectiveSystemPrompt(options);
+    const effectiveTools = getEffectiveTools(options);
+
+    const userMessages = messages.filter(m => m.role !== 'system');
+    const contents = userMessages.map(msg => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: msg.content }],
+    }));
+
+    const maxTokens = options.maxTokens || options.max_tokens || 2000;
+
+    const requestBody: any = {
+      contents,
+      systemInstruction: { parts: [{ text: effectiveSystemPrompt }] },
+      generationConfig: {
+        temperature: options.temperature || 0.7,
+        maxOutputTokens: maxTokens,
+      },
+    };
+
+    if (effectiveTools.length > 0) {
+      requestBody.tools = [{
+        functionDeclarations: effectiveTools.map(tool => ({
+          name: tool.function.name,
+          description: tool.function.description,
+          parameters: tool.function.parameters,
+        }))
+      }];
+    }
+
+    const endpoint = `https://${region}-aiplatform.googleapis.com/v1/projects/${projectId}/locations/${region}/publishers/google/models/${model}:generateContent`;
+
+    const response = await fetchWithTimeout(
+      endpoint,
+      {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestBody),
+      },
+      PROVIDER_TIMEOUTS.vertexOAuth
+    );
+
+    const fastFailError = checkFastFail(response, 'vertex-sa');
+    if (fastFailError) return { success: false, provider: 'vertex-sa', error: fastFailError };
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.warn(`⚠️ Vertex SA failed (${response.status}):`, errorText);
+      return { success: false, provider: 'vertex-sa', error: `${response.status}: ${errorText}` };
+    }
+
+    const data = await response.json();
+    const parts = data.candidates?.[0]?.content?.parts;
+
+    if (!parts || parts.length === 0) {
+      return { success: false, provider: 'vertex-sa', error: 'No content in Vertex AI response' };
+    }
+
+    console.log('✅ PRIMARY: Vertex AI SA OAuth2 successful');
+
+    const functionCall = parts.find((p: any) => p.functionCall);
+    if (functionCall) {
+      console.log(`🔧 Vertex SA returned function call: ${functionCall.functionCall.name}`);
+      return {
+        success: true,
+        provider: 'vertex-sa',
+        message: {
+          role: 'assistant',
+          content: null,
+          tool_calls: [{
+            id: `vertex_sa_${Date.now()}`,
+            type: 'function',
+            function: {
+              name: functionCall.functionCall.name,
+              arguments: JSON.stringify(functionCall.functionCall.args || {})
+            }
+          }]
+        }
+      };
+    }
+
+    const content = parts.find((p: any) => p.text)?.text || '';
+    return { success: true, provider: 'vertex-sa', content };
+  } catch (error) {
+    console.warn('⚠️ Vertex SA error:', error?.message || error);
+    return { success: false, provider: 'vertex-sa', error: error?.message || 'Unknown error' };
+  }
+}
 
 /**
  * Fetch with timeout - aborts request if provider is slow/hung
@@ -559,57 +771,49 @@ async function callKimi(
 
 /**
  * MAIN ENTRY POINT: Unified AI Fallback Cascade
- * Try providers in sequence: Preference -> Gemini -> Vertex -> Lovable -> DeepSeek -> Kimi
+ *
+ * Order:
+ *   1. Vertex AI via Service Account OAuth2 (GCP — most reliable)
+ *   2. Gemini API key (direct, fast fallback)
+ *   3. Vertex AI Express Mode (via Gemini key)
+ *   4. Lovable / OpenRouter
+ *   5. DeepSeek V3
+ *   6. Kimi K2
  */
 export async function callAIWithFallback(
   messages: AIMessage[],
   options: UnifiedAIOptions = {}
 ): Promise<any> {
-  const preferProvider = options.preferProvider || 'gemini';
   const errors: string[] = [];
 
-  // 1. Try Preferred Provider
-  if (preferProvider === 'deepseek') {
-    const result = await callDeepSeek(messages, options);
-    if (result.success) return transformResult(result);
-    errors.push(`DeepSeek: ${result.error}`);
-  } else if (preferProvider === 'lovable') {
-    const result = await callLovable(messages, options);
-    if (result.success) return transformResult(result);
-    errors.push(`Lovable: ${result.error}`);
-  } else if (preferProvider === 'vertexai') {
-    const result = await callVertex(messages, options);
-    if (result.success) return transformResult(result);
-    errors.push(`Vertex: ${result.error}`);
-  }
+  // 1. PRIMARY: Vertex AI via Service Account OAuth2
+  console.log('🔑 Trying Vertex AI SA OAuth2 (primary)...');
+  const saResult = await callVertexWithServiceAccount(messages, options);
+  if (saResult.success) return transformResult(saResult);
+  errors.push(`VertexSA: ${saResult.error}`);
+  console.warn('⚠️ Vertex SA failed, trying API key fallback...');
 
-  // 2. Fallback to Gemini (Primary/Strongest)
+  // 2. FALLBACK: Gemini API key
   const geminiResult = await callGemini(messages, options);
   if (geminiResult.success) return transformResult(geminiResult);
   errors.push(`Gemini: ${geminiResult.error}`);
 
-  // 3. Fallback to Vertex (if not already tried)
-  if (preferProvider !== 'vertexai') {
-    const vertexResult = await callVertex(messages, options);
-    if (vertexResult.success) return transformResult(vertexResult);
-    errors.push(`Vertex: ${vertexResult.error}`);
-  }
+  // 3. Vertex AI Express Mode (reuses Gemini key)
+  const vertexResult = await callVertex(messages, options);
+  if (vertexResult.success) return transformResult(vertexResult);
+  errors.push(`Vertex: ${vertexResult.error}`);
 
-  // 4. Fallback to Lovable (if not already tried)
-  if (preferProvider !== 'lovable') {
-    const lovableResult = await callLovable(messages, options);
-    if (lovableResult.success) return transformResult(lovableResult);
-    errors.push(`Lovable: ${lovableResult.error}`);
-  }
+  // 4. Lovable (Claude 3.5 Sonnet via OpenRouter)
+  const lovableResult = await callLovable(messages, options);
+  if (lovableResult.success) return transformResult(lovableResult);
+  errors.push(`Lovable: ${lovableResult.error}`);
 
-  // 5. Fallback to DeepSeek (if not already tried)
-  if (preferProvider !== 'deepseek') {
-    const deepSeekResult = await callDeepSeek(messages, options);
-    if (deepSeekResult.success) return transformResult(deepSeekResult);
-    errors.push(`DeepSeek: ${deepSeekResult.error}`);
-  }
+  // 5. DeepSeek V3
+  const deepSeekResult = await callDeepSeek(messages, options);
+  if (deepSeekResult.success) return transformResult(deepSeekResult);
+  errors.push(`DeepSeek: ${deepSeekResult.error}`);
 
-  // 6. Final Fallback: Kimi K2
+  // 6. Kimi K2 (final fallback)
   const kimiResult = await callKimi(messages, options);
   if (kimiResult.success) return transformResult(kimiResult);
   errors.push(`Kimi: ${kimiResult.error}`);
