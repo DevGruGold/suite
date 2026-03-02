@@ -2,6 +2,7 @@ import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { encodeBase64 } from "https://deno.land/std@0.224.0/encoding/base64.ts";
 import { createClient } from "npm:@supabase/supabase-js@2.46.2";
 import { executeToolCall } from '../_shared/toolExecutor.ts';
+import { getVertexAuth } from '../_shared/vertexAuthHelper.ts';
 
 // ========== ENVIRONMENT CONFIGURATION ==========
 // Deployment Trigger: 2026-02-16 Fix ai-chat assignment bug
@@ -90,6 +91,20 @@ interface AIProviderConfig {
 }
 
 const AI_PROVIDERS_CONFIG: Record<string, AIProviderConfig> = {
+  vertex: {
+    name: 'Vertex AI (Gemini 2.5 Pro)',
+    // Vertex uses SA JWT auth — no static apiKey needed; enabled when GCP_PROJECT_ID is set
+    enabled: !!(Deno.env.get('GCP_PROJECT_ID') || Deno.env.get('GOOGLE_CLOUD_SERVICE_KEY') || Deno.env.get('VERTEX_AI_API_KEY')),
+    apiKey: '', // auth handled by vertexAuthHelper
+    endpoint: '', // dynamic; set inside callVertex
+    models: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+    supportsTools: true,
+    timeoutMs: 60000,
+    priority: 0, // ← Highest priority — uses $1000 GCP credits
+    fallbackOnly: false,
+    maxRetries: 2,
+    retryDelayMs: 1000
+  },
   openai: {
     name: 'OpenAI',
     enabled: !!OPENAI_API_KEY,
@@ -3343,6 +3358,9 @@ class EnhancedProviderCascade {
         case 'anthropic':
           result = await this.callAnthropic(messages, controller);
           break;
+        case 'vertex':
+          result = await this.callVertex(messages, tools, controller);
+          break;
         case 'kimi':
           result = await this.callKimi(messages, tools, controller);
           break;
@@ -3371,7 +3389,115 @@ class EnhancedProviderCascade {
     }
   }
 
+  private async callVertex(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+    const vertexModels = ['gemini-2.5-pro', 'gemini-2.5-flash'];
+
+    for (const model of vertexModels) {
+      try {
+        console.log(`🔄 [Vertex AI] Trying model: ${model}`);
+
+        const vertexAuth = await getVertexAuth(model);
+        if (!vertexAuth) {
+          console.warn('⚠️ [Vertex AI] No auth available, skipping...');
+          return { success: false, provider: 'vertex', error: 'Vertex AI credentials not configured' };
+        }
+
+        // Convert messages to Gemini contents format
+        const contents: any[] = [];
+        let systemInstruction: any = undefined;
+
+        for (const msg of messages) {
+          if (msg.role === 'system') {
+            systemInstruction = { parts: [{ text: msg.content }] };
+          } else if (msg.role === 'user') {
+            contents.push({ role: 'user', parts: [{ text: msg.content || '' }] });
+          } else if (msg.role === 'assistant') {
+            if (msg.tool_calls?.length > 0) {
+              contents.push({
+                role: 'model',
+                parts: msg.tool_calls.map((tc: any) => ({
+                  functionCall: {
+                    name: tc.function.name,
+                    args: typeof tc.function.arguments === 'string'
+                      ? JSON.parse(tc.function.arguments)
+                      : tc.function.arguments
+                  }
+                }))
+              });
+            } else if (msg.content) {
+              contents.push({ role: 'model', parts: [{ text: msg.content }] });
+            }
+          } else if (msg.role === 'tool') {
+            contents.push({
+              role: 'user',
+              parts: [{ functionResponse: { name: msg.name || 'tool_result', response: { content: msg.content } } }]
+            });
+          }
+        }
+
+        // Build request body
+        const requestBody: any = {
+          contents,
+          generationConfig: { temperature: 0.7, maxOutputTokens: 4000 }
+        };
+        if (systemInstruction) requestBody.systemInstruction = systemInstruction;
+        if (tools.length > 0) {
+          requestBody.tools = [{ functionDeclarations: convertToolsToGeminiFormat(tools) }];
+        }
+
+        const response = await fetch(vertexAuth.endpoint, {
+          method: 'POST',
+          headers: vertexAuth.headers,
+          body: JSON.stringify(requestBody),
+          signal: controller.signal
+        });
+
+        if (!response.ok) {
+          const err = await response.text();
+          if (response.status === 429 && model !== vertexModels[vertexModels.length - 1]) {
+            console.warn(`⚠️ [Vertex AI] Rate limit on ${model}, trying next...`);
+            continue;
+          }
+          return { success: false, provider: 'vertex', error: `Vertex AI ${model} error ${response.status}: ${err.slice(0, 200)}` };
+        }
+
+        const data = await response.json();
+        const candidate = data.candidates?.[0];
+        if (!candidate?.content) {
+          if (model !== vertexModels[vertexModels.length - 1]) continue;
+          return { success: false, provider: 'vertex', error: 'No content in Vertex AI response' };
+        }
+
+        // Parse function calls
+        const funcCallParts = candidate.content.parts?.filter((p: any) => p.functionCall) || [];
+        if (funcCallParts.length > 0) {
+          const toolCalls = funcCallParts.map((p: any, i: number) => ({
+            id: `vertex_${Date.now()}_${i}`,
+            type: 'function',
+            function: { name: p.functionCall.name, arguments: JSON.stringify(p.functionCall.args || {}) }
+          }));
+          console.log(`✅ [Vertex AI] ${model} returned ${toolCalls.length} function call(s)`);
+          return { success: true, tool_calls: toolCalls, provider: 'vertex', model };
+        }
+
+        const text = candidate.content.parts?.map((p: any) => p.text || '').join('') || '';
+        console.log(`✅ [Vertex AI] ${model} succeeded (auth: ${vertexAuth.authType})`);
+        return { success: true, content: text, provider: 'vertex', model };
+
+      } catch (error: any) {
+        if (model !== vertexModels[vertexModels.length - 1]) {
+          console.warn(`⚠️ [Vertex AI] ${model} failed, trying next:`, error.message);
+          continue;
+        }
+        return { success: false, provider: 'vertex', error: `Vertex AI failed: ${error.message}` };
+      }
+    }
+
+    return { success: false, provider: 'vertex', error: 'All Vertex AI models exhausted' };
+  }
+
   private async callOpenAI(messages: any[], tools: any[], controller: AbortController): Promise<CascadeResult> {
+
     const forceTools = needsDataRetrieval(messages);
 
     const response = await fetch('https://api.openai.com/v1/chat/completions', {

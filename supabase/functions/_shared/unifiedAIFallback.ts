@@ -44,13 +44,30 @@ function base64url(data: Uint8Array): string {
  * Returns null if SA credentials are not configured.
  */
 async function getServiceAccountAccessToken(): Promise<string | null> {
-  const saEmail = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
+  let saEmail = Deno.env.get('GOOGLE_SERVICE_ACCOUNT_EMAIL');
   // Private key may be stored with literal \n or real newlines
-  const rawKey = Deno.env.get('GOOGLE_PRIVATE_KEY');
+  let rawKey = Deno.env.get('GOOGLE_PRIVATE_KEY');
+
+  // ── NEW: Also try GOOGLE_CLOUD_SERVICE_KEY (SA JSON blob) ──────────────────
+  // This is the primary secret set in Supabase (to work around the 100-secret limit).
+  if (!saEmail || !rawKey) {
+    const serviceKeyJson = Deno.env.get('GOOGLE_CLOUD_SERVICE_KEY');
+    if (serviceKeyJson) {
+      try {
+        const parsed = JSON.parse(serviceKeyJson);
+        saEmail = saEmail || parsed.client_email;
+        rawKey = rawKey || parsed.private_key;
+        console.log('🔑 SA credentials sourced from GOOGLE_CLOUD_SERVICE_KEY JSON');
+      } catch (e) {
+        console.warn('⚠️ Failed to parse GOOGLE_CLOUD_SERVICE_KEY JSON:', e?.message);
+      }
+    }
+  }
 
   if (!saEmail || !rawKey) {
     return null;
   }
+
 
   try {
     // Normalize the PEM key (handle \n escapes stored as literal backslash-n)
@@ -84,7 +101,7 @@ async function getServiceAccountAccessToken(): Promise<string | null> {
     };
 
     const enc = new TextEncoder();
-    const headerB64  = base64url(enc.encode(JSON.stringify(header)));
+    const headerB64 = base64url(enc.encode(JSON.stringify(header)));
     const payloadB64 = base64url(enc.encode(JSON.stringify(payload)));
     const signingInput = `${headerB64}.${payloadB64}`;
 
@@ -129,8 +146,8 @@ async function callVertexWithServiceAccount(
   options: UnifiedAIOptions = {}
 ): Promise<ProviderResult> {
   const projectId = Deno.env.get('GCP_PROJECT_ID') || Deno.env.get('GOOGLE_CLOUD_PROJECT_ID');
-  const region    = Deno.env.get('GCP_REGION') || 'us-central1';
-  const model     = options.model || 'gemini-2.5-flash';
+  const region = Deno.env.get('GCP_REGION') || 'us-central1';
+  const model = options.model || 'gemini-2.5-flash';
 
   if (!projectId) {
     return { success: false, provider: 'vertex-sa', error: 'GCP_PROJECT_ID not configured' };
