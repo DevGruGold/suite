@@ -5245,8 +5245,13 @@ Deno.serve(async (req) => {
       `- Do NOT say "Shall I proceed?", "Would you like me to continue?", or similar.\n` +
       `- Execute the next logical step immediately, then give a brief one-line status update.\n` +
       `- Format status updates as: "✅ [Step N complete] — [what was done]. Now: [next step]..."\n` +
-      `- PAUSE and ask the user ONLY if: (1) a critical/irreversible action is needed, (2) a blocking error occurs, (3) you need information only the user can provide, or (4) the task scope changes unexpectedly.\n` +
-      `- When the entire workflow is complete, announce completion clearly and concisely.\n\n`
+      `- When the entire workflow is complete, announce completion clearly and concisely.\n` +
+      `\n` +
+      `📬 INBOX QUESTION PROTOCOL (Auto-Approve Mode):\n` +
+      `- When you encounter a question that ONLY the user can answer (e.g., missing credential, ambiguous scope, irreversible action requiring explicit sign-off), DO NOT block the chat.\n` +
+      `- Instead: (1) Send the question to the user's inbox via invoke_edge_function("inbox-notify", {user_id: <user_id>, title: "⚡ Auto-Approve: Your Input Needed", content: "The question or decision point here", task_id: <task_id_if_known>}), (2) then continue with any parts of the workflow that do NOT depend on that answer, (3) note in your status update that you sent an inbox message and are continuing.\n` +
+      `- The user_id is available from the request context — use it.\n` +
+      `- Only fully pause (block) when you literally cannot proceed with ANY part of the remaining workflow without the answer.\n\n`
       : '';
 
     const baseSystemPrompt = (bodySystemPrompt && typeof bodySystemPrompt === 'string' && bodySystemPrompt.trim())
