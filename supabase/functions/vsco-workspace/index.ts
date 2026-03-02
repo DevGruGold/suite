@@ -504,84 +504,142 @@ Deno.serve(async (req) => {
         }
 
         const findResults: any[] = [];
+        const searchStartMs = Date.now();
+        const MAX_SCAN_MS = 25_000; // 25s budget — edge function limit is 60s
 
-        // Search 1: local vsco_jobs DB
+        // ── Tier 1: local vsco_jobs DB ──
         const { data: localJobs } = await supabase
           .from('vsco_jobs')
-          .select('vsco_id, name, raw_data, event_date, stage')
-          .limit(300);
+          .select('vsco_id, name, raw_data, event_date, stage, client_first_name, client_last_name, client_email')
+          .limit(1000);
 
         (localJobs || []).forEach((j: any) => {
           const jobName = (j.name || '').toLowerCase();
-          const rawData = j.raw_data || {};
-          const clientName = (rawData.clientName || rawData.client_name || '').toLowerCase();
-          const contacts = Array.isArray(rawData.contacts) ? rawData.contacts : [];
-          const contactNames = contacts.map((c: any) =>
-            `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase().trim()
-          ).join(' ');
-          if (jobName.includes(sq) || clientName.includes(sq) || contactNames.includes(sq)) {
+          const firstName = (j.client_first_name || '').toLowerCase();
+          const lastName = (j.client_last_name || '').toLowerCase();
+          const fullName = `${firstName} ${lastName}`.trim();
+          const email = (j.client_email || '').toLowerCase();
+          // also check contacts array inside raw_data for legacy rows
+          const pc = j.raw_data?.primaryContact || {};
+          const pcFirst = (pc.firstName || '').toLowerCase();
+          const pcLast = (pc.lastName || '').toLowerCase();
+          const pcFull = `${pcFirst} ${pcLast}`.trim();
+          if (jobName.includes(sq) || fullName.includes(sq) || pcFull.includes(sq) || email.includes(sq)) {
             findResults.push({
               source: 'local_db',
               vsco_id: j.vsco_id,
               name: j.name,
               stage: j.stage,
               event_date: j.event_date,
-              client_name: rawData.clientName || clientName
+              client_name: fullName || pcFull
             });
           }
         });
+        console.log(`🔍 [find_job] T1 local_db: ${findResults.length} matches from ${(localJobs || []).length} rows`);
 
-        // Search 2: contact API then linked jobs
-        if (findResults.length === 0) {
-          const cResp = await vscoRequest(supabase, '/address-book', {
-            params: { search: data.search || data.search_name || data.name, pageSize: '50' }
-          }, executive);
-          const contacts = cResp.data?.items || cResp.data?.contacts || cResp.data || [];
-          for (const c of (Array.isArray(contacts) ? contacts : [])) {
-            const full = `${c.firstName || ''} ${c.lastName || ''} ${c.name || ''}`.toLowerCase();
-            if (full.includes(sq)) {
-              const jResp = await vscoRequest(supabase, '/job', {
-                params: { contactId: c.id, pageSize: '50' }
-              }, executive);
-              const linked = jResp.data?.items || jResp.data?.jobs || [];
-              (Array.isArray(linked) ? linked : []).forEach((j: any) => {
-                findResults.push({
-                  source: 'contact_api',
-                  vsco_id: j.id,
-                  name: j.name,
-                  stage: j.stage,
-                  event_date: j.eventDate,
-                  client_name: `${c.firstName || ''} ${c.lastName || ''}`.trim()
-                });
-              });
-              break;
+        // ── Tier 2: address-book contact lookup (ALL pages) ──
+        if (findResults.length === 0 && Date.now() - searchStartMs < MAX_SCAN_MS) {
+          let abPage = 1;
+          let abTotalPages = 1;
+          let matchedContact: any = null;
+
+          while (abPage <= abTotalPages && !matchedContact && Date.now() - searchStartMs < MAX_SCAN_MS) {
+            const cResp = await vscoRequest(supabase, '/address-book', {
+              params: { search: data.search || data.search_name || data.name, pageSize: '100', page: String(abPage) }
+            }, executive);
+
+            const abMeta = cResp.data?.meta;
+            if (abPage === 1 && abMeta?.totalPages) abTotalPages = abMeta.totalPages;
+
+            const contacts = cResp.data?.items || [];
+            console.log(`🔍 [find_job] T2 address-book page ${abPage}/${abTotalPages}: ${contacts.length} contacts`);
+
+            for (const c of (Array.isArray(contacts) ? contacts : [])) {
+              const firstName = (c.firstName || '').toLowerCase();
+              const lastName = (c.lastName || '').toLowerCase();
+              const full = `${firstName} ${lastName}`.trim();
+              const email = (c.email || '').toLowerCase();
+              if (full.includes(sq) || firstName.includes(sq) || lastName.includes(sq) || email.includes(sq)) {
+                matchedContact = c;
+                console.log(`🔍 [find_job] T2 contact match: ${c.firstName} ${c.lastName} (${c.id}) on page ${abPage}`);
+                break;
+              }
             }
+            abPage++;
+          }
+
+          if (matchedContact?.id) {
+            const jResp = await vscoRequest(supabase, '/job', {
+              params: { contactId: matchedContact.id, pageSize: '100', includeClosed: 'true' }
+            }, executive);
+            const linked = jResp.data?.items || [];
+            (Array.isArray(linked) ? linked : []).forEach((j: any) => {
+              findResults.push({
+                source: 'contact_api',
+                vsco_id: j.id,
+                name: j.name,
+                stage: j.stage,
+                event_date: j.eventDate,
+                client_name: `${matchedContact.firstName || ''} ${matchedContact.lastName || ''}`.trim()
+              });
+            });
+            console.log(`🔍 [find_job] T2 linked jobs for contact ${matchedContact.id}: ${findResults.length}`);
+          } else {
+            console.log(`🔍 [find_job] T2: no contact match found in ${abTotalPages} pages`);
           }
         }
 
-        // Search 3: paginated full scan (up to 3 pages to avoid timeout)
-        if (findResults.length === 0) {
-          for (let pg = 1; pg <= 3; pg++) {
+        // ── Tier 3: full paginated API job scan ──
+        if (findResults.length === 0 && Date.now() - searchStartMs < MAX_SCAN_MS) {
+          let pg = 1;
+          let totalPages = 999; // will be set from first response meta
+          console.log(`🔍 [find_job] T3: starting full scan (budget: ${MAX_SCAN_MS - (Date.now() - searchStartMs)}ms remaining)`);
+
+          while (pg <= totalPages && Date.now() - searchStartMs < MAX_SCAN_MS) {
             const sResp = await vscoRequest(supabase, '/job', {
               params: { pageSize: '100', page: String(pg), includeClosed: 'true' }
             }, executive);
-            const batch = sResp.data?.items || sResp.data?.jobs || sResp.data || [];
+
+            if (pg === 1 && sResp.data?.meta?.totalPages) {
+              totalPages = sResp.data.meta.totalPages;
+              console.log(`🔍 [find_job] T3: ${sResp.data.meta.totalItems} total jobs, ${totalPages} pages`);
+            }
+
+            const batch = sResp.data?.items || [];
             if (!Array.isArray(batch) || batch.length === 0) break;
-            batch.forEach((j: any) => {
-              const name = (j.name || j.clientName || '').toLowerCase();
-              const email = (j.clientEmail || j.email || '').toLowerCase();
-              if (name.includes(sq) || email.includes(sq)) {
-                findResults.push({
-                  source: `api_scan_p${pg}`,
-                  vsco_id: j.id,
-                  name: j.name,
-                  stage: j.stage,
-                  event_date: j.eventDate,
-                  client_name: j.clientName || ''
-                });
-              }
+
+            const matchInBatch = batch.find((j: any) => {
+              const name = (j.name || '').toLowerCase();
+              const pc = j.primaryContact || {};
+              const first = (pc.firstName || '').toLowerCase();
+              const last = (pc.lastName || '').toLowerCase();
+              const email = (pc.email || '').toLowerCase();
+              return name.includes(sq) || email.includes(sq) ||
+                first.includes(sq) || last.includes(sq) ||
+                `${first} ${last}`.trim().includes(sq);
             });
+
+            if (matchInBatch) {
+              const pc = matchInBatch.primaryContact || {};
+              findResults.push({
+                source: `api_scan_p${pg}`,
+                vsco_id: matchInBatch.id,
+                name: matchInBatch.name,
+                stage: matchInBatch.stage,
+                event_date: matchInBatch.eventDate,
+                client_name: `${pc.firstName || ''} ${pc.lastName || ''}`.trim()
+              });
+              console.log(`🔍 [find_job] T3 match on page ${pg}: ${matchInBatch.id}`);
+              break; // stop on first match
+            }
+
             if (batch.length < 100) break;
+            pg++;
+          }
+
+          if (findResults.length === 0) {
+            const elapsed = Date.now() - searchStartMs;
+            console.log(`🔍 [find_job] T3 exhausted after ${pg - 1} pages / ${elapsed}ms — no match`);
           }
         }
 
@@ -591,7 +649,7 @@ Deno.serve(async (req) => {
           count: findResults.length,
           hint: findResults.length > 0
             ? `Use update_job with job_id: "${findResults[0].vsco_id}" to update the first match`
-            : 'No matches found. Try sync_jobs first then search again.'
+            : `No matches found after ${Math.round((Date.now() - searchStartMs) / 1000)}s of searching.`
         };
         break;
       }
