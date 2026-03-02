@@ -509,9 +509,8 @@ Deno.serve(async (req) => {
         const MAX_SCAN_MS = 25_000;
 
         // ── Tier 0: VSCO server-side job search + contact resolution ──
-        // Step A: server-side search narrows the 7424-job space immediately.
-        // Step B: for each unique primaryContactId, look up the contact to
-        //         confirm name match (jobs don't embed firstName/lastName).
+        // VSCO uses HAL-style links object: { links: { primaryContactId: { href: ".../address-book/{id}" } } }
+        // Contact ID is NOT a flat field — it lives inside j.links under a contact-related key.
         try {
           const s0Resp = await vscoRequest(supabase, '/job', {
             params: { search: rawSearch, pageSize: '50', includeClosed: 'true' }
@@ -519,29 +518,45 @@ Deno.serve(async (req) => {
           const s0Jobs = s0Resp.data?.items || [];
 
           if (Array.isArray(s0Jobs) && s0Jobs.length > 0) {
-            console.log(`🔍 [find_job] T0 server-side search: ${s0Jobs.length} candidate jobs for "${rawSearch}"`);
+            console.log(`🔍 [find_job] T0: ${s0Jobs.length} candidate jobs for "${rawSearch}"`);
 
-            // Log field names from first job so we know the contact ref field name
+            // Helper: extract address-book ID from job's links object (HAL pattern)
+            // Scans all link keys for one containing 'contact' or 'client',
+            // then parses the address-book ID from the href URL.
+            const extractContactId = (job: any): string | null => {
+              const links = job.links || {};
+              // Log all link keys on first job so we see the exact structure
+              return Object.entries(links).reduce((found: string | null, [key, val]: [string, any]) => {
+                if (found) return found;
+                if (!/(contact|client)/i.test(key)) return null;
+                const href: string = val?.href || '';
+                // URL pattern ".../address-book/{id}" or ".../address-book/{id}/..."
+                const m = href.match(/address-book\/([^/?]+)/);
+                return m ? m[1] : null;
+              }, null);
+            };
+
+            // Log link keys from first job for diagnostics
             if (s0Jobs[0]) {
               const j0 = s0Jobs[0];
-              const contactRefField =
-                j0.primaryContactId ? 'primaryContactId' :
-                  (typeof j0.primaryContact === 'string' && j0.primaryContact) ? 'primaryContact(string)' :
-                    j0.contactId ? 'contactId' : 'unknown';
-              console.log(`🔍 [find_job] T0 job[0] name="${j0.name}" stage="${j0.stage}" eventDate="${j0.eventDate}" contactRefField=${contactRefField} contactId="${j0.primaryContactId || j0.primaryContact || j0.contactId}"`);
+              const linkKeys = Object.keys(j0.links || {}).join(', ') || 'none';
+              const cid0 = extractContactId(j0);
+              console.log(`🔍 [find_job] T0 job[0] eventDate="${j0.eventDate}" stage="${j0.stage}" linkKeys=[${linkKeys}] extractedContactId="${cid0}"`);
+              // Also log all NON-link flat fields for discovery
+              const flatKeys = Object.keys(j0).filter(k => k !== 'links' && k !== 'raw_data').join(', ');
+              console.log(`🔍 [find_job] T0 job[0] flatFields=[${flatKeys}]`);
             }
 
-            // Collect unique contact IDs referenced by these jobs
-            const contactIdMap = new Map<string, any>(); // contactId → resolved contact
+            // Collect unique contact IDs from all T0 jobs
+            const searchTokensT0 = sq.split(/\s+/).filter(Boolean);
+            const contactIdMap = new Map<string, any>();
             for (const j of s0Jobs) {
-              const cid = j.primaryContactId
-                || (typeof j.primaryContact === 'string' ? j.primaryContact : null)
-                || j.contactId;
+              const cid = extractContactId(j);
               if (cid && !contactIdMap.has(cid)) contactIdMap.set(cid, null);
             }
+            console.log(`🔍 [find_job] T0 unique contact IDs: ${contactIdMap.size}`);
 
-            // Resolve each unique contact ID via /address-book/{id}
-            const searchTokensT0 = sq.split(/\s+/).filter(Boolean);
+            // Resolve each contact via /address-book/{id}
             const resolvedContacts: Record<string, any> = {};
             for (const [cid] of contactIdMap) {
               try {
@@ -556,61 +571,48 @@ Deno.serve(async (req) => {
                     cFirst.includes(tk) || cLast.includes(tk) ||
                     cName.includes(tk) || cEmail.includes(tk)
                   );
-                  resolvedContacts[cid] = {
-                    id: cid,
-                    firstName: contact.firstName,
-                    lastName: contact.lastName,
-                    name: contact.name,
-                    email: contact.email,
-                    isMatch,
-                  };
-                  console.log(`🔍 [find_job] T0 contact ${cid}: "${contact.firstName} ${contact.lastName}" match=${isMatch}`);
+                  resolvedContacts[cid] = { id: cid, firstName: contact.firstName, lastName: contact.lastName, email: contact.email, isMatch };
+                  if (isMatch) {
+                    console.log(`✅ [find_job] T0 MATCH: contact ${cid} = "${contact.firstName} ${contact.lastName}"`);
+                  }
                 }
-              } catch {
-                // contact lookup failed, keep going
-              }
+              } catch { /* keep going */ }
             }
 
-            // Push jobs whose resolved contact matches search
             const matchedContactIds = new Set(
-              Object.values(resolvedContacts)
-                .filter((c: any) => c.isMatch)
-                .map((c: any) => c.id)
+              Object.values(resolvedContacts).filter((c: any) => c.isMatch).map((c: any) => c.id)
             );
 
-            // If no contacts resolved to a match, fall back to including ALL T0 results
-            // (VSCO server already filtered them — likely correct)
+            // If contact resolution yielded matches, use those. Otherwise trust T0 server results.
             const useAllT0 = matchedContactIds.size === 0;
             if (useAllT0) {
-              console.log(`🔍 [find_job] T0 contact resolution found no name match — including all ${s0Jobs.length} server results`);
+              console.log(`🔍 [find_job] T0 no contact resolution match — returning all ${s0Jobs.length} server-filtered results`);
             }
 
             s0Jobs.forEach((j: any) => {
-              const cid = j.primaryContactId
-                || (typeof j.primaryContact === 'string' ? j.primaryContact : null)
-                || j.contactId;
+              const cid = extractContactId(j);
               const contact = cid ? resolvedContacts[cid] : null;
-              if (useAllT0 || matchedContactIds.has(cid)) {
+              if (useAllT0 || matchedContactIds.has(cid!)) {
                 findResults.push({
                   source: 'vsco_search',
                   vsco_id: j.id,
                   name: j.name || `Job ${j.id}`,
                   stage: j.stage,
                   event_date: j.eventDate,
-                  client_name: contact
-                    ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim()
-                    : cid || '',
+                  client_name: contact ? `${contact.firstName || ''} ${contact.lastName || ''}`.trim() : '',
                   contact_id: cid || null,
                 });
               }
             });
-            console.log(`🔍 [find_job] T0 final: ${findResults.length} confirmed matches`);
+            console.log(`🔍 [find_job] T0 final: ${findResults.length} results`);
+
           } else {
-            console.log(`🔍 [find_job] T0 server search: 0 results (API may not support ?search= on /job)`);
+            console.log(`🔍 [find_job] T0 server search: 0 results`);
           }
         } catch (t0e) {
-          console.log(`🔍 [find_job] T0 server search failed: ${t0e}`);
+          console.log(`🔍 [find_job] T0 failed: ${t0e}`);
         }
+
 
 
         // ── Tier 1: local vsco_jobs DB ──
