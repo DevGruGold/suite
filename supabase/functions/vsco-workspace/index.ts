@@ -508,34 +508,47 @@ Deno.serve(async (req) => {
         const MAX_SCAN_MS = 25_000; // 25s budget — edge function limit is 60s
 
         // ── Tier 1: local vsco_jobs DB ──
-        const { data: localJobs } = await supabase
+        // IMPORTANT: only SELECT columns guaranteed to exist. 'client_*' columns may not
+        // be in the schema yet — selecting them causes Supabase to reject the entire query.
+        // We pull raw_data and extract primaryContact at runtime instead.
+        const { data: localJobs, error: t1Error } = await supabase
           .from('vsco_jobs')
-          .select('vsco_id, name, raw_data, event_date, stage, client_first_name, client_last_name, client_email')
-          .limit(1000);
+          .select('vsco_id, name, raw_data, event_date, stage')
+          .limit(2000);
+
+        if (t1Error) {
+          console.error(`🔍 [find_job] T1 SELECT error: ${t1Error.message}`);
+        }
+
+        // Split search into tokens — 'christine brooks' → ['christine', 'brooks']
+        const searchTokens = sq.split(/\s+/).filter(Boolean);
 
         (localJobs || []).forEach((j: any) => {
           const jobName = (j.name || '').toLowerCase();
-          const firstName = (j.client_first_name || '').toLowerCase();
-          const lastName = (j.client_last_name || '').toLowerCase();
-          const fullName = `${firstName} ${lastName}`.trim();
-          const email = (j.client_email || '').toLowerCase();
-          // also check contacts array inside raw_data for legacy rows
           const pc = j.raw_data?.primaryContact || {};
           const pcFirst = (pc.firstName || '').toLowerCase();
           const pcLast = (pc.lastName || '').toLowerCase();
           const pcFull = `${pcFirst} ${pcLast}`.trim();
-          if (jobName.includes(sq) || fullName.includes(sq) || pcFull.includes(sq) || email.includes(sq)) {
+          const pcEmail = (pc.email || '').toLowerCase();
+
+          // Match if ALL tokens appear across name/contact fields
+          const allTokensMatch = searchTokens.length > 0 && searchTokens.every((token: string) =>
+            jobName.includes(token) || pcFirst.includes(token) ||
+            pcLast.includes(token) || pcFull.includes(token) || pcEmail.includes(token)
+          );
+
+          if (allTokensMatch) {
             findResults.push({
               source: 'local_db',
               vsco_id: j.vsco_id,
               name: j.name,
               stage: j.stage,
               event_date: j.event_date,
-              client_name: fullName || pcFull
+              client_name: pcFull,
             });
           }
         });
-        console.log(`🔍 [find_job] T1 local_db: ${findResults.length} matches from ${(localJobs || []).length} rows`);
+        console.log(`🔍 [find_job] T1 local_db: ${findResults.length} matches from ${(localJobs || []).length} rows (search="${sq}", tokens=${JSON.stringify(searchTokens)})`);
 
         // ── Tier 2: address-book contact lookup (ALL pages) ──
         if (findResults.length === 0 && Date.now() - searchStartMs < MAX_SCAN_MS) {
