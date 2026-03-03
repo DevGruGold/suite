@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-import { 
-  Sheet, 
-  SheetContent, 
-  SheetHeader, 
-  SheetTitle, 
-  SheetDescription 
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription
 } from '@/components/ui/sheet';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,10 @@ import { Progress } from '@/components/ui/progress';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { useIsMobile } from '@/hooks/useIsMobile';
-import { 
-  User, 
-  Clock, 
-  AlertTriangle, 
+import {
+  User,
+  Clock,
+  AlertTriangle,
   ChevronDown,
   CheckCircle2,
   Circle,
@@ -100,7 +100,7 @@ function getRelativeTime(dateString: string): string {
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
   const diffMins = Math.floor(diffMs / 60000);
-  
+
   if (diffMins < 1) return 'just now';
   if (diffMins < 60) return `${diffMins}m ago`;
   const diffHours = Math.floor(diffMins / 60);
@@ -125,12 +125,12 @@ function getActivityIcon(activityType: string) {
   }
 }
 
-export function TaskDetailSheet({ 
-  task, 
-  isOpen, 
-  onOpenChange, 
+export function TaskDetailSheet({
+  task,
+  isOpen,
+  onOpenChange,
   agentName,
-  onTaskUpdate 
+  onTaskUpdate
 }: TaskDetailSheetProps) {
   const [fullTask, setFullTask] = useState<Task | null>(null);
   const [activityLog, setActivityLog] = useState<ActivityLogEntry[]>([]);
@@ -152,7 +152,7 @@ export function TaskDetailSheet({
 
     async function fetchDetails() {
       setIsLoading(true);
-      
+
       try {
         // Fetch full task details including description
         const { data: taskData, error: taskError } = await supabase
@@ -160,15 +160,15 @@ export function TaskDetailSheet({
           .select('*')
           .eq('id', task.id)
           .single();
-        
+
         if (taskError) throw taskError;
-        
+
         setFullTask(taskData as Task);
-        
+
         // Set completed items from task data
         const savedCompleted = (taskData as Task).completed_checklist_items || [];
         setCompletedItems(Array.isArray(savedCompleted) ? savedCompleted : []);
-        
+
         // Get checklist - prefer task's metadata checklist over category defaults
         const taskMetadata = (taskData as Record<string, unknown>).metadata as Record<string, unknown> | null;
         const taskChecklist = taskMetadata?.checklist as string[] | undefined;
@@ -177,7 +177,7 @@ export function TaskDetailSheet({
           ? taskChecklist
           : (DEFAULT_CHECKLIST[category] || DEFAULT_CHECKLIST.default);
         setChecklist(templateChecklist);
-        
+
         // Fetch activity log for this task
         const { data: activityData, error: activityError } = await supabase
           .from('eliza_activity_log')
@@ -185,13 +185,13 @@ export function TaskDetailSheet({
           .eq('task_id', task.id)
           .order('created_at', { ascending: false })
           .limit(20);
-        
+
         if (activityError) {
           console.error('[TaskDetailSheet] Activity log error:', activityError);
         } else {
           setActivityLog((activityData || []) as ActivityLogEntry[]);
         }
-        
+
       } catch (err) {
         console.error('[TaskDetailSheet] Error fetching details:', err);
         toast({
@@ -203,41 +203,41 @@ export function TaskDetailSheet({
         setIsLoading(false);
       }
     }
-    
+
     fetchDetails();
   }, [isOpen, task?.id]);
 
   // Handle checklist item toggle
   const handleChecklistToggle = async (item: string) => {
     if (!fullTask || isUpdating) return;
-    
+
     setIsUpdating(true);
-    
+
     const isCurrentlyCompleted = completedItems.includes(item);
     const newCompletedItems = isCurrentlyCompleted
       ? completedItems.filter(i => i !== item)
       : [...completedItems, item];
-    
+
     // Calculate new progress
     const newProgress = Math.round((newCompletedItems.length / checklist.length) * 100);
-    
+
     try {
       // Update task in database
       const { error: updateError } = await supabase
         .from('tasks')
-        .update({ 
+        .update({
           completed_checklist_items: newCompletedItems,
           progress_percentage: newProgress,
           updated_at: new Date().toISOString()
         })
         .eq('id', fullTask.id);
-      
+
       if (updateError) throw updateError;
-      
+
       // Log activity
       await supabase.from('eliza_activity_log').insert({
         activity_type: 'checklist_update',
-        title: isCurrentlyCompleted 
+        title: isCurrentlyCompleted
           ? `Unchecked: ${item}`
           : `Completed: ${item}`,
         description: `Checklist progress: ${newProgress}% (${newCompletedItems.length}/${checklist.length})`,
@@ -250,15 +250,15 @@ export function TaskDetailSheet({
           progress: newProgress
         }
       });
-      
+
       // Update local state
       setCompletedItems(newCompletedItems);
-      setFullTask(prev => prev ? { 
-        ...prev, 
+      setFullTask(prev => prev ? {
+        ...prev,
         completed_checklist_items: newCompletedItems,
-        progress_percentage: newProgress 
+        progress_percentage: newProgress
       } : null);
-      
+
       // Notify parent
       if (onTaskUpdate && fullTask) {
         onTaskUpdate({
@@ -267,7 +267,7 @@ export function TaskDetailSheet({
           progress_percentage: newProgress
         });
       }
-      
+
       // Refresh activity log
       const { data: activityData } = await supabase
         .from('eliza_activity_log')
@@ -275,11 +275,11 @@ export function TaskDetailSheet({
         .eq('task_id', fullTask.id)
         .order('created_at', { ascending: false })
         .limit(20);
-      
+
       if (activityData) {
         setActivityLog(activityData as ActivityLogEntry[]);
       }
-      
+
     } catch (err) {
       console.error('[TaskDetailSheet] Error updating checklist:', err);
       toast({
@@ -297,16 +297,19 @@ export function TaskDetailSheet({
   const displayTask = fullTask || task;
   const statusStyle = STATUS_STYLES[displayTask.status] || STATUS_STYLES.PENDING;
   const StageIcon = STAGE_ICONS[displayTask.stage] || Circle;
-  const timeProgress = displayTask.progress_percentage || 0;
-  const workProgress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 0;
+  const timeProgress = Math.min(100, Math.max(0, displayTask.progress_percentage || 0));
+  const isCompleted = ['COMPLETED', 'DONE'].includes(displayTask.status);
+  const rawWorkProgress = checklist.length > 0 ? Math.round((completedItems.length / checklist.length) * 100) : 0;
+  // Only show 100% when task is officially COMPLETED/DONE — checklist alone isn't enough
+  const workProgress = isCompleted ? Math.min(100, rawWorkProgress) : Math.min(99, rawWorkProgress);
 
   return (
     <Sheet open={isOpen} onOpenChange={onOpenChange}>
-      <SheetContent 
+      <SheetContent
         side={isMobile ? "bottom" : "right"}
         className={`
-          ${isMobile 
-            ? 'h-[90vh] rounded-t-2xl pb-safe-area-inset-bottom' 
+          ${isMobile
+            ? 'h-[90vh] rounded-t-2xl pb-safe-area-inset-bottom'
             : 'w-full sm:max-w-md'
           }
           overflow-hidden flex flex-col
@@ -318,7 +321,7 @@ export function TaskDetailSheet({
             <div className="w-12 h-1.5 bg-muted-foreground/30 rounded-full" />
           </div>
         )}
-        
+
         <SheetHeader className={`pb-4 border-b border-border ${isMobile ? 'px-1' : ''}`}>
           <SheetTitle className="text-lg leading-tight pr-6">
             {displayTask.title}
@@ -369,7 +372,7 @@ export function TaskDetailSheet({
                 </div>
                 <Progress value={timeProgress} className="h-2.5 [&>div]:bg-amber-500" />
               </div>
-              
+
               {/* Work Progress */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between text-sm">
@@ -407,7 +410,7 @@ export function TaskDetailSheet({
                   {completedItems.length}/{checklist.length} done
                 </span>
               </div>
-              
+
               {isLoading ? (
                 <div className="flex items-center justify-center py-4">
                   <Loader2 className="w-5 h-5 animate-spin text-muted-foreground" />
@@ -417,13 +420,12 @@ export function TaskDetailSheet({
                   {checklist.map((item, idx) => {
                     const isCompleted = completedItems.includes(item);
                     return (
-                      <div 
+                      <div
                         key={idx}
-                        className={`flex items-center gap-3 p-3 rounded-xl border transition-colors touch-manipulation ${
-                          isCompleted 
-                            ? 'bg-green-500/10 border-green-500/30' 
+                        className={`flex items-center gap-3 p-3 rounded-xl border transition-colors touch-manipulation ${isCompleted
+                            ? 'bg-green-500/10 border-green-500/30'
                             : 'bg-muted/30 border-border hover:border-primary/50 active:border-primary'
-                        }`}
+                          }`}
                         onClick={() => handleChecklistToggle(item)}
                       >
                         <Checkbox
@@ -433,11 +435,10 @@ export function TaskDetailSheet({
                           disabled={isUpdating}
                           className="data-[state=checked]:bg-green-500 data-[state=checked]:border-green-500 h-5 w-5"
                         />
-                        <label 
+                        <label
                           htmlFor={`checklist-${idx}`}
-                          className={`text-sm flex-1 cursor-pointer select-none ${
-                            isCompleted ? 'line-through text-muted-foreground' : ''
-                          }`}
+                          className={`text-sm flex-1 cursor-pointer select-none ${isCompleted ? 'line-through text-muted-foreground' : ''
+                            }`}
                         >
                           {item}
                         </label>
@@ -460,7 +461,7 @@ export function TaskDetailSheet({
                 </div>
                 <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${isHistoryOpen ? 'rotate-180' : ''}`} />
               </CollapsibleTrigger>
-              
+
               <CollapsibleContent className="pt-2">
                 {isLoading ? (
                   <div className="flex items-center justify-center py-4">
@@ -474,14 +475,14 @@ export function TaskDetailSheet({
                   <div className="relative space-y-0">
                     {/* Timeline line */}
                     <div className="absolute left-[11px] top-3 bottom-3 w-px bg-border" />
-                    
+
                     {activityLog.slice(0, isMobile ? 5 : 10).map((activity) => (
                       <div key={activity.id} className="relative flex gap-3 pb-4">
                         {/* Timeline dot */}
                         <div className="relative z-10 flex items-center justify-center w-6 h-6 rounded-full bg-background border border-border flex-shrink-0">
                           {getActivityIcon(activity.activity_type)}
                         </div>
-                        
+
                         {/* Content */}
                         <div className="flex-1 min-w-0 pt-0.5">
                           <p className="text-xs font-medium text-foreground line-clamp-2">
@@ -498,7 +499,7 @@ export function TaskDetailSheet({
                         </div>
                       </div>
                     ))}
-                    
+
                     {activityLog.length > (isMobile ? 5 : 10) && (
                       <div className="text-center pt-2">
                         <span className="text-xs text-muted-foreground">
@@ -532,12 +533,12 @@ export function TaskDetailSheet({
             )}
           </div>
         </ScrollArea>
-        
+
         {/* Mobile bottom action bar */}
         {isMobile && (
           <div className="border-t border-border pt-4 pb-2 mt-auto">
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="w-full h-12 text-sm gap-2"
               onClick={() => onOpenChange(false)}
             >

@@ -1,9 +1,9 @@
 import { Badge } from '@/components/ui/badge';
-import { 
-  MessageSquare, 
-  FileText, 
-  Play, 
-  CheckCircle2, 
+import {
+  MessageSquare,
+  FileText,
+  Play,
+  CheckCircle2,
   GitMerge,
   AlertCircle
 } from 'lucide-react';
@@ -38,15 +38,15 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
     acc[stage].push(task);
     return acc;
   }, {});
-  
+
   // Find most urgent task (highest progress percentage)
   const urgentTask = tasks.reduce<Task | null>((urgent, task) => {
     if (!urgent) return task;
     return (task.progress_percentage || 0) > (urgent.progress_percentage || 0) ? task : urgent;
   }, null);
-  
-  const hasUrgent = urgentTask && (urgentTask.progress_percentage || 0) >= 75;
-  
+
+  const hasUrgent = urgentTask && Math.min(100, urgentTask.progress_percentage || 0) >= 75;
+
   if (tasks.length === 0) {
     return (
       <div className="text-[10px] text-muted-foreground/50 italic">
@@ -54,7 +54,7 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
       </div>
     );
   }
-  
+
   if (compact) {
     // Compact view: Just show stage badges
     return (
@@ -63,11 +63,11 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
           const config = STAGE_CONFIG[stage as StageKey] || STAGE_CONFIG.DISCUSS;
           const Icon = config.icon;
           const hasUrgentInStage = stageTasks.some(t => (t.progress_percentage || 0) >= 75);
-          
+
           return (
-            <Badge 
-              key={stage} 
-              variant="outline" 
+            <Badge
+              key={stage}
+              variant="outline"
               className={cn(
                 "text-[9px] px-1 py-0 h-4 gap-0.5",
                 config.color,
@@ -82,7 +82,7 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
       </div>
     );
   }
-  
+
   // Full view: Show stage breakdown with progress
   return (
     <div className="space-y-1.5">
@@ -93,16 +93,16 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
           <span>Task due soon</span>
         </div>
       )}
-      
+
       {/* Stage breakdown */}
       <div className="flex flex-wrap gap-1">
         {Object.entries(tasksByStage).map(([stage, stageTasks]) => {
           const config = STAGE_CONFIG[stage as StageKey] || STAGE_CONFIG.DISCUSS;
           const Icon = config.icon;
           const maxProgress = Math.max(...stageTasks.map(t => t.progress_percentage || 0));
-          
+
           return (
-            <div 
+            <div
               key={stage}
               className={cn(
                 "flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]",
@@ -119,7 +119,7 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
           );
         })}
       </div>
-      
+
       {/* Total tasks */}
       <div className="text-[9px] text-muted-foreground">
         {tasks.length} total task{tasks.length !== 1 ? 's' : ''}
@@ -128,26 +128,26 @@ export function AgentTaskSummary({ tasks, compact = false }: AgentTaskSummaryPro
   );
 }
 
-export function PipelinePositionIndicator({ 
-  stage, 
-  totalStages = 5 
-}: { 
-  stage: string; 
+export function PipelinePositionIndicator({
+  stage,
+  totalStages = 5
+}: {
+  stage: string;
   totalStages?: number;
 }) {
   const stageOrder = ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'];
   const currentIndex = stageOrder.indexOf(stage);
   const position = currentIndex >= 0 ? currentIndex + 1 : 1;
-  
+
   return (
     <div className="flex items-center gap-0.5">
       {stageOrder.map((s, i) => {
         const config = STAGE_CONFIG[s as StageKey];
         const isActive = i === currentIndex;
         const isPast = i < currentIndex;
-        
+
         return (
-          <div 
+          <div
             key={s}
             className={cn(
               "w-1.5 h-1.5 rounded-full transition-all",

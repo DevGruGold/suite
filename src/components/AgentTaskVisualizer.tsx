@@ -163,7 +163,7 @@ function AgentCard({ agent, taskCount, assignedTasks, onAgentClick, onTaskDropTo
     if (!urgent) return task;
     return (task.progress_percentage || 0) > (urgent.progress_percentage || 0) ? task : urgent;
   }, null);
-  const hasUrgent = urgentTask && (urgentTask.progress_percentage || 0) >= 75;
+  const hasUrgent = urgentTask && Math.min(100, urgentTask.progress_percentage || 0) >= 75;
 
   const handleDragOver = (e: DragEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -222,7 +222,7 @@ interface TaskCardProps {
 function TaskCard({ task, agentName, onDragStart, onDragEnd, isDragging, onTaskClick }: TaskCardProps) {
   const statusStyle = STATUS_STYLES[task.status] || STATUS_STYLES.PENDING;
   const categoryColor = task.category ? CATEGORY_COLORS[task.category.toLowerCase()] || 'bg-muted' : 'bg-muted';
-  const progressPercentage = task.progress_percentage || 0;
+  const progressPercentage = Math.min(100, Math.max(0, task.progress_percentage || 0));
   const isUrgent = progressPercentage >= 75;
 
   const handleClick = (e: React.MouseEvent) => {
