@@ -179,14 +179,18 @@ serve(async (req) => {
       if (taskStats.blocked > 5 || taskStats.failed > 5) statusReport.overall_status = 'degraded';
     }
 
-    // 4. Check Mining Proxy (supportxmr-proxy)
+    // 4. Check Mining Stats via mining-proxy
+    // NOTE: mining-proxy is the authoritative mining function — it:
+    //   - Fetches pool stats from SupportXMR /stats/ (including perWorkerStats)
+    //   - Syncs worker data to user_worker_mappings & worker_registrations DB tables
+    //   - Returns: hash, amtDue/amtPaid (+ amountDue/amountPaid aliases), workers[]
+    // supportxmr-proxy is a separate read-only function for identifier/worker lookups.
     console.log('⛏️ Checking mining stats...');
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      // NOTE: The function is named 'supportxmr-proxy', NOT 'mining-proxy'
-      const { data: miningData, error: miningError } = await supabase.functions.invoke('supportxmr-proxy', {
+      const { data: miningData, error: miningError } = await supabase.functions.invoke('mining-proxy', {
         body: {}
       });
 
@@ -194,20 +198,31 @@ serve(async (req) => {
 
       if (miningError) throw miningError;
 
-      // Field names returned by supportxmr-proxy:
-      //   hashrate, amountPaid, amountDue, workers[], active_workers, worker_ids[]
+      // mining-proxy response fields:
+      //   hash           — global hashrate (H/s)
+      //   amtDue / amountDue    — XMR owed (already converted from piconeros)
+      //   amtPaid / amountPaid  — lifetime XMR paid (already converted)
+      //   workers[]      — array built from perWorkerStats (may be empty if pool returns none)
+      //   Each worker:   { identifier, hash, validShares, invalidShares, lastHash, wallet, alias }
+      const workerList: any[] = miningData.workers || [];
+      const activeWorkers = workerList.filter((w: any) => (w.hash || 0) > 0 || (w.lastHash || 0) > 0);
+
       statusReport.components.mining = {
         status: 'healthy',
-        hash_rate: miningData.hashrate || 0,
+        hash_rate: miningData.hash || 0,
         total_hashes: miningData.totalHashes || 0,
         valid_shares: miningData.validShares || 0,
-        amount_due: miningData.amountDue || 0,
-        amount_paid: miningData.amountPaid || 0,
-        // Use pre-computed active_workers from proxy (not raw workers.length)
-        active_workers: miningData.active_workers ?? (miningData.workers ? miningData.workers.length : 0),
-        worker_ids: miningData.worker_ids || [],
-        total_registered_workers: miningData.total_registered_workers || 0,
-        workers: miningData.workers || []
+        // Use aliased field names; fall back to original if alias absent
+        amount_due: miningData.amountDue ?? miningData.amtDue ?? 0,
+        amount_paid: miningData.amountPaid ?? miningData.amtPaid ?? 0,
+        // Active worker count: prefer identified active workers; fall back to total worker list length
+        active_workers: activeWorkers.length > 0 ? activeWorkers.length : workerList.length,
+        // Worker IDs: prefer alias, then identifier field
+        worker_ids: activeWorkers.length > 0
+          ? activeWorkers.map((w: any) => w.alias || w.identifier)
+          : workerList.map((w: any) => w.alias || w.identifier),
+        total_registered_workers: workerList.length,
+        workers: workerList
       };
     } catch (error) {
       statusReport.components.mining = {

@@ -28,30 +28,30 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     const supabase = createClient(supabaseUrl, supabaseKey)
-    
+
     const url = new URL(req.url);
     const path = url.pathname;
-    
+
     // Handle worker registration endpoint (POST /worker or /register)
     if ((path.includes('/worker') || path.includes('/register')) && req.method === 'POST') {
       const body = await req.json();
       const { worker_id, wallet, alias, user_id, session_key } = body;
-      
+
       if (!worker_id || !wallet) {
         return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: 'Missing required fields: worker_id and wallet' 
+          JSON.stringify({
+            success: false,
+            error: 'Missing required fields: worker_id and wallet'
           }),
-          { 
+          {
             status: 400,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
       }
-      
+
       console.log('Registering worker:', worker_id, 'for wallet:', wallet);
-      
+
       // Store worker registration in user_worker_mappings table
       const { data: workerData, error: workerError } = await supabase
         .from('user_worker_mappings')
@@ -75,31 +75,31 @@ serve(async (req) => {
         })
         .select()
         .single();
-      
+
       if (workerError) {
         console.error('Worker registration error:', workerError);
         return new Response(
-          JSON.stringify({ 
-            success: false, 
+          JSON.stringify({
+            success: false,
             error: 'Failed to register worker',
             details: workerError.message
           }),
-          { 
+          {
             status: 500,
             headers: { ...corsHeaders, 'Content-Type': 'application/json' }
           }
         );
       }
-      
+
       console.log('Worker registered successfully:', workerData);
-      
+
       return new Response(
-        JSON.stringify({ 
+        JSON.stringify({
           success: true,
           worker: workerData,
           message: 'Worker registered successfully'
         }),
-        { 
+        {
           headers: { ...corsHeaders, 'Content-Type': 'application/json' }
         }
       );
@@ -107,10 +107,10 @@ serve(async (req) => {
 
     const minerAddress = Deno.env.get('MINER_WALLET_ADDRESS') || '46UxNFuGM2E3UwmZWWJicaRPoRwqwW4byQkaTHkX8yPcVihp91qAVtSFipWUGJJUyTXgzSqxzDQtNLf2bsp2DX2qCCgC5mg';
     const apiUrl = `https://www.supportxmr.com/api/miner/${minerAddress}/stats/`;
-    
+
     console.log('Fetching mining stats from SupportXMR:', apiUrl);
     console.log('Using miner address:', minerAddress);
-    
+
     const response = await fetch(apiUrl, {
       headers: {
         'User-Agent': 'XMRT-DAO/1.0',
@@ -129,13 +129,14 @@ serve(async (req) => {
 
     // The SupportXMR API returns data in format: { "amtDue": ..., "amtPaid": ..., "hash": ..., etc. }
     // Not in a nested structure. Let's adapt to whatever structure comes back.
-    
-    // Register/update individual workers from perWorkerStats if it exists
+
+    // Build worker list from perWorkerStats if present
     const workers = [];
-    if (data.perWorkerStats && Array.isArray(data.perWorkerStats)) {
+    if (data.perWorkerStats && Array.isArray(data.perWorkerStats) && data.perWorkerStats.length > 0) {
+      console.log(`Processing ${data.perWorkerStats.length} workers from perWorkerStats`);
       for (const worker of data.perWorkerStats) {
         const workerId = worker.identifier || worker.identifer || worker.id || 'unknown';
-        
+
         // Update worker_registrations (legacy table for compatibility)
         const { error: legacyError } = await supabase
           .from('worker_registrations')
@@ -157,7 +158,7 @@ serve(async (req) => {
         if (legacyError) {
           console.error('Failed to update legacy worker_registrations:', workerId, legacyError);
         }
-        
+
         // Update user_worker_mappings with latest stats from pool
         const { data: mappingData, error: mappingError } = await supabase
           .from('user_worker_mappings')
@@ -173,24 +174,117 @@ serve(async (req) => {
           .eq('worker_id', workerId)
           .select()
           .single();
-        
+
         if (mappingError && mappingError.code !== 'PGRST116') {
           console.error('Failed to update worker mapping:', workerId, mappingError);
         } else if (mappingData) {
           console.log('Worker mapping updated:', workerId, 'for wallet:', mappingData.wallet_address);
         }
 
+        const nowMs = Date.now();
+        const lastHashMs = (worker.lastHash || worker.lts || 0) * 1000;
+        const recentlyActive = lastHashMs > 0 && (nowMs - lastHashMs) < 30 * 60 * 1000;
+        const active = (worker.hash || 0) > 0 || recentlyActive;
+
         workers.push({
           identifier: workerId,
+          id: workerId,
           hash: worker.hash || 0,
           validShares: worker.validShares || 0,
           invalidShares: worker.invalidShares || 0,
           lastHash: worker.lastHash || worker.lts || 0,
           wallet: mappingData?.wallet_address || null,
           alias: mappingData?.alias || null,
+          active,
         });
       }
+    } else {
+      // FALLBACK: perWorkerStats absent — happens when SupportXMR doesn't include
+      // it in the /stats/ response. Use the /identifiers endpoint to discover
+      // worker names, then enrich each with their individual /identifiers/{id}/stats.
+      console.log('perWorkerStats absent from pool response — falling back to /identifiers endpoint');
+
+      if ((data.hash || 0) > 0) {
+        try {
+          const identifiersUrl = `https://supportxmr.com/api/miner/${minerAddress}/identifiers`;
+          const identResp = await fetch(identifiersUrl, {
+            headers: { 'User-Agent': 'XMRT-DAO/1.0', 'Accept': 'application/json' }
+          });
+
+          if (identResp.ok) {
+            const identifierList: string[] = await identResp.json();
+            console.log(`Identifiers endpoint returned ${identifierList.length} workers:`, identifierList);
+
+            const nowMs = Date.now();
+            const THIRTY_MIN_MS = 30 * 60 * 1000;
+
+            // Fetch per-worker stats in parallel (cap at 10)
+            const workerStatPromises = identifierList.slice(0, 10).map(async (workerId: string) => {
+              try {
+                const wsUrl = `https://supportxmr.com/api/miner/${minerAddress}/identifiers/${encodeURIComponent(workerId)}/stats`;
+                const wsResp = await fetch(wsUrl, {
+                  headers: { 'User-Agent': 'XMRT-DAO/1.0', 'Accept': 'application/json' }
+                });
+                const ws = wsResp.ok ? await wsResp.json() : {};
+
+                const lastHashMs = (ws.lastHash || 0) * 1000;
+                const recentlyActive = lastHashMs > 0 && (nowMs - lastHashMs) < THIRTY_MIN_MS;
+                const active = (ws.hash || 0) > 0 || recentlyActive;
+
+                // Also look up alias from user_worker_mappings
+                const { data: mapping } = await supabase
+                  .from('user_worker_mappings')
+                  .select('alias, wallet_address')
+                  .eq('worker_id', workerId)
+                  .maybeSingle();
+
+                return {
+                  identifier: workerId,
+                  id: workerId,
+                  hash: ws.hash || 0,
+                  validShares: ws.validShares || 0,
+                  invalidShares: ws.invalidShares || 0,
+                  lastHash: ws.lastHash || 0,
+                  wallet: mapping?.wallet_address || null,
+                  alias: mapping?.alias || null,
+                  active,
+                };
+              } catch (e) {
+                console.warn(`Could not fetch stats for identifier "${workerId}":`, e);
+                return {
+                  identifier: workerId,
+                  id: workerId,
+                  hash: 0,
+                  validShares: 0,
+                  invalidShares: 0,
+                  lastHash: 0,
+                  wallet: null,
+                  alias: null,
+                  active: false,
+                };
+              }
+            });
+
+            const resolved = await Promise.all(workerStatPromises);
+            workers.push(...resolved);
+            console.log(`Fallback resolved ${workers.length} workers, ${workers.filter(w => w.active).length} active`);
+          } else {
+            console.warn(`/identifiers endpoint returned ${identResp.status} — cannot resolve worker list`);
+          }
+        } catch (identErr) {
+          console.error('Identifiers fallback failed:', identErr);
+        }
+      } else {
+        console.log('Global hash = 0 and no perWorkerStats — no active workers');
+      }
     }
+
+    const activeWorkerCount = workers.filter(w => w.active).length;
+    const effectiveWorkerCount = activeWorkerCount > 0 ? activeWorkerCount : workers.length;
+    const activeWorkerIds = workers
+      .filter(w => w.active)
+      .map(w => w.alias || w.identifier);
+
 
     // Return both workers array AND original data with XMR conversion
     const responseData = {
@@ -198,38 +292,44 @@ serve(async (req) => {
       // Convert atomic units to XMR for all amount fields
       amtDue: atomicUnitsToXMR(data.amtDue || 0),
       amtPaid: atomicUnitsToXMR(data.amtPaid || 0),
-      amountDue: atomicUnitsToXMR(data.amtDue || 0), // Alias for compatibility
+      amountDue: atomicUnitsToXMR(data.amtDue || 0),   // Alias for compatibility
       amountPaid: atomicUnitsToXMR(data.amtPaid || 0), // Alias for compatibility
-      workers: workers.length > 0 ? workers : undefined
+      // Worker data — always present (empty array rather than undefined)
+      workers: workers,
+      // Pre-computed active worker metrics for easy downstream consumption
+      active_workers: effectiveWorkerCount,
+      worker_ids: activeWorkerIds,
+      total_registered_workers: workers.length,
     };
 
     await usageTracker.success({ workers_count: workers.length, has_data: !!data });
 
+
     return new Response(
       JSON.stringify(responseData),
-      { 
-        headers: { 
+      {
+        headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json' 
-        } 
+          'Content-Type': 'application/json'
+        }
       }
     );
 
   } catch (error: any) {
     console.error('Mining proxy error:', error);
     await usageTracker.failure(error?.message || 'Unknown error', 500);
-    
+
     return new Response(
-      JSON.stringify({ 
+      JSON.stringify({
         error: 'Failed to fetch mining stats',
         message: error?.message || 'Unknown error occurred'
       }),
-      { 
+      {
         status: 500,
-        headers: { 
+        headers: {
           ...corsHeaders,
-          'Content-Type': 'application/json' 
-        } 
+          'Content-Type': 'application/json'
+        }
       }
     );
   }
