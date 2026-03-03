@@ -1417,7 +1417,7 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'assign_task',
-      description: 'Create and assign a task to an agent using their ID (NOT name). User will see task in TaskVisualizer. Category and stage have specific valid values.',
+      description: 'Create and assign a task to an agent using their ID (NOT name). User will see task in TaskVisualizer. Category and stage have specific valid values. Include expected_deliverables and notification_recipients to trigger completion notifications (issue #2279).',
       parameters: {
         type: 'object',
         properties: {
@@ -1435,7 +1435,10 @@ export const ELIZA_TOOLS = [
             description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE. Default: PLAN'
           },
           assignee_agent_id: { type: 'string', description: 'Agent ID from list_agents or spawn_agent result' },
-          priority: { type: 'number', description: 'Priority 1-10, default 5' }
+          priority: { type: 'number', description: 'Priority 1-10, default 5' },
+          expected_deliverables: { type: 'string', description: '📋 RECOMMENDED: Human-readable description of expected outputs (e.g., "Market Research Report in PDF", "Code Snippet in GitHub Gist"). Used in completion notification emails.' },
+          deliverable_storage_path: { type: 'string', description: '📁 Optional: Intended Drive storage path (e.g., "Google Drive/XMRT-DAO/Awapuhi Project/Reports")' },
+          notification_recipients: { type: 'array', items: { type: 'string' }, description: '📧 Optional: Email addresses to notify upon completion. Falls back to EXECUTIVE_EMAIL env var if not provided.' }
         },
         required: ['title', 'description', 'category', 'assignee_agent_id']
       }
@@ -1445,7 +1448,7 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'update_task_status',
-      description: 'Update task status and stage as agents work on it. Status and stage have specific valid values.',
+      description: 'Update task status and stage as agents work on it. When completing a task (COMPLETED/DONE), always provide proof_of_work_link and outcome_summary to trigger executive notifications.',
       parameters: {
         type: 'object',
         properties: {
@@ -1460,7 +1463,10 @@ export const ELIZA_TOOLS = [
             enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
             description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE'
           },
-          blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' }
+          blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' },
+          proof_of_work_link: { type: 'string', description: '🔗 REQUIRED ON COMPLETION: Direct URL to final deliverable (Google Drive link, GitHub link, etc.). Included in notification email to Executive Council.' },
+          outcome_summary: { type: 'string', description: '📝 REQUIRED ON COMPLETION: Brief summary of what was accomplished. Included in notification email to Executive Council.' },
+          resolution_notes: { type: 'string', description: 'Detailed resolution notes (stored in task record)' }
         },
         required: ['task_id', 'status']
       }
@@ -1470,7 +1476,7 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'set_task_status',
-      description: 'Directly set the status of a task. Alias for update_task_status. Use this to change task status to COMPLETED, FAILED, etc.',
+      description: 'Directly set the status of a task. Alias for update_task_status. Use this to change task status to COMPLETED, FAILED, etc. When completing, provide proof_of_work_link and outcome_summary.',
       parameters: {
         type: 'object',
         properties: {
@@ -1485,7 +1491,9 @@ export const ELIZA_TOOLS = [
             enum: ['DISCUSS', 'PLAN', 'EXECUTE', 'VERIFY', 'INTEGRATE'],
             description: 'Pipeline stage - MUST be one of: DISCUSS, PLAN, EXECUTE, VERIFY, INTEGRATE'
           },
-          blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' }
+          blocking_reason: { type: 'string', description: 'Reason for blocking (required if status is BLOCKED)' },
+          proof_of_work_link: { type: 'string', description: '🔗 REQUIRED ON COMPLETION: Direct URL to final deliverable.' },
+          outcome_summary: { type: 'string', description: '📝 REQUIRED ON COMPLETION: Brief summary of what was accomplished.' }
         },
         required: ['task_id', 'status']
       }
@@ -1570,12 +1578,14 @@ export const ELIZA_TOOLS = [
     type: 'function',
     function: {
       name: 'mark_task_complete',
-      description: 'Mark a task as completed. Shortcut for update_task_status with COMPLETED status.',
+      description: 'Mark a task as completed. Shortcut for update_task_status with COMPLETED status. Always provide proof_of_work_link and outcome_summary to trigger executive notifications.',
       parameters: {
         type: 'object',
         properties: {
           task_id: { type: 'string', description: 'Task ID to mark complete' },
-          completion_notes: { type: 'string', description: 'Notes about task completion' }
+          completion_notes: { type: 'string', description: 'Notes about task completion' },
+          proof_of_work_link: { type: 'string', description: '🔗 REQUIRED: Direct URL to final deliverable.' },
+          outcome_summary: { type: 'string', description: '📝 REQUIRED: Brief summary of what was accomplished.' }
         },
         required: ['task_id']
       }

@@ -514,7 +514,7 @@ serve(async (req) => {
           });
         }
 
-        const insertTask = {
+        const insertTask: any = {
           id: taskData.task_id ?? `task-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
           title: taskData.title,
           description: taskData.description,
@@ -531,6 +531,13 @@ serve(async (req) => {
             ...(taskData.metadata || {}),
           },
         };
+
+        // Deliverable tracking fields (issue #2279)
+        if (taskData.expected_deliverables) insertTask.expected_deliverables = taskData.expected_deliverables;
+        if (taskData.deliverable_storage_path) insertTask.deliverable_storage_path = taskData.deliverable_storage_path;
+        if (Array.isArray(taskData.notification_recipients) && taskData.notification_recipients.length > 0) {
+          insertTask.notification_recipients = taskData.notification_recipients;
+        }
 
         const created = await supabase.from("tasks").insert(insertTask).select().single();
         if (created.error) {
@@ -604,7 +611,7 @@ serve(async (req) => {
       // ------------------------
       case "update_task_status":
       case "set_task_status": {
-        const { task_id, status, completion_data, resolution_notes, items_completed = [] } = data ?? {};
+        const { task_id, status, completion_data, resolution_notes, items_completed = [], proof_of_work_link, outcome_summary } = data ?? {};
         if (!task_id || !status) throw new ValidationError("update_task_status requires task_id and status");
 
         // Validate status
@@ -620,10 +627,11 @@ serve(async (req) => {
         // Build update payload
         const updatePayload: any = {
           updated_at: new Date().toISOString(),
-          // Safely merge completion_data into metadata to avoid PGRST204 (Column not found)
+          // Safely merge completion_data and outcome_summary into metadata
           metadata: {
             ...(task?.metadata ?? {}),
-            ...(completion_data ?? {})
+            ...(completion_data ?? {}),
+            ...(outcome_summary ? { outcome_summary } : {}),
           }
         };
 
@@ -641,6 +649,11 @@ serve(async (req) => {
 
           if (resolution_notes) {
             updatePayload.resolution_notes = resolution_notes;
+          }
+
+          // Persist proof of work link and outcome summary (issue #2279)
+          if (proof_of_work_link) {
+            updatePayload.proof_of_work_link = proof_of_work_link;
           }
         }
 
