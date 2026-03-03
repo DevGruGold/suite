@@ -179,13 +179,14 @@ serve(async (req) => {
       if (taskStats.blocked > 5 || taskStats.failed > 5) statusReport.overall_status = 'degraded';
     }
 
-    // 4. Check Mining Proxy
+    // 4. Check Mining Proxy (supportxmr-proxy)
     console.log('⛏️ Checking mining stats...');
     try {
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000);
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
 
-      const { data: miningData, error: miningError } = await supabase.functions.invoke('mining-proxy', {
+      // NOTE: The function is named 'supportxmr-proxy', NOT 'mining-proxy'
+      const { data: miningData, error: miningError } = await supabase.functions.invoke('supportxmr-proxy', {
         body: {}
       });
 
@@ -193,14 +194,19 @@ serve(async (req) => {
 
       if (miningError) throw miningError;
 
+      // Field names returned by supportxmr-proxy:
+      //   hashrate, amountPaid, amountDue, workers[], active_workers, worker_ids[]
       statusReport.components.mining = {
         status: 'healthy',
-        hash_rate: miningData.hash || 0,
+        hash_rate: miningData.hashrate || 0,
         total_hashes: miningData.totalHashes || 0,
         valid_shares: miningData.validShares || 0,
-        amount_due: miningData.amtDue || 0,
-        amount_paid: miningData.amtPaid || 0,
-        active_workers: miningData.workers ? miningData.workers.length : 0,
+        amount_due: miningData.amountDue || 0,
+        amount_paid: miningData.amountPaid || 0,
+        // Use pre-computed active_workers from proxy (not raw workers.length)
+        active_workers: miningData.active_workers ?? (miningData.workers ? miningData.workers.length : 0),
+        worker_ids: miningData.worker_ids || [],
+        total_registered_workers: miningData.total_registered_workers || 0,
         workers: miningData.workers || []
       };
     } catch (error) {
@@ -209,6 +215,7 @@ serve(async (req) => {
         error: error.message
       };
     }
+
 
     // 5. Check Vercel Services Status
     console.log('🚀 Checking Vercel services health...');

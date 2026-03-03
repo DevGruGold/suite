@@ -63,6 +63,8 @@ interface SystemStatus {
       amount_due?: number;
       amount_paid?: number;
       active_workers?: number;
+      worker_ids?: string[];
+      total_registered_workers?: number;
     };
     render_service?: ComponentStatus;
     activity_log?: ComponentStatus & {
@@ -254,6 +256,22 @@ export const SystemStatusMonitor = () => {
                   <div>
                     <div className="text-muted-foreground">Due</div>
                     <div className="font-bold text-yellow-600">{(status.components.mining.amount_due || 0).toFixed(6)} XMR</div>
+                  </div>
+                </div>
+              )}
+              {/* Worker IDs — show when we have active workers */}
+              {status.components.mining.worker_ids && status.components.mining.worker_ids.length > 0 && (
+                <div className="mt-2">
+                  <div className="text-xs text-muted-foreground mb-1">Active Miners</div>
+                  <div className="flex flex-wrap gap-1">
+                    {status.components.mining.worker_ids.map((wid) => (
+                      <span
+                        key={wid}
+                        className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200"
+                      >
+                        ⛏ {wid}
+                      </span>
+                    ))}
                   </div>
                 </div>
               )}
