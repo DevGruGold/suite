@@ -68,7 +68,7 @@ function getChannelBadge(msg: InboxMessage) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function InboxPage() {
-    const { user } = useAuth();
+    const { user, profile } = useAuth();
     const navigate = useNavigate();
     const [messages, setMessages] = useState<InboxMessage[]>([]);
     const [isLoading, setIsLoading] = useState(true);
