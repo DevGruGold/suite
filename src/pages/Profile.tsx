@@ -12,7 +12,7 @@ import { toast } from "sonner";
 import {
   User, Wallet, GitCommit, Cpu, Battery, Coins,
   ExternalLink, Copy, CheckCircle, Edit2, Save, X,
-  Shield, Zap
+  Shield, Zap, Mail
 } from "lucide-react";
 import { Navigate } from "react-router-dom";
 import { MiningSessionsList } from "@/components/MiningSessionsList";
