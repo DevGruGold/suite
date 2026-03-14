@@ -259,7 +259,7 @@ const Profile = () => {
                   )}
                   <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
                     <div className="flex items-center gap-3">
-                      <MessageSquare className="w-4 h-4 text-primary" />
+                      <Mail className="w-4 h-4 text-primary" />
                       <div>
                         <p className="text-sm font-medium">Email Notifications</p>
                         <p className="text-[10px] text-muted-foreground">Receive copies of inbox messages</p>

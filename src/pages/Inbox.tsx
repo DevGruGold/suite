@@ -43,7 +43,7 @@ function getMessageIcon(msg: InboxMessage) {
         case "task_blocked": return <AlertTriangle className="w-4 h-4 text-amber-400" />;
         case "agent_message": return <Bot className="w-4 h-4 text-violet-400" />;
         case "whatsapp": return <Smartphone className="w-4 h-4 text-green-400" />;
-        case "email": return <MessageSquare className="w-4 h-4 text-sky-400" />;
+        case "email": return <Mail className="w-4 h-4 text-sky-400" />;
         case "channel": return <MessageSquare className="w-4 h-4 text-blue-400" />;
         default: return <Zap className="w-4 h-4 text-primary" />;
     }
@@ -268,7 +268,7 @@ export default function InboxPage() {
                             "flex items-center gap-3 px-3 py-2 rounded-lg border transition-all",
                             user?.id ? "bg-card border-border shadow-sm" : "bg-muted/30 border-dashed"
                         )}>
-                            <MessageSquare className={cn("w-4 h-4", profile?.email_notifications_enabled ? "text-primary" : "text-muted-foreground")} />
+                            <Mail className={cn("w-4 h-4", profile?.email_notifications_enabled ? "text-primary" : "text-muted-foreground")} />
                             <div className="flex-1">
                                 <p className="text-[11px] font-medium leading-none">Email Notifications</p>
                                 <p className="text-[9px] text-muted-foreground mt-0.5">
