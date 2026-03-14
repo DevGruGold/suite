@@ -234,6 +234,23 @@ const Profile = () => {
                       placeholder="Tell us about yourself..."
                     />
                   </div>
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/20">
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-4 h-4 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Email Notifications</p>
+                        <p className="text-[10px] text-muted-foreground">Get copies of your inbox messages</p>
+                      </div>
+                    </div>
+                    <Button
+                      variant={editForm.email_notifications_enabled ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditForm(prev => ({ ...prev, email_notifications_enabled: !prev.email_notifications_enabled }))}
+                      className="h-8"
+                    >
+                      {editForm.email_notifications_enabled ? "Enabled" : "Disabled"}
+                    </Button>
+                  </div>
                 </>
               ) : (
                 <div className="grid gap-3 text-sm">
