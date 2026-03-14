@@ -70,7 +70,7 @@ export class SuperDuperAgent {
 
             const messages = [
                 { role: 'system', content: this.config.system_prompt },
-                { role: 'user', content: `Please execute the following task.\n${taskContext}\n\nThink step-by-step. If you need more information or need to take action, use the available tools.\n\n🚨 CRITICAL: If a 'task_id' is visible in the context above, you MUST call 'update_task_status' to mark progress or completion. If you finish the task, set status='DONE'. This is required for the user to see your work.` }
+                { role: 'user', content: `Please execute the following task.\n${taskContext}\n\nThink step-by-step. If you need more information or need to take action, use the available tools.\n\n🚨 CRITICAL: If a 'task_id' is visible in the context above, you MUST call 'update_task_status' to mark progress or completion. If you finish the task, set status='DONE'.\n\n📋 COMPLETION PROTOCOL (issue #2279): When marking a task as DONE or COMPLETED, you MUST also provide:\n  - proof_of_work_link: A direct URL to your final deliverable (Google Drive, GitHub, etc.)\n  - outcome_summary: A 1-2 sentence description of what was accomplished\nThis triggers the Executive Council notification system so the user can review your work.` }
             ];
 
             // 1. Plan / Thought Loop (Simple single-turn for now, can loop if needed)

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { toast } from "sonner";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -198,6 +199,24 @@ export default function InboxPage() {
                             </div>
                         </div>
                         <div className="flex items-center gap-2">
+                             <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 gap-1.5 text-xs text-muted-foreground"
+                                onClick={async () => {
+                                    toast.loading("Syncing Gmail replies...");
+                                    const { data, error } = await supabase.functions.invoke("sync-gmail-v2");
+                                    if (error) {
+                                        toast.error("Sync failed: " + error.message);
+                                    } else {
+                                        toast.success(`Synced ${data.processed?.length || 0} messages`);
+                                        refresh();
+                                    }
+                                }}
+                            >
+                                <RefreshCw className="w-3.5 h-3.5" />
+                                Sync Gmail
+                            </Button>
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -241,6 +260,45 @@ export default function InboxPage() {
                                 )}
                             </button>
                         ))}
+                    </div>
+
+                    {/* Email Notification Toggle (Quick Access) */}
+                    <div className="flex items-center gap-2 mt-4 px-1 py-2 border-t border-border/10">
+                        <div className={cn(
+                            "flex items-center gap-3 px-3 py-2 rounded-lg border transition-all",
+                            user?.id ? "bg-card border-border shadow-sm" : "bg-muted/30 border-dashed"
+                        )}>
+                            <Mail className={cn("w-4 h-4", profile?.email_notifications_enabled ? "text-primary" : "text-muted-foreground")} />
+                            <div className="flex-1">
+                                <p className="text-[11px] font-medium leading-none">Email Notifications</p>
+                                <p className="text-[9px] text-muted-foreground mt-0.5">
+                                    {profile?.email_notifications_enabled ? "Enabled - receiving copies" : "Disabled - internal only"}
+                                </p>
+                            </div>
+                            <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-7 text-[10px] gap-1 px-2"
+                                onClick={async () => {
+                                    if (!user) return;
+                                    const next = !profile?.email_notifications_enabled;
+                                    const { error } = await supabase
+                                        .from("profiles")
+                                        .update({ email_notifications_enabled: next })
+                                        .eq("id", user.id);
+                                    
+                                    if (error) {
+                                        toast.error("Failed to update: " + error.message);
+                                    } else {
+                                        toast.success(`Email notifications ${next ? "enabled" : "disabled"}`);
+                                        // The profile will auto-update via AuthContext if it re-fetches or uses real-time
+                                        // For now, we trust the UI to reflect state if the page refreshes or if we use local state.
+                                    }
+                                }}
+                            >
+                                {profile?.email_notifications_enabled ? "Turn Off" : "Turn On"}
+                            </Button>
+                        </div>
                     </div>
                 </div>
             </div>

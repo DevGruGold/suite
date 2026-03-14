@@ -30,7 +30,19 @@ serve(async (req) => {
         );
 
         const body = await req.json();
-        const { user_id, title, content, task_id, metadata } = body;
+        const { 
+            user_id, 
+            title, 
+            content, 
+            task_id, 
+            metadata,
+            type = 'system',
+            channel = 'internal',
+            priority = 2,
+            agent_id,
+            agent_name,
+            action_url
+        } = body;
 
         if (!user_id || !title || !content) {
             return new Response(
@@ -45,9 +57,16 @@ serve(async (req) => {
             content,
             is_read: false,
             created_at: new Date().toISOString(),
+            type,
+            channel,
+            priority,
+            metadata: metadata || {}
         };
 
         if (task_id) record.task_id = task_id;
+        if (agent_id) record.agent_id = agent_id;
+        if (agent_name) record.agent_name = agent_name;
+        if (action_url) record.action_url = action_url;
 
         const { data, error } = await supabase
             .from('inbox_messages')
@@ -60,7 +79,49 @@ serve(async (req) => {
             throw error;
         }
 
-        console.log(`[inbox-notify] ✅ Sent inbox message to user ${user_id}: "${title}"`);
+        // ── Step 2: Handle Email Notifications ─────────────────────────────
+        try {
+            // Fetch user profile and email preference
+            const { data: profile, error: profileError } = await supabase
+                .from('profiles')
+                .select('email_notifications_enabled')
+                .eq('id', user_id)
+                .single();
+
+            if (profile?.email_notifications_enabled) {
+                // Fetch user email from auth.users (requires service role key access)
+                const { data: userData, error: userError } = await supabase.auth.admin.getUserById(user_id);
+                const userEmail = userData?.user?.email;
+
+                if (userEmail) {
+                    console.log(`[inbox-notify] 📧 Sending email notification to ${userEmail} for message: "${title}"`);
+                    
+                    const emailBody = `
+<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; border: 1px solid #eee; border-radius: 8px;">
+    <h2 style="color: #333;">${title}</h2>
+    <div style="color: #555; line-height: 1.6; white-space: pre-wrap;">${content}</div>
+    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;">
+    <p style="font-size: 12px; color: #888;">
+        Reply directly to this email to respond to the Executive Agent.<br>
+        Manage your notification settings in the <a href="https://suite-beta.vercel.app/dashboard/profile">Suite Profile</a>.
+    </p>
+</div>
+                    `;
+
+                    await supabase.functions.invoke('google-gmail', {
+                        body: {
+                            action: 'send_email',
+                            to: userEmail,
+                            subject: `[Suite] ${title}`,
+                            body: emailBody,
+                            is_html: true
+                        }
+                    });
+                }
+            }
+        } catch (emailErr: any) {
+            console.warn('[inbox-notify] ⚠️ Non-fatal error sending email notification:', emailErr.message);
+        }
 
         return new Response(
             JSON.stringify({ success: true, message_id: data.id, user_id, title }),

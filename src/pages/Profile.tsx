@@ -39,7 +39,8 @@ const Profile = () => {
     display_name: '',
     github_username: '',
     wallet_address: '',
-    bio: ''
+    bio: '',
+    email_notifications_enabled: false
   });
   const [saving, setSaving] = useState(false);
 
@@ -49,7 +50,8 @@ const Profile = () => {
         display_name: profile.display_name || '',
         github_username: profile.github_username || '',
         wallet_address: profile.wallet_address || '',
-        bio: profile.bio || ''
+        bio: profile.bio || '',
+        email_notifications_enabled: profile.email_notifications_enabled || false
       });
       // Load linked worker IDs from profile
       fetchLinkedWorkerIds();
@@ -103,6 +105,7 @@ const Profile = () => {
           github_username: editForm.github_username,
           wallet_address: editForm.wallet_address,
           bio: editForm.bio,
+          email_notifications_enabled: editForm.email_notifications_enabled,
           updated_at: new Date().toISOString()
         })
         .eq('id', user.id);
@@ -254,6 +257,27 @@ const Profile = () => {
                   {profile?.bio && (
                     <p className="text-muted-foreground">{profile.bio}</p>
                   )}
+                  <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
+                    <div className="flex items-center gap-3">
+                      <Mail className="w-4 h-4 text-primary" />
+                      <div>
+                        <p className="text-sm font-medium">Email Notifications</p>
+                        <p className="text-[10px] text-muted-foreground">Receive copies of inbox messages</p>
+                      </div>
+                    </div>
+                    {isEditing ? (
+                      <input 
+                        type="checkbox"
+                        checked={editForm.email_notifications_enabled}
+                        onChange={(e) => setEditForm(prev => ({ ...prev, email_notifications_enabled: e.target.checked }))}
+                        className="w-4 h-4 rounded border-gray-300 text-primary focus:ring-primary"
+                      />
+                    ) : (
+                      <div className="text-xs font-medium text-primary uppercase tracking-wider">
+                        {profile?.email_notifications_enabled ? 'Enabled' : 'Disabled'}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
             </CardContent>

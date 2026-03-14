@@ -81,8 +81,8 @@ export async function executeToolCall(
     // Provide tool-specific expected schema in error messages
     const expectedSchemas: Record<string, string> = {
       'execute_python': '{ "code": "python_code_string", "purpose": "description_of_what_code_does" }',
-      'assign_task': '{ "title": "string", "description": "string", "category": "code|infra|research|governance|mining|device|ops|other", "assignee_agent_id": "agent-xxx", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE" }',
-      'update_task_status': '{ "task_id": "uuid", "status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE" }',
+      'assign_task': '{ "title": "string", "description": "string", "category": "code|infra|research|governance|mining|device|ops|other", "assignee_agent_id": "agent-xxx", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE", "expected_deliverables": "optional: description of expected outputs", "notification_recipients": ["email@example.com"] }',
+      'update_task_status': '{ "task_id": "uuid", "status": "PENDING|CLAIMED|IN_PROGRESS|BLOCKED|DONE|CANCELLED|COMPLETED|FAILED", "stage": "DISCUSS|PLAN|EXECUTE|VERIFY|INTEGRATE", "proof_of_work_link": "url-to-deliverable (required on COMPLETED)", "outcome_summary": "what was accomplished (required on COMPLETED)" }',
       'update_agent_status': '{ "agent_id": "agent-xxx", "status": "IDLE|BUSY|ARCHIVED|ERROR|OFFLINE" }',
       'createGitHubIssue': '{ "title": "string", "body": "string", "repo": "XMRT-Ecosystem", "labels": ["bug"], "assignees": ["Antigravity"] }',
       'invoke_edge_function': '{ "function_name": "string", "payload": {} }',

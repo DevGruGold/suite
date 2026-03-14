@@ -126,9 +126,10 @@ function buildMimeMessage(
     images?: InlineImage[];
     video?: VideoEmbed;
     plainFallback?: string;
+    cc?: string;
   } = {}
 ): string {
-  const { isHtml = false, images = [], video } = options;
+  const { isHtml = false, images = [], video, cc } = options;
   const needsMultipart = images.length > 0;
   const needsHtml = isHtml || !!video || needsMultipart;
 
@@ -136,6 +137,7 @@ function buildMimeMessage(
   if (!needsHtml) {
     const msg = [
       `To: ${to}`,
+      ...(cc ? [`Cc: ${cc}`] : []),
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
       'Content-Type: text/plain; charset=utf-8',
@@ -160,6 +162,7 @@ function buildMimeMessage(
     const htmlEncoded = wrapBase64(btoa(unescape(encodeURIComponent(htmlBody))));
     const msg = [
       `To: ${to}`,
+      ...(cc ? [`Cc: ${cc}`] : []),
       `Subject: ${subject}`,
       'MIME-Version: 1.0',
       'Content-Type: text/html; charset=utf-8',
@@ -178,6 +181,7 @@ function buildMimeMessage(
 
   // Outer envelope headers
   lines.push(`To: ${to}`);
+  if (cc) lines.push(`Cc: ${cc}`);
   lines.push(`Subject: ${subject}`);
   lines.push('MIME-Version: 1.0');
   lines.push(`Content-Type: multipart/related; boundary="${boundaryRelated}"`);
@@ -219,9 +223,10 @@ async function sendEmail(
   body: string,
   isHtml = false,
   images: InlineImage[] = [],
-  video?: VideoEmbed
+  video?: VideoEmbed,
+  cc?: string
 ) {
-  const encodedMessage = buildMimeMessage(to, subject, body, { isHtml, images, video });
+  const encodedMessage = buildMimeMessage(to, subject, body, { isHtml, images, video, cc });
 
   const response = await fetch(`${GMAIL_API_URL}/users/me/messages/send`, {
     method: 'POST',
@@ -266,6 +271,21 @@ async function listEmails(accessToken: string, query = '', maxResults = 20) {
   return { messages: previews, total: data.resultSizeEstimate || data.messages.length };
 }
 
+async function modifyMessage(accessToken: string, messageId: string, addLabelIds: string[] = [], removeLabelIds: string[] = []) {
+  const response = await fetch(`${GMAIL_API_URL}/users/me/messages/${messageId}/modify`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${accessToken}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      addLabelIds,
+      removeLabelIds
+    })
+  });
+  return response.json();
+}
+
 async function getEmail(accessToken: string, messageId: string) {
   const response = await fetch(`${GMAIL_API_URL}/users/me/messages/${messageId}?format=full`, {
     headers: { Authorization: `Bearer ${accessToken}` }
@@ -280,9 +300,10 @@ async function createDraft(
   body: string,
   isHtml = false,
   images: InlineImage[] = [],
-  video?: VideoEmbed
+  video?: VideoEmbed,
+  cc?: string
 ) {
-  const encodedMessage = buildMimeMessage(to, subject, body, { isHtml, images, video });
+  const encodedMessage = buildMimeMessage(to, subject, body, { isHtml, images, video, cc });
 
   const response = await fetch(`${GMAIL_API_URL}/users/me/drafts`, {
     method: 'POST',
@@ -348,7 +369,8 @@ serve(async (req) => {
           body.body,
           body.is_html ?? false,
           body.images ?? [],
-          body.video
+          body.video,
+          body.cc
         );
         break;
 
@@ -368,7 +390,17 @@ serve(async (req) => {
           body.body,
           body.is_html ?? false,
           body.images ?? [],
-          body.video
+          body.video,
+          body.cc
+        );
+        break;
+
+      case 'modify_message':
+        result = await modifyMessage(
+          accessToken,
+          body.message_id,
+          body.add_labels ?? [],
+          body.remove_labels ?? []
         );
         break;
 
@@ -384,7 +416,8 @@ serve(async (req) => {
                 'body',
                 'is_html?',
                 'images? [{cid, data (base64), mimeType}]',
-                'video? {url, thumbnailUrl?, title?}'
+                'video? {url, thumbnailUrl?, title?}',
+                'cc?'
               ],
               description: 'Send an email. Supports plain text, HTML, inline embedded images (via CID), and video thumbnail blocks.'
             },
@@ -406,7 +439,8 @@ serve(async (req) => {
                 'body',
                 'is_html?',
                 'images? [{cid, data (base64), mimeType}]',
-                'video? {url, thumbnailUrl?, title?}'
+                'video? {url, thumbnailUrl?, title?}',
+                'cc?'
               ],
               description: 'Create an email draft. Supports the same rich media options as send_email.'
             }
