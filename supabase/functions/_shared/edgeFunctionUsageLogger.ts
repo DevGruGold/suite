@@ -6,6 +6,7 @@ import { SupabaseClient, createClient } from 'https://esm.sh/@supabase/supabase-
  * This ensures complete analytics coverage including early validation failures
  * 
  * Enhanced with execution_source tracking for cross-platform cron job awareness
+ * Enhanced with user_info tracking for multi-tenant operations
  */
 
 export type ExecutionSource = 'supabase_native' | 'pg_cron' | 'github_actions' | 'vercel_cron' | 'api' | 'tool_call';
@@ -24,6 +25,8 @@ interface UsageLogEntry {
   fallback?: string;
   status_code?: number;
   execution_source?: ExecutionSource;
+  user_id?: string;      // Added for user context
+  user_email?: string;   // Added for user context
 }
 
 /**
@@ -116,6 +119,8 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
           tool_calls: entry.tool_calls,
           fallback: entry.fallback,
           status_code: entry.status_code,
+          user_id: entry.user_id,        // Include user info in metadata
+          user_email: entry.user_email,  // Include user info in metadata
           logged_at: new Date().toISOString()
         },
         tool_category: categorizeFunction(entry.function_name),
@@ -125,7 +130,8 @@ export async function logEdgeFunctionUsage(entry: UsageLogEntry): Promise<void> 
     if (error) {
       console.error(`⚠️ Failed to log usage for ${entry.function_name}:`, error.message);
     } else {
-      console.log(`📊 Logged usage: ${entry.function_name} [${entry.execution_source || 'api'}] (${entry.success ? 'success' : 'failure'})`);
+      const userContext = entry.user_email ? ` [user: ${entry.user_email}]` : '';
+      console.log(`📊 Logged usage: ${entry.function_name}${userContext} [${entry.execution_source || 'api'}] (${entry.success ? 'success' : 'failure'})`);
     }
   } catch (e) {
     // Never let logging errors break the main function
@@ -174,6 +180,8 @@ export class UsageTracker {
   private startTime: number;
   private parameters?: any;
   private executionSource: ExecutionSource;
+  private userId?: string;
+  private userEmail?: string;
 
   constructor(functionName: string, executiveName?: string, parameters?: any, executionSource: ExecutionSource = 'api') {
     this.functionName = functionName;
@@ -188,6 +196,16 @@ export class UsageTracker {
    */
   setExecutionSource(source: ExecutionSource): void {
     this.executionSource = source;
+  }
+
+  /**
+   * Set user information for this usage tracker
+   * This enables multi-tenant user tracking in analytics
+   */
+  setUserInfo(userEmail: string, userId?: string): void {
+    this.userEmail = userEmail;
+    this.userId = userId;
+    console.log(`👤 User context set: ${userEmail}${userId ? ` (${userId})` : ''}`);
   }
 
   /**
@@ -207,6 +225,8 @@ export class UsageTracker {
       execution_time_ms: Date.now() - this.startTime,
       parameters: this.parameters,
       execution_source: this.executionSource,
+      user_id: this.userId,
+      user_email: this.userEmail,
       ...details
     });
   }
@@ -223,6 +243,8 @@ export class UsageTracker {
       error_message,
       parameters: this.parameters,
       execution_source: this.executionSource,
+      user_id: this.userId,
+      user_email: this.userEmail,
       status_code
     });
   }
