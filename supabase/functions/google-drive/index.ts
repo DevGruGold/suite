@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { getGoogleAccessToken, isGoogleConfigured, corsHeaders } from "../_shared/googleAuthHelper.ts";
+import { getGoogleAccessToken, isGoogleConfigured, corsHeaders, extractUserContext, UserTokenInfo } from "../_shared/googleAuthHelper.ts";
 import { startUsageTrackingWithRequest } from "../_shared/edgeFunctionUsageLogger.ts";
 
 const FUNCTION_NAME = 'google-drive';
@@ -32,17 +32,75 @@ async function uploadFile(accessToken: string, fileName: string, content: string
   if (folderId) metadata.parents = [folderId];
 
   const boundary = 'foo_bar_baz';
-  const body = [
-    `--${boundary}`,
-    'Content-Type: application/json; charset=UTF-8',
-    '',
-    JSON.stringify(metadata),
-    `--${boundary}`,
-    `Content-Type: ${mimeType}`,
-    '',
-    content,
-    `--${boundary}--`
-  ].join('\r\n');
+  
+  // Check if this is a binary file type that needs base64 decoding
+  const isBinaryFile = mimeType.startsWith('image/') || 
+                      mimeType.startsWith('video/') || 
+                      mimeType.startsWith('audio/') ||
+                      mimeType === 'application/pdf' ||
+                      mimeType === 'application/zip' ||
+                      mimeType === 'application/x-zip-compressed' ||
+                      mimeType === 'application/octet-stream';
+
+  let body: string | Uint8Array;
+
+  if (isBinaryFile) {
+    // Remove data URL prefix if present (e.g., "data:image/png;base64,")
+    const base64Data = content.includes('base64,') 
+      ? content.split('base64,')[1] 
+      : content;
+    
+    // Decode base64 to binary
+    const binaryData = Uint8Array.from(atob(base64Data), c => c.charCodeAt(0));
+    
+    // Build multipart body as binary
+    const encoder = new TextEncoder();
+    
+    // Metadata part
+    const metadataPart = encoder.encode(
+      `--${boundary}\r\n` +
+      'Content-Type: application/json; charset=UTF-8\r\n' +
+      '\r\n' +
+      JSON.stringify(metadata) +
+      '\r\n'
+    );
+    
+    // File content part with proper headers for binary data
+    const contentPartHeader = encoder.encode(
+      `--${boundary}\r\n` +
+      `Content-Type: ${mimeType}\r\n` +
+      '\r\n'
+    );
+    
+    // Closing boundary
+    const closingBoundary = encoder.encode(`\r\n--${boundary}--`);
+    
+    // Combine all parts
+    const totalLength = metadataPart.length + contentPartHeader.length + binaryData.length + closingBoundary.length;
+    body = new Uint8Array(totalLength);
+    
+    let offset = 0;
+    body.set(metadataPart, offset);
+    offset += metadataPart.length;
+    body.set(contentPartHeader, offset);
+    offset += contentPartHeader.length;
+    body.set(binaryData, offset);
+    offset += binaryData.length;
+    body.set(closingBoundary, offset);
+  } else {
+    // For text files, keep original behavior
+    body = [
+      `--${boundary}`,
+      'Content-Type: application/json; charset=UTF-8',
+      '',
+      JSON.stringify(metadata),
+      `--${boundary}`,
+      `Content-Type: ${mimeType}`,
+      '',
+      content,
+      `--${boundary}--`
+    ].join('\r\n');
+  }
 
   const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
     method: 'POST',
@@ -50,7 +108,7 @@ async function uploadFile(accessToken: string, fileName: string, content: string
       Authorization: `Bearer ${accessToken}`,
       'Content-Type': `multipart/related; boundary=${boundary}`
     },
-    body
+    body: body
   });
 
   return response.json();
@@ -119,7 +177,15 @@ serve(async (req) => {
   const usageTracker = startUsageTrackingWithRequest(FUNCTION_NAME, req, body);
 
   try {
-    if (!(await isGoogleConfigured())) {
+    // Extract user context from request
+    const userContext = await extractUserContext(req, body);
+    console.log('👤 User context:', { 
+      userId: userContext.userId, 
+      userEmail: userContext.userEmail, 
+      requestedFrom: userContext.requestedFrom 
+    });
+
+    if (!(await isGoogleConfigured(userContext))) {
       await usageTracker.failure('Google Cloud not configured', 401);
       return new Response(JSON.stringify({
         success: false,
@@ -133,15 +199,28 @@ serve(async (req) => {
 
     console.log(`📁 google-drive: action=${action}`);
 
-    const accessToken = await getGoogleAccessToken();
-    if (!accessToken) {
-      await usageTracker.failure('Failed to get access token', 401);
-      return new Response(JSON.stringify({
-        success: false,
-        error: 'Failed to get access token',
-        credential_required: true
-      }), { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    // Get access token with user context
+    const tokenOrErr = await getGoogleAccessToken(userContext);
+    
+    // Check for error response
+    if ('error' in tokenOrErr) {
+      const err = tokenOrErr as { error: string; code: number; reason?: string };
+      await usageTracker.failure(err.error, err.code);
+      return new Response(JSON.stringify({ 
+        success: false, 
+        error: err.error, 
+        reason: err.reason 
+      }), { 
+        status: err.code, 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+      });
     }
+    
+    // Success - we have a valid token info
+    const tokenInfo = tokenOrErr as UserTokenInfo;
+    usageTracker.setUserInfo(tokenInfo.userEmail, tokenInfo.userId);
+    console.log(`📁 Operating as: ${tokenInfo.userEmail || 'env-fallback'}`);
+    const accessToken = tokenInfo.accessToken;
 
     let result;
 
@@ -195,7 +274,16 @@ serve(async (req) => {
     }
 
     await usageTracker.success({ result_summary: `${action} completed` });
-    return new Response(JSON.stringify({ success: true, result }), {
+    
+    // Return result with user info
+    return new Response(JSON.stringify({ 
+      success: true, 
+      result,
+      user: { 
+        email: tokenInfo.userEmail, 
+        id: tokenInfo.userId 
+      }
+    }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
     });
 
