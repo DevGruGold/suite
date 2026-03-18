@@ -23,6 +23,105 @@ export interface UserTokenInfo {
 }
 
 /**
+ * Extract user context from request headers and body
+ * Looks for user identification in multiple places:
+ * 1. Authorization header (JWT token)
+ * 2. x-user-email header
+ * 3. x-user-id header
+ * 4. Request body fields (user_email, user_id, requested_from)
+ */
+export function extractUserContext(req: Request, body: any): { 
+  userId?: string; 
+  userEmail?: string; 
+  requestedFrom?: string;
+  authMethod?: string;
+} {
+  const context: { userId?: string; userEmail?: string; requestedFrom?: string; authMethod?: string } = {};
+  
+  try {
+    // Check headers first (these are more reliable)
+    const userEmailHeader = req.headers.get('x-user-email');
+    const userIdHeader = req.headers.get('x-user-id');
+    const authHeader = req.headers.get('authorization');
+    
+    // Try to extract from JWT if available
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      try {
+        // This is a simple extraction - in production you'd want to verify the JWT
+        const token = authHeader.substring(7);
+        const base64Url = token.split('.')[1];
+        if (base64Url) {
+          const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+          const jsonPayload = decodeURIComponent(atob(base64).split('').map(c => {
+            return '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2);
+          }).join(''));
+          
+          const payload = JSON.parse(jsonPayload);
+          context.userId = payload.sub || payload.user_id;
+          context.userEmail = payload.email;
+          context.authMethod = 'jwt';
+        }
+      } catch (e) {
+        console.debug('Could not parse JWT token:', e);
+      }
+    }
+    
+    // Override with explicit headers if provided (these take precedence)
+    if (userEmailHeader) {
+      context.userEmail = userEmailHeader;
+      context.authMethod = context.authMethod ? 'header+others' : 'header';
+    }
+    
+    if (userIdHeader) {
+      context.userId = userIdHeader;
+      context.authMethod = context.authMethod ? 'header+others' : 'header';
+    }
+    
+    // Then check body parameters (lowest precedence, but useful for debugging)
+    if (body) {
+      if (body.user_email && !context.userEmail) {
+        context.userEmail = body.user_email;
+        context.authMethod = context.authMethod ? 'body+others' : 'body';
+      }
+      
+      if (body.user_id && !context.userId) {
+        context.userId = body.user_id;
+        context.authMethod = context.authMethod ? 'body+others' : 'body';
+      }
+      
+      // requestedFrom is specifically for "act as" functionality
+      if (body.requested_from) {
+        context.requestedFrom = body.requested_from;
+      }
+      
+      // Also check for nested user object
+      if (body.user) {
+        if (body.user.email && !context.userEmail) {
+          context.userEmail = body.user.email;
+        }
+        if (body.user.id && !context.userId) {
+          context.userId = body.user.id;
+        }
+      }
+    }
+    
+    // Clean up - ensure email is lowercase for consistency
+    if (context.userEmail) {
+      context.userEmail = context.userEmail.toLowerCase();
+    }
+    
+    if (context.requestedFrom) {
+      context.requestedFrom = context.requestedFrom.toLowerCase();
+    }
+    
+    return context;
+  } catch (error) {
+    console.error('Error extracting user context:', error);
+    return {};
+  }
+}
+
+/**
  * Get Supabase service role client
  */
 function getSrClient() {
