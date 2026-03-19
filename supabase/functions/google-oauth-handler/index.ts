@@ -11,12 +11,18 @@ const corsHeaders = {
 const GOOGLE_AUTH_URL = 'https://accounts.google.com/o/oauth2/v2/auth';
 const GOOGLE_TOKEN_URL = 'https://oauth2.googleapis.com/token';
 
-// Gmail scopes required
+// Extended Google Cloud scopes for full access to Gmail, Drive, Sheets, Docs, and Calendar
 const SCOPES = [
   'https://www.googleapis.com/auth/gmail.send',
-  'https://www.googleapis.com/auth/gmail.compose',
+  'https://www.googleapis.com/auth/gmail.readonly',
   'https://www.googleapis.com/auth/gmail.modify',
-  'https://mail.google.com/'
+  'https://www.googleapis.com/auth/drive',
+  'https://www.googleapis.com/auth/spreadsheets',
+  'https://www.googleapis.com/auth/documents',
+  'https://www.googleapis.com/auth/calendar',
+  'openid',
+  'email',
+  'profile'
 ].join(' ');
 
 serve(async (req) => {
@@ -113,10 +119,12 @@ serve(async (req) => {
             <a href="${authUrl.toString()}" class="btn">Connect Google Account</a>
             <div class="info">
               <strong>Scopes requested:</strong><br>
-              • Send emails<br>
-              • Compose drafts<br>
-              • Modify messages<br>
-              • Full Gmail access
+              • Gmail: Send, Read, Modify<br>
+              • Drive: Full access<br>
+              • Sheets: Read/Write<br>
+              • Docs: Read/Write<br>
+              • Calendar: Full access<br>
+              • Profile: Read-only
             </div>
           </div>
         </body>

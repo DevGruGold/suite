@@ -200,7 +200,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         provider: 'google_cloud',
         account_email: email,
         refresh_token: refreshToken,
-        scopes: ['gmail', 'drive', 'sheets', 'calendar'],
+        scopes: ['gmail', 'drive', 'sheets', 'docs', 'calendar'],
         connected_at: new Date().toISOString(),
         is_active: true
       }, { onConflict: 'user_id,provider' });
@@ -219,12 +219,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const BASIC_SCOPES = 'openid email profile';
 
   // Extended Google OAuth scopes for superadmins with full Google Cloud access
+  // Includes: Gmail, Drive, Sheets, Docs, and Calendar
   const GOOGLE_CLOUD_SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
     'https://www.googleapis.com/auth/gmail.modify',
     'https://www.googleapis.com/auth/drive',
     'https://www.googleapis.com/auth/spreadsheets',
+    'https://www.googleapis.com/auth/documents',
     'https://www.googleapis.com/auth/calendar',
     'openid',
     'email',
