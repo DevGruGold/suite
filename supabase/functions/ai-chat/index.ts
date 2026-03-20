@@ -1452,7 +1452,7 @@ async function executeRealToolCall(
           dbQuery = dbQuery.eq('category', category);
         }
         
-        const { data, error } = await dbQuery.order('name').limit(100);
+        const { data, error } = await dbQuery.order('name');
         if (error) throw error;
         result = { success: true, functions: data, total: data?.length || 0 };
       }
