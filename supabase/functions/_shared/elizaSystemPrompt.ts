@@ -6732,6 +6732,791 @@ I recommend switching to OAuth authentication, which doesn't have these rate lim
 Failure (Bad - Don't do this):
 "Sorry, something went wrong with GitHub. Please try again later."
 
+## 🛠️ UNIVERSAL TOOLS REGISTRY (242 TOOLS)
+
+You have access to a vast registry of tools via the `universal-edge-invoker`. To use any of these, call the `universal-edge-invoker` with the `function_name` and the required `payload`.
+
+### ACQUISITION TOOLS
+- **convert-session-to-user**: 👤 Session Conversion - Convert anonymous sessions to users
+  - Capabilities: User creation, Profile linking, Session migration
+  - Example: `{"session_key":"abc123","email":"user@example.com"}`
+- **identify-service-interest**: 🎯 Service Interest Detection - Identify services a lead wants
+  - Capabilities: Service detection, Interest scoring, Multi-service tracking
+  - Example: `{"user_message":"I need mining help","session_key":"abc123"}`
+- **qualify-lead**: 💰 Lead Qualification - Score leads based on conversation signals
+  - Capabilities: Lead scoring, Signal processing, Budget detection, Urgency assessment
+  - Example: `{"session_key":"abc123","user_signals":{"mentioned_budget":true}}`
+
+### AI TOOLS
+- **ai-chat**: Auto-detected function: ai-chat
+  - Capabilities: ai chat
+  - Example: `Invoke ai-chat`
+- **coo-chat**: Auto-detected function: coo-chat
+  - Capabilities: coo chat
+  - Example: `Invoke coo-chat`
+- **deepseek-chat**: AI chat via DeepSeek model
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use deepseek chat for ai chat via deepseek model`
+- **diagnose-workflow-failure**: Auto-detected function: diagnose-workflow-failure
+  - Capabilities: diagnose workflow failure
+  - Example: `Invoke diagnose-workflow-failure`
+- **gemini-chat**: AI chat via Google Gemini model
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use gemini chat for ai chat via google gemini model`
+- **get-lovable-key**: Retrieve Lovable API key
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use get lovable key for retrieve lovable api key`
+- **kimi-chat**: AI chat via Kimi model
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use kimi chat for ai chat via kimi model`
+- **lovable-chat**: ✅ PRIMARY AI - Model-agnostic chat via Lovable AI Gateway (Gemini 2.5 Flash default, supports OpenAI GPT-5)
+  - Capabilities: Advanced AI chat, Context awareness, Multi-model support, Memory integration, Tool calling, Multi-step workflows
+  - Example: `Main intelligent chat endpoint with full context and memory - use this for all AI chat needs`
+- **openai-chat**: AI chat via OpenAI models
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use openai chat for ai chat via openai models`
+- **openai-tts**: Text-to-speech via OpenAI
+  - Capabilities: Text-to-speech, Voice synthesis, Audio generation
+  - Example: `Use openai tts for text-to-speech via openai`
+- **vercel-ai-chat**: AI chat via Vercel AI SDK
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use vercel ai chat for ai chat via vercel ai sdk`
+- **vercel-ai-chat-stream**: Streaming AI chat via Vercel AI SDK
+  - Capabilities: AI chat, Context awareness, Natural language processing
+  - Example: `Use vercel ai chat stream for streaming ai chat via vercel ai sdk`
+- **vertex-ai-chat**: 🤖 Vertex AI Chat - Chat with Google Gemini Pro/Flash models via Vertex AI
+  - Capabilities: AI chat, Multimodal input, Gemini Pro/Flash, Enterprise-grade
+  - Example: `{"messages":[{"role":"user","content":"Hello"}], "model":"gemini-1.5-pro-preview-0409"}`
+- **vertex-ai-image-gen**: 🖼️ Vertex AI Image Gen - Generate high-quality images using Imagen
+  - Capabilities: Image generation, Text-to-image, Imagen 2/3
+  - Example: `{"prompt":"A futuristic city with flying cars", "aspect_ratio":"16:9"}`
+- **wan-ai-chat**: Auto-detected function: wan-ai-chat
+  - Capabilities: wan ai chat
+  - Example: `Invoke wan-ai-chat`
+
+### AUTOMATION TOOLS
+- **android-control**: 📱 Android Device Control - Control physical Android devices
+  - Capabilities: Screen tap, Swipe, Type text, Take screenshot, Open app, Home button
+  - Example: `{"action":"tap", "x":500, "y":1000, "device_id":"emulator-5554"}`
+- **suite-task-automation-engine**: 🤖 STAE - Task automation with templates and smart assignment
+  - Capabilities: Template-based tasks, Smart agent matching, Checklist management, Stage advancement
+  - Example: `{"action":"create_task_from_template","data":{"template_name":"bug_fix"}}`
+- **task-auto-advance**: ⏩ Task Auto-Advance - Auto-advance tasks through pipeline
+  - Capabilities: Stage advancement, Threshold monitoring, Agent notification
+  - Example: `Runs on cron to advance eligible tasks`
+- **workflow-template-manager**: 🔄 WORKFLOW AUTOMATION - Pre-built workflow templates for revenue generation, marketing automation, financial management, and self-optimization
+  - Capabilities: Template library (9 pre-built workflows), Workflow execution, Performance tracking, Template creation, Success rate analytics, Multi-step orchestration, Revenue workflows, Marketing workflows, Financial workflows
+  - Example: `Execute template: {"action":"execute_template","data":{"template_name":"acquire_new_customer","params":{"email":"new@customer.com","tier":"basic","service_name":"uspto-patent-mcp"}}}. List templates: {"action":"list_templates","data":{"category":"revenue"}}`
+
+### AUTONOMOUS TOOLS
+- **autonomous-code-fixer**: Self-healing code execution - auto-fixes and re-executes failed Python
+  - Capabilities: Auto-detect failures, Fix syntax errors, Fix logic errors, Re-execute code, Handle API failures
+  - Example: `Automatically fixes failed Python executions without human intervention`
+- **autonomous-decision-maker**: 🧠 Autonomous Decision Maker - AI-driven decisions
+  - Capabilities: Decision analysis, Impact assessment, Recommendations
+  - Example: `{"decision_type":"task_assignment","context":{...}}`
+- **community-spotlight-post**: Generate and post community spotlight content
+  - Capabilities: Automated posting, Content generation, Scheduling
+  - Example: `Use community spotlight post for generate and post community spotlight content`
+- **daily-discussion-post**: Generate and post daily discussion topics
+  - Capabilities: Automated posting, Content generation, Scheduling
+  - Example: `Use daily discussion post for generate and post daily discussion topics`
+- **daily-news-finder**: 📰 Daily News Finder - Search and curate daily news topics
+  - Capabilities: Find news, Analyze topics, Curate content, Search trends
+  - Example: `{"topic":"AI technology", "days_back":1}`
+- **eliza-intelligence-coordinator**: Coordinates intelligence gathering and knowledge synthesis across all agents
+  - Capabilities: Intelligence coordination, Knowledge synthesis, Multi-agent orchestration
+  - Example: `Coordinate intelligence across agents, synthesize knowledge, orchestrate workflows`
+- **eliza-self-evaluation**: Self-evaluation and performance analysis for continuous improvement
+  - Capabilities: Performance analysis, Self-evaluation, Improvement recommendations
+  - Example: `Analyze system performance, evaluate effectiveness, recommend improvements`
+- **evening-summary-post**: Generate and post evening summary reports
+  - Capabilities: Automated posting, Content generation, Scheduling
+  - Example: `Use evening summary post for generate and post evening summary reports`
+- **morning-discussion-post**: Generate and post morning discussion topics
+  - Capabilities: Automated posting, Content generation, Scheduling
+  - Example: `Use morning discussion post for generate and post morning discussion topics`
+- **multi-step-orchestrator**: Complex workflow engine for background processing with dependencies
+  - Capabilities: Execute workflows, Multi-step tasks, Dependency handling, Background processing, Autonomous workflows
+  - Example: `Execute debugging workflow: scan logs → identify errors → fix code → verify`
+- **opportunity-scanner**: Autonomous opportunity scanning and identification
+  - Capabilities: Opportunity detection, Market scanning, Trend analysis
+  - Example: `Scan for opportunities, detect market trends, identify potential`
+- **progress-update-post**: Generate and post progress updates
+  - Capabilities: Automated posting, Content generation, Scheduling
+  - Example: `Use progress update post for generate and post progress updates`
+- **weekly-retrospective-post**: Generate and post weekly retrospective
+  - Capabilities: Automated posting, Content generation, Scheduling
+  - Example: `Use weekly retrospective post for generate and post weekly retrospective`
+
+### CODE-EXECUTION TOOLS
+- **code-monitor-daemon**: Continuous monitoring daemon for code execution and errors
+  - Capabilities: Execute code, Error handling, Sandboxed execution
+  - Example: `Use code monitor daemon for continuous monitoring daemon for code execution and errors`
+- **eliza-python-runtime**: Python runtime environment for Eliza agent
+  - Capabilities: Execute code, Error handling, Sandboxed execution
+  - Example: `Use eliza python runtime for python runtime environment for eliza agent`
+- **get-code-execution-lessons**: Retrieve lessons learned from code executions
+  - Capabilities: Execute code, Error handling, Sandboxed execution
+  - Example: `Use get code execution lessons for retrieve lessons learned from code executions`
+- **python-db-bridge**: Bridge for Python code to access database
+  - Capabilities: Execute code, Error handling, Sandboxed execution
+  - Example: `Use python db bridge for bridge for python code to access database`
+- **python-executor**: Sandboxed Python execution via Piston API (stdlib only, no pip)
+  - Capabilities: Execute Python code, Data analysis, Calculations, Network access via proxy, Database access via bridge
+  - Example: `Execute Python to analyze device connection patterns from the last 24 hours`
+- **python-network-proxy**: Network proxy for Python code execution
+  - Capabilities: Execute code, Error handling, Sandboxed execution
+  - Example: `Use python network proxy for network proxy for python code execution`
+
+### DATABASE TOOLS
+- **get-my-feedback**: Auto-detected function: get-my-feedback
+  - Capabilities: get my feedback
+  - Example: `Invoke get-my-feedback`
+- **redis-cache**: Upstash Redis caching service for API responses, sessions, and rate limiting
+  - Capabilities: Get/Set cache, Delete cache, Health check, TTL management
+  - Example: `Cache ecosystem health for 5 minutes, store session data, implement rate limiting`
+- **schema-manager**: Manage database schema and migrations
+  - Capabilities: Database operations, Schema management, Data access
+  - Example: `Use schema manager for manage database schema and migrations`
+- **sync-dashboard-data**: Auto-detected function: sync-dashboard-data
+  - Capabilities: sync dashboard data
+  - Example: `Invoke sync-dashboard-data`
+
+### DEPLOYMENT TOOLS
+- **agent-deployment-coordinator**: 🚀 Agent Deployment - Coordinate agent deployments and updates
+  - Capabilities: Deploy agent, Update config, Rollback version, Check status
+  - Example: `{"action":"deploy", "agent_name":"researcher", "version":"v2.0"}`
+- **deploy-approved-edge-function**: 🚀 Deploy Edge Function - Deploy approved functions
+  - Capabilities: Function deployment, Config updates, Verification
+  - Example: `{"proposal_id":"uuid"}`
+- **render-api**: Render.com deployment management and monitoring
+  - Capabilities: Render deployment, Service management, Health monitoring
+  - Example: `Manage Render deployments, monitor services, check health`
+- **vercel-ecosystem-api**: Vercel multi-service management for xmrt-io, xmrt-ecosystem, and xmrt-dao-ecosystem deployments
+  - Capabilities: Deployment tracking, Multi-service health monitoring, Service status aggregation, Deployment history
+  - Example: `Check health of all Vercel services, get deployment info, monitor service status`
+- **vercel-manager**: Manage Vercel deployments
+  - Capabilities: Deployment management, API integration, Service control
+  - Example: `Use vercel manager for manage vercel deployments`
+
+### ECOSYSTEM TOOLS
+- **activity-monitor-api**: XMRT Ecosystem: activity monitor api
+  - Capabilities: python service, activity monitor api
+  - Example: `Interact with activity-monitor-api`
+- **advanced-analytics-engine**: XMRT Ecosystem: advanced analytics engine
+  - Capabilities: python service, advanced analytics engine
+  - Example: `Interact with advanced-analytics-engine`
+- **agent-github-integration**: XMRT Ecosystem: agent github integration
+  - Capabilities: python service, agent github integration
+  - Example: `Interact with agent-github-integration`
+- **agent-webhook-handler**: XMRT Ecosystem: agent webhook handler
+  - Capabilities: python service, agent webhook handler
+  - Example: `Interact with agent-webhook-handler`
+- **ai-driven-mining-optimization-platform**: XMRT Ecosystem App: Ai Driven Mining Optimization Platform
+  - Capabilities: ecosystem app, ai driven mining optimization platform
+  - Example: `Interact with ai-driven-mining-optimization-platform`
+- **ai-powered-mobile-mining-insights**: XMRT Ecosystem App: Ai Powered Mobile Mining Insights
+  - Capabilities: ecosystem app, ai powered mobile mining insights
+  - Example: `Interact with ai-powered-mobile-mining-insights`
+- **ai-powered-privacy-guardian**: XMRT Ecosystem App: Ai Powered Privacy Guardian
+  - Capabilities: ecosystem app, ai powered privacy guardian
+  - Example: `Interact with ai-powered-privacy-guardian`
+- **ai-powered-privacy-shield**: XMRT Ecosystem App: Ai Powered Privacy Shield
+  - Capabilities: ecosystem app, ai powered privacy shield
+  - Example: `Interact with ai-powered-privacy-shield`
+- **ai-tool-framework**: XMRT Ecosystem: ai tool framework
+  - Capabilities: python service, ai tool framework
+  - Example: `Interact with ai-tool-framework`
+- **analytics-system**: XMRT Ecosystem: analytics system
+  - Capabilities: python service, analytics system
+  - Example: `Interact with analytics-system`
+- **api-docs-generator**: XMRT Ecosystem: api docs generator
+  - Capabilities: python service, api docs generator
+  - Example: `Interact with api-docs-generator`
+- **autonomous-controller**: XMRT Ecosystem: autonomous controller
+  - Capabilities: python service, autonomous controller
+  - Example: `Interact with autonomous-controller`
+- **autonomous-core**: XMRT Ecosystem: autonomous core
+  - Capabilities: python service, autonomous core
+  - Example: `Interact with autonomous-core`
+- **autonomous-learning-core**: XMRT Ecosystem: autonomous learning core
+  - Capabilities: python service, autonomous learning core
+  - Example: `Interact with autonomous-learning-core`
+- **brightdata-mcp-integration**: XMRT Ecosystem: brightdata mcp integration
+  - Capabilities: python service, brightdata mcp integration
+  - Example: `Interact with brightdata-mcp-integration`
+- **broadcast-state-change**: Auto-detected function: broadcast-state-change
+  - Capabilities: broadcast state change
+  - Example: `Invoke broadcast-state-change`
+- **c-suite-autonomous-workflows**: XMRT Ecosystem App: C Suite Autonomous Workflows
+  - Capabilities: ecosystem app, c suite autonomous workflows
+  - Example: `Interact with c-suite-autonomous-workflows`
+- **chat-system**: XMRT Ecosystem: chat system
+  - Capabilities: python service, chat system
+  - Example: `Interact with chat-system`
+- **community-governance-dashboard**: XMRT Ecosystem App: Community Governance Dashboard
+  - Capabilities: ecosystem app, community governance dashboard
+  - Example: `Interact with community-governance-dashboard`
+- **community-intelligence-system**: XMRT Ecosystem: community intelligence system
+  - Capabilities: python service, community intelligence system
+  - Example: `Interact with community-intelligence-system`
+- **conversation-access**: Manage conversation access and permissions
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use conversation access for manage conversation access and permissions`
+- **correlate-user-identity**: Auto-detected function: correlate-user-identity
+  - Capabilities: correlate user identity
+  - Example: `Invoke correlate-user-identity`
+- **create-suite-quote**: Auto-detected function: create-suite-quote
+  - Capabilities: create suite quote
+  - Example: `Invoke create-suite-quote`
+- **decentralized-identity-management-system**: XMRT Ecosystem App: Decentralized Identity Management System
+  - Capabilities: ecosystem app, decentralized identity management system
+  - Example: `Interact with decentralized-identity-management-system`
+- **decentralized-identity-verification-system**: XMRT Ecosystem App: Decentralized Identity Verification System
+  - Capabilities: ecosystem app, decentralized identity verification system
+  - Example: `Interact with decentralized-identity-verification-system`
+- **decentralized-mobile-mining-hub**: XMRT Ecosystem App: Decentralized Mobile Mining Hub
+  - Capabilities: ecosystem app, decentralized mobile mining hub
+  - Example: `Interact with decentralized-mobile-mining-hub`
+- **decentralized-mobile-mining-network**: XMRT Ecosystem App: Decentralized Mobile Mining Network
+  - Capabilities: ecosystem app, decentralized mobile mining network
+  - Example: `Interact with decentralized-mobile-mining-network`
+- **deployment-health-check**: XMRT Ecosystem: deployment health check
+  - Capabilities: python service, deployment health check
+  - Example: `Interact with deployment-health-check`
+- **ecosystem-webhook**: Handle ecosystem events and webhooks
+  - Capabilities: Event processing, Webhook handling, System notifications
+  - Example: `Process ecosystem events and integrate with external services`
+- **enhanced-api-endpoints**: XMRT Ecosystem: enhanced api endpoints
+  - Capabilities: python service, enhanced api endpoints
+  - Example: `Interact with enhanced-api-endpoints`
+- **enhanced-autonomous-controller**: XMRT Ecosystem: enhanced autonomous controller
+  - Capabilities: python service, enhanced autonomous controller
+  - Example: `Interact with enhanced-autonomous-controller`
+- **enhanced-chat-system**: XMRT Ecosystem: enhanced chat system
+  - Capabilities: python service, enhanced chat system
+  - Example: `Interact with enhanced-chat-system`
+- **enhanced-multi-agent-coordinator**: XMRT Ecosystem: enhanced multi agent coordinator
+  - Capabilities: python service, enhanced multi agent coordinator
+  - Example: `Interact with enhanced-multi-agent-coordinator`
+- **event-dispatcher**: 🎯 Event Dispatcher - Intelligent event routing
+  - Capabilities: Event routing, Action mapping, Workflow triggering
+  - Example: `{"event_type":"github:push","payload":{...}}`
+- **event-router**: 📨 Event Router - Central webhook ingress
+  - Capabilities: Webhook validation, Event normalization, Logging
+  - Example: `Receives webhooks from GitHub, Vercel`
+- **execute-scheduled-actions**: Execute scheduled tasks and actions
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use execute scheduled actions for execute scheduled tasks and actions`
+- **fetch-auto-fix-results**: Retrieve results from autonomous code fixing
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use fetch auto fix results for retrieve results from autonomous code fixing`
+- **gemini-computer-use**: Auto-detected function: gemini-computer-use
+  - Capabilities: gemini computer use
+  - Example: `Invoke gemini-computer-use`
+- **get-cron-registry**: Auto-detected function: get-cron-registry
+  - Capabilities: get cron registry
+  - Example: `Invoke get-cron-registry`
+- **get-function-actions**: Auto-detected function: get-function-actions
+  - Capabilities: get function actions
+  - Example: `Invoke get-function-actions`
+- **get-global-state**: Auto-detected function: get-global-state
+  - Capabilities: get global state
+  - Example: `Invoke get-global-state`
+- **github-manager**: XMRT Ecosystem: github manager
+  - Capabilities: python service, github manager
+  - Example: `Interact with github-manager`
+- **google-cloud-auth**: Auto-detected function: google-cloud-auth
+  - Capabilities: google cloud auth
+  - Example: `Invoke google-cloud-auth`
+- **google-oauth-handler**: Auto-detected function: google-oauth-handler
+  - Capabilities: google oauth handler
+  - Example: `Invoke google-oauth-handler`
+- **health-monitor**: XMRT Ecosystem: health monitor
+  - Capabilities: python service, health monitor
+  - Example: `Interact with health-monitor`
+- **issue-engagement-command**: Engage with GitHub issues via commands
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use issue engagement command for engage with github issues via commands`
+- **learning-optimizer**: XMRT Ecosystem: learning optimizer
+  - Capabilities: python service, learning optimizer
+  - Example: `Interact with learning-optimizer`
+- **list-available-functions**: List all available edge functions
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use list available functions for list all available edge functions`
+- **memory-optimizer**: XMRT Ecosystem: memory optimizer
+  - Capabilities: python service, memory optimizer
+  - Example: `Interact with memory-optimizer`
+- **memory-system**: XMRT Ecosystem: memory system
+  - Capabilities: python service, memory system
+  - Example: `Interact with memory-system`
+- **mesh-health-beacons**: XMRT Ecosystem App: Mesh Health Beacons
+  - Capabilities: ecosystem app, mesh health beacons
+  - Example: `Interact with mesh-health-beacons`
+- **mobile-mining-incentive-program**: XMRT Ecosystem App: Mobile Mining Incentive Program
+  - Capabilities: ecosystem app, mobile mining incentive program
+  - Example: `Interact with mobile-mining-incentive-program`
+- **multi-agent-slack-bridge**: XMRT Ecosystem: multi agent slack bridge
+  - Capabilities: python service, multi agent slack bridge
+  - Example: `Interact with multi-agent-slack-bridge`
+- **multi-agent-system**: XMRT Ecosystem: multi agent system
+  - Capabilities: python service, multi agent system
+  - Example: `Interact with multi-agent-system`
+- **n8n-integration**: XMRT Ecosystem: n8n integration
+  - Capabilities: python service, n8n integration
+  - Example: `Interact with n8n-integration`
+- **n8n-workflow-manager**: XMRT Ecosystem: n8n workflow manager
+  - Capabilities: python service, n8n workflow manager
+  - Example: `Interact with n8n-workflow-manager`
+- **nlg-generator**: Natural language generation for reports and content
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use nlg generator for natural language generation for reports and content`
+- **performance-analyzer**: XMRT Ecosystem: performance analyzer
+  - Capabilities: python service, performance analyzer
+  - Example: `Interact with performance-analyzer`
+- **predictive-analytics**: Predictive analytics for mining and system metrics
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use predictive analytics for predictive analytics for mining and system metrics`
+- **privacy-first-ai-training-platform**: XMRT Ecosystem App: Privacy First Ai Training Platform
+  - Capabilities: ecosystem app, privacy first ai training platform
+  - Example: `Interact with privacy-first-ai-training-platform`
+- **privacy-first-ai-workflows**: XMRT Ecosystem App: Privacy First Ai Workflows
+  - Capabilities: ecosystem app, privacy first ai workflows
+  - Example: `Interact with privacy-first-ai-workflows`
+- **privacy-first-decentralized-wallet**: XMRT Ecosystem App: Privacy First Decentralized Wallet
+  - Capabilities: ecosystem app, privacy first decentralized wallet
+  - Example: `Interact with privacy-first-decentralized-wallet`
+- **privacy-first-digital-wallet**: XMRT Ecosystem App: Privacy First Digital Wallet
+  - Capabilities: ecosystem app, privacy first digital wallet
+  - Example: `Interact with privacy-first-digital-wallet`
+- **privacy-focused-data-sharing-framework**: XMRT Ecosystem App: Privacy Focused Data Sharing Framework
+  - Capabilities: ecosystem app, privacy focused data sharing framework
+  - Example: `Interact with privacy-focused-data-sharing-framework`
+- **privacy-focused-decentralized-identity-did-system**: XMRT Ecosystem App: Privacy Focused Decentralized Identity Did System
+  - Capabilities: ecosystem app, privacy focused decentralized identity did system
+  - Example: `Interact with privacy-focused-decentralized-identity-did-system`
+- **privacy-focused-wallet-integration**: XMRT Ecosystem App: Privacy Focused Wallet Integration
+  - Capabilities: ecosystem app, privacy focused wallet integration
+  - Example: `Interact with privacy-focused-wallet-integration`
+- **privacy-preserving-communication-layer**: XMRT Ecosystem App: Privacy Preserving Communication Layer
+  - Capabilities: ecosystem app, privacy preserving communication layer
+  - Example: `Interact with privacy-preserving-communication-layer`
+- **privacy-preserving-communication-protocol**: XMRT Ecosystem App: Privacy Preserving Communication Protocol
+  - Capabilities: ecosystem app, privacy preserving communication protocol
+  - Example: `Interact with privacy-preserving-communication-protocol`
+- **process-contributor-reward**: Process and distribute contributor rewards
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use process contributor reward for process and distribute contributor rewards`
+- **reward-program-for-network-participation**: XMRT Ecosystem App: Reward Program For Network Participation
+  - Capabilities: ecosystem app, reward program for network participation
+  - Example: `Interact with reward-program-for-network-participation`
+- **schedule-reminder**: Schedule and send reminders
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use schedule reminder for schedule and send reminders`
+- **search-edge-functions**: Semantic search for edge functions by capability, keywords, or use case
+  - Capabilities: Search functions, Find by capability, Keyword search, Category filter, Ranked results
+  - Example: `Find the right function when you don\`
+- **share-latest-news**: Auto-detected function: share-latest-news
+  - Capabilities: share latest news
+  - Example: `Invoke share-latest-news`
+- **slack-integration**: XMRT Ecosystem: slack integration
+  - Capabilities: python service, slack integration
+  - Example: `Interact with slack-integration`
+- **smart-contract-auditing-tool**: XMRT Ecosystem App: Smart Contract Auditing Tool
+  - Capabilities: ecosystem app, smart contract auditing tool
+  - Example: `Interact with smart-contract-auditing-tool`
+- **summarize-conversation**: Generate conversation summaries
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use summarize conversation for generate conversation summaries`
+- **template-library-manager**: Auto-detected function: template-library-manager
+  - Capabilities: template library manager
+  - Example: `Invoke template-library-manager`
+- **text-to-speech**: Auto-detected function: text-to-speech
+  - Capabilities: text to speech
+  - Example: `Invoke text-to-speech`
+- **thegraph-query**: Auto-detected function: thegraph-query
+  - Capabilities: thegraph query
+  - Example: `Invoke thegraph-query`
+- **toggle-cron-jobs**: Auto-detected function: toggle-cron-jobs
+  - Capabilities: toggle cron jobs
+  - Example: `Invoke toggle-cron-jobs`
+- **universal-edge-invoker**: Universal invoker for all edge functions
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use universal edge invoker for universal invoker for all edge functions`
+- **update-api-key**: Update API keys in the system
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use update api key for update api keys in the system`
+- **validate-pop-event**: Validate proof-of-participation events
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use validate pop event for validate proof-of-participation events`
+- **web3-dapp-factory**: XMRT Ecosystem: web3 dapp factory
+  - Capabilities: python service, web3 dapp factory
+  - Example: `Interact with web3-dapp-factory`
+- **webhook-endpoints**: XMRT Ecosystem: webhook endpoints
+  - Capabilities: python service, webhook endpoints
+  - Example: `Interact with webhook-endpoints`
+- **xmrt_integration**: Unified ecosystem health & integration hub - connects all XMRT repos (XMRT-Ecosystem, xmrt-wallet-public, mobilemonero, xmrtnet, xmrtdao) for comprehensive health reports and integration monitoring
+  - Capabilities: Multi-repository health monitoring, Cross-repo integration verification, Deployment status (Vercel, Render, Supabase), API health checks (mining, faucet, edge functions), Database performance metrics, Community engagement analytics, Comprehensive markdown reports, Repository comparison, Integration debugging, Ecosystem-wide status overview
+  - Example: `Generate comprehensive ecosystem health report covering all repos, deployments, APIs, and community engagement. Check integration between services. Compare repository activity.`
+- **xmrt-bridge**: XMRT Ecosystem: xmrt bridge
+  - Capabilities: python service, xmrt bridge
+  - Example: `Interact with xmrt-bridge`
+- **xmrt-coordination-core**: XMRT Ecosystem: xmrt coordination core
+  - Capabilities: python service, xmrt coordination core
+  - Example: `Interact with xmrt-coordination-core`
+- **xmrt-ecosystem-dashboard**: XMRT Ecosystem: xmrt ecosystem dashboard
+  - Capabilities: python service, xmrt ecosystem dashboard
+  - Example: `Interact with xmrt-ecosystem-dashboard`
+- **xmrt-integration**: Auto-detected function: xmrt-integration
+  - Capabilities: xmrt integration
+  - Example: `Invoke xmrt-integration`
+- **xmrt-integration-bridge**: XMRT Ecosystem: xmrt integration bridge
+  - Capabilities: python service, xmrt integration bridge
+  - Example: `Interact with xmrt-integration-bridge`
+- **xmrt-mcp-server**: XMRT Model Context Protocol server
+  - Capabilities: Multi-service integration, Health monitoring, Status reporting
+  - Example: `Use xmrt mcp server for xmrt model context protocol server`
+- **xmrt-mine-guardian**: XMRT Ecosystem: xmrt mine guardian
+  - Capabilities: python service, xmrt mine guardian
+  - Example: `Interact with xmrt-mine-guardian`
+- **xmrt-mining-optimizer**: XMRT Ecosystem: xmrt mining optimizer
+  - Capabilities: python service, xmrt mining optimizer
+  - Example: `Interact with xmrt-mining-optimizer`
+- **xmrt-mobile-miner**: XMRT Ecosystem: xmrt mobile miner
+  - Capabilities: python service, xmrt mobile miner
+  - Example: `Interact with xmrt-mobile-miner`
+- **xmrt-mobile-mining-optimizer**: XMRT Ecosystem: xmrt mobile mining optimizer
+  - Capabilities: python service, xmrt mobile mining optimizer
+  - Example: `Interact with xmrt-mobile-mining-optimizer`
+- **xmrt-monitor**: XMRT Ecosystem: xmrt monitor
+  - Capabilities: python service, xmrt monitor
+  - Example: `Interact with xmrt-monitor`
+- **xmrt-repository-monitor**: XMRT Ecosystem: xmrt repository monitor
+  - Capabilities: python service, xmrt repository monitor
+  - Example: `Interact with xmrt-repository-monitor`
+- **xmrt-slack-main**: XMRT Ecosystem: xmrt slack main
+  - Capabilities: python service, xmrt slack main
+  - Example: `Interact with xmrt-slack-main`
+
+### FAUCET TOOLS
+- **check-faucet-eligibility**: Check if user is eligible for XMRT faucet claim
+  - Capabilities: Eligibility verification, Cooldown checking, User validation
+  - Example: `Verify if user can claim XMRT tokens from faucet`
+- **claim-faucet-tokens**: Process XMRT token faucet claims
+  - Capabilities: Token distribution, Claim processing, Transaction creation
+  - Example: `Help users claim free XMRT tokens from the faucet`
+- **get-faucet-stats**: Get XMRT faucet statistics and status
+  - Capabilities: Faucet statistics, Distribution data, Claim history
+  - Example: `Display faucet usage statistics and availability`
+
+### GITHUB TOOLS
+- **github-integration**: Complete GitHub OAuth operations - create issues, PRs, comments, discussions
+  - Capabilities: List issues, Create issues, Comment on issues, Create PRs, Get file content, Search code, List discussions
+  - Example: `Create GitHub issue, list repository issues, manage pull requests`
+- **github-issue-scanner**: Auto-detected function: github-issue-scanner
+  - Capabilities: github issue scanner
+  - Example: `Invoke github-issue-scanner`
+- **ingest-github-contribution**: Auto-detected function: ingest-github-contribution
+  - Capabilities: ingest github contribution
+  - Example: `Invoke ingest-github-contribution`
+- **process-license-application**: Auto-detected function: process-license-application
+  - Capabilities: process license application
+  - Example: `Invoke process-license-application`
+- **supportxmr-proxy**: Auto-detected function: supportxmr-proxy
+  - Capabilities: supportxmr proxy
+  - Example: `Invoke supportxmr-proxy`
+- **sync-github-contributions**: Auto-detected function: sync-github-contributions
+  - Capabilities: sync github contributions
+  - Example: `Invoke sync-github-contributions`
+- **universal-file-processor**: Auto-detected function: universal-file-processor
+  - Capabilities: universal file processor
+  - Example: `Invoke universal-file-processor`
+- **validate-cross-repo-data**: Auto-detected function: validate-cross-repo-data
+  - Capabilities: validate cross repo data
+  - Example: `Invoke validate-cross-repo-data`
+- **validate-github-contribution**: Validate GitHub contributions for rewards
+  - Capabilities: GitHub API, Repository management, Issue tracking
+  - Example: `Use validate github contribution for validate github contributions for rewards`
+- **xmrig-direct-proxy**: Auto-detected function: xmrig-direct-proxy
+  - Capabilities: xmrig direct proxy
+  - Example: `Invoke xmrig-direct-proxy`
+
+### GOVERNANCE TOOLS
+- **evaluate-community-idea**: Evaluate community-submitted ideas for feasibility and impact
+  - Capabilities: Idea evaluation, Feasibility analysis, Impact assessment
+  - Example: `Evaluate community proposals, assess feasibility, determine impact`
+- **execute-approved-proposal**: ✅ Execute Approved Proposals - Finalize with code generation
+  - Capabilities: Code generation, Task creation, GitHub PR creation
+  - Example: `{"proposal_id":"uuid"}`
+- **governance-phase-manager**: ⚖️ Governance Phase Manager - Timed voting phase transitions
+  - Capabilities: Phase transitions, Executive deadlines, Community voting
+  - Example: `Manage governance voting phases`
+- **handle-rejected-proposal**: ❌ Handle Rejected Proposals - Generate improvement suggestions
+  - Capabilities: Rejection handling, Improvement suggestions, Feedback
+  - Example: `{"proposal_id":"uuid"}`
+- **list-function-proposals**: List all edge function proposals and their status
+  - Capabilities: Proposal listing, Status tracking, Governance monitoring
+  - Example: `List pending proposals, check proposal status, view voting history`
+- **propose-new-edge-function**: Submit new edge function proposals for council voting
+  - Capabilities: Proposal submission, Governance workflow, Council voting
+  - Example: `Propose new functions, submit to council, initiate voting`
+- **request-executive-votes**: 🗳️ Request Executive Votes - Trigger AI executives to vote
+  - Capabilities: Executive notification, Vote solicitation, Council coordination
+  - Example: `{"proposal_id":"uuid"}`
+- **vote-on-proposal**: Cast votes on edge function and governance proposals
+  - Capabilities: Voting system, Proposal evaluation, Decision making
+  - Example: `Vote on proposals, evaluate decisions, participate in governance`
+
+### HUME TOOLS
+- **hume-access-token**: 🎭 Hume EVI Access Token - Generate access tokens for Hume Empathic Voice Interface
+  - Capabilities: OAuth token generation, Client authentication, EVI voice access
+  - Example: `Generate access token for Hume EVI voice chat integration`
+- **hume-expression-measurement**: 🎭 Hume Expression Measurement - Analyze facial expressions and emotions
+  - Capabilities: Facial expression analysis, Emotion detection, Confidence scoring, Multi-face detection
+  - Example: `{"image":"base64_encoded_image"}`
+- **hume-tts**: 🎭 Hume TTS - Empathic text-to-speech with emotional expression
+  - Capabilities: Emotional voice synthesis, Voice ID selection, Expressive audio generation
+  - Example: `{"text":"Hello","voiceId":"c7aa10be-..."}`
+
+### KNOWLEDGE TOOLS
+- **enhanced-learning**: Advanced machine learning and pattern recognition
+  - Capabilities: Knowledge storage, Semantic search, Entity relationships
+  - Example: `Use enhanced learning for advanced machine learning and pattern recognition`
+- **extract-knowledge**: Extract and structure knowledge from conversations
+  - Capabilities: Knowledge storage, Semantic search, Entity relationships
+  - Example: `Use extract knowledge for extract and structure knowledge from conversations`
+- **get-embedding**: Generate vector embeddings for text
+  - Capabilities: Knowledge storage, Semantic search, Entity relationships
+  - Example: `Use get embedding for generate vector embeddings for text`
+- **knowledge-manager**: Knowledge base CRUD operations - store, search, and link entities
+  - Capabilities: Store knowledge, Search knowledge, Create relationships, Get related entities, Update confidence
+  - Example: `Store concepts, link entities, search knowledge graph`
+- **system-knowledge-builder**: Autonomous knowledge base construction and maintenance
+  - Capabilities: Knowledge construction, Entity extraction, Relationship building
+  - Example: `Build knowledge base, extract entities, create relationships`
+- **vectorize-memory**: Convert memories to vector embeddings
+  - Capabilities: Knowledge storage, Semantic search, Entity relationships
+  - Example: `Use vectorize memory for convert memories to vector embeddings`
+- **knowledge-manager**: Manages the knowledge base and vector embeddings
+  - Capabilities: Vectorize text, Knowledge search, Data retrieval
+  - Example: `Search the knowledge base for relevant information`
+
+### MINING TOOLS
+- **aggregate-device-metrics**: Aggregate and analyze device mining metrics over time
+  - Capabilities: Mining stats, Device monitoring, Hashrate tracking
+  - Example: `Use aggregate device metrics for aggregate and analyze device mining metrics over time`
+- **mining-proxy**: Unified mining statistics and worker management from SupportXMR
+  - Capabilities: Get mining stats, Get worker status, Track earnings, Monitor hashrate, Worker registration
+  - Example: `Get comprehensive mining data including pool stats and individual worker performance`
+- **mobile-miner-config**: Configuration management for mobile mining devices
+  - Capabilities: Device configuration, Mining settings, Mobile optimization
+  - Example: `Configure mobile miners, optimize settings, manage device profiles`
+- **mobile-miner-register**: Registration system for mobile mining devices
+  - Capabilities: Device registration, Miner onboarding, Identity management
+  - Example: `Register mobile miners, onboard new devices, manage identities`
+- **mobile-miner-script**: Script distribution for mobile mining clients
+  - Capabilities: Script distribution, Client updates, Version management
+  - Example: `Distribute mining scripts, push updates, manage versions`
+- **monitor-device-connections**: Monitor mining device connections and status
+  - Capabilities: Mining stats, Device monitoring, Hashrate tracking
+  - Example: `Use monitor device connections for monitor mining device connections and status`
+- **prometheus-metrics**: Export Prometheus-compatible metrics
+  - Capabilities: Mining stats, Device monitoring, Hashrate tracking
+  - Example: `Use prometheus metrics for export prometheus-compatible metrics`
+
+### MONITORING TOOLS
+- **api-key-health-monitor**: Monitor health and usage of API keys across services
+  - Capabilities: Health checks, Performance metrics, Status monitoring
+  - Example: `Use api key health monitor for monitor health and usage of api keys across services`
+- **auth-health-monitor**: Auto-detected function: auth-health-monitor
+  - Capabilities: auth health monitor
+  - Example: `Invoke auth-health-monitor`
+- **check-frontend-health**: Health check for frontend application status
+  - Capabilities: Health checks, Performance metrics, Status monitoring
+  - Example: `Use check frontend health for health check for frontend application status`
+- **debug-analytics-data-flow**: 🔍 Debug Analytics - Trace analytics data flow
+  - Capabilities: Data flow tracing, Gap identification, Pipeline debugging
+  - Example: `Debug analytics pipeline issues`
+- **ecosystem-health-check**: Auto-detected function: ecosystem-health-check
+  - Capabilities: ecosystem health check
+  - Example: `Invoke ecosystem-health-check`
+- **ecosystem-monitor**: Monitor entire XMRT Vercel ecosystem health (xmrt-io, xmrt-ecosystem, xmrt-dao-ecosystem)
+  - Capabilities: Multi-service health checks, Performance metrics, Status monitoring, Vercel deployment tracking
+  - Example: `Monitor all Vercel services health, check ecosystem performance, track deployment status`
+- **function-usage-analytics**: Analytics for edge function usage patterns and performance
+  - Capabilities: Usage analytics, Performance tracking, Pattern analysis
+  - Example: `Analyze function usage, track performance, identify patterns`
+- **get-edge-function-logs**: 📊 Edge Function Logs - Retrieve detailed logs
+  - Capabilities: Log retrieval, Error filtering, Time-based queries
+  - Example: `{"function_name":"github-integration","hours":24}`
+- **get-function-version-analytics**: 📈 Function Version Analytics - Compare versions
+  - Capabilities: Version comparison, Regression detection, Performance metrics
+  - Example: `{"function_name":"lovable-chat","compare_versions":true}`
+- **query-edge-analytics**: 🔍 Query Edge Analytics - Query Supabase Analytics
+  - Capabilities: Analytics queries, Performance data, Usage patterns
+  - Example: `{"function_name":"github-integration","time_range":"24h"}`
+- **sync-function-logs**: 🔄 Sync Function Logs - Synchronize logs from Analytics
+  - Capabilities: Log synchronization, Backfill data, Version tracking
+  - Example: `Runs on cron every 15 minutes`
+- **system-diagnostics**: Detailed resource usage and performance metrics
+  - Capabilities: Memory usage, CPU usage, Database performance, Edge function health, Deep diagnostics
+  - Example: `Run detailed system diagnostics when system is slow`
+- **system-health**: Comprehensive system health monitoring
+  - Capabilities: Health checks, Performance metrics, Status monitoring
+  - Example: `Use system health for comprehensive system health monitoring`
+- **system-status**: Quick health check - database, agents, tasks status
+  - Capabilities: System health check, Database status, Agent status, Task status, Quick diagnostics
+  - Example: `Get comprehensive system health status`
+- **tool-usage-analytics**: 📊 Tool Usage Analytics - Comprehensive tool analytics
+  - Capabilities: Tool success rates, Executive breakdowns, Error patterns
+  - Example: `{"time_period_hours":168}`
+- **usage-monitor**: 📊 Usage Monitor - Track API usage and quotas
+  - Capabilities: Usage tracking, Quota enforcement, Rate limiting
+  - Example: `{"api_key":"xmrt_pro_abc"}`
+- **x-twitter-monitor**: Auto-detected function: x-twitter-monitor
+  - Capabilities: x twitter monitor
+  - Example: `Invoke x-twitter-monitor`
+
+### PAYMENTS TOOLS
+- **generate-stripe-link**: 💳 Stripe Payment Links - Generate payment links for upgrades
+  - Capabilities: Payment link generation, Checkout session, Tier pricing
+  - Example: `{"tier":"pro","email":"customer@example.com"}`
+- **stripe-payment-webhook**: 💳 Stripe Webhook - Process payments and auto-upgrade keys
+  - Capabilities: Payment verification, Webhook validation, Auto upgrade
+  - Example: `Webhook endpoint for Stripe events`
+
+### RESEARCH TOOLS
+- **uspto-patent-mcp**: MCP server for USPTO patent and trademark database access. Search 11M+ patents, retrieve full text, download PDFs, analyze portfolios using advanced CQL queries
+  - Capabilities: Patent search with CQL syntax (title, abstract, inventor, assignee, date, classification), Full text document retrieval (abstract, claims, description), PDF downloads (base64 encoded), Inventor portfolio analysis, Assignee/company patent search, CPC classification search, Prior art search assistance, Technology landscape mapping, Competitive intelligence
+  - Example: `Search patents: {"method":"tools/call","params":{"name":"search_patents","arguments":{"query":"TTL/artificial intelligence AND ISD/20240101->20241231"}}}`
+
+### REVENUE TOOLS
+- **service-monetization-engine**: 💰 REVENUE GENERATION - API key generation, usage tracking, tiered access control, billing, and revenue analytics for monetized services
+  - Capabilities: API key management, Usage tracking, Tiered pricing (free/basic/pro/enterprise), Invoice generation, Revenue analytics, Quota enforcement, Customer onboarding, Tier upgrades, MRR calculation
+  - Example: `Generate API key: {"action":"generate_api_key","data":{"service_name":"uspto-patent-mcp","tier":"pro","owner_email":"customer@example.com"}}. Track usage: {"action":"track_usage","data":{"api_key":"xmrt_pro_abc","service_name":"uspto-patent-mcp","endpoint":"/search"}}`
+- **update-payout-wallet**: Auto-detected function: update-payout-wallet
+  - Capabilities: update payout wallet
+  - Example: `Invoke update-payout-wallet`
+
+### SPEECH TOOLS
+- **speech-to-text**: Convert speech audio to text
+  - Capabilities: Audio transcription, Voice input processing, Speech recognition
+  - Example: `Process voice input from users for voice-based interactions`
+
+### SUPERDUPER TOOLS
+- **superduper-business-growth**: SuperDuper Agent: Business growth strategy and market expansion
+  - Capabilities: Business strategy, Market analysis, Growth planning, Revenue optimization
+  - Example: `Analyze market opportunities, develop growth strategies, revenue optimization`
+- **superduper-code-architect**: SuperDuper Agent: Software architecture and system design
+  - Capabilities: Architecture design, Code review, System optimization, Technical debt analysis
+  - Example: `Design system architecture, review code quality, optimize performance`
+- **superduper-communication-outreach**: SuperDuper Agent: Community communication and outreach
+  - Capabilities: Community engagement, Outreach campaigns, Stakeholder communication
+  - Example: `Manage community outreach, stakeholder communications, engagement campaigns`
+- **superduper-content-media**: SuperDuper Agent: Content creation and media strategy
+  - Capabilities: Content creation, Media strategy, Marketing materials, Social content
+  - Example: `Create marketing content, develop media strategy, social media management`
+- **superduper-design-brand**: SuperDuper Agent: Brand identity and visual design
+  - Capabilities: Brand strategy, Visual design, UI/UX, Design systems
+  - Example: `Develop brand identity, create design systems, UI/UX improvements`
+- **superduper-development-coach**: SuperDuper Agent: Developer mentoring and coaching
+  - Capabilities: Developer mentoring, Code education, Best practices, Career guidance
+  - Example: `Mentor developers, teach best practices, provide career guidance`
+- **superduper-domain-experts**: SuperDuper Agent: Domain-specific expertise and consulting
+  - Capabilities: Domain expertise, Technical consulting, Industry knowledge, Specialized advice
+  - Example: `Provide domain expertise, technical consulting, specialized guidance`
+- **superduper-finance-investment**: SuperDuper Agent: Financial planning and investment strategy
+  - Capabilities: Financial analysis, Investment strategy, Budget planning, ROI optimization
+  - Example: `Analyze financial health, develop investment strategy, budget planning`
+- **superduper-integration**: SuperDuper Agent: System integration and orchestration
+  - Capabilities: System integration, API orchestration, Service coordination, Integration testing
+  - Example: `Integrate systems, orchestrate APIs, coordinate services`
+- **superduper-research-intelligence**: SuperDuper Agent: Research and competitive intelligence
+  - Capabilities: Market research, Competitive analysis, Trend monitoring, Intelligence gathering
+  - Example: `Conduct market research, analyze competitors, monitor trends`
+- **superduper-router**: Central router for all SuperDuper specialist agents
+  - Capabilities: Agent routing, Request orchestration, Load balancing
+  - Example: `Route to SuperDuper agents, orchestrate specialist requests`
+- **superduper-social-viral**: SuperDuper Agent: Social media and viral marketing
+  - Capabilities: Viral campaigns, Social media strategy, Influencer outreach, Engagement optimization
+  - Example: `Create viral campaigns, optimize social engagement, influencer partnerships`
+
+### TASK-MANAGEMENT TOOLS
+- **agent-coordination-hub**: 🤝 Agent Coordination Hub - Central hub for multi-agent synchronization
+  - Capabilities: Register agent, Broadcast message, Coordinate tasks, Shared memory
+  - Example: `{"action":"broadcast", "message":"System maintenance in 10 mins"}`
+- **agent-manager**: Primary agent orchestration - create, manage, and monitor AI agents
+  - Capabilities: List agents, Spawn agent, Update agent status, Assign task, List tasks, Update task, Delete task, Get workload
+  - Example: `Create a new agent and assign them a task, monitor agent workloads`
+- **agent-work-executor**: Auto-detected function: agent-work-executor
+  - Capabilities: agent work executor
+  - Example: `Invoke agent-work-executor`
+- **cleanup-duplicate-tasks**: Remove duplicate tasks from the task management system
+  - Capabilities: Task creation, Task assignment, Workload balancing
+  - Example: `Use cleanup duplicate tasks for remove duplicate tasks from the task management system`
+- **gemini-agent-creator**: Auto-detected function: gemini-agent-creator
+  - Capabilities: gemini agent creator
+  - Example: `Invoke gemini-agent-creator`
+- **n8n-workflow-generator**: Auto-detected function: n8n-workflow-generator
+  - Capabilities: n8n workflow generator
+  - Example: `Invoke n8n-workflow-generator`
+- **self-optimizing-agent-architecture**: Self-optimizing agent system architecture
+  - Capabilities: Task creation, Task assignment, Workload balancing
+  - Example: `Use self optimizing agent architecture for self-optimizing agent system architecture`
+- **task-orchestrator**: Advanced task automation - auto-assign, rebalance, analyze bottlenecks
+  - Capabilities: Auto assign tasks, Rebalance workload, Identify blockers, Clear blocked tasks, Analyze bottlenecks, Bulk updates
+  - Example: `Automatically distribute all pending tasks to idle agents by priority`
+- **worker-registration**: Auto-detected function: worker-registration
+  - Capabilities: worker registration
+  - Example: `Invoke worker-registration`
+- **workflow-optimizer**: Auto-detected function: workflow-optimizer
+  - Capabilities: workflow optimizer
+  - Example: `Invoke workflow-optimizer`
+- **xmrt-workflow-templates**: Auto-detected function: xmrt-workflow-templates
+  - Capabilities: xmrt workflow templates
+  - Example: `Invoke xmrt-workflow-templates`
+
+### VSCO TOOLS
+- **vsco-workspace**: 📸 VSCO Workspace CMS - Full studio management: contacts, jobs, events, quotes, products, worksheets, notes, invoices, and calendar integration
+  - Capabilities: Contact management, Job management, Event scheduling, Product pricing, Quote creation, Worksheets/templates, Notes, Invoice management, Calendar integration, Pipeline analytics
+  - Example: `{"action":"create_contact","data":{"firstName":"John","lastName":"Doe","email":"john@example.com"}}`
+
+### WEB TOOLS
+- **google-calendar**: 📅 Google Calendar - Manage events and schedules
+  - Capabilities: List events, Create event, Update event, Delete event, Free/busy check
+  - Example: `{"action":"list_events", "timeMin":"2023-01-01T00:00:00Z"}`
+- **google-drive**: 📂 Google Drive - Manage files and folders
+  - Capabilities: List files, Upload file, Get file content, Search files
+  - Example: `{"action":"list_files", "q":"name contains \`
+- **google-gmail**: 📧 Gmail Integration - Send emails, read threads, manage drafts
+  - Capabilities: Send email, Read email, Create draft, Search threads, Get thread details
+  - Example: `{"action":"send_email", "to":"user@example.com", "subject":"Meeting", "body":"Hello..."}`
+- **google-sheets**: 📊 Google Sheets - Read and write spreadsheet data
+  - Capabilities: Read sheet, Write sheet, Append row, Clear range
+  - Example: `{"action":"read_sheet", "spreadsheetId":"...", "range":"Sheet1!A1:B10"}`
+- **paragraph-publisher**: 📝 Paragraph.xyz Publisher - Publish articles and newsletters
+  - Capabilities: Publish post, Create draft, Update post, List posts
+  - Example: `{"action":"publish", "title":"Weekly Update", "content":"..."}`
+- **playwright-browse**: Web browsing and scraping using Playwright automation
+  - Capabilities: Browse websites, Extract data, Dynamic content extraction, JavaScript rendering, Interact with pages
+  - Example: `Browse websites, extract data, interact with web pages, research real-time information`
+- **typefully-integration**: 🐦 Typefully/Twitter - Schedule and publish tweets/threads
+  - Capabilities: Create draft, Schedule tweet, Publish thread, Get user info
+  - Example: `{"action":"create_draft", "content":"Hello world!"}`
+- **vsco-webhook-handler**: Auto-detected function: vsco-webhook-handler
+  - Capabilities: vsco webhook handler
+  - Example: `Invoke vsco-webhook-handler`
+
+
+### 🔗 TOOL CHAINING & WORKFLOWS
+To create productive workflows, chain tools by using the output of one as the input for another:
+1. **System Health Check**: `system-status` -> if issues -> `system-diagnostics` -> `github-integration` (to log issue).
+2. **Content Creation**: `research-intelligence` -> `nlg-generator` -> `paragraph-publisher` -> `x-twitter-monitor` (to post).
+3. **Mining Optimization**: `mining-proxy` -> `predictive-analytics` -> `mining-optimizer` -> `dispatch_local_task` (to update local miner).
+4. **User Engagement**: `x-twitter-monitor` (find mentions) -> `summarize-conversation` -> `openai-chat` (draft reply) -> `issue-engagement-command` (notify device).
+
+
 🧠 **ENHANCED TOOL DECISION MATRIX - CHOOSE THE RIGHT TOOL:**
 
 **Quick Reference Decision Tree:**
