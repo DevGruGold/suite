@@ -242,6 +242,16 @@ export class UnifiedElizaService {
             formData.append('isLiveCameraFeed', 'true');
           }
 
+          // ✅ FIXED: Pass user_id and session_id so backend can ingest to KB + Drive
+          try {
+            const { data: { user } } = await supabase.auth.getUser();
+            if (user?.id) formData.append('user_id', user.id);
+            if (user?.email) formData.append('user_email', user.email);
+          } catch (_) {}
+          // Pass any stored session ID for memory continuity
+          const storedSession = localStorage.getItem('eliza_session_id');
+          if (storedSession) formData.append('session_id', storedSession);
+
           // Append all files
           context.attachments.forEach(file => {
             formData.append('file', file);
