@@ -236,7 +236,10 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     for (const file of files.slice(0, MAX_FILES - attachments.length)) {
       if (file.size > MAX_SIZE) {
         console.warn(`File ${file.name} exceeds 6MB limit`);
-        // Optional: Add a toast notification here
+        // Show a toast if available
+        try {
+          (window as any).__toast?.(`⚠️ ${file.name} exceeds 6MB limit - skipped`);
+        } catch (_) {}
         continue;
       }
 
@@ -2109,7 +2112,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
               type="file"
               ref={fileInputRef}
               onChange={handleFileSelect}
-              accept="image/*,audio/*,video/*,.pdf,.doc,.docx"
+              accept="image/*,audio/*,video/*,.pdf,.doc,.docx,.txt,.md,.csv,.json,.yaml,.yml,.js,.ts,.jsx,.tsx,.py,.java,.cpp,.c,.h,.go,.rs,.rb,.php,.sol,.html,.css,.xml,.toml,.ini,.sh,.bat,.ps1"
               multiple
               className="hidden"
             />
