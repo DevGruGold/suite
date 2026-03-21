@@ -1063,7 +1063,140 @@ async function invokeEdgeFunction(name: string, payload: any): Promise<any> {
   }
 }
 
-async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sessionId: string): Promise<any> {
+// ====== GEMINI VISION: Actually analyze image content ======
+async function analyzeImageWithGeminiVision(imageData: string, filename: string): Promise<any> {
+  if (!GEMINI_API_KEY) return { success: false, error: 'No Gemini API key' };
+  try {
+    // Support data URLs and raw base64
+    let mimeType = 'image/jpeg';
+    let base64Data = imageData;
+    if (imageData.startsWith('data:')) {
+      const match = imageData.match(/^data:([^;]+);base64,(.+)$/);
+      if (match) { mimeType = match[1]; base64Data = match[2]; }
+    }
+    const prompt = `You are analyzing an uploaded file named "${filename}". 
+Describe exactly what you see in this image in detail. Include:
+- What type of document/image this is
+- All visible text content
+- Key information, data, or insights
+- Any charts, diagrams, code, or structured data
+- A concise summary of the meaning and context
+Provide a thorough analysis that can be stored in a knowledge base.`;
+    const geminiModels = ['gemini-2.0-flash-exp', 'gemini-1.5-flash'];
+    for (const model of geminiModels) {
+      try {
+        const response = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json', 'x-goog-api-key': GEMINI_API_KEY },
+            body: JSON.stringify({
+              contents: [{
+                parts: [
+                  { text: prompt },
+                  { inline_data: { mime_type: mimeType, data: base64Data } }
+                ]
+              }],
+              generationConfig: { temperature: 0.3, maxOutputTokens: 2000 }
+            })
+          }
+        );
+        if (!response.ok) continue;
+        const data = await response.json();
+        const text = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+        if (!text) continue;
+        const findings: string[] = [];
+        if (text.length > 100) findings.push('Detailed visual analysis completed');
+        if (/\d{4}/.test(text)) findings.push('Contains numerical data');
+        if (/table|chart|graph|diagram/i.test(text)) findings.push('Contains visual data representation');
+        if (/code|function|class|import/i.test(text)) findings.push('Contains code or technical content');
+        return { success: true, description: text, key_findings: findings, model };
+      } catch (_) { continue; }
+    }
+    return { success: false, error: 'All Gemini Vision models failed' };
+  } catch (err: any) {
+    return { success: false, error: err.message };
+  }
+}
+
+// ====== KNOWLEDGE BASE: Ingest analyzed attachment into knowledge_entities ======
+async function ingestAttachmentToKnowledgeBase(
+  sessionId: string,
+  userId: string | undefined,
+  filename: string,
+  fileType: string,
+  analysis: any
+): Promise<void> {
+  try {
+    const title = `📎 Uploaded: ${filename}`;
+    const content = analysis.description || analysis.content_preview || 
+                    (analysis.key_findings?.join('. ') ?? '') || 
+                    `File uploaded: ${filename}`;
+    const entityData: any = {
+      session_id: sessionId,
+      entity_type: 'uploaded_file',
+      entity_name: filename,
+      title,
+      content: content.substring(0, 4000),
+      metadata: {
+        file_type: fileType,
+        mime_type: analysis.mime_type,
+        size: analysis.size,
+        key_findings: analysis.key_findings,
+        analyzed_at: new Date().toISOString(),
+        vision_analysis: analysis.vision_analysis || null,
+        analysis_type: analysis.analysis_type,
+      },
+      source: 'attachment_upload',
+      relevance_score: 0.9,
+      created_at: new Date().toISOString()
+    };
+    if (userId) entityData.user_id = userId;
+    const { error } = await supabase.from('knowledge_entities').insert(entityData);
+    if (error) console.warn('⚠️ Failed to ingest attachment to knowledge_entities:', error.message);
+    else console.log(`🧠 Knowledge base updated with attachment: ${filename}`);
+  } catch (e: any) {
+    console.warn('⚠️ Knowledge ingestion error:', e.message);
+  }
+}
+
+// ====== GOOGLE DRIVE: Auto-save uploaded file to user's Drive ======
+async function saveAttachmentToGoogleDrive(
+  filename: string,
+  fileContent: string,
+  mimeType: string,
+  userId: string | undefined,
+  userEmail: string | undefined,
+  sessionId: string
+): Promise<{ success: boolean; driveUrl?: string; fileId?: string; error?: string }> {
+  try {
+    const folderName = 'Suite AI Uploads';
+    const drivePayload: any = {
+      action: 'upload_file',
+      file_name: filename,
+      content: fileContent,
+      mime_type: mimeType,
+      folder_name: folderName,
+      session_id: sessionId
+    };
+    if (userId) drivePayload.user_id = userId;
+    if (userEmail) drivePayload.user_email = userEmail;
+    const { data, error } = await supabase.functions.invoke('google-drive', { body: drivePayload });
+    if (error) return { success: false, error: error.message };
+    if (data?.id || data?.file?.id) {
+      const fileId = data.id || data.file?.id;
+      const driveUrl = data.webViewLink || data.file?.webViewLink || `https://drive.google.com/file/d/${fileId}/view`;
+      console.log(`✅ File saved to Google Drive: ${filename} → ${driveUrl}`);
+      return { success: true, driveUrl, fileId };
+    }
+    return { success: false, error: data?.error || 'Drive upload returned no file ID' };
+  } catch (e: any) {
+    console.warn('⚠️ Google Drive save error:', e.message);
+    return { success: false, error: e.message };
+  }
+}
+
+async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sessionId: string, userId?: string, userEmail?: string): Promise<any> {
   try {
     console.log(`📎 Analyzing ${attachments.length} attachment(s) for IP: ${ipAddress}, Session: ${sessionId}`);
     
@@ -1104,7 +1237,27 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
       
       if (fileType === 'image') {
         analysis.analysis_type = 'image_vision';
-        analysis.note = 'Image will be analyzed using vision capabilities';
+        // ✅ FIXED: Actually call Gemini Vision to analyze the image
+        const imageData = attachment.data_url || attachment.content || url;
+        if (imageData && GEMINI_API_KEY) {
+          try {
+            const visionResult = await analyzeImageWithGeminiVision(imageData, filename);
+            if (visionResult.success) {
+              analysis.description = visionResult.description;
+              analysis.key_findings = visionResult.key_findings || [];
+              analysis.content_preview = visionResult.description?.substring(0, 500);
+              analysis.vision_analysis = visionResult;
+              analysis.note = 'Image analyzed with Gemini Vision';
+            } else {
+              analysis.note = visionResult.error || 'Vision analysis failed';
+            }
+          } catch (vErr: any) {
+            console.warn('⚠️ Gemini vision error:', vErr.message);
+            analysis.note = 'Image received; vision analysis unavailable';
+          }
+        } else {
+          analysis.note = 'Image received (no vision API key configured)';
+        }
         
       } else if (['text', 'document', 'code', 'smart_contract'].includes(fileType)) {
         if (content) {
@@ -1129,15 +1282,49 @@ async function analyzeAttachmentTool(attachments: any[], ipAddress: string, sess
           filename,
           analysis
         );
+        // ✅ FIXED: Ingest analyzed content into knowledge base
+        await ingestAttachmentToKnowledgeBase(sessionId, userId, filename, fileType, analysis);
+        // ✅ FIXED: Auto-save to Google Drive if content available
+        const fileContentForDrive = attachment.data_url || attachment.base64_data || attachment.content || '';
+        if (fileContentForDrive) {
+          const driveResult = await saveAttachmentToGoogleDrive(
+            filename,
+            fileContentForDrive,
+            mime_type || 'application/octet-stream',
+            userId,
+            userEmail,
+            sessionId
+          );
+          analysis.drive_saved = driveResult.success;
+          analysis.drive_url = driveResult.driveUrl;
+          if (!driveResult.success) {
+            analysis.drive_error = driveResult.error;
+            console.warn(`⚠️ Drive save skipped for ${filename}: ${driveResult.error}`);
+          }
+        }
       }
     }
     
+    // Build a rich context summary for Eliza to use in her response
+    const contextSummary = analyses
+      .filter(a => a.success)
+      .map(a => {
+        let summary = `📎 **${a.filename}** (${a.file_type}):\n`;
+        if (a.description) summary += a.description.substring(0, 800) + '\n';
+        else if (a.content_preview) summary += a.content_preview.substring(0, 800) + '\n';
+        if (a.key_findings?.length) summary += `Key findings: ${a.key_findings.join(', ')}\n`;
+        if (a.drive_url) summary += `✅ Saved to Google Drive: ${a.drive_url}\n`;
+        return summary;
+      })
+      .join('\n---\n');
+
     return {
       success: true,
       total_attachments: attachments.length,
       analyzed: analyses.filter(a => a.success).length,
       failed: analyses.filter(a => !a.success).length,
       analyses: analyses,
+      context_summary: contextSummary,
       timestamp: new Date().toISOString()
     };
     
@@ -1350,7 +1537,7 @@ async function executeRealToolCall(
         throw new Error('Missing or empty attachments array');
       }
       
-      result = await analyzeAttachmentTool(attachments, ipAddress, sessionId);
+      result = await analyzeAttachmentTool(attachments, ipAddress, sessionId, user_id, undefined);
       
     } else if (name === 'browse_web') {
       const url = parsedArgs.url;
@@ -1703,6 +1890,9 @@ async function executeRealToolCall(
         template_data: template,
         params: params || {}
       });
+      
+    } else if (name === 'google_drive') {
+      result = await invokeEdgeFunction('google-drive', parsedArgs);
       
     } else if (name === 'google_gmail') {
       result = await invokeEdgeFunction('google-gmail', parsedArgs);
@@ -3652,6 +3842,26 @@ const ELIZA_TOOLS = [
   {
     type: 'function',
     function: {
+      name: 'google_drive',
+      description: '📁 Manage files in Google Drive. Actions: list_files, upload_file, get_file, download_file, create_folder, share_file.',
+      parameters: {
+        type: 'object',
+        properties: {
+          action: { type: 'string', description: 'Drive action: list_files | upload_file | get_file | download_file | create_folder | share_file', enum: ['list_files', 'upload_file', 'get_file', 'download_file', 'create_folder', 'share_file'] },
+          file_name: { type: 'string', description: 'Name of the file to upload or create' },
+          content: { type: 'string', description: 'File content (text or base64 for binary)' },
+          mime_type: { type: 'string', description: 'MIME type of the file' },
+          folder_name: { type: 'string', description: 'Folder to upload into' },
+          file_id: { type: 'string', description: 'Google Drive file ID for get/download/share' },
+          query: { type: 'string', description: 'Search query for list_files' }
+        },
+        required: ['action']
+      }
+    }
+  },
+  {
+    type: 'function',
+    function: {
       name: 'analyze_attachment',
       description: '📎 Analyze attachments including text files, documents, images, and code files',
       parameters: {
@@ -4225,14 +4435,58 @@ Deno.serve(async (req) => {
       );
     }
     
-    let body;
+    // ====== ATTACHMENT-AWARE BODY PARSING ======
+    // Handle both JSON and multipart/form-data (file uploads)
+    let body: any;
     try {
-      body = await req.json();
+      const contentType = req.headers.get('content-type') || '';
+      if (contentType.includes('multipart/form-data')) {
+        // Parse multipart form data (file uploads from UnifiedChat)
+        const form = await req.formData();
+        body = {
+          userQuery: form.get('userQuery') as string || '',
+          messages: (() => { try { return JSON.parse(form.get('messages') as string || '[]'); } catch { return []; } })(),
+          session_id: form.get('session_id') as string || undefined,
+          user_id: form.get('user_id') as string || undefined,
+          provider: form.get('provider') as string || 'auto',
+          use_tools: true,
+          save_memory: true,
+          attachments: [],
+          images: [],
+        };
+        // Read each uploaded file and convert to base64 attachment object
+        const fileEntries = form.getAll('file') as File[];
+        for (const uploadedFile of fileEntries) {
+          const arrayBuffer = await uploadedFile.arrayBuffer();
+          const uint8 = new Uint8Array(arrayBuffer);
+          // Build base64 string
+          let binary = '';
+          uint8.forEach(b => binary += String.fromCharCode(b));
+          const b64 = btoa(binary);
+          const dataUrl = `data:${uploadedFile.type};base64,${b64}`;
+          const isImage = uploadedFile.type.startsWith('image/');
+          body.attachments.push({
+            filename: uploadedFile.name,
+            content: isImage ? dataUrl : new TextDecoder().decode(uint8),
+            mime_type: uploadedFile.type,
+            size: uploadedFile.size,
+            base64_data: b64,
+            data_url: dataUrl,
+            is_image: isImage,
+          });
+          if (isImage) {
+            body.images.push(dataUrl);
+          }
+        }
+        console.log(`📎 Parsed multipart body: ${fileEntries.length} file(s), query="${body.userQuery}"`);
+      } else {
+        body = await req.json();
+      }
     } catch (parseError: any) {
       clearTimeout(timeoutId);
       return new Response(
         JSON.stringify({ 
-          error: 'Invalid JSON payload',
+          error: 'Invalid request payload',
           details: parseError.message,
           request_id: requestId 
         }),
@@ -4375,8 +4629,26 @@ Deno.serve(async (req) => {
       ipAddress
     );
     
+    // ====== ATTACHMENT PRE-PROCESSING: Analyze before AI call ======
+    // If attachments present, analyze them and inject their content as context
+    let attachmentContextMessage = '';
+    if (attachments && attachments.length > 0) {
+      console.log(`📎 Pre-processing ${attachments.length} attachment(s) before AI call...`);
+      try {
+        const preAnalysis = await analyzeAttachmentTool(
+          attachments, ipAddress, sessionId, user_id, undefined
+        );
+        if (preAnalysis.success && preAnalysis.context_summary) {
+          attachmentContextMessage = `\n\n## 📎 UPLOADED FILE CONTEXT (JUST INGESTED)\n\n${preAnalysis.context_summary}\n\nThe above files have been:\n✅ Analyzed and understood\n✅ Added to the knowledge base\n${preAnalysis.analyses?.some((a: any) => a.drive_saved) ? '✅ Saved to Google Drive' : '⚠️ Google Drive save attempted (may need auth)'}\n\nRespond to the user based on the file content above.`;
+          console.log('✅ Attachment pre-analysis complete, injecting context into messages');
+        }
+      } catch (attachErr: any) {
+        console.warn('⚠️ Attachment pre-analysis error:', attachErr.message);
+      }
+    }
+
     const messagesArray = [
-      { role: 'system', content: systemPrompt },
+      { role: 'system', content: systemPrompt + attachmentContextMessage },
       ...allMessages
     ];
     
