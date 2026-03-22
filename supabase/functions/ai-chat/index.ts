@@ -3604,21 +3604,46 @@ async function executeToolsWithIteration(
   if (totalToolsExecuted > 0 && !finalContent) {
     const lastUserMsg = extractLastUserMessage(conversationMessages);
     const toolResults = memoryManager?.getToolResults().slice(-totalToolsExecuted) || [];
-    
-    const toolSummary = toolResults.map(t => 
-      `${t.name}: ${t.result.success ? 'Success' : 'Failed'}`
-    ).join('\n');
-    
+
+    const summarizeResultForFallback = (result: any): string => {
+      if (result == null) return 'No result returned.';
+      if (typeof result === 'string') return result.slice(0, 500);
+      if (Array.isArray(result)) return result.slice(0, 5).map(item => JSON.stringify(item)).join('; ').slice(0, 500);
+      if (typeof result === 'object') {
+        const preferredFields = [
+          'content', 'message', 'summary', 'description', 'answer', 'result', 'output', 'data', 'analyses', 'context_summary', 'error'
+        ];
+        for (const field of preferredFields) {
+          const value = result[field];
+          if (typeof value === 'string' && value.trim()) return value.trim().slice(0, 500);
+          if (Array.isArray(value) && value.length > 0) return value.slice(0, 5).map(item => typeof item === 'string' ? item : JSON.stringify(item)).join('; ').slice(0, 500);
+          if (value && typeof value === 'object') return JSON.stringify(value).slice(0, 500);
+        }
+        return JSON.stringify(result).slice(0, 500);
+      }
+      return String(result).slice(0, 500);
+    };
+
+    const toolSummary = toolResults.map(t => {
+      const outcome = t.result?.success === false ? 'failed' : 'succeeded';
+      return `- ${t.name} ${outcome}: ${summarizeResultForFallback(t.result)}`;
+    }).join('\n');
+
     const synthesisMessages = [
       ...conversationMessages,
       {
-        role: 'system',
-        content: `You just executed ${totalToolsExecuted} tool(s) based on the user's request: "${lastUserMsg}".\n\nTool results summary:\n${toolSummary}\n\nNow synthesize these results into a natural, helpful, conversational response. Don't just list the raw tool outputs – explain what they mean, highlight interesting findings, and answer the user's question directly. Be warm and insightful.`
+        role: 'user',
+        content: `Please answer the user's original request using the tool results below.\n\nOriginal user request:\n${lastUserMsg}\n\nTool results:\n${toolSummary}\n\nWrite the final assistant reply in natural language. Be specific, include the actual findings, and do not say that you merely completed actions.`
       }
     ];
-    
+
     const synthesisResult = await callAIFunction(synthesisMessages, []);
-    finalContent = synthesisResult?.content || "I've completed the requested actions based on your query.";
+    const synthesizedContent = synthesisResult?.content?.trim();
+    const isGenericSynthesis = !synthesizedContent || /^(i('|’)ve|i have) completed the requested actions based on your query\.?$/i.test(synthesizedContent);
+
+    finalContent = isGenericSynthesis
+      ? toolResults.map(t => `**${t.name}**: ${summarizeResultForFallback(t.result)}`).join('\n\n')
+      : synthesizedContent;
   }
   
   return { content: finalContent, toolsExecuted: totalToolsExecuted };
