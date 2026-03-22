@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from './ui/card';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
@@ -17,7 +17,6 @@ import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X, M
 import ReactMarkdown from 'react-markdown';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { useToast } from '@/hooks/use-toast';
 import { AttachmentPreview, type AttachmentFile } from './AttachmentPreview';
 import { QuickResponseButtons } from './QuickResponseButtons';
 import { ExecutiveCouncilChat } from './ExecutiveCouncilChat';
@@ -101,6 +100,228 @@ interface UnifiedChatProps {
   onBack?: () => void; // Callback to return to directory view
 }
 
+const MessageCopyButton = React.memo(({ content }: { content: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(content);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+      onClick={handleCopy}
+    >
+      {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+    </Button>
+  );
+});
+
+const MessageCodeBlock = React.memo(({ code, language, ...props }: { code: string; language: string }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(code);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  return (
+    <div className="relative group my-4">
+      <div className="absolute right-2 top-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+        <Button
+          size="icon"
+          variant="secondary"
+          className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+          onClick={handleCopy}
+        >
+          {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+        </Button>
+      </div>
+      <SyntaxHighlighter
+        style={vscDarkPlus}
+        language={language}
+        PreTag="div"
+        className="rounded-md !mt-0"
+        {...props}
+      >
+        {code}
+      </SyntaxHighlighter>
+    </div>
+  );
+});
+
+const markdownComponents = {
+  code({ inline, className, children, ...props }: any) {
+    const match = /language-(\w+)/.exec(className || '');
+    const codeString = String(children).replace(/\n$/, '');
+
+    if (!inline && match) {
+      return <MessageCodeBlock code={codeString} language={match[1]} {...props} />;
+    }
+
+    return (
+      <code className={`${className} bg-muted px-1.5 py-0.5 rounded-md font-mono text-xs`} {...props}>
+        {children}
+      </code>
+    );
+  }
+};
+
+const ChatMessage = React.memo(({ message }: { message: UnifiedMessage }) => {
+  return (
+    <div
+      className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} flex-col gap-2 animate-fade-in`}
+    >
+      {message.sender === 'assistant' && message.isCouncilDeliberation && message.councilDeliberation && (
+        <div className="max-w-[95%]">
+          <ExecutiveCouncilChat deliberation={message.councilDeliberation} />
+        </div>
+      )}
+
+      {message.sender === 'assistant' && message.reasoning && message.reasoning.length > 0 && (
+        <div className="max-w-[85%]">
+          <ReasoningSteps steps={message.reasoning} />
+        </div>
+      )}
+
+      {!message.isCouncilDeliberation && (
+        <div className="max-w-[80%] sm:max-w-[75%]">
+          <div
+            className={`group p-3 rounded-xl ${message.sender === 'user'
+              ? 'bg-primary text-primary-foreground rounded-br-sm'
+              : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
+              }`}
+          >
+            {message.attachments?.images && message.attachments.images.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {message.attachments.images.map((img, idx) => (
+                  <img
+                    key={idx}
+                    src={img}
+                    alt={`Attachment ${idx + 1}`}
+                    className="max-w-[200px] max-h-[150px] rounded-lg object-cover border border-border/30"
+                  />
+                ))}
+              </div>
+            )}
+
+            {message.generatedImages && message.generatedImages.length > 0 && (
+              <div className="space-y-2 mb-2">
+                {message.generatedImages.map((img, idx) => (
+                  <ImageResponsePreview
+                    key={`gen-${idx}`}
+                    imageData={img}
+                    alt={`Generated Image ${idx + 1}`}
+                    className="max-w-full"
+                  />
+                ))}
+              </div>
+            )}
+
+            {message.generatedVideos && message.generatedVideos.length > 0 && (
+              <div className="space-y-3 mb-2">
+                {message.generatedVideos.map((url, idx) => (
+                  <GeneratedVideoPreview key={`vid-${idx}`} url={url} index={idx} />
+                ))}
+              </div>
+            )}
+
+            <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+              <ReactMarkdown components={markdownComponents}>
+                {message.content}
+              </ReactMarkdown>
+            </div>
+
+            {message.sender === 'assistant' && (
+              <div className="mt-2 flex justify-end">
+                <MessageCopyButton content={message.content} />
+              </div>
+            )}
+
+            {message.tool_calls && message.tool_calls.length > 0 && (
+              <div className="mt-2 space-y-1">
+                {message.tool_calls.map((tool) => (
+                  <div key={tool.id} className="text-xs flex items-center gap-1.5 opacity-70">
+                    <span className="text-muted-foreground">🔧</span>
+                    <span className="font-medium">{tool.function_name}</span>
+                    {tool.status === 'success' && <span className="text-green-600">✓</span>}
+                    {tool.status === 'failed' && <span className="text-red-600">✗</span>}
+                    {tool.status === 'pending' && <span className="animate-pulse">⋯</span>}
+                    {tool.execution_time_ms && (
+                      <span className="text-muted-foreground">({tool.execution_time_ms}ms)</span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="text-xs opacity-60 mt-2 flex items-center justify-between gap-2">
+              <span>{formatTime(message.timestamp)}</span>
+              {message.sender === 'assistant' && message.providerUsed && (
+                <span className="text-[10px] text-muted-foreground/70 font-medium">
+                  via {message.providerUsed}
+                </span>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+});
+
+const GeneratedVideoPreview = React.memo(({ url, index }: { url: string; index: number }) => {
+  const videoRef = useRef<HTMLVideoElement>(null);
+
+  return (
+    <div className="rounded-xl overflow-hidden border border-border/40 bg-black/20">
+      <video
+        ref={videoRef}
+        controls
+        preload="metadata"
+        className="w-full max-h-64 rounded-xl cursor-pointer"
+        src={url}
+        aria-label={`Generated Video ${index + 1}`}
+        onDoubleClick={() => {
+          const el = videoRef.current;
+          if (el?.requestFullscreen) el.requestFullscreen();
+        }}
+        title="Double-click to enter fullscreen"
+      >
+        <p className="text-xs text-muted-foreground p-2">
+          Your browser doesn't support video playback.
+          <a href={url} download className="underline ml-1">Download video</a>
+        </p>
+      </video>
+      <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30">
+        <span className="text-xs text-muted-foreground">🎬 AI Generated Video</span>
+        <div className="flex items-center gap-3">
+          <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            ↗ Open in new tab
+          </a>
+          <a
+            href={url}
+            download
+            className="text-xs text-primary hover:underline flex items-center gap-1"
+          >
+            ⬇ Download
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+});
+
 // Internal component using ElevenLabs and Gemini
 
 const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
@@ -174,67 +395,6 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
   // Council mode state - initialize from prop
   const [councilMode, setCouncilMode] = useState<boolean>(defaultCouncilMode);
-  const { toast } = useToast();
-
-  const CopyButton = ({ content }: { content: string }) => {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
-      navigator.clipboard.writeText(content);
-      setCopied(true);
-      toast({
-        title: "Copied to clipboard",
-        description: "Response copied successfully",
-      });
-      setTimeout(() => setCopied(false), 2000);
-    };
-    return (
-      <Button
-        variant="ghost"
-        size="icon"
-        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
-        onClick={handleCopy}
-      >
-        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-      </Button>
-    );
-  };
-
-  const CodeBlock = ({ code, language, ...props }: { code: string, language: string }) => {
-    const [copied, setCopied] = useState(false);
-    const handleCopy = () => {
-      navigator.clipboard.writeText(code);
-      setCopied(true);
-      toast({
-        title: "Copied to clipboard",
-        description: "Code snippet copied successfully",
-      });
-      setTimeout(() => setCopied(false), 2000);
-    };
-
-    return (
-      <div className="relative group my-4">
-        <div className="absolute right-2 top-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button
-            size="icon"
-            variant="secondary"
-            className="h-8 w-8 bg-background/80 backdrop-blur-sm"
-            onClick={handleCopy}
-          >
-            {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
-          </Button>
-        </div>
-        <SyntaxHighlighter
-          style={vscDarkPlus}
-          language={language}
-          PreTag="div"
-          className="rounded-md !mt-0"
-          {...props}
-        >
-          {code}
-        </SyntaxHighlighter>
-      </div>
-    );
-  };
 
   // Auto-advance state — council meeting self-drives after each synthesis
   const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState<number | null>(null);
@@ -1940,175 +2100,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
             )}
 
             {messages.map((message) => (
-              <div
-                key={message.id}
-                className={`flex ${message.sender === 'user' ? 'justify-end' : 'justify-start'} flex-col gap-2 animate-fade-in`}
-              >
-                {/* Show Council Deliberation for council messages */}
-                {message.sender === 'assistant' && message.isCouncilDeliberation && message.councilDeliberation && (
-                  <div className="max-w-[95%]">
-                    <ExecutiveCouncilChat deliberation={message.councilDeliberation} />
-                  </div>
-                )}
-
-                {/* Show Reasoning Steps for assistant messages */}
-                {message.sender === 'assistant' && message.reasoning && message.reasoning.length > 0 && (
-                  <div className="max-w-[85%]">
-                    <ReasoningSteps steps={message.reasoning} />
-                  </div>
-                )}
-
-                {/* Standard message bubble (skip if council deliberation) */}
-                {!(message.isCouncilDeliberation) && (
-                  <div className="max-w-[80%] sm:max-w-[75%]">
-                    <div
-                      className={`p-3 rounded-xl ${message.sender === 'user'
-                        ? 'bg-primary text-primary-foreground rounded-br-sm'
-                        : 'bg-muted/50 text-foreground rounded-bl-sm border border-border/40'
-                        }`}
-                    >
-                      {/* Show attached images */}
-                      {message.attachments?.images && message.attachments.images.length > 0 && (
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          {message.attachments.images.map((img, idx) => (
-                            <img
-                              key={idx}
-                              src={img}
-                              alt={`Attachment ${idx + 1}`}
-                              className="max-w-[200px] max-h-[150px] rounded-lg object-cover border border-border/30"
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Show AI-generated images with lazy loading to prevent freeze */}
-                      {message.generatedImages && message.generatedImages.length > 0 && (
-                        <div className="space-y-2 mb-2">
-                          {message.generatedImages.map((img, idx) => (
-                            <ImageResponsePreview
-                              key={`gen-${idx}`}
-                              imageData={img}
-                              alt={`Generated Image ${idx + 1}`}
-                              className="max-w-full"
-                            />
-                          ))}
-                        </div>
-                      )}
-
-                      {/* 🎬 Show AI-generated videos as playable players */}
-                      {message.generatedVideos && message.generatedVideos.length > 0 && (
-                        <div className="space-y-3 mb-2">
-                          {message.generatedVideos.map((url, idx) => {
-                            const videoRef = React.createRef<HTMLVideoElement>();
-                            return (
-                              <div key={`vid-${idx}`} className="rounded-xl overflow-hidden border border-border/40 bg-black/20">
-                                <video
-                                  ref={videoRef}
-                                  controls
-                                  preload="metadata"
-                                  className="w-full max-h-64 rounded-xl cursor-pointer"
-                                  src={url}
-                                  aria-label={`Generated Video ${idx + 1}`}
-                                  onDoubleClick={() => {
-                                    const el = videoRef.current;
-                                    if (el) {
-                                      if (el.requestFullscreen) el.requestFullscreen();
-                                    }
-                                  }}
-                                  title="Double-click to enter fullscreen"
-                                >
-                                  <p className="text-xs text-muted-foreground p-2">
-                                    Your browser doesn't support video playback.
-                                    <a href={url} download className="underline ml-1">Download video</a>
-                                  </p>
-                                </video>
-                                <div className="flex items-center justify-between px-3 py-1.5 bg-muted/30">
-                                  <span className="text-xs text-muted-foreground">🎬 AI Generated Video</span>
-                                  <div className="flex items-center gap-3">
-                                    <a
-                                      href={url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                                    >
-                                      ↗ Open in new tab
-                                    </a>
-                                    <a
-                                      href={url}
-                                      download
-                                      className="text-xs text-primary hover:underline flex items-center gap-1"
-                                    >
-                                      ⬇ Download
-                                    </a>
-                                  </div>
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
-                        <ReactMarkdown
-                          components={{
-                            code({ node, inline, className, children, ...props }: any) {
-                              const match = /language-(\w+)/.exec(className || '');
-                              const codeString = String(children).replace(/\n$/, '');
-                              
-                              if (!inline && match) {
-                                return (
-                                  <CodeBlock code={codeString} language={match[1]} {...props} />
-                                );
-                              }
-                              
-                              return (
-                                <code className={`${className} bg-muted px-1.5 py-0.5 rounded-md font-mono text-xs`} {...props}>
-                                  {children}
-                                </code>
-                              );
-                            }
-                          }}
-                        >
-                          {message.content}
-                        </ReactMarkdown>
-                      </div>
-
-                      {message.sender === 'assistant' && (
-                        <div className="mt-2 flex justify-end">
-                          <CopyButton content={message.content} />
-                        </div>
-                      )}
-
-                      {/* Tool Call Indicators */}
-                      {message.tool_calls && message.tool_calls.length > 0 && (
-                        <div className="mt-2 space-y-1">
-                          {message.tool_calls.map((tool) => (
-                            <div key={tool.id} className="text-xs flex items-center gap-1.5 opacity-70">
-                              <span className="text-muted-foreground">🔧</span>
-                              <span className="font-medium">{tool.function_name}</span>
-                              {tool.status === 'success' && <span className="text-green-600">✓</span>}
-                              {tool.status === 'failed' && <span className="text-red-600">✗</span>}
-                              {tool.status === 'pending' && <span className="animate-pulse">⋯</span>}
-                              {tool.execution_time_ms && (
-                                <span className="text-muted-foreground">({tool.execution_time_ms}ms)</span>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      <div className="text-xs opacity-60 mt-2 flex items-center justify-between gap-2">
-                        <span>{formatTime(message.timestamp)}</span>
-                        {message.sender === 'assistant' && message.providerUsed && (
-                          <span className="text-[10px] text-muted-foreground/70 font-medium">
-                            via {message.providerUsed}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </div>
+              <ChatMessage key={message.id} message={message} />
             ))}
 
             {/* 🚀 Auto-Advance Banner — shown during council countdown */}
