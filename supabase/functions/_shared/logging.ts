@@ -1,4 +1,7 @@
-import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+import {
+  createClient,
+  SupabaseClient,
+} from 'https://esm.sh/@supabase/supabase-js@2.58.0';
 
 /**
  * Shared logging utility for all Supabase Edge Functions
@@ -6,8 +9,20 @@ import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-
  */
 
 export type LogLevel = 'debug' | 'info' | 'warning' | 'error' | 'critical';
-export type LogSource = 'edge_function' | 'frontend' | 'background_task' | 'system';
-export type LogCategory = 'performance' | 'security' | 'user_activity' | 'system_health' | 'api_call' | 'error' | 'workflow' | 'ai_interaction';
+export type LogSource =
+  | 'edge_function'
+  | 'frontend'
+  | 'background_task'
+  | 'system';
+export type LogCategory =
+  | 'performance'
+  | 'security'
+  | 'user_activity'
+  | 'system_health'
+  | 'api_call'
+  | 'error'
+  | 'workflow'
+  | 'ai_interaction';
 
 export interface SystemLogEntry {
   log_level: LogLevel;
@@ -18,6 +33,18 @@ export interface SystemLogEntry {
   error_stack?: string;
   user_context?: Record<string, any>;
   metadata?: Record<string, any>;
+}
+
+export interface RequestLogContext {
+  requestId: string;
+  method?: string;
+  action?: string;
+  operation?: string;
+  executionSource?: string;
+  path?: string;
+  duration_ms?: number;
+  status?: number;
+  [key: string]: unknown;
 }
 
 /**
@@ -38,23 +65,21 @@ export async function logToSystem(
 ): Promise<void> {
   try {
     const supabase = getSupabaseClient();
-    
-    const { error } = await supabase
-      .from('system_logs')
-      .insert({
-        log_level: entry.log_level,
-        log_source: entry.log_source,
-        log_category: entry.log_category,
-        message: `[${functionName}] ${entry.message}`,
-        details: entry.details || {},
-        error_stack: entry.error_stack,
-        user_context: entry.user_context || {},
-        metadata: {
-          ...entry.metadata,
-          function_name: functionName,
-          timestamp: new Date().toISOString()
-        }
-      });
+
+    const { error } = await supabase.from('system_logs').insert({
+      log_level: entry.log_level,
+      log_source: entry.log_source,
+      log_category: entry.log_category,
+      message: `[${functionName}] ${entry.message}`,
+      details: entry.details || {},
+      error_stack: entry.error_stack,
+      user_context: entry.user_context || {},
+      metadata: {
+        ...entry.metadata,
+        function_name: functionName,
+        timestamp: new Date().toISOString(),
+      },
+    });
 
     if (error) {
       console.error('Failed to log to system_logs:', error);
@@ -68,54 +93,77 @@ export async function logToSystem(
  * Convenience methods for different log levels
  */
 export const EdgeFunctionLogger = (functionName: string) => ({
-  debug: (message: string, details?: Record<string, any>) => 
+  debug: (message: string, details?: Record<string, any>) =>
     logToSystem(functionName, {
       log_level: 'debug',
       log_source: 'edge_function',
       log_category: 'system_health',
       message,
-      details
+      details,
     }),
 
-  info: (message: string, category: LogCategory = 'system_health', details?: Record<string, any>) => 
+  info: (
+    message: string,
+    category: LogCategory = 'system_health',
+    details?: Record<string, any>
+  ) =>
     logToSystem(functionName, {
       log_level: 'info',
       log_source: 'edge_function',
       log_category: category,
       message,
-      details
+      details,
     }),
 
-  warning: (message: string, category: LogCategory = 'system_health', details?: Record<string, any>) => 
+  warning: (
+    message: string,
+    category: LogCategory = 'system_health',
+    details?: Record<string, any>
+  ) =>
     logToSystem(functionName, {
       log_level: 'warning',
       log_source: 'edge_function',
       log_category: category,
       message,
-      details
+      details,
     }),
 
-  error: (message: string, error: Error | unknown, category: LogCategory = 'error', details?: Record<string, any>) => 
+  error: (
+    message: string,
+    error: Error | unknown,
+    category: LogCategory = 'error',
+    details?: Record<string, any>
+  ) =>
     logToSystem(functionName, {
       log_level: 'error',
       log_source: 'edge_function',
       log_category: category,
       message,
       details,
-      error_stack: error instanceof Error ? error.stack : String(error)
+      error_stack: error instanceof Error ? error.stack : String(error),
     }),
 
-  critical: (message: string, error: Error | unknown, category: LogCategory = 'error', details?: Record<string, any>) => 
+  critical: (
+    message: string,
+    error: Error | unknown,
+    category: LogCategory = 'error',
+    details?: Record<string, any>
+  ) =>
     logToSystem(functionName, {
       log_level: 'critical',
       log_source: 'edge_function',
       log_category: category,
       message,
       details,
-      error_stack: error instanceof Error ? error.stack : String(error)
+      error_stack: error instanceof Error ? error.stack : String(error),
     }),
 
-  apiCall: (endpoint: string, status: number, duration_ms: number, details?: Record<string, any>) =>
+  apiCall: (
+    endpoint: string,
+    status: number,
+    duration_ms: number,
+    details?: Record<string, any>
+  ) =>
     logToSystem(functionName, {
       log_level: status >= 400 ? 'error' : 'info',
       log_source: 'edge_function',
@@ -125,17 +173,83 @@ export const EdgeFunctionLogger = (functionName: string) => ({
         ...details,
         endpoint,
         status,
-        duration_ms
-      }
+        duration_ms,
+      },
     }),
 
-  userActivity: (action: string, userContext?: Record<string, any>, details?: Record<string, any>) =>
+  userActivity: (
+    action: string,
+    userContext?: Record<string, any>,
+    details?: Record<string, any>
+  ) =>
     logToSystem(functionName, {
       log_level: 'info',
       log_source: 'edge_function',
       log_category: 'user_activity',
       message: action,
       user_context: userContext,
-      details
-    })
+      details,
+    }),
+
+  requestStart: async (message: string, context: RequestLogContext) => {
+    console.log(
+      JSON.stringify({
+        level: 'info',
+        event: 'request_start',
+        function_name: functionName,
+        timestamp: new Date().toISOString(),
+        ...context,
+        message,
+      })
+    );
+
+    await logToSystem(functionName, {
+      log_level: 'info',
+      log_source: 'edge_function',
+      log_category: 'api_call',
+      message,
+      details: context,
+    });
+  },
+
+  requestComplete: async (
+    message: string,
+    context: RequestLogContext,
+    details?: Record<string, any>
+  ) => {
+    console.log(
+      JSON.stringify({
+        level: context.status && context.status >= 400 ? 'error' : 'info',
+        event: 'request_complete',
+        function_name: functionName,
+        timestamp: new Date().toISOString(),
+        ...context,
+        details,
+        message,
+      })
+    );
+
+    await logToSystem(functionName, {
+      log_level: context.status && context.status >= 400 ? 'error' : 'info',
+      log_source: 'edge_function',
+      log_category:
+        context.status && context.status >= 400 ? 'error' : 'api_call',
+      message,
+      details: { ...context, ...details },
+    });
+  },
 });
+
+export function createRequestContext(
+  req: Request,
+  extra: Record<string, unknown> = {}
+): RequestLogContext {
+  const url = new URL(req.url);
+
+  return {
+    requestId: req.headers.get('x-request-id') || crypto.randomUUID(),
+    method: req.method,
+    path: url.pathname,
+    ...extra,
+  };
+}
