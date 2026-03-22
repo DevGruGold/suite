@@ -205,11 +205,10 @@ export function isLargeResponse(content: string): boolean {
 }
 
 /**
- * Truncate large content for safe rendering while preserving meaning
+ * Sanitize large content for safe rendering while preserving meaning.
+ * Note: Truncation has been removed to ensure full response visibility.
  */
 export function sanitizeLargeResponse(content: string): string {
-  if (!isLargeResponse(content)) return content;
-
   // Check for base64 images
   const { hasImages, textContent, images } = extractImagesFromResponse(content);
 
@@ -217,8 +216,7 @@ export function sanitizeLargeResponse(content: string): string {
     return `${textContent}\n\n📸 ${images.length} image(s) generated - see preview above`;
   }
 
-  // For other large content, truncate with notice
-  return content.substring(0, 10000) + '\n\n[Response truncated for performance - content too large]';
+  return content;
 }
 
 export default ImageResponsePreview;

@@ -13,7 +13,11 @@ import { GitHubPATInput } from './GitHubContributorRegistration';
 import { GitHubTokenStatus } from './GitHubTokenStatus';
 import { mobilePermissionService } from '@/services/mobilePermissionService';
 import { formatTime } from '@/utils/dateFormatter';
-import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X, Mic, MicOff, Video, VideoOff } from 'lucide-react';
+import { Send, Volume2, VolumeX, Trash2, Key, Wifi, Users, Vote, Paperclip, X, Mic, MicOff, Video, VideoOff, Copy, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useToast } from '@/hooks/use-toast';
 import { AttachmentPreview, type AttachmentFile } from './AttachmentPreview';
 import { QuickResponseButtons } from './QuickResponseButtons';
 import { ExecutiveCouncilChat } from './ExecutiveCouncilChat';
@@ -168,6 +172,67 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
 
   // Council mode state - initialize from prop
   const [councilMode, setCouncilMode] = useState<boolean>(defaultCouncilMode);
+  const { toast } = useToast();
+
+  const CopyButton = ({ content }: { content: string }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+      navigator.clipboard.writeText(content);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Response copied successfully",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    };
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={handleCopy}
+      >
+        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+      </Button>
+    );
+  };
+
+  const CodeBlock = ({ code, language, ...props }: { code: string, language: string }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Code snippet copied successfully",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+      <div className="relative group my-4">
+        <div className="absolute right-2 top-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+            onClick={handleCopy}
+          >
+            {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+          </Button>
+        </div>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={language}
+          PreTag="div"
+          className="rounded-md !mt-0"
+          {...props}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+    );
+  };
 
   // Auto-advance state — council meeting self-drives after each synthesis
   const [autoAdvanceCountdown, setAutoAdvanceCountdown] = useState<number | null>(null);
@@ -1979,7 +2044,36 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
                         </div>
                       )}
 
-                      <div className="text-sm leading-relaxed whitespace-pre-wrap">{message.content}</div>
+                      <div className="text-sm leading-relaxed prose prose-sm dark:prose-invert max-w-none">
+                        <ReactMarkdown
+                          components={{
+                            code({ node, inline, className, children, ...props }: any) {
+                              const match = /language-(\w+)/.exec(className || '');
+                              const codeString = String(children).replace(/\n$/, '');
+                              
+                              if (!inline && match) {
+                                return (
+                                  <CodeBlock code={codeString} language={match[1]} {...props} />
+                                );
+                              }
+                              
+                              return (
+                                <code className={`${className} bg-muted px-1.5 py-0.5 rounded-md font-mono text-xs`} {...props}>
+                                  {children}
+                                </code>
+                              );
+                            }
+                          }}
+                        >
+                          {message.content}
+                        </ReactMarkdown>
+                      </div>
+
+                      {message.sender === 'assistant' && (
+                        <div className="mt-2 flex justify-end">
+                          <CopyButton content={message.content} />
+                        </div>
+                      )}
 
                       {/* Tool Call Indicators */}
                       {message.tool_calls && message.tool_calls.length > 0 && (

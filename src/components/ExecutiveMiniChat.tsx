@@ -4,7 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Send, Loader2, Volume2, VolumeX, Square, Trash2 } from 'lucide-react';
+import { Send, Loader2, Volume2, VolumeX, Square, Trash2, Copy, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useToast } from '@/hooks/use-toast';
 import { ExecutiveName, EXECUTIVE_PROFILES } from '@/components/ExecutiveBio';
 import { UnifiedElizaService } from '@/services/unifiedElizaService';
 import { QuickResponseButtons } from './QuickResponseButtons';
@@ -59,7 +63,91 @@ const ACCENT_COLORS: Record<ExecutiveName, { ring: string; badge: string; bubble
 export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniChatProps) => {
   const profile = EXECUTIVE_PROFILES[executive];
   const accent = ACCENT_COLORS[executive];
+  const { toast } = useToast();
   const [messages, setMessages] = useState<Message[]>([]);
+
+  const CopyButton = ({ content }: { content: string }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+      navigator.clipboard.writeText(content);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Content copied successfully",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    };
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-6 w-6 p-0 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={handleCopy}
+      >
+        {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+      </Button>
+    );
+  };
+
+  const CodeBlock = ({ code, language, ...props }: { code: string, language: string }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Code snippet copied successfully",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+      <div className="relative group my-2">
+        <div className="absolute right-1 top-1 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-6 w-6 bg-background/80 backdrop-blur-sm"
+            onClick={handleCopy}
+          >
+            {copied ? <Check className="h-3 w-3 text-green-500" /> : <Copy className="h-3 w-3" />}
+          </Button>
+        </div>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={language}
+          PreTag="div"
+          className="rounded-md !mt-0 text-[10px]"
+          {...props}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+    );
+  };
+
+  const MarkdownContent = ({ content }: { content: string }) => (
+    <div className="prose prose-xs dark:prose-invert max-w-none">
+      <ReactMarkdown
+        components={{
+          code({ node, inline, className, children, ...props }: any) {
+            const match = /language-(\w+)/.exec(className || '');
+            const codeString = String(children).replace(/\n$/, '');
+            if (!inline && match) {
+              return <CodeBlock code={codeString} language={match[1]} {...props} />;
+            }
+            return (
+              <code className={`${className} bg-muted px-1 py-0.5 rounded font-mono text-[10px]`} {...props}>
+                {children}
+              </code>
+            );
+          }
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [voiceEnabled, setVoiceEnabled] = useState(() =>
@@ -253,14 +341,21 @@ export const ExecutiveMiniChat = ({ executive, className = '' }: ExecutiveMiniCh
                       )}
                     </div>
                   )}
-                  <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm ${message.role === 'user'
+                  <div className={`max-w-[80%] rounded-xl px-3 py-2 text-sm group ${message.role === 'user'
                       ? 'bg-primary text-primary-foreground rounded-br-sm'
                       : `${accent.bubble} text-foreground rounded-bl-sm`
                     }`}>
-                    <span className="whitespace-pre-wrap break-words">{message.content}</span>
-                    <span className="block text-[9px] opacity-40 mt-1 text-right">
-                      {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </span>
+                    <div className="text-sm leading-relaxed">
+                      <MarkdownContent content={message.content} />
+                    </div>
+                    <div className="flex items-center justify-between mt-1">
+                      <span className="block text-[9px] opacity-40">
+                        {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                      {message.role === 'assistant' && (
+                        <CopyButton content={message.content} />
+                      )}
+                    </div>
                   </div>
                 </div>
               ))

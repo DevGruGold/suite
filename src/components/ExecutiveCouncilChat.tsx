@@ -2,7 +2,13 @@ import React from 'react';
 import { Card, CardContent } from './ui/card';
 import { Badge } from './ui/badge';
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from './ui/collapsible';
-import { ChevronDown, Users, Clock, TrendingUp } from 'lucide-react';
+import { ChevronDown, Users, Clock, TrendingUp, Copy, Check } from 'lucide-react';
+import ReactMarkdown from 'react-markdown';
+import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
+import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
+import { useToast } from '@/hooks/use-toast';
+import { Button } from './ui/button';
+import { useState } from 'react';
 import type { CouncilDeliberation } from '@/services/executiveCouncilService';
 
 interface ExecutiveCouncilChatProps {
@@ -11,6 +17,90 @@ interface ExecutiveCouncilChatProps {
 
 export const ExecutiveCouncilChat: React.FC<ExecutiveCouncilChatProps> = ({ deliberation }) => {
   const { responses, synthesis, consensus, totalExecutionTimeMs } = deliberation;
+  const { toast } = useToast();
+
+  const CopyButton = ({ content }: { content: string }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+      navigator.clipboard.writeText(content);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Content copied successfully",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    };
+    return (
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+        onClick={handleCopy}
+      >
+        {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+      </Button>
+    );
+  };
+
+  const CodeBlock = ({ code, language, ...props }: { code: string, language: string }) => {
+    const [copied, setCopied] = useState(false);
+    const handleCopy = () => {
+      navigator.clipboard.writeText(code);
+      setCopied(true);
+      toast({
+        title: "Copied to clipboard",
+        description: "Code snippet copied successfully",
+      });
+      setTimeout(() => setCopied(false), 2000);
+    };
+
+    return (
+      <div className="relative group my-4">
+        <div className="absolute right-2 top-2 z-10 opacity-0 group-hover:opacity-100 transition-opacity">
+          <Button
+            size="icon"
+            variant="secondary"
+            className="h-8 w-8 bg-background/80 backdrop-blur-sm"
+            onClick={handleCopy}
+          >
+            {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+          </Button>
+        </div>
+        <SyntaxHighlighter
+          style={vscDarkPlus}
+          language={language}
+          PreTag="div"
+          className="rounded-md !mt-0"
+          {...props}
+        >
+          {code}
+        </SyntaxHighlighter>
+      </div>
+    );
+  };
+
+  const MarkdownContent = ({ content }: { content: string }) => (
+    <div className="prose prose-sm dark:prose-invert max-w-none">
+      <ReactMarkdown
+        components={{
+          code({ node, inline, className, children, ...props }: any) {
+            const match = /language-(\w+)/.exec(className || '');
+            const codeString = String(children).replace(/\n$/, '');
+            if (!inline && match) {
+              return <CodeBlock code={codeString} language={match[1]} {...props} />;
+            }
+            return (
+              <code className={`${className} bg-muted px-1.5 py-0.5 rounded-md font-mono text-xs`} {...props}>
+                {children}
+              </code>
+            );
+          }
+        }}
+      >
+        {content}
+      </ReactMarkdown>
+    </div>
+  );
 
   const renderExecutiveAvatar = (executive: string, icon: string, color: string) => {
     return (
@@ -79,9 +169,12 @@ export const ExecutiveCouncilChat: React.FC<ExecutiveCouncilChatProps> = ({ deli
               <ChevronDown className="w-4 h-4 text-muted-foreground transition-transform ui-open:rotate-180" />
             </CollapsibleTrigger>
             
-            <CollapsibleContent className="pl-[52px] pr-3 pt-2 pb-3">
-              <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground">
-                {perspective.perspective}
+            <CollapsibleContent className="pl-[52px] pr-3 pt-2 pb-3 group">
+              <div className="text-sm leading-relaxed text-foreground">
+                <MarkdownContent content={perspective.perspective} />
+              </div>
+              <div className="mt-2 flex justify-end">
+                <CopyButton content={perspective.perspective} />
               </div>
               
               {perspective.reasoning && perspective.reasoning.length > 0 && (
@@ -114,8 +207,11 @@ export const ExecutiveCouncilChat: React.FC<ExecutiveCouncilChatProps> = ({ deli
             Unified Council Recommendation:
           </span>
         </div>
-        <div className="text-sm leading-relaxed whitespace-pre-wrap text-foreground pl-10">
-          {synthesis}
+        <div className="text-sm leading-relaxed text-foreground pl-10 group">
+          <MarkdownContent content={synthesis} />
+          <div className="mt-2 flex justify-end">
+            <CopyButton content={synthesis} />
+          </div>
         </div>
       </div>
 
