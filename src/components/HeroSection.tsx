@@ -2,7 +2,6 @@ import { useState, useEffect } from 'react';
 import { AnimatedCounter } from './AnimatedCounter';
 import { ActivityPulse } from './ActivityPulse';
 import { supabase } from '@/integrations/supabase/client';
-import { EDGE_FUNCTIONS_REGISTRY } from '@/services/edgeFunctionRegistry';
 import {
   Zap,
   Bot,
@@ -102,6 +101,7 @@ export const HeroSection = ({ stats }: HeroSectionProps) => {
   }, []);
 
   const banner = marketingBanners[currentBanner];
+  const registeredEdgeFunctions = stats.registeredEdgeFunctions;
 
   return (
     <section className="relative w-full overflow-hidden rounded-3xl border border-border/60 bg-card/70 shadow-sm">
@@ -196,10 +196,8 @@ export const HeroSection = ({ stats }: HeroSectionProps) => {
             />
             <StatCard
               icon={<Workflow className="h-4 w-4 text-sky-500" />}
-              label="Edge functions"
-              value={
-                stats.registeredEdgeFunctions || EDGE_FUNCTIONS_REGISTRY.length
-              }
+              label="Edge functions (system)"
+              value={registeredEdgeFunctions}
             />
             <StatCard
               icon={<BrainCircuit className="h-4 w-4 text-violet-500" />}
@@ -231,11 +229,8 @@ export const HeroSection = ({ stats }: HeroSectionProps) => {
                 />
                 <MetricPill
                   icon={<Workflow className="h-3 w-3" />}
-                  label="Registered"
-                  value={
-                    stats.registeredEdgeFunctions ||
-                    EDGE_FUNCTIONS_REGISTRY.length
-                  }
+                  label="System count"
+                  value={registeredEdgeFunctions}
                 />
               </div>
             </div>
