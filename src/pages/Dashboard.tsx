@@ -2,10 +2,7 @@ import { useEffect, useState } from 'react';
 import UnifiedChat from '@/components/UnifiedChat';
 import AgentTaskVisualizer from '@/components/AgentTaskVisualizer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Bot } from 'lucide-react';
 import PythonShell from '@/components/PythonShell';
-import AgentTaskVisualizer from '@/components/AgentTaskVisualizer';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Activity, Bot } from 'lucide-react';
 import { HeroSection, Stats } from '@/components/HeroSection';
@@ -179,7 +176,7 @@ const Index = () => {
           {/* 2. Chat Interface */}
           <Card className="glass-card overflow-hidden">
             <CardContent className="p-0">
-              <UnifiedChat />
+              <UnifiedChat enableMiningStats={false} />
             </CardContent>
           </Card>
 
