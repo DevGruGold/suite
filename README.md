@@ -1,6 +1,6 @@
 # XMRT Suite 🚀
 
-[![CI/CD Pipeline](https://github.com/DevGruGold/suite/actions/workflows/ci-cd.yml/badge.svg)](https://github.com/DevGruGold/suite/actions/workflows/ci-cd.yml)
+[![CI/CD Pipeline](https://github.com/DevGruGold/suite/actions/workflows/ci.yml/badge.svg)](https://github.com/DevGruGold/suite/actions/workflows/ci.yml)
 [![Security Analysis](https://github.com/DevGruGold/suite/actions/workflows/codeql-analysis.yml/badge.svg)](https://github.com/DevGruGold/suite/actions/workflows/codeql-analysis.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
