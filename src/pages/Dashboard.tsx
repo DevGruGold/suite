@@ -1,5 +1,8 @@
 import { useEffect, useState } from 'react';
 import UnifiedChat from '@/components/UnifiedChat';
+import AgentTaskVisualizer from '@/components/AgentTaskVisualizer';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Bot } from 'lucide-react';
 import PythonShell from '@/components/PythonShell';
 import AgentTaskVisualizer from '@/components/AgentTaskVisualizer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
