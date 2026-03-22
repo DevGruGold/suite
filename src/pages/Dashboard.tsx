@@ -6,11 +6,12 @@ import PythonShell from '@/components/PythonShell';
 import { Badge } from '@/components/ui/badge';
 import { Activity, Bot } from 'lucide-react';
 import { HeroSection, Stats } from '@/components/HeroSection';
-import { EDGE_FUNCTIONS_REGISTRY } from '@/services/edgeFunctionRegistry';
 import { SEOHead } from '@/components/SEOHead';
 import { useAudio } from '@/contexts/AudioContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { supabase } from '@/integrations/supabase/client';
+
+const DASHBOARD_EDGE_FUNCTION_TOTAL = 293;
 
 const Index = () => {
   const { playWelcomeOnce } = useAudio();
@@ -23,7 +24,7 @@ const Index = () => {
     healthStatus: 'healthy',
     healthIssues: [],
     knowledgeEntities: 0,
-    registeredEdgeFunctions: 0,
+    registeredEdgeFunctions: DASHBOARD_EDGE_FUNCTION_TOTAL,
   });
 
   // Play welcome audio once per session when dashboard loads (handles post-login)
@@ -102,7 +103,7 @@ const Index = () => {
         healthStatus,
         healthIssues,
         knowledgeEntities: knowledgeEntities.count || 0,
-        registeredEdgeFunctions: EDGE_FUNCTIONS_REGISTRY.length,
+        registeredEdgeFunctions: DASHBOARD_EDGE_FUNCTION_TOTAL,
       });
     };
 
@@ -158,14 +159,14 @@ const Index = () => {
     <>
       <SEOHead
         title="AI Council of Executives at Your Fingertips | Suite"
-        description="120+ functions, 5 AI executives, real-time orchestration. Chat with CSO, CTO, CIO, CAO, COO - get multi-angle analysis on any decision instantly."
+        description="293 edge functions, 5 AI executives, real-time orchestration. Chat with CSO, CTO, CIO, CAO, COO and review live system operations instantly."
         image="/og-image-home.svg"
         url="/"
         keywords="AI executives, AI council, autonomous AI, real-time orchestration, multi-agent system"
         twitterLabel1="🤖 AI Executives"
         twitterData1="4"
         twitterLabel2="⚡ Functions"
-        twitterData2="120+"
+        twitterData2="293"
       />
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
         {/* Main Content Grid */}
