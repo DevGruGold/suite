@@ -1,9 +1,17 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.58.0";
+import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.58.0';
+import { startUsageTracking } from '../_shared/edgeFunctionUsageLogger.ts';
+import {
+  EdgeFunctionLogger,
+  createRequestContext,
+} from '../_shared/logging.ts';
 
+const FUNCTION_NAME = 'enhanced-learning';
+const logger = EdgeFunctionLogger(FUNCTION_NAME);
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+  'Access-Control-Allow-Headers':
+    'authorization, x-client-info, apikey, content-type',
 };
 
 // Embedded Python code for enhanced learning
@@ -228,6 +236,12 @@ function toIso(d: unknown): string | null {
 }
 
 serve(async (req) => {
+  const usageTracker = startUsageTracking(FUNCTION_NAME, undefined, {
+    method: req.method,
+  });
+  const startedAt = Date.now();
+  const requestContext = createRequestContext(req);
+
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -239,27 +253,51 @@ serve(async (req) => {
 
     const requestData = await req.json();
     const { action, experience, config } = requestData;
+    requestContext.action = action;
+    await logger.requestStart('Enhanced learning request received', {
+      ...requestContext,
+      operation: action,
+      has_experience: Boolean(experience),
+    });
 
     console.log(`Enhanced learning request: ${action}`);
 
     // Execute Python learning core via python-executor
-    const { data: pythonResult, error: pythonError } = await supabase.functions.invoke('python-executor', {
-      body: {
-        code: ENHANCED_LEARNING_PYTHON_CODE,
-        purpose: 'Enhanced autonomous learning processing',
-        args: JSON.stringify({
-          action,
-          experience,
-          config
-        })
-      }
-    });
+    const { data: pythonResult, error: pythonError } =
+      await supabase.functions.invoke('python-executor', {
+        body: {
+          code: ENHANCED_LEARNING_PYTHON_CODE,
+          purpose: 'Enhanced autonomous learning processing',
+          args: JSON.stringify({
+            action,
+            experience,
+            config,
+          }),
+        },
+      });
 
     if (pythonError) {
       console.error('Python execution error:', pythonError);
+      await usageTracker.failure('Python execution failed', 500);
+      await logger.requestComplete(
+        'Enhanced learning Python execution failed',
+        {
+          ...requestContext,
+          operation: action,
+          duration_ms: Date.now() - startedAt,
+          status: 500,
+        },
+        { python_error: pythonError }
+      );
       return new Response(
-        JSON.stringify({ error: 'Python execution failed', details: pythonError }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        JSON.stringify({
+          error: 'Python execution failed',
+          details: pythonError,
+        }),
+        {
+          status: 500,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        }
       );
     }
 
@@ -270,7 +308,7 @@ serve(async (req) => {
         pattern_data: pythonResult,
         confidence_score: experience?.confidence || 0.5,
         usage_count: 1,
-        last_used: toIso(new Date())
+        last_used: toIso(new Date()),
       });
     }
 
@@ -282,23 +320,51 @@ serve(async (req) => {
       metadata: {
         action,
         learning_iteration: pythonResult?.learning_iteration,
-        optimizer: pythonResult?.current_optimizer
-      }
+        optimizer: pythonResult?.current_optimizer,
+      },
     });
+
+    await usageTracker.success({
+      result_summary: `${action || 'unknown'} completed`,
+      tool_calls: 1,
+    });
+    await logger.requestComplete(
+      'Enhanced learning request completed',
+      {
+        ...requestContext,
+        operation: action,
+        duration_ms: Date.now() - startedAt,
+        status: 200,
+      },
+      {
+        learning_iteration: pythonResult?.learning_iteration,
+        optimizer: pythonResult?.current_optimizer,
+      }
+    );
 
     return new Response(
       JSON.stringify({
         success: true,
-        result: pythonResult
+        result: pythonResult,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
-
   } catch (error) {
     console.error('Enhanced learning error:', error);
-    return new Response(
-      JSON.stringify({ error: error.message }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+    await usageTracker.failure(error.message, 500);
+    await logger.requestComplete(
+      'Enhanced learning request failed',
+      {
+        ...requestContext,
+        operation: requestContext.action as string | undefined,
+        duration_ms: Date.now() - startedAt,
+        status: 500,
+      },
+      { error: error.message }
     );
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 500,
+      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+    });
   }
 });
