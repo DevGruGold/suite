@@ -1,15 +1,20 @@
 import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { useAuth } from '@/contexts/AuthContext';
-import { SuiteLogo } from '@/components/SuiteLogo';
 import { DemoVideoModal } from '@/components/DemoVideoModal';
 import { LandingNav } from '@/components/LandingNav';
+import { Footer } from '@/components/Footer';
 import { useLanguage } from '@/contexts/LanguageContext';
 import {
-  Users, Bot, Shield,
-  ArrowRight, Play, CheckCircle2, Zap
+  Users,
+  Bot,
+  Shield,
+  ArrowRight,
+  Play,
+  CheckCircle2,
+  Zap,
 } from 'lucide-react';
 
 const executives = [
@@ -17,7 +22,8 @@ const executives = [
     name: 'Dr. Anya Sharma',
     title: 'CTO',
     role: 'Chief Technology Officer',
-    description: 'AI/ML strategy, technical architecture, ethical AI, subagent orchestration',
+    description:
+      'AI/ML strategy, technical architecture, ethical AI, subagent orchestration',
     gradient: 'from-blue-500 to-cyan-500',
     photo: '/executives/anya.png',
   },
@@ -25,7 +31,8 @@ const executives = [
     name: 'Mr. Omar Al-Farsi',
     title: 'CFO',
     role: 'Chief Financial Officer',
-    description: 'Treasury management, global markets, tokenomics, fiscal strategy',
+    description:
+      'Treasury management, global markets, tokenomics, fiscal strategy',
     gradient: 'from-amber-500 to-yellow-500',
     photo: '/executives/omar.png',
   },
@@ -33,7 +40,8 @@ const executives = [
     name: 'Ms. Isabella Rodriguez',
     title: 'CMO',
     role: 'Chief Marketing Officer',
-    description: 'Brand storytelling, viral growth, consumer psychology, content strategy',
+    description:
+      'Brand storytelling, viral growth, consumer psychology, content strategy',
     gradient: 'from-pink-500 to-rose-500',
     photo: '/executives/bella.png',
   },
@@ -41,7 +49,8 @@ const executives = [
     name: 'Mr. Klaus Richter',
     title: 'COO',
     role: 'Chief Operations Officer',
-    description: 'Process optimization, agent pipelines, operational excellence',
+    description:
+      'Process optimization, agent pipelines, operational excellence',
     gradient: 'from-slate-500 to-gray-600',
     photo: '/executives/klaus.png',
   },
@@ -63,14 +72,26 @@ const benefits = [
 ];
 
 const steps = [
-  { number: '01', title: 'Sign Up', description: 'Create your account in seconds with Google' },
-  { number: '02', title: 'Chat with Executives', description: 'Describe your needs to AI council members' },
-  { number: '03', title: 'Watch It Work', description: 'Autonomous agents execute tasks in real-time' },
+  {
+    number: '01',
+    title: 'Sign Up',
+    description: 'Create your account in seconds with Google',
+  },
+  {
+    number: '02',
+    title: 'Chat with Executives',
+    description: 'Describe your needs to AI council members',
+  },
+  {
+    number: '03',
+    title: 'Watch It Work',
+    description: 'Autonomous agents execute tasks in real-time',
+  },
 ];
 
 export default function Landing() {
   const navigate = useNavigate();
-  const { signInWithGoogle, isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { t } = useLanguage();
   const [demoOpen, setDemoOpen] = useState(false);
 
@@ -114,7 +135,9 @@ export default function Landing() {
               {t('landing.hero.title.part2')}
             </span>
             <br />
-            <span className="text-foreground/90">{t('landing.hero.title.part3')}</span>
+            <span className="text-foreground/90">
+              {t('landing.hero.title.part3')}
+            </span>
           </h1>
 
           <p className="text-lg md:text-xl text-muted-foreground mb-10 max-w-2xl mx-auto">
@@ -147,7 +170,11 @@ export default function Landing() {
               { icon: Zap, value: '$12.4M', label: t('landing.stats.savings') },
               { icon: Users, value: '41%', label: t('landing.stats.salary') },
               { icon: Bot, value: '120+', label: t('landing.stats.functions') },
-              { icon: Shield, value: '24/7', label: t('landing.stats.operations') },
+              {
+                icon: Shield,
+                value: '24/7',
+                label: t('landing.stats.operations'),
+              },
             ].map((benefit, i) => (
               <div
                 key={i}
@@ -156,8 +183,12 @@ export default function Landing() {
                 <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
                   <benefit.icon className="w-5 h-5 text-primary" />
                 </div>
-                <div className="text-2xl md:text-3xl font-bold">{benefit.value}</div>
-                <div className="text-xs text-muted-foreground mt-1">{benefit.label}</div>
+                <div className="text-2xl md:text-3xl font-bold">
+                  {benefit.value}
+                </div>
+                <div className="text-xs text-muted-foreground mt-1">
+                  {benefit.label}
+                </div>
               </div>
             ))}
           </div>
@@ -170,7 +201,9 @@ export default function Landing() {
 
         <div className="container mx-auto max-w-6xl relative">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{t('landing.executives.title')}</h2>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
+              {t('landing.executives.title')}
+            </h2>
             <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
               {t('landing.executives.subtitle')}
             </p>
@@ -182,12 +215,16 @@ export default function Landing() {
                 key={i}
                 className="group hover:shadow-xl hover:-translate-y-2 transition-all duration-300 border-border/50 bg-card/80 overflow-hidden"
               >
-                <div className={`absolute inset-0 bg-gradient-to-br ${exec.gradient} opacity-0 group-hover:opacity-5 transition-opacity`} />
+                <div
+                  className={`absolute inset-0 bg-gradient-to-br ${exec.gradient} opacity-0 group-hover:opacity-5 transition-opacity`}
+                />
 
                 <CardContent className="p-6 relative text-center">
                   {/* Portrait photo with gradient fallback */}
                   <div className="relative mx-auto mb-4 w-20 h-20">
-                    <div className={`w-20 h-20 rounded-full bg-gradient-to-br ${exec.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden border-2 border-primary/20`}>
+                    <div
+                      className={`w-20 h-20 rounded-full bg-gradient-to-br ${exec.gradient} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform overflow-hidden border-2 border-primary/20`}
+                    >
                       <img
                         src={exec.photo}
                         alt={exec.name}
@@ -195,7 +232,8 @@ export default function Landing() {
                         onError={(e) => {
                           const target = e.currentTarget as HTMLImageElement;
                           target.style.display = 'none';
-                          const fallback = target.nextElementSibling as HTMLElement;
+                          const fallback =
+                            target.nextElementSibling as HTMLElement;
                           if (fallback) fallback.style.display = 'flex';
                         }}
                       />
@@ -204,12 +242,24 @@ export default function Landing() {
                     {/* Online indicator */}
                     <div className="absolute bottom-1 right-1 w-3 h-3 bg-green-500 rounded-full border-2 border-card" />
                   </div>
-                  <div className="text-base font-bold mb-0.5 group-hover:text-primary transition-colors leading-tight">{exec.name}</div>
-                  <div className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 bg-gradient-to-r ${exec.gradient} text-white`}>{exec.title}</div>
-                  <div className="text-xs text-primary font-medium mb-2">{exec.role}</div>
-                  <p className="text-xs text-muted-foreground">{exec.description}</p>
+                  <div className="text-base font-bold mb-0.5 group-hover:text-primary transition-colors leading-tight">
+                    {exec.name}
+                  </div>
+                  <div
+                    className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full mb-2 bg-gradient-to-r ${exec.gradient} text-white`}
+                  >
+                    {exec.title}
+                  </div>
+                  <div className="text-xs text-primary font-medium mb-2">
+                    {exec.role}
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {exec.description}
+                  </p>
 
-                  <div className={`absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r ${exec.gradient} transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left`} />
+                  <div
+                    className={`absolute bottom-0 left-0 right-0 h-0.5 bg-gradient-to-r ${exec.gradient} transform scale-x-0 group-hover:scale-x-100 transition-transform origin-left`}
+                  />
                 </CardContent>
               </Card>
             ))}
@@ -221,16 +271,29 @@ export default function Landing() {
       <section id="benefits" className="py-12 px-4 scroll-mt-20">
         <div className="container mx-auto max-w-5xl">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{t('landing.benefits.title')}</h2>
-            <p className="text-muted-foreground text-lg">{t('landing.benefits.subtitle')}</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
+              {t('landing.benefits.title')}
+            </h2>
+            <p className="text-muted-foreground text-lg">
+              {t('landing.benefits.subtitle')}
+            </p>
           </div>
 
           <div className="grid lg:grid-cols-2 gap-12 items-center">
             <div className="space-y-6">
               {[
-                { title: t('landing.benefits.cost.title'), desc: t('landing.benefits.cost.desc') },
-                { title: t('landing.benefits.empowerment.title'), desc: t('landing.benefits.empowerment.desc') },
-                { title: t('landing.benefits.autonomous.title'), desc: t('landing.benefits.autonomous.desc') },
+                {
+                  title: t('landing.benefits.cost.title'),
+                  desc: t('landing.benefits.cost.desc'),
+                },
+                {
+                  title: t('landing.benefits.empowerment.title'),
+                  desc: t('landing.benefits.empowerment.desc'),
+                },
+                {
+                  title: t('landing.benefits.autonomous.title'),
+                  desc: t('landing.benefits.autonomous.desc'),
+                },
               ].map((item, i) => (
                 <div
                   key={i}
@@ -240,7 +303,9 @@ export default function Landing() {
                     <CheckCircle2 className="w-5 h-5 text-primary" />
                   </div>
                   <div>
-                    <h3 className="font-semibold text-lg mb-1 group-hover:text-primary transition-colors">{item.title}</h3>
+                    <h3 className="font-semibold text-lg mb-1 group-hover:text-primary transition-colors">
+                      {item.title}
+                    </h3>
                     <p className="text-muted-foreground">{item.desc}</p>
                   </div>
                 </div>
@@ -252,9 +317,15 @@ export default function Landing() {
 
               <div className="relative bg-card border border-border/50 rounded-3xl p-8 text-center">
                 <div className="absolute top-4 right-4 w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-                <div className="text-6xl md:text-7xl font-bold text-primary mb-3">$0</div>
-                <div className="text-xl text-muted-foreground mb-4">{t('landing.trial.title')}</div>
-                <div className="text-sm text-muted-foreground mb-6">{t('landing.trial.description')}</div>
+                <div className="text-6xl md:text-7xl font-bold text-primary mb-3">
+                  $0
+                </div>
+                <div className="text-xl text-muted-foreground mb-4">
+                  {t('landing.trial.title')}
+                </div>
+                <div className="text-sm text-muted-foreground mb-6">
+                  {t('landing.trial.description')}
+                </div>
                 <Button
                   size="lg"
                   onClick={handleGetStarted}
@@ -273,8 +344,12 @@ export default function Landing() {
       <section id="how-it-works" className="py-12 px-4 scroll-mt-20">
         <div className="container mx-auto max-w-4xl">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{t('landing.howitworks.title')}</h2>
-            <p className="text-muted-foreground text-lg">{t('landing.howitworks.subtitle')}</p>
+            <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
+              {t('landing.howitworks.title')}
+            </h2>
+            <p className="text-muted-foreground text-lg">
+              {t('landing.howitworks.subtitle')}
+            </p>
           </div>
 
           <div className="grid md:grid-cols-3 gap-8">
@@ -294,8 +369,12 @@ export default function Landing() {
       {/* CTA Section */}
       <section className="py-16 px-4">
         <div className="container mx-auto max-w-3xl text-center">
-          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">{t('landing.cta.title')}</h2>
-          <p className="text-lg text-muted-foreground mb-8">{t('landing.cta.subtitle')}</p>
+          <h2 className="text-3xl md:text-4xl lg:text-5xl font-bold mb-6">
+            {t('landing.cta.title')}
+          </h2>
+          <p className="text-lg text-muted-foreground mb-8">
+            {t('landing.cta.subtitle')}
+          </p>
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button
               size="lg"
@@ -317,6 +396,8 @@ export default function Landing() {
           </div>
         </div>
       </section>
+
+      <Footer />
 
       {/* Demo Video Modal */}
       <DemoVideoModal open={demoOpen} onOpenChange={setDemoOpen} />
