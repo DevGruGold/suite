@@ -4,6 +4,8 @@ import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, TrendingUp, Lock, Users, Activity } from 'lucide-react';
 import { useMiningStats } from '@/hooks/useMiningStats';
+import { Link } from 'react-router-dom';
+import { Button } from '@/components/ui/button';
 
 interface TreasuryData {
   total_xmr: number;
@@ -36,16 +38,12 @@ interface MiningData {
 
 export function TreasuryStats() {
   const [treasuryData, setTreasuryData] = useState<TreasuryData | null>(null);
-  const [miningData, setMiningData] = useState<MiningData | null>(null);
-  const { stats: unifiedStats, workers: unifiedWorkers } = useMiningStats();
-  const [loading, setLoading] = useState(true);
+  const { stats: unifiedStats, workers: unifiedWorkers, loading, error: miningError, refetch } = useMiningStats();
   const [error, setError] = useState<string | null>(null);
 
   const LOCK_TARGET_USD = 1000000; // $1 million goal
 
   useEffect(() => {
-    fetchTreasuryData();
-    
     // Set up real-time subscription
     const channel = supabase
       .channel('treasury_changes')
@@ -57,89 +55,62 @@ export function TreasuryStats() {
           table: 'treasury_stats'
         },
         () => {
-          fetchTreasuryData();
+          refetch(true);
         }
       )
       .subscribe();
 
-    // Fetch mining data every 30 seconds
-    const interval = setInterval(fetchMiningData, 30000);
-    fetchMiningData();
-
     return () => {
       channel.unsubscribe();
-      clearInterval(interval);
     };
-  }, []);
+  }, [refetch]);
 
-  const fetchTreasuryData = async () => {
-    try {
-      // Fetch mining data to calculate treasury values
-      const { data, error } = await supabase.functions.invoke('mining-proxy', {
-        body: {}
-      });
-
-      if (error) throw error;
-
-      if (data) {
-        // Use amountPaid as the treasury locked value
-        const lockedXMR = data.amountPaid || 0;
-        const xmrPrice = 437.95; // Current XMR price USD
-        const lockedValueUSD = lockedXMR * xmrPrice;
-        
-        // Calculate progress toward $10k lock target
-        const LOCK_TARGET_USD = 10000;
-        const lockProgress = Math.min((lockedValueUSD / LOCK_TARGET_USD) * 100, 100);
-        
-        setTreasuryData({
-          total_value_usd: lockedValueUSD,
-          total_xmr: lockedXMR,
-          locked_value_usd: lockedValueUSD,
-          locked_xmr: lockedXMR,
-          lock_progress: lockProgress,
-          active_miners: 1,
-          total_contributors: 1
-        });
-      }
-    } catch (err) {
-      console.error('Error fetching treasury data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch treasury data');
-      
-      // Set safe defaults on error
-      setTreasuryData({
-        total_value_usd: 0,
-        total_xmr: 0,
-        locked_value_usd: 0,
-        locked_xmr: 0,
-        lock_progress: 0,
-        active_miners: 0,
-        total_contributors: 0
-      });
+  useEffect(() => {
+    if (miningError) {
+      setError(miningError);
+      return;
     }
-  };
 
-  const fetchMiningData = async () => {
-    try {
-      setLoading(true);
-      
-      // Call the enhanced mining-proxy edge function
-      const { data, error } = await supabase.functions.invoke('mining-proxy', {
-        body: { action: 'get_stats' }
-      });
+    if (!unifiedStats) return;
 
-      if (error) throw error;
+    const xmrPrice = 437.95;
+    const lockedXMR = unifiedStats.amountPaid || 0;
+    const dueXMR = unifiedStats.amountDue || 0;
+    const totalXMR = lockedXMR + dueXMR;
+    const lockedValueUSD = lockedXMR * xmrPrice;
+    const totalValueUSD = totalXMR * xmrPrice;
+    const lockProgress = Math.min((lockedValueUSD / LOCK_TARGET_USD) * 100, 100);
 
-      if (data && data.success) {
-        setMiningData(data);
-        setError(null);
-      }
-    } catch (err) {
-      console.error('Error fetching mining data:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch mining data');
-    } finally {
-      setLoading(false);
-    }
-  };
+    setTreasuryData({
+      total_value_usd: totalValueUSD,
+      total_xmr: totalXMR,
+      locked_value_usd: lockedValueUSD,
+      locked_xmr: lockedXMR,
+      lock_progress: lockProgress,
+      active_miners: unifiedWorkers.filter((worker) => worker.hash > 0).length,
+      total_contributors: unifiedWorkers.length
+    });
+    setError(null);
+  }, [miningError, unifiedStats, unifiedWorkers]);
+
+  const miningData: MiningData | null = unifiedStats ? {
+    treasury: {
+      total_xmr: (unifiedStats.amountDue || 0) + (unifiedStats.amountPaid || 0),
+      total_value_usd: treasuryData?.total_value_usd || 0,
+      amount_due_xmr: unifiedStats.amountDue || 0,
+      amount_paid_xmr: unifiedStats.amountPaid || 0
+    },
+    mining: {
+      total_hashrate: unifiedStats.hashRate || 0,
+      active_workers: unifiedWorkers.filter((worker) => worker.hash > 0).length,
+      total_workers: unifiedWorkers.length
+    },
+    workers: unifiedWorkers.map((worker) => ({
+      worker_id: worker.identifier,
+      hashrate: worker.hash,
+      is_active: worker.hash > 0
+    }))
+  } : null;
 
   if (loading && !treasuryData) {
     return (
@@ -193,6 +164,11 @@ export function TreasuryStats() {
           <CardDescription>
             First million dollars of XMR earned by global MobileMonero workers is permanently locked
           </CardDescription>
+          <div className="pt-2">
+            <Button asChild variant="outline" size="sm">
+              <Link to="/mining-dashboard">Open dedicated mining dashboard</Link>
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">

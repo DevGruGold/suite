@@ -1,11 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { DollarSign, GitCommit, Cpu, Battery, Lightbulb, Users } from "lucide-react";
+import { DollarSign, GitCommit, Lightbulb, Users } from "lucide-react";
 import { SEOHead } from "@/components/SEOHead";
 import { IdeaSubmissionForm } from "@/components/IdeaSubmissionForm";
 import { IdeaDashboard } from "@/components/IdeaDashboard";
 import { ContributorDashboard } from "@/components/ContributorDashboard";
 import { TreasuryStats } from "@/components/TreasuryStats";
+import { Link } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const Earn = () => {
   return (
@@ -59,30 +61,38 @@ const Earn = () => {
 
           {/* Treasury Tab - NOW WITH REAL STATS */}
           <TabsContent value="treasury">
-            <div className="grid gap-6 md:grid-cols-2">
-              {/* REPLACED STATIC TREASURY STATS WITH REAL COMPONENT */}
-              <TreasuryStats />
+            <div className="space-y-4">
+              <div className="flex justify-end">
+                <Button asChild variant="outline">
+                  <Link to="/mining-dashboard">Open Mining Operations</Link>
+                </Button>
+              </div>
 
-              <Card className="border-border bg-card">
-                <CardHeader>
-                  <CardTitle className="text-foreground">Purchase Crypto</CardTitle>
-                  <CardDescription>
-                    Buy cryptocurrency directly with fiat to fund your participation
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div style={{ width: "100%", height: "600px" }}>
-                    <iframe
-                      src="https://buy.onramper.com?color=3b82f6&apiKey=pk_prod_01HMVZ8HJ2E7XQFVT2VVJMVZ0Q"
-                      title="Onramper widget"
-                      height="600px"
-                      width="100%"
-                      allow="accelerometer; autoplay; camera; gyroscope; payment"
-                      className="rounded-lg"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* REPLACED STATIC TREASURY STATS WITH REAL COMPONENT */}
+                <TreasuryStats />
+
+                <Card className="border-border bg-card">
+                  <CardHeader>
+                    <CardTitle className="text-foreground">Purchase Crypto</CardTitle>
+                    <CardDescription>
+                      Buy cryptocurrency directly with fiat to fund your participation
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <div style={{ width: "100%", height: "600px" }}>
+                      <iframe
+                        src="https://buy.onramper.com?color=3b82f6&apiKey=pk_prod_01HMVZ8HJ2E7XQFVT2VVJMVZ0Q"
+                        title="Onramper widget"
+                        height="600px"
+                        width="100%"
+                        allow="accelerometer; autoplay; camera; gyroscope; payment"
+                        className="rounded-lg"
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
           </TabsContent>
 

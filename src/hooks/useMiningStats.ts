@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
 export interface MiningStats {
@@ -25,58 +25,78 @@ const CACHE_DURATION = 30000; // 30 seconds
 let cachedMiningStats: MiningStats | null = null;
 let cachedWorkers: WorkerStats[] | null = null;
 let lastFetchTime = 0;
+let pendingFetch: Promise<{ miningStats: MiningStats; workersList: WorkerStats[] }> | null = null;
 
-export const useMiningStats = () => {
+interface UseMiningStatsOptions {
+  enabled?: boolean;
+  refreshInterval?: number;
+}
+
+const loadMiningStats = async (forceRefresh = false) => {
+  const now = Date.now();
+
+  if (!forceRefresh && cachedMiningStats && now - lastFetchTime < CACHE_DURATION) {
+    return {
+      miningStats: cachedMiningStats,
+      workersList: cachedWorkers || []
+    };
+  }
+
+  if (!forceRefresh && pendingFetch) {
+    return pendingFetch;
+  }
+
+  pendingFetch = supabase.functions.invoke('mining-proxy', {
+    body: { action: 'getStats' }
+  }).then(({ data, error: fetchError }) => {
+    if (fetchError) throw fetchError;
+
+    const miningStats: MiningStats = {
+      hashRate: data?.hash || 0,
+      hashrate: data?.hash || 0,
+      totalHashes: data?.totalHashes || 0,
+      validShares: data?.validShares || 0,
+      invalidShares: data?.invalidShares || 0,
+      amountDue: data?.amountDue || 0,
+      amountPaid: data?.amountPaid || 0,
+      isOnline: data?.isOnline || false,
+      lastUpdate: new Date(now)
+    };
+
+    const workersList: WorkerStats[] = (data?.workers || [])
+      .map((w: any) => ({
+        identifier: w.identifier || 'Unknown',
+        hash: w.hash || 0,
+        validShares: w.validShares || 0,
+        invalidShares: w.invalidShares || 0,
+        lastHash: w.lastHash || 0
+      }))
+      .sort((a: WorkerStats, b: WorkerStats) => b.hash - a.hash);
+
+    cachedMiningStats = miningStats;
+    cachedWorkers = workersList;
+    lastFetchTime = now;
+
+    return { miningStats, workersList };
+  }).finally(() => {
+    pendingFetch = null;
+  });
+
+  return pendingFetch;
+};
+
+export const useMiningStats = ({ enabled = true, refreshInterval = CACHE_DURATION }: UseMiningStatsOptions = {}) => {
   const [stats, setStats] = useState<MiningStats | null>(cachedMiningStats);
   const [workers, setWorkers] = useState<WorkerStats[]>(cachedWorkers || []);
-  const [loading, setLoading] = useState(!cachedMiningStats);
+  const [loading, setLoading] = useState(enabled && !cachedMiningStats);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStats = async () => {
-    const now = Date.now();
-    
-    // Return cached data if still fresh
-    if (cachedMiningStats && now - lastFetchTime < CACHE_DURATION) {
-      setStats(cachedMiningStats);
-      setWorkers(cachedWorkers || []);
-      setLoading(false);
-      return;
-    }
+  const fetchStats = useCallback(async (forceRefresh = false) => {
+    if (!enabled) return;
 
     try {
-      const { data, error: fetchError } = await supabase.functions.invoke('mining-proxy', {
-        body: { action: 'getStats' }
-      });
-
-      if (fetchError) throw fetchError;
-
-      const miningStats: MiningStats = {
-        hashRate: data?.hash || 0,
-        hashrate: data?.hash || 0, // Deprecated alias
-        totalHashes: data?.totalHashes || 0,
-        validShares: data?.validShares || 0,
-        invalidShares: data?.invalidShares || 0,
-        amountDue: data?.amountDue || 0,
-        amountPaid: data?.amountPaid || 0,
-        isOnline: data?.isOnline || false,
-        lastUpdate: new Date(now)
-      };
-
-      const workersList: WorkerStats[] = (data?.workers || [])
-        .map((w: any) => ({
-          identifier: w.identifier || 'Unknown',
-          hash: w.hash || 0,
-          validShares: w.validShares || 0,
-          invalidShares: w.invalidShares || 0,
-          lastHash: w.lastHash || 0
-        }))
-        .sort((a: WorkerStats, b: WorkerStats) => b.hash - a.hash);
-
-      // Update cache
-      cachedMiningStats = miningStats;
-      cachedWorkers = workersList;
-      lastFetchTime = now;
-
+      setLoading(true);
+      const { miningStats, workersList } = await loadMiningStats(forceRefresh);
       setStats(miningStats);
       setWorkers(workersList);
       setError(null);
@@ -86,13 +106,24 @@ export const useMiningStats = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [enabled]);
 
   useEffect(() => {
+    if (!enabled) {
+      setLoading(false);
+      return;
+    }
+
     fetchStats();
-    const interval = setInterval(fetchStats, CACHE_DURATION);
+
+    if (!refreshInterval) return;
+
+    const interval = setInterval(() => {
+      fetchStats();
+    }, refreshInterval);
+
     return () => clearInterval(interval);
-  }, []);
+  }, [enabled, refreshInterval]);
 
   return { stats, workers, loading, error, refetch: fetchStats };
 };

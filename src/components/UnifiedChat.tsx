@@ -95,6 +95,7 @@ interface UnifiedChatProps {
   apiKey?: string;
   className?: string;
   miningStats?: MiningStats;
+  enableMiningStats?: boolean;
   selectedExecutive?: ExecutiveName; // Target specific executive (bypasses intelligent routing)
   defaultCouncilMode?: boolean; // Start in council mode
   onBack?: () => void; // Callback to return to directory view
@@ -106,6 +107,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
   apiKey = import.meta.env.VITE_GEMINI_API_KEY || "",
   className = '',
   miningStats: externalMiningStats,
+  enableMiningStats = true,
   selectedExecutive,
   defaultCouncilMode = false,
   onBack
@@ -430,11 +432,13 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
       try {
         const [userCtx, miningData] = await Promise.all([
           unifiedDataService.getUserContext(),
-          externalMiningStats || unifiedDataService.getMiningStats()
+          (enableMiningStats || externalMiningStats)
+            ? (externalMiningStats || unifiedDataService.getMiningStats())
+            : Promise.resolve(null)
         ]);
 
         setUserContext(userCtx);
-        if (!externalMiningStats) {
+        if (enableMiningStats && !externalMiningStats) {
           setMiningStats(miningData);
         }
 
@@ -477,7 +481,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
         }
 
         // Periodic refresh for mining stats
-        if (!externalMiningStats) {
+        if (enableMiningStats && !externalMiningStats) {
           const interval = setInterval(async () => {
             const freshStats = await unifiedDataService.getMiningStats();
             setMiningStats(freshStats);
@@ -490,7 +494,7 @@ const UnifiedChatInner: React.FC<UnifiedChatProps> = ({
     };
 
     initialize();
-  }, []);
+  }, [enableMiningStats, externalMiningStats]);
 
   // Fetch organization context when profile changes
   useEffect(() => {

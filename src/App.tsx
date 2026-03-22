@@ -15,6 +15,7 @@ import Governance from "./pages/Governance";
 import Licensing from "./pages/Licensing";
 import Admin from "./pages/Admin";
 import Earn from "./pages/Earn";
+import MiningDashboard from "./pages/MiningDashboard";
 import Profile from "./pages/Profile";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
@@ -51,6 +52,7 @@ const App = () => (
                   <Route path="/dashboard" element={<Dashboard />} />
                   <Route path="/council" element={<Council />} />
                   <Route path="/earn" element={<Earn />} />
+                  <Route path="/mining-dashboard" element={<MiningDashboard />} />
                   <Route path="/governance" element={<Governance />} />
                   <Route path="/licensing" element={<Licensing />} />
                   <Route path="/credentials" element={<Credentials />} />
