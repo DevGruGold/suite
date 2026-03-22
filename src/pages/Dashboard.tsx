@@ -3,6 +3,11 @@ import UnifiedChat from '@/components/UnifiedChat';
 import AgentTaskVisualizer from '@/components/AgentTaskVisualizer';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Bot } from 'lucide-react';
+import PythonShell from '@/components/PythonShell';
+import AgentTaskVisualizer from '@/components/AgentTaskVisualizer';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Activity, Bot } from 'lucide-react';
 import { HeroSection, Stats } from '@/components/HeroSection';
 import { EDGE_FUNCTIONS_REGISTRY } from '@/services/edgeFunctionRegistry';
 import { SEOHead } from '@/components/SEOHead';
@@ -190,6 +195,24 @@ const Index = () => {
             </CardHeader>
             <CardContent className="p-0">
               <AgentTaskVisualizer />
+            </CardContent>
+          </Card>
+
+          {/* 3. System Activity Logs */}
+          <Card className="glass-card overflow-hidden">
+            <CardHeader className="border-b border-border/60 py-4 px-5">
+              <div className="flex items-center justify-between">
+                <CardTitle className="text-sm font-medium flex items-center gap-2">
+                  <Activity className="w-4 h-4 text-primary" />
+                  {t('dashboard.activity.title')}
+                </CardTitle>
+                <Badge variant="outline" className="text-xs font-normal">
+                  {t('dashboard.activity.live')}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent className="p-0">
+              <PythonShell />
             </CardContent>
           </Card>
         </div>
