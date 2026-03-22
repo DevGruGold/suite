@@ -1230,7 +1230,41 @@ export function AgentTaskVisualizer() {
         </Button>
       </div>
 
-      {/* Agent Grid Section */}
+      {/* Task Pipeline Section - moved above Agent Grid so it sits directly beneath the chat */}
+      <div>
+        <div className="flex items-center gap-2 mb-3">
+          <Cpu className="w-4 h-4 text-primary" />
+          <span className="text-sm font-medium text-foreground">Task Pipeline</span>
+          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
+            {tasks.length}
+          </Badge>
+        </div>
+        <ScrollArea className="w-full">
+          <div className="flex gap-1 pb-2">
+            {STAGES.map((stage, idx) => (
+              <StageColumn
+                key={stage.key}
+                stage={stage}
+                tasks={tasks}
+                agents={agentMap}
+                isLast={idx === STAGES.length - 1}
+                dragOverStage={dragOverStage}
+                onDragOver={(e, stageKey) => handleDragOver(e, stageKey)}
+                onDragLeave={handleDragLeave}
+                onDrop={handleDrop}
+                onDragStart={handleDragStart}
+                onDragEnd={handleDragEnd}
+                draggedTask={draggedTask}
+                isUpdating={isUpdating}
+                onTaskClick={handleTaskClick}
+              />
+            ))}
+          </div>
+          <ScrollBar orientation="horizontal" />
+        </ScrollArea>
+      </div>
+
+      {/* Agent Grid Section - moved below Task Pipeline */}
       <div>
         <div className="flex items-center gap-2 mb-3">
           <Bot className="w-4 h-4 text-primary" />
@@ -1264,40 +1298,6 @@ export function AgentTaskVisualizer() {
             </div>
           )}
         </div>
-      </div>
-
-      {/* Task Pipeline Section */}
-      <div>
-        <div className="flex items-center gap-2 mb-3">
-          <Cpu className="w-4 h-4 text-primary" />
-          <span className="text-sm font-medium text-foreground">Task Pipeline</span>
-          <Badge variant="secondary" className="text-[10px] h-5 px-1.5">
-            {tasks.length}
-          </Badge>
-        </div>
-        <ScrollArea className="w-full">
-          <div className="flex gap-1 pb-2">
-            {STAGES.map((stage, idx) => (
-              <StageColumn
-                key={stage.key}
-                stage={stage}
-                tasks={tasks}
-                agents={agentMap}
-                isLast={idx === STAGES.length - 1}
-                dragOverStage={dragOverStage}
-                onDragOver={(e, stageKey) => handleDragOver(e, stageKey)}
-                onDragLeave={handleDragLeave}
-                onDrop={handleDrop}
-                onDragStart={handleDragStart}
-                onDragEnd={handleDragEnd}
-                draggedTask={draggedTask}
-                isUpdating={isUpdating}
-                onTaskClick={handleTaskClick}
-              />
-            ))}
-          </div>
-          <ScrollBar orientation="horizontal" />
-        </ScrollArea>
       </div>
 
       {/* Task Detail Sheet */}
