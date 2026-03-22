@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: deploy-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 permissions:
@@ -37,46 +37,20 @@ jobs:
             echo 'ready=false' >> "$GITHUB_OUTPUT"
           fi
 
-  VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-  VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
-
-jobs:
   deploy-vercel:
     name: Deploy to Vercel
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: deployment-preflight
     if: needs.deployment-preflight.outputs.ready == 'true'
+    environment: production
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
     steps:
-      - name: Check out repository
-        uses: actions/checkout@v5
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v5
-        with:
-          node-version: 22
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci --no-audit || npm install --no-audit
-    if: ${{ secrets.VERCEL_TOKEN != '' && secrets.VERCEL_ORG_ID != '' && secrets.VERCEL_PROJECT_ID != '' }}
-
-    steps:
-      - name: Check out repository
-        uses: actions/checkout@v4
-
-      - name: Set up Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 20
-          cache: npm
-
-      - name: Install dependencies
-        run: npm ci
+      - name: Set up project
+        uses: ./.github/actions/setup-node-install
 
       - name: Build application
         run: npm run build
@@ -94,7 +68,6 @@ jobs:
     needs:
       - deployment-preflight
       - deploy-vercel
-    needs: deploy-vercel
     if: always()
 
     steps:
@@ -106,11 +79,5 @@ jobs:
             echo 'Vercel deployment completed successfully.'
           else
             echo 'Vercel deployment failed.'
-          if [ "${{ needs.deploy-vercel.result }}" = "skipped" ]; then
-            echo "Vercel deployment skipped because one or more required secrets are not configured."
-          elif [ "${{ needs.deploy-vercel.result }}" = "success" ]; then
-            echo "Vercel deployment completed successfully."
-          else
-            echo "Vercel deployment failed."
             exit 1
           fi
