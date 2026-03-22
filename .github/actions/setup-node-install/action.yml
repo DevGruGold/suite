@@ -1,0 +1,27 @@
+name: Setup Node and install dependencies
+description: Check out the repository, configure Node.js, and install npm dependencies.
+inputs:
+  node-version:
+    description: Node.js version to install.
+    required: false
+    default: '22'
+  cache-dependency-path:
+    description: Path to the npm lockfile used for cache invalidation.
+    required: false
+    default: package-lock.json
+runs:
+  using: composite
+  steps:
+    - name: Check out repository
+      uses: actions/checkout@v5
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v5
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: npm
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
