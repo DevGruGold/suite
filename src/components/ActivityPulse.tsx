@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useMemo } from 'react';
 import { supabase } from '@/integrations/supabase/client';
+import type { Database, Json } from '@/integrations/supabase/types';
 import { cn } from '@/lib/utils';
 import {
   AlertCircle,
@@ -19,15 +20,25 @@ import { Badge } from '@/components/ui/badge';
 
 interface ActivityItem {
   id: string;
+  source: 'eliza_activity_log' | 'agent_activities' | 'autonomous_actions_log' | 'eliza_python_executions' | 'workflow_executions';
   type: string;
   title?: string;
   description: string;
   timestamp: string;
   status?: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, Json>;
   task_id?: string;
   agent_id?: string;
 }
+
+const MAX_DESCRIPTION_LENGTH = 70;
+
+type ElizaActivityRow = Database['public']['Tables']['eliza_activity_log']['Row'];
+type AgentActivityRow = Database['public']['Tables']['agent_activities']['Row'];
+type AutonomousActionRow = Database['public']['Tables']['autonomous_actions_log']['Row'];
+type PythonExecutionRow = Database['public']['Tables']['eliza_python_executions']['Row'];
+type WorkflowExecutionRow = Database['public']['Tables']['workflow_executions']['Row'];
+
 
 interface ActivityPulseProps {
   healthScore?: number;
@@ -58,34 +69,139 @@ export const ActivityPulse = ({
   const [retryCount, setRetryCount] = useState(0);
   const MAX_RETRIES = 3;
   const RETRY_DELAY_MS = 2000;
-  const channelRef = useRef<any>(null);
+  const channelRef = useRef<ReturnType<typeof supabase.channel> | null>(null);
 
   useEffect(() => {
-    // Fetch recent activities - REAL DATA ONLY with task_id and agent_id
-    const fetchRecent = async () => {
-      const { data } = await supabase
-        .from('eliza_activity_log')
-        .select(
-          'id, activity_type, title, description, created_at, status, metadata, task_id, agent_id'
-        )
-        .order('created_at', { ascending: false })
-        .limit(maxItems);
+    const truncate = (value: string, maxLength = MAX_DESCRIPTION_LENGTH) =>
+      value.length > maxLength ? `${value.slice(0, maxLength - 3)}...` : value;
 
-      if (data) {
-        setActivities(
-          data.map((a) => ({
-            id: a.id,
-            type: a.activity_type,
-            title: a.title,
-            description: a.description || 'Activity completed',
-            timestamp: a.created_at,
-            status: a.status,
-            metadata: a.metadata as Record<string, any>,
-            task_id: a.task_id,
-            agent_id: a.agent_id,
-          }))
-        );
-      }
+    const normalizeElizaActivity = (activity: ElizaActivityRow): ActivityItem => ({
+      id: `eliza-${activity.id}`,
+      source: 'eliza_activity_log',
+      type: activity.activity_type || 'system',
+      title: activity.title || undefined,
+      description: activity.description || 'Activity completed',
+      timestamp: activity.created_at || new Date().toISOString(),
+      status: activity.status || undefined,
+      metadata: ((activity.metadata as Record<string, Json> | null) || {}),
+      task_id: activity.task_id || undefined,
+      agent_id: activity.agent_id || undefined,
+    });
+
+    const normalizeAgentActivity = (activity: AgentActivityRow): ActivityItem => ({
+      id: `agent-${activity.id}`,
+      source: 'agent_activities',
+      type: 'agent_activity',
+      title: activity.level ? `Agent ${activity.level.toLowerCase()}` : 'Agent activity',
+      description: activity.activity || 'Agent activity recorded',
+      timestamp: activity.created_at || new Date().toISOString(),
+      status: activity.level?.toLowerCase() || 'info',
+      metadata: { level: activity.level },
+      agent_id: activity.agent_id || undefined,
+    });
+
+    const normalizeAutonomousAction = (action: AutonomousActionRow): ActivityItem => ({
+      id: `autonomous-${action.id}`,
+      source: 'autonomous_actions_log',
+      type: 'autonomous_action',
+      title: action.action_type ? `Autonomous ${action.action_type.replace(/_/g, ' ')}` : 'Autonomous action',
+      description: action.trigger_reason || 'Autonomous action recorded',
+      timestamp: action.action_timestamp || action.created_at || new Date().toISOString(),
+      status: action.outcome || undefined,
+      metadata: {
+        ...(((action.metadata as Record<string, Json> | null) || {})),
+        action_details: action.action_details,
+        impact_assessment: action.impact_assessment,
+        confidence_score: action.confidence_score,
+      },
+    });
+
+    const normalizePythonExecution = (execution: PythonExecutionRow): ActivityItem => ({
+      id: `python-${execution.id}`,
+      source: 'eliza_python_executions',
+      type: 'python_execution',
+      title: execution.purpose ? truncate(execution.purpose) : 'Python execution',
+      description: execution.error_message || execution.purpose || 'Python execution recorded',
+      timestamp: execution.started_at || execution.created_at || new Date().toISOString(),
+      status: execution.status || undefined,
+      metadata: {
+        ...(((execution.metadata as Record<string, Json> | null) || {})),
+        workflow_id: execution.workflow_id,
+        execution_time_ms: execution.execution_time_ms,
+        exit_code: execution.exit_code,
+        source: execution.source,
+      },
+    });
+
+    const normalizeWorkflowExecution = (workflow: WorkflowExecutionRow): ActivityItem => ({
+      id: `workflow-${workflow.id}`,
+      source: 'workflow_executions',
+      type: 'workflow_execution',
+      title: workflow.name || 'Workflow execution',
+      description: workflow.description || `Workflow ${workflow.workflow_id} ${workflow.status || 'updated'}`,
+      timestamp: workflow.start_time || workflow.created_at || new Date().toISOString(),
+      status: workflow.status || undefined,
+      metadata: {
+        ...(((workflow.metadata as Record<string, Json> | null) || {})),
+        workflow_id: workflow.workflow_id,
+        current_step_index: workflow.current_step_index,
+        total_steps: workflow.total_steps,
+        failed_step: workflow.failed_step,
+      },
+    });
+
+    const sortActivities = (items: ActivityItem[]) =>
+      items
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, maxItems);
+
+    const upsertActivity = (nextActivity: ActivityItem) => {
+      setActivities((prev) => {
+        const filtered = prev.filter((activity) => activity.id !== nextActivity.id);
+        return sortActivities([nextActivity, ...filtered]);
+      });
+      setIsLive(true);
+    };
+
+    // Fetch recent activities across agent and execution sources.
+    const fetchRecent = async () => {
+      const [elizaActivities, agentActivities, autonomousActions, pythonExecutions, workflowExecutions] = await Promise.all([
+        supabase
+          .from('eliza_activity_log')
+          .select('id, activity_type, title, description, created_at, status, metadata, task_id, agent_id')
+          .order('created_at', { ascending: false })
+          .limit(maxItems),
+        supabase
+          .from('agent_activities')
+          .select('id, activity, created_at, level, agent_id')
+          .order('created_at', { ascending: false })
+          .limit(maxItems),
+        supabase
+          .from('autonomous_actions_log')
+          .select('id, action_type, trigger_reason, action_timestamp, created_at, outcome, metadata, action_details, impact_assessment, confidence_score')
+          .order('action_timestamp', { ascending: false })
+          .limit(maxItems),
+        supabase
+          .from('eliza_python_executions')
+          .select('id, purpose, started_at, created_at, status, error_message, metadata, workflow_id, execution_time_ms, exit_code, source')
+          .order('started_at', { ascending: false })
+          .limit(maxItems),
+        supabase
+          .from('workflow_executions')
+          .select('id, workflow_id, name, description, start_time, created_at, status, metadata, current_step_index, total_steps, failed_step')
+          .order('start_time', { ascending: false })
+          .limit(maxItems),
+      ]);
+
+      const mergedActivities = sortActivities([
+        ...(elizaActivities.data || []).map(normalizeElizaActivity),
+        ...(agentActivities.data || []).map(normalizeAgentActivity),
+        ...(autonomousActions.data || []).map(normalizeAutonomousAction),
+        ...(pythonExecutions.data || []).map(normalizePythonExecution),
+        ...(workflowExecutions.data || []).map(normalizeWorkflowExecution),
+      ]);
+
+      setActivities(mergedActivities);
     };
 
     fetchRecent();
@@ -106,23 +222,51 @@ export const ActivityPulse = ({
               table: 'eliza_activity_log',
             },
             (payload) => {
-              const newActivity: ActivityItem = {
-                id: payload.new.id,
-                type: payload.new.activity_type || 'system',
-                title: payload.new.title,
-                description: payload.new.description || 'Activity completed',
-                timestamp: payload.new.created_at,
-                status: payload.new.status,
-                metadata: payload.new.metadata,
-                task_id: payload.new.task_id,
-                agent_id: payload.new.agent_id,
-              };
-
-              setActivities((prev) => [
-                newActivity,
-                ...prev.slice(0, maxItems - 1),
-              ]);
-              setIsLive(true);
+              upsertActivity(normalizeElizaActivity(payload.new));
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'agent_activities',
+            },
+            (payload) => {
+              upsertActivity(normalizeAgentActivity(payload.new));
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'autonomous_actions_log',
+            },
+            (payload) => {
+              upsertActivity(normalizeAutonomousAction(payload.new));
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'eliza_python_executions',
+            },
+            (payload) => {
+              upsertActivity(normalizePythonExecution(payload.new));
+            }
+          )
+          .on(
+            'postgres_changes',
+            {
+              event: 'INSERT',
+              schema: 'public',
+              table: 'workflow_executions',
+            },
+            (payload) => {
+              upsertActivity(normalizeWorkflowExecution(payload.new));
             }
           )
           .subscribe((status, err) => {
@@ -208,6 +352,7 @@ export const ActivityPulse = ({
       case 'task_update':
         return <ListTodo className="w-3.5 h-3.5 text-blue-500" />;
       case 'agent_status_change':
+      case 'agent_activity':
         return <User className="w-3.5 h-3.5 text-violet-500" />;
       case 'auto_task_assignment':
       case 'auto_task_creation':
@@ -218,6 +363,12 @@ export const ActivityPulse = ({
       case 'learning':
       case 'learning_session':
         return <Brain className="w-3.5 h-3.5 text-violet-500" />;
+      case 'function_call':
+        return <Zap className="w-3.5 h-3.5 text-sky-500" />;
+      case 'workflow_execution':
+        return <Activity className="w-3.5 h-3.5 text-cyan-500" />;
+      case 'autonomous_action':
+        return <Brain className="w-3.5 h-3.5 text-fuchsia-500" />;
       case 'auto_fix':
       case 'code_fix':
         return <Wrench className="w-3.5 h-3.5 text-amber-500" />;
@@ -233,7 +384,7 @@ export const ActivityPulse = ({
   const getActivityColor = (
     type: string,
     status?: string,
-    metadata?: Record<string, any>
+    metadata?: Record<string, Json>
   ) => {
     // Health check coloring based on score
     if (type === 'system_health_check' && metadata?.health_score) {
@@ -258,6 +409,7 @@ export const ActivityPulse = ({
       case 'task_update':
         return 'text-blue-400';
       case 'agent_status_change':
+      case 'agent_activity':
         return 'text-violet-400';
       case 'auto_task_assignment':
       case 'auto_task_creation':
@@ -267,6 +419,12 @@ export const ActivityPulse = ({
         return 'text-primary';
       case 'learning':
         return 'text-violet-400';
+      case 'autonomous_action':
+        return 'text-fuchsia-400';
+      case 'workflow_execution':
+        return 'text-cyan-400';
+      case 'function_call':
+        return 'text-sky-400';
       case 'auto_fix':
         return 'text-amber-400';
       default:
@@ -288,8 +446,8 @@ export const ActivityPulse = ({
   // Get display text - prefer title over description
   const getDisplayText = (activity: ActivityItem) => {
     const text = activity.title || activity.description;
-    if (text.length > 70) {
-      return text.slice(0, 67) + '...';
+    if (text.length > MAX_DESCRIPTION_LENGTH) {
+      return text.slice(0, MAX_DESCRIPTION_LENGTH - 3) + '...';
     }
     return text;
   };
@@ -305,6 +463,10 @@ export const ActivityPulse = ({
       python_execution: 'Python',
       learning_session: 'Learning',
       code_fix: 'Code Fix',
+      function_call: 'Function',
+      agent_activity: 'Agent',
+      autonomous_action: 'Autonomous',
+      workflow_execution: 'Workflow',
     };
     return labels[type] || type.replace(/_/g, ' ');
   };

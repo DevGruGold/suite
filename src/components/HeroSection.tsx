@@ -214,11 +214,10 @@ export const HeroSection = ({ stats }: HeroSectionProps) => {
                     <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                     <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
                   </span>
-                  Eliza activity
+                  Agent activity
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Live operations, health checks, and agent events without
-                  pushing chat below the fold.
+                  Live operations, health checks, function calls, and agent events.
                 </p>
               </div>
               <div className="flex flex-wrap justify-end gap-2 text-[10px]">
